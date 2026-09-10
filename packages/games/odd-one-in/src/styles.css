@@ -1,0 +1,236 @@
+.odd-one-in { color: var(--kp-cream); font-family: var(--font-body); overflow-wrap: anywhere; }
+.odd-one-in-display, .odd-one-in-controller { width: 100%; margin: auto; padding: max(1rem, var(--safe-top)) max(1rem, var(--safe-right)) max(2rem, var(--safe-bottom)) max(1rem, var(--safe-left)); }
+.odd-one-in-display { max-width: 1640px; }
+.odd-one-in-controller { max-width: 42rem; padding-bottom: max(4rem, var(--safe-bottom)); }
+.odd-one-in-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+.odd-one-in-header h1 { margin: .3rem 0; font-size: clamp(1.8rem, 3.8vw, 3.5rem); }
+.odd-one-in-header .kp-eyebrow { color: var(--kp-lime); margin: 0 0 .5rem; }
+.odd-one-in-header .kp-eyebrow span { margin: 0 .35rem; }
+.odd-one-in-clock { flex: 0 0 auto; display: grid; text-align: center; color: var(--kp-lime); border: 2px solid var(--kp-lime); border-radius: 1rem; padding: .25rem .75rem; transform: rotate(3deg); background: var(--kp-ink); }
+.odd-one-in-clock output { font-size: 2.6rem; line-height: 1; }
+.odd-one-in-clock span { font-size: .65rem; color: var(--kp-cream); }
+.odd-one-in-welcome { display: grid; grid-template-columns: 1fr 1.15fr; align-items: center; gap: 2.5rem; }
+.odd-one-in-house-stage { min-width: 0; }
+.odd-one-in-house-stage h2 { font-size: clamp(1.9rem, 3.1vw, 3.1rem); margin: .5rem 0 -.3rem; }
+.odd-one-in-house-stage h2 span, .odd-one-in-instructions h2 span { color: var(--kp-lime); }
+.odd-one-in-house { display: block; width: 100%; max-width: 36rem; height: auto; margin: 0 auto; }
+.odd-one-in-house text { font-family: var(--font-display); font-size: 26px; }
+.odd-one-in-avatar { flex: 0 0 auto; display: block; width: 3rem; height: auto; }
+.odd-one-in-avatar text { font-family: var(--font-display); font-size: 14px; }
+.odd-one-in-invitation { position: relative; border: 2px solid var(--kp-lime); padding: 2.5rem 2rem 1.3rem; transform: rotate(1deg); }
+.odd-one-in-ticket-label { position: absolute; left: 1.5rem; top: -.75rem; background: var(--kp-lime); color: var(--kp-ink); padding: .4rem .8rem; border: 3px solid var(--kp-ink); border-radius: .45rem; font: .8rem var(--font-display); letter-spacing: .1em; transform: rotate(-3deg); }
+.odd-one-in-invitation h2 { font-size: clamp(2.6rem, 4.4vw, 4.8rem); margin: .5rem 0 1rem; color: var(--kp-lime); }
+.odd-one-in-invitation > p { line-height: 1.5; }
+.odd-one-in-progress { margin: 1.1rem 0; display: grid; grid-template-columns: auto 1fr; gap: .4rem .8rem; align-items: center; }
+.odd-one-in-progress strong { color: var(--kp-lime); font-size: 3rem; line-height: 1; }
+.odd-one-in-progress strong span { font-size: 1.5rem; color: var(--kp-cream); }
+.odd-one-in-progress progress { grid-column: 1 / -1; width: 100%; height: .6rem; accent-color: var(--kp-lime); border: 0; border-radius: 1rem; overflow: hidden; background: var(--kp-ink); }
+.odd-one-in-progress progress::-webkit-progress-bar { background: var(--kp-ink); }
+.odd-one-in-progress progress::-webkit-progress-value { background: var(--kp-lime); }
+.odd-one-in-steps { display: flex; list-style: none; gap: 1rem; padding: .6rem 0 0; margin: 0; font-size: .85rem; }
+.odd-one-in-steps li { display: flex; gap: .35rem; align-items: center; margin: 0; color: var(--kp-cream); }
+.odd-one-in-steps li[aria-current] { color: var(--kp-lime); font-weight: 900; }
+.odd-one-in-steps li > span { display: grid; place-items: center; width: 1.35rem; height: 1.35rem; border: 1px solid currentColor; border-radius: 50%; font-size: .7rem; }
+.odd-one-in-guest-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .5rem 1rem; margin-top: 1rem; padding-top: .8rem; border-top: 1px solid var(--border); }
+.odd-one-in-guest-list > div { display: flex; align-items: center; gap: .5rem; min-width: 0; border-left: 3px solid var(--guest); padding-left: .5rem; }
+.odd-one-in-guest-list strong, .odd-one-in-guest-list small { display: block; }
+.odd-one-in-guest-list small { color: var(--kp-lime); font-size: .75rem; }
+.odd-one-in-discussion { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem 2rem; border-bottom: 1px solid var(--border); padding-bottom: .7rem; }
+.odd-one-in-discussion p { margin: 0; }
+.odd-one-in-discussion .odd-one-in-steps { padding: 0; }
+.odd-one-in-vote-count { color: var(--kp-lime); font-weight: 900; }
+.odd-one-in-question { margin: 1.25rem 0; }
+.odd-one-in-question .kp-eyebrow { margin: 0 0 .3rem; color: var(--kp-lime); }
+.odd-one-in-question h2 { font-size: clamp(1.3rem, 2.3vw, 2.4rem); margin: 0; line-height: 1.2; }
+.odd-one-in-guests { display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 1rem; }
+.odd-one-in-badge { border-top: 7px solid var(--kp-lime); border-radius: var(--radius); padding: 1rem; min-width: 0; }
+.odd-one-in-badge-top { display: flex; align-items: center; gap: .5rem; }
+.odd-one-in-badge-top > div { min-width: 0; }
+.odd-one-in-badge h3 { margin: .2rem 0; font-size: 1.2rem; }
+.odd-one-in-badge .kp-eyebrow { color: var(--kp-lime); font-size: .6rem; letter-spacing: .05em; margin: 0; }
+.odd-one-in-answer { font-family: var(--font-display); font-size: clamp(1.5rem, 2.4vw, 2.6rem); margin: .75rem 0 .25rem; padding-top: .75rem; border-top: 1px dashed var(--border); line-height: 1.15; }
+.odd-one-in-private { padding: 0 1.2rem 1.2rem; border: 2px solid var(--kp-lime); }
+.odd-one-in-private-top { display: flex; justify-content: space-between; align-items: center; gap: .5rem; background: var(--kp-lime); color: var(--kp-ink); margin: 0 -1.2rem 1rem; padding: .65rem 1.2rem; }
+.odd-one-in-private-top span:first-child { font-family: var(--font-display); letter-spacing: .07em; }
+.odd-one-in-private-top span:last-child { font-size: .7rem; }
+.odd-one-in-private > .kp-eyebrow { margin-bottom: .5rem; font-size: .7rem; color: var(--kp-lime); }
+.odd-one-in-private h2 { font-size: clamp(1.2rem, 3vw, 1.7rem); margin: 0 0 .75rem; line-height: 1.3; }
+.odd-one-in-options { display: grid; gap: .65rem; margin: .75rem 0; }
+.odd-one-in-options button { text-align: left; white-space: normal; }
+.odd-one-in button, .odd-one-in input, .odd-one-in select, .odd-one-in summary { min-height: 44px; min-width: 44px; }
+.odd-one-in input, .odd-one-in select { width: 100%; font: inherit; font-size: 1rem; }
+.odd-one-in select { background: var(--kp-navy); color: var(--kp-cream); padding: .8rem; border: 2px solid var(--kp-lime); border-radius: var(--radius); }
+.odd-one-in button:focus-visible, .odd-one-in input:focus-visible, .odd-one-in select:focus-visible, .odd-one-in summary:focus-visible { outline: 3px solid var(--kp-cream); outline-offset: 3px; }
+.odd-one-in-label { display: block; font-weight: 800; margin: 1rem 0 .5rem; }
+.odd-one-in-number { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; gap: .5rem; align-items: center; }
+.odd-one-in-number button { padding: .5rem; font-size: 1.5rem; }
+.odd-one-in-number input { text-align: center; font-family: var(--font-display); font-size: 2rem; height: 3.8rem; }
+.odd-one-in .odd-one-in-submit { display: block; width: 100%; margin-top: 1.2rem; min-height: 52px; }
+.odd-one-in-character-count { display: block; text-align: right; margin-top: .3rem; }
+.odd-one-in-form-note { font-size: .75rem; text-align: center; margin: 1rem 0 0; line-height: 1.4; }
+.odd-one-in-help { font-size: .85rem; line-height: 1.5; }
+.odd-one-in-locked { text-align: center; padding-top: 1rem; }
+.odd-one-in-locked h3 { font-family: var(--font-display); font-size: 1.8rem; margin: 1.1rem 0; }
+.odd-one-in-stamp { display: inline-block; color: var(--kp-lime); border: 3px solid currentColor; padding: .35rem .7rem; font-family: var(--font-display); font-size: 1rem; letter-spacing: .08em; transform: rotate(-5deg); border-radius: .35rem; }
+.odd-one-in-ballot { padding: 1.2rem; }
+.odd-one-in-ballot h2 { margin: .3rem 0; font-size: 1.7rem; }
+.odd-one-in-ballot > p { font-size: .9rem; }
+.odd-one-in-vote-options button > span { display: flex; align-items: center; gap: .6rem; }
+.odd-one-in-vote-options .odd-one-in-avatar { width: 2rem; }
+.odd-one-in-vote-options button { padding: .4rem .9rem; }
+.odd-one-in-vote-options button:last-child { min-height: 48px; }
+.odd-one-in-history { margin-top: 1rem; }
+.odd-one-in-history summary { padding: .8rem; cursor: pointer; }
+.odd-one-in-resolution { display: grid; grid-template-columns: 1fr 2fr; gap: 2rem; align-items: center; padding: 2rem; border-color: var(--kp-lime); }
+.odd-one-in-unmask { display: grid; justify-items: center; align-items: center; }
+.odd-one-in-unmask .odd-one-in-avatar { width: min(100%, 14rem); }
+.odd-one-in-unmask .odd-one-in-stamp { font-size: 1.8rem; background: var(--kp-ink); margin-top: -1rem; }
+.odd-one-in-resolution h2 { margin: .5rem 0; color: var(--kp-lime); font-size: clamp(2rem, 4vw, 4rem); }
+.odd-one-in-resolution h2 > span { display: block; font-size: .6em; margin-top: .4rem; color: var(--kp-cream); }
+.odd-one-in-awards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem 1.5rem; }
+.odd-one-in-awards p { display: flex; justify-content: space-between; align-items: baseline; gap: .8rem; padding: .5rem 0; border-bottom: 1px solid var(--border); margin: 0; }
+.odd-one-in-awards span { flex-shrink: 0; color: var(--kp-lime); font-family: var(--font-display); font-size: 1.5rem; }
+.odd-one-in-next { color: var(--kp-lime); font-size: .85rem; }
+.odd-one-in-instructions, .odd-one-in-results { display: grid; grid-template-columns: 1fr 1.3fr; gap: 2rem; align-items: center; }
+.odd-one-in-instructions h2, .odd-one-in-results h2 { font-size: clamp(2rem, 4vw, 3.5rem); margin: .5rem 0; }
+.odd-one-in-instructions li { margin-bottom: .8rem; }
+.odd-one-in-instructions ol { padding-left: 1.2rem; }
+.odd-one-in-final-rows { display: grid; gap: .65rem; }
+.odd-one-in-final-rows > div { display: flex; align-items: center; gap: .8rem; padding: .6rem .8rem; background: var(--kp-ink); border: 1px solid var(--border); border-radius: .8rem; }
+.odd-one-in-final-rows > div > strong { flex: 1; }
+.odd-one-in-final-rows > div > .kp-numeral { font-size: 1.8rem; color: var(--kp-lime); }
+.odd-one-in-final-rows > div > .kp-numeral:last-child { text-align: right; }
+.odd-one-in-final-rows small { display: block; font: .7rem var(--font-body); color: var(--kp-cream); }
+.odd-one-in-final-rows .odd-one-in-first-place { border-color: var(--kp-lime); }
+.odd-one-in-controller .odd-one-in-guests { grid-template-columns: 1fr 1fr; gap: .6rem; }
+.odd-one-in-controller .odd-one-in-badge { padding: .6rem; border-top-width: 4px; }
+.odd-one-in-controller .odd-one-in-badge-top .odd-one-in-avatar { width: 1.8rem; }
+.odd-one-in-controller .odd-one-in-badge .kp-eyebrow { display: none; }
+.odd-one-in-controller .odd-one-in-badge h3 { font-size: .9rem; }
+.odd-one-in-controller .odd-one-in-answer { font-size: 1.4rem; }
+.odd-one-in-controller .odd-one-in-resolution { display: block; padding: 1rem; }
+.odd-one-in-controller .odd-one-in-unmask .odd-one-in-avatar { width: 5rem; }
+.odd-one-in-controller .odd-one-in-unmask .odd-one-in-stamp { font-size: 1rem; margin-top: -.2rem; }
+.odd-one-in-controller .odd-one-in-resolution h2 { font-size: 2rem; }
+.odd-one-in-controller .odd-one-in-awards { grid-template-columns: 1fr; gap: 0; }
+
+@media (min-width: 1600px) { .odd-one-in-display { padding-top: 2.5rem; } .odd-one-in-welcome { gap: 5rem; } .odd-one-in-invitation { padding: 3rem; } .odd-one-in-guests { gap: 1.4rem; } }
+@media (max-width: 700px) { .odd-one-in-instructions, .odd-one-in-results { grid-template-columns: 1fr; gap: 1rem; } .odd-one-in-instructions .odd-one-in-house { display: none; } .odd-one-in-results .odd-one-in-house { max-width: 13rem; } .odd-one-in-results { padding: 1rem; } .odd-one-in-header { gap: .5rem; } .odd-one-in-header .kp-eyebrow { font-size: .7rem; letter-spacing: .08em; } .odd-one-in-clock { padding: .25rem .55rem; } .odd-one-in-clock output { font-size: 2.1rem; } .odd-one-in-controller { padding-top: .75rem; } .odd-one-in-header h1 { font-size: 1.8rem; } .odd-one-in-final-rows .odd-one-in-avatar { width: 2.1rem; } .odd-one-in-final-rows > div { gap: .5rem; } .odd-one-in-final-rows > div > .kp-numeral { font-size: 1.4rem; } }
+@media (max-width: 350px) { .odd-one-in-private, .odd-one-in-ballot { padding-left: .85rem; padding-right: .85rem; } .odd-one-in-private-top { margin-left: -.85rem; margin-right: -.85rem; padding-left: .85rem; padding-right: .85rem; } .odd-one-in-private-top span:last-child { font-size: .6rem; } .odd-one-in-options { gap: .5rem; } .odd-one-in-header h1 { font-size: 1.65rem; } }
+@media (prefers-reduced-motion: reduce) { .odd-one-in *, .odd-one-in *::before, .odd-one-in *::after { animation: none !important; transition: none !important; } }
+@media (min-width: 1000px) and (max-height: 800px) { .odd-one-in-house-stage .odd-one-in-house { max-height: 270px; } }
+@media (max-width: 350px) { .odd-one-in-controller .odd-one-in-badge-top .odd-one-in-avatar { display: none; } }
+
+/* Two reveal rows at every supported roster; identity and complete answers stay together. */
+.odd-one-in-display .odd-one-in-guests { grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); grid-auto-rows: 1fr; }
+.odd-one-in-badge { display: flex; flex-direction: column; border-top-color: var(--guest); animation: odd-one-in-deal 280ms ease-out both; animation-delay: calc(var(--i, 0) * 35ms); }
+.odd-one-in-answer { margin-top: auto; }
+.odd-one-in-display .odd-one-in-answer[data-size="lg"] { font-size: clamp(2.6rem, 4vw, 4rem); }
+.odd-one-in-display .odd-one-in-answer[data-size="md"] { font-size: clamp(1.7rem, 2.4vw, 2.6rem); }
+.odd-one-in-display .odd-one-in-answer[data-size="sm"] { font-size: clamp(1.2rem, 1.6vw, 1.75rem); line-height: 1.25; }
+.odd-one-in .odd-one-in-answer[data-size="none"] { font: italic 1.05rem var(--font-body); color: var(--muted-foreground); }
+.odd-one-in-question h2 { font-size: clamp(1.2rem, 1.9vw, 2rem); }
+.odd-one-in-progress strong { animation: odd-one-in-bump 240ms ease-out; }
+.odd-one-in-progress small { color: var(--muted-foreground); }
+.odd-one-in-resolution { --outcome: var(--kp-lime); border: 2px solid var(--outcome); }
+.odd-one-in-resolution[data-outcome="escaped"] { --outcome: var(--kp-coral); }
+.odd-one-in-resolution h2, .odd-one-in-resolution .odd-one-in-stamp { color: var(--outcome); }
+.odd-one-in-stamp { animation: odd-one-in-stamp 360ms ease-out; }
+.odd-one-in-personal { font-weight: 800; }
+.odd-one-in-private-top { border-radius: .7rem .7rem 0 0; }
+.odd-one-in-role { font-size: .9rem; margin: 0 0 .5rem; }
+.odd-one-in-private h2 { font-size: clamp(1.35rem, 5vw, 2rem); min-height: 5.2em; }
+.odd-one-in-private-clue .odd-one-in-help { min-height: 4.5em; }
+.odd-one-in-submit-bar { position: sticky; bottom: 0; z-index: 2; padding: .5rem 0 max(.5rem, var(--safe-bottom)); background: var(--kp-navy); }
+.odd-one-in-submit-bar .odd-one-in-submit { margin-top: .4rem; }
+.odd-one-in-submit-bar .odd-one-in-form-note { margin-top: .5rem; }
+.odd-one-in-character-count { color: var(--muted-foreground); }
+.odd-one-in-character-count[data-full] { color: var(--kp-coral); }
+.odd-one-in-final-rows > div { border-left: 4px solid var(--guest); min-width: 0; }
+.odd-one-in-final-rows > div > .kp-numeral { flex-shrink: 0; white-space: nowrap; }
+.odd-one-in-final-rows > div > .kp-numeral:first-child { min-width: 2ch; text-align: center; }
+.odd-one-in-final-rows .odd-one-in-first-place { border-color: var(--kp-sun); background: linear-gradient(120deg, color-mix(in srgb, var(--kp-sun) 15%, var(--kp-ink)), var(--kp-ink)); }
+.odd-one-in-first-place > .kp-numeral:first-child { color: var(--kp-sun); }
+.odd-one-in-final-rows .odd-one-in-you { display: inline-block; margin-left: .3rem; padding: .1rem .3rem; border: 1px solid var(--border); border-radius: 1rem; }
+@media (min-width: 1000px) {
+  .odd-one-in-results { grid-template-columns: .7fr 1.7fr; }
+  .odd-one-in-final-rows[data-many] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .odd-one-in-final-rows[data-many] > div { gap: .4rem; padding: .55rem; }
+  .odd-one-in-final-rows[data-many] .odd-one-in-avatar { width: 2rem; }
+}
+@media (min-width: 1000px) and (max-height: 800px) {
+  .odd-one-in-display { padding-bottom: 1rem; }
+  .odd-one-in-header { margin-bottom: .8rem; }
+  .odd-one-in-house-stage .odd-one-in-house { max-height: 230px; }
+  .odd-one-in-guest-list .odd-one-in-avatar { width: 2.2rem; }
+  .odd-one-in-invitation { padding: 1.6rem 1.5rem 1rem; }
+  .odd-one-in-invitation h2 { font-size: 2.8rem; }
+  .odd-one-in-badge { padding: .7rem; }
+  .odd-one-in-badge h3 { font-size: 1rem; }
+  .odd-one-in-badge .odd-one-in-avatar { width: 2.3rem; }
+  .odd-one-in-resolution { gap: 1.4rem; padding: 1.4rem; }
+  .odd-one-in-resolution h2 { font-size: 2.8rem; }
+}
+@media (max-width: 700px) {
+  .odd-one-in-results .odd-one-in-house { display: none; }
+  .odd-one-in-final-rows > div > strong { min-width: 0; }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .odd-one-in-controller { padding-top: .3rem; }
+  .odd-one-in-controller .odd-one-in-header { margin-bottom: .5rem; }
+  .odd-one-in-controller .odd-one-in-header h1 { font-size: 1.3rem; margin: .1rem 0; }
+  .odd-one-in-controller .odd-one-in-header .kp-eyebrow { margin-bottom: .15rem; }
+  .odd-one-in-clock { transform: none; padding: .1rem .5rem; }
+  .odd-one-in-clock output { font-size: 1.55rem; }
+  .odd-one-in-clock span { display: none; }
+  .odd-one-in-private { display: grid; grid-template-columns: 1fr 1.15fr; gap: 0 1rem; }
+  .odd-one-in-private-top { grid-column: 1 / -1; padding-top: .4rem; padding-bottom: .4rem; margin-bottom: .6rem; }
+  .odd-one-in-private h2 { font-size: 1.2rem; min-height: 3.9em; margin-bottom: .4rem; }
+  .odd-one-in-private-clue .odd-one-in-help { margin-bottom: 0; }
+  .odd-one-in-label { margin-top: 0; }
+  .odd-one-in-options { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; }
+  .odd-one-in-options button { padding: .4rem .6rem; font-size: 1rem; }
+  .odd-one-in-controller .odd-one-in-guests { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .odd-one-in-ballot h2 { font-size: 1.2rem; }
+  .odd-one-in-ballot > .kp-eyebrow { margin: 0; }
+  .odd-one-in-ballot > p { margin: .3rem 0; }
+  .odd-one-in-ballot > .odd-one-in-history { margin-top: 0; }
+}
+@keyframes odd-one-in-deal { from { transform: translateY(8px); } to { transform: none; } }
+@keyframes odd-one-in-bump { from { transform: scale(1.12); } to { transform: scale(1); } }
+@keyframes odd-one-in-stamp { from { transform: rotate(-5deg) scale(1.25); } to { transform: rotate(-5deg) scale(1); } }
+@media (min-width: 1000px) and (max-height: 800px) {
+  .odd-one-in-display .odd-one-in-awards { row-gap: 0; }
+  .odd-one-in-display .odd-one-in-awards p { padding: .35rem 0; }
+}
+.odd-one-in-controller .odd-one-in-ballot > .kp-eyebrow { display: none; }
+.odd-one-in-controller .odd-one-in-ballot > p { margin: .5rem 0; }
+.odd-one-in-controller .odd-one-in-ballot > .odd-one-in-history { margin-top: 0; }
+.odd-one-in-ballot .odd-one-in-submit-bar .odd-one-in-form-note { display: none; }
+@media (max-width: 500px) {
+  .odd-one-in-controller .odd-one-in-header h1 { font-size: 1.4rem; }
+  .odd-one-in-controller .odd-one-in-header { margin-bottom: .7rem; }
+  .odd-one-in-controller .odd-one-in-header .kp-eyebrow { letter-spacing: .03em; font-size: .65rem; }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .odd-one-in-private .odd-one-in-submit-bar { position: static; padding-bottom: 0; }
+  .odd-one-in-private .odd-one-in-form-note { display: none; }
+}
+@media (min-width: 1000px) and (max-height: 800px) {
+  .odd-one-in-display .odd-one-in-header h1 { font-size: 2.4rem; }
+  .odd-one-in-display .odd-one-in-question { margin: .75rem 0; }
+  .odd-one-in-display .odd-one-in-guests[data-many] { gap: .7rem; }
+  .odd-one-in-display .odd-one-in-guests[data-many] .odd-one-in-badge { padding: .6rem; }
+  .odd-one-in-display .odd-one-in-guests[data-many] .kp-eyebrow { display: none; }
+  .odd-one-in-display .odd-one-in-guests[data-many] .odd-one-in-answer[data-size="sm"] { font-size: 1.2rem; }
+}
+@media (max-width: 500px) and (max-height: 640px) {
+  .odd-one-in-private-top { margin-bottom: .5rem; }
+  .odd-one-in-private h2 { font-size: 1.2rem; min-height: 3.9em; margin-bottom: .5rem; }
+  .odd-one-in-private-clue .odd-one-in-help { min-height: 2.8em; font-size: .8rem; line-height: 1.4; margin: .5rem 0; }
+  .odd-one-in-private .odd-one-in-label { margin-top: .5rem; }
+  .odd-one-in-private .odd-one-in-form-note { display: none; }
+}
+@media (max-width: 500px) and (max-height: 640px) {
+  .odd-one-in-private .odd-one-in-submit-bar { padding: 0 0 var(--safe-bottom); }
+}

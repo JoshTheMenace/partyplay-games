@@ -1,0 +1,7 @@
+{
+  "name": "@joshthemenace/partyplay-games",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "PartyPlay game modules, shared runtime contracts and licensed assets, consumed by Party Place."
+}

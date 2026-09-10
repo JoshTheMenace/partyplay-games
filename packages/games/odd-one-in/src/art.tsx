@@ -1,0 +1,21 @@
+/** Original public artwork. These fictional party guests never represent assigned roles. */
+export function HouseArt() {
+  return <svg className="odd-one-in-house" viewBox="0 0 560 360" aria-hidden="true">
+    <path d="M24 95 280 12 536 95v241H24Z" fill="var(--kp-navy)" stroke="var(--kp-ink)" strokeWidth="10" strokeLinejoin="round" />
+    <path d="M46 106 280 33 514 106v206H46Z" fill="var(--kp-ink)" />
+    <path d="M46 290h468v34H46Z" fill="var(--kp-grape)" opacity=".35" />
+    <path d="M60 110Q280 183 500 110" fill="none" stroke="var(--kp-cream)" strokeWidth="3" />
+    {[82, 145, 208, 280, 352, 415, 478].map((x, i) => <circle key={x} cx={x} cy={119 + Math.sin(i / 6 * Math.PI) * 26} r="7" fill={i % 2 ? 'var(--kp-lime)' : 'var(--kp-sun)'} />)}
+    <g transform="rotate(-5 280 86)"><rect x="190" y="61" width="180" height="48" rx="9" fill="var(--kp-lime)" stroke="var(--kp-ink)" strokeWidth="5" /><text x="280" y="94" textAnchor="middle" fill="var(--kp-ink)">COME ON IN</text></g>
+    <g stroke="var(--kp-ink)" strokeWidth="5"><rect x="65" y="163" width="98" height="109" rx="9" fill="var(--kp-sky)" /><path d="M75 177h78v81H75Z" fill="var(--kp-navy)" /><path d="M114 177v81M75 215h78" stroke="var(--kp-sky)" /><circle cx="140" cy="193" r="8" fill="var(--kp-cream)" stroke="none" />
+      <rect x="370" y="174" width="104" height="101" rx="9" fill="var(--kp-grape)" /><path d="M384 185h75v75h-75Z" fill="var(--kp-navy)" /><path d="M421 185v75M384 224h75" stroke="var(--kp-grape)" /></g>
+    <g stroke="var(--kp-ink)" strokeWidth="6"><rect x="173" y="227" width="191" height="66" rx="19" fill="var(--kp-lime)" /><rect x="161" y="247" width="35" height="54" rx="13" fill="var(--kp-lime)" /><rect x="343" y="247" width="35" height="54" rx="13" fill="var(--kp-lime)" /><path d="M195 300v12m149-12v12" /><rect x="205" y="238" width="44" height="38" rx="8" fill="var(--kp-sky)" transform="rotate(-11 227 257)" /><rect x="286" y="238" width="42" height="38" rx="8" fill="var(--kp-grape)" transform="rotate(12 307 257)" /></g>
+    <g transform="translate(73 229) rotate(-8)"><path d="M0 84V50Q0 29 22 29t22 21v34" fill="var(--kp-coral)" stroke="var(--kp-ink)" strokeWidth="5" /><circle cx="22" cy="19" r="25" fill="var(--kp-coral)" stroke="var(--kp-ink)" strokeWidth="5" /><path d="m6 19 8 2m17-2 6-1M18 29q8 4 13-2" fill="none" stroke="var(--kp-ink)" strokeWidth="4" strokeLinecap="round" /><rect x="12" y="48" width="24" height="16" rx="3" fill="var(--kp-cream)" /></g>
+    <g transform="translate(424 228) rotate(8)"><path d="M0 84V50Q0 29 22 29t22 21v34" fill="var(--kp-grape)" stroke="var(--kp-ink)" strokeWidth="5" /><circle cx="22" cy="19" r="25" fill="var(--kp-grape)" stroke="var(--kp-ink)" strokeWidth="5" /><path d="M6 15h12m10 0h11M16 29q6-6 13 0" fill="none" stroke="var(--kp-ink)" strokeWidth="4" strokeLinecap="round" /><rect x="11" y="49" width="24" height="16" rx="3" fill="var(--kp-cream)" /></g>
+    <g stroke="var(--kp-ink)" strokeWidth="5"><ellipse cx="280" cy="319" rx="85" ry="14" fill="var(--kp-sun)" /><path d="M222 326v24m116-24v24" /><path d="m246 303-4-22h19l-4 22Z" fill="var(--kp-coral)" /><path d="m301 305-4-24h19l-4 24Z" fill="var(--kp-sky)" /><path d="m277 309 13-16 11 16Z" fill="var(--kp-cream)" /></g>
+    <path d="m19 167 5 12 13 5-13 5-5 13-5-13-13-5 13-5Zm508 55 4 10 10 4-10 4-4 10-4-10-10-4 10-4Z" fill="var(--kp-sun)" />
+  </svg>;
+}
+export function GuestAvatar({ color, initial, masked = false }: { color: string; initial: string; masked?: boolean }) {
+  return <svg className="odd-one-in-avatar" viewBox="0 0 80 86" aria-hidden="true"><path d="M12 79V63a28 28 0 0 1 56 0v16Z" fill={color} stroke="var(--kp-ink)" strokeWidth="4" /><circle cx="40" cy="29" r="24" fill={color} stroke="var(--kp-ink)" strokeWidth="4" />{masked && <path d="M17 20q23 10 46 0v15q-23 11-46 0Z" fill="var(--kp-ink)" />}<circle cx="31" cy="28" r="3" fill={masked ? 'var(--kp-cream)' : 'var(--kp-ink)'} /><circle cx="49" cy="28" r="3" fill={masked ? 'var(--kp-cream)' : 'var(--kp-ink)'} /><path d="M34 41q6 4 12 0" fill="none" stroke="var(--kp-ink)" strokeWidth="3" strokeLinecap="round" /><rect x="28" y="57" width="24" height="17" rx="3" fill="var(--kp-cream)" /><text x="40" y="70" textAnchor="middle" fill="var(--kp-ink)">{initial}</text></svg>;
+}

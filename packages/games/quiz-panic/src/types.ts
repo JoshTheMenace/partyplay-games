@@ -1,0 +1,9 @@
+export type Settings = { rounds: 8 };
+export type Phase = 'instructions' | 'quiz' | 'quiz-reveal' | 'rescue-preview' | 'rescue' | 'rescue-reveal' | 'finale-intro' | 'finale' | 'finale-reveal' | 'results';
+export type Family = 'memory' | 'estimate' | 'logic';
+export type Action = { turnId: string; kind: 'answer'; choice: number } | { turnId: string; kind: 'rescue'; value: number | number[] };
+export type QuestionView = { category: string; prompt: string; options: string[] };
+export type ChallengeView = { family: Family; prompt: string; options: string[]; sequence: number[] | null };
+export type PlayerView = { id: string; name: string; color: string; connected: boolean; charge: number; distance: number; needsRescue: boolean; boost: boolean; submitted: boolean; gained: number };
+export type PublicView = { phase: Phase; turnId: string; deadline: number; round: number; rounds: number; finaleStep: number; players: PlayerView[]; question: QuestionView | null; challenge: ChallengeView | null; reveal: { answer: string; explanation: string; source: string | null } | null };
+export type PrivateView = { submitted: boolean; answer: number | number[] | null; needsRescue: boolean; boost: boolean };

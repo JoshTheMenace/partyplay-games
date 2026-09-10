@@ -1,0 +1,23 @@
+.sl-hud { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: .75rem; color: #132941; }
+.sl-title { border-radius: 1.1rem; padding: .7rem 1rem; background: #fffffff0; box-shadow: 0 3px 0 #13294122; }
+.sl-title span { font-size: .75rem; font-weight: 900; letter-spacing: .18em; }
+.sl-title h1 { font-size: clamp(1.3rem, 3vw, 2.4rem); margin: .1rem 0; }
+.sl-title p { margin: 0; font-size: .85rem; }
+.sl-hud > output { grid-column: 3; grid-row: 1; background: #132941; color: #fff; border-radius: 1rem; padding: .25rem .8rem; }
+.sl-roster { grid-column: 2; grid-row: 1; padding-top: .5rem; display: flex; justify-content: center; flex-wrap: wrap; gap: .35rem; }
+.sl-roster > span { display: flex; align-items: center; gap: .35rem; max-width: 100%; overflow-wrap: anywhere; border-radius: 2rem; padding: .2rem .6rem .2rem .2rem; background: #fffffff0; font-size: .75rem; }
+.sl-roster b { display: grid; place-items: center; color: #132941; min-width: 1.6rem; height: 1.6rem; border-radius: 50%; border: 1px solid #132941; }
+.sl-metrics { position: absolute; bottom: .7rem; left: .7rem; max-height: 60%; overflow: auto; background: #fffef4f0; color: #132941; border-radius: .7rem; padding: .5rem .8rem; font-size: .7rem; }
+.sl-metrics summary { cursor: pointer; min-height: 24px; }
+.sl-controller { max-width: 650px; margin: auto; }
+.sl-controller-heading, .sl-controls { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.sl-controller-heading h1 { font-size: clamp(1.5rem, 5vw, 2.5rem); margin: .4rem 0; }
+.sl-controls { justify-content: space-around; padding: 1rem 0; }
+.sl-score { text-align: center; font-weight: 800; }
+@media (orientation: landscape) and (max-height: 500px) { .sl-controller { padding: .6rem 1rem; } .sl-controller > p { margin: .2rem 0; } .sl-controller-heading { float: right; } .sl-controller-heading h1 { display: none; } .sl-controls { padding: .3rem 0; } .sl-controls .kp-steer-pad { width: 136px; } }
+.kp-landscape-controller .sl-controller { position:relative; height:100%; max-width:none; padding:12px; text-align:center; }
+.kp-landscape-controller .sl-controls { position:absolute; inset:auto 16px 16px; justify-content:space-between; padding:0; }
+.kp-landscape-controller .sl-controller-heading { float:none; justify-content:center; }
+.kp-landscape-controller .sl-controller-heading h1 { display:none; }
+.kp-landscape-controller .sl-controls .kp-steer-pad { width:130px; height:130px; }
+.kp-landscape-controller .sl-controls .kp-hold-button { min-width:140px; min-height:64px; }
