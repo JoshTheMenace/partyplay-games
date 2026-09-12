@@ -26,13 +26,19 @@ All four mobs were authored with Blender 5.2.1, exported to GLB, reimported to c
 
 ## Compatibility and deliberate limits
 
-New worlds use terrain/rules version 4. Versions 1–3 retain their terrain generators, recipe tables, inventory capacity and legacy enemy rules. Existing IDs are never shifted; inventory-only IDs are rejected as world edits and cannot be placed. The current save format remains version 2, with the terrain/rules version selecting behavior. Fuel state is an optional validated extension.
+New worlds use terrain/rules version 5. Version 4 terrain is preserved when loading existing saves. Versions 1–3 retain their terrain generators, recipe tables, inventory capacity and legacy enemy rules. Existing IDs are never shifted; inventory-only IDs are rejected as world edits and cannot be placed. The current save format remains version 2, with the terrain/rules version selecting behavior. Fuel state is an optional validated extension.
 
 This remains a small multiplayer sandbox, with significant differences from Bedrock:
 
 - Inventory is pooled by item type, capped at 64 per type (one per tool), rather than 36 independent stack slots. Crafting uses a recipe-book preview; arbitrary manual ingredient placement is not implemented.
-- Tool durability, armor, enchantments, full recipes, item dropping, passive animals, biomes/dimensions, redstone and liquid flow are not implemented.
+- Tool durability, armor, enchantments, full recipes, item dropping, complete biome systems/dimensions, redstone and liquid flow are not implemented.
 - Terrain remains a bounded 128×128×48 world. Mining with an inadequate tool is prevented rather than destroying the block without a drop. Glass breaks without a drop.
-- Farms, one-block beds, chest capacity, automatic one-block stepping, tree-growth timing and loot are simplified. Seeds currently come from grass-block gathering. Food uses a ten-unit meter with fractional values, and rotten flesh has no hunger status effect.
+- Farms, one-block beds, chest capacity, automatic one-block stepping, tree-growth timing and loot are simplified. Version 5 supplies seeds from short-grass tufts; version 4 retains grass-block gathering for its existing terrain. Food uses a ten-unit meter with fractional values, and rotten flesh has no hunger status effect.
 - Mob navigation follows nearby players with collision handling rather than full pathfinding. Spawning uses night and nearby placed lights; it does not compute a full propagated light field. Creeper blasts destroy a bounded set of softer blocks and preserve stored station contents. Mob state is transient across save/load.
 - Touch behavior still needs physical-device and human gameplay testing; browser emulation cannot establish Bedrock-like feel by itself.
+
+## Farming and passive animals, 12 September 2026
+
+See [the farming implementation and sources](FARMING.md) for hoes, short-grass seed drops, wheat and root crops, wandering herds, food attraction, breeding, babies and deliberate timing/world-generation differences.
+
+The farm toolkit adds portable static water, shearing and grazing, bone meal, daylight/torch crop checks and differentiated food values. These follow familiar interactions while keeping simplified growth, wool quantities, stack storage and lighting. See [farm toolkit rules](FARMING.md#farm-toolkit).

@@ -1,7 +1,7 @@
-import { ITEMS, isTool, isWorldBlock, itemColor, type Recipe } from './model';
+import { BUCKET, WATER_BUCKET, SHEARS, BONE_MEAL, isHoe, ITEMS, isTool, isWorldBlock, itemColor, type Recipe } from './model';
 export const CATEGORIES=['Construction','Equipment','Items','Nature'] as const;
 export type Category=typeof CATEGORIES[number];
-export const HIDDEN=[13,26,42], FOODS=[53,40,42,27,58], PICKS=[24,25,26,36,52], SWORDS=[37,60,61];
+export const HIDDEN=[13,26,42], FOODS=[53,40,42,27,58,70,71,72,73,74,75,78,79,80,81,82], PICKS=[24,25,26,36,52], SWORDS=[37,60,61];
 const NATURE=new Set([1,2,3,4,5,6,7,8,9,14,17,19,20,32,33,34,45,47,63,38,39,...FOODS]);
 const COLORS:Record<number,string>={36:'#d6d9de',37:'#d6d9de',41:'#d6d9de',60:'#aa8153',61:'#aaaaaa',48:'#c9a48a',59:'#b5563f',49:'#2b2d30',50:'#a87947',54:'#e8e2cf',55:'#d0d0d0',56:'#f0f0f0',57:'#6e6e6e',58:'#7c5a3c',39:'#d9b85a',40:'#c58b4a',38:'#7fa350',42:'#a24a4a',62:'#3a2f28',63:'#9faab7'};
 export const itemName=(id:number)=>id===0?'Empty hand':ITEMS[id]??`Item ${id}`;
@@ -12,6 +12,10 @@ const shade=(hex:string,f:number)=>`#${[1,3,5].map(i=>Math.round(Math.min(255,pa
 export function ItemIcon({id}:{id:number}){
  const c=COLORS[id]??itemColor(id);
  if(!id)return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" fill="none" stroke="#ffffff55" strokeWidth="2" strokeDasharray="3 3"/></svg>;
+ if(id===BUCKET||id===WATER_BUCKET)return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16l-3 15H7z" fill="#acb4b8" stroke="#626c76" strokeWidth="2"/><ellipse cx="12" cy="6" rx="8" ry="3" fill={id===WATER_BUCKET?'#459bc6':'#495866'}/><path d="M5 6V4q7-5 14 0v2" fill="none" stroke="#d9dfe2" strokeWidth="2"/></svg>;
+ if(id===SHEARS)return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 18 11-15-2 12L7 3l-1 12" fill="none" stroke="#ccd2d4" strokeWidth="3"/><circle cx="6" cy="18" r="3" fill="none" stroke="#89979e" strokeWidth="2"/><circle cx="17" cy="18" r="3" fill="none" stroke="#89979e" strokeWidth="2"/></svg>;
+ if(id===BONE_MEAL)return <svg viewBox="0 0 24 24" aria-hidden="true">{[[5,16],[10,12],[15,17],[17,7],[8,5]].map(([x,y])=><rect key={x} x={x} y={y} width="4" height="4" fill="#eee6d2"/>)}</svg>;
+ if(isHoe(id))return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21 15 7" stroke="#8b6036" strokeWidth="3"/><path d="M7 4h12v4h-5v5h-4V8H7z" fill={id===67?'#b48a52':'#aaaaaa'}/></svg>;
  if(PICKS.includes(id))return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20 16 9" stroke="#7a4f23" strokeWidth="2.6" strokeLinecap="round"/><path d="M7 3q8-1 14 6l-3 3q-4-5-9-6z" fill={c} stroke={shade(c,.6)} strokeWidth=".8"/></svg>;
  if(SWORDS.includes(id))return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2l5 5-9 9-5-5z" fill={c} stroke={shade(c,.6)} strokeWidth=".8"/><path d="M4 12l8 8" stroke="#5a3d1f" strokeWidth="3" strokeLinecap="round"/><path d="M5 17l-2 2" stroke="#3b2814" strokeWidth="3" strokeLinecap="round"/></svg>;
  if(id===43)return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="10.5" y="9" width="3" height="12" fill="#8a5a2b"/><circle cx="12" cy="7" r="4" fill="#ffb347"/><circle cx="12" cy="6" r="2" fill="#fff0a0"/></svg>;

@@ -12,7 +12,7 @@ export function spatial(listener:Point&{yaw:number},source:Point,range=22){
 }
 export function material(b:number){
  if([4,10,28,30,35,43].includes(b))return 'wood';
- if([1,5,20,45].includes(b))return 'grass';
+ if([1,5,20,45,64,65,66].includes(b))return 'grass';
  if([2,7,19,32,47].includes(b))return 'snow';
  if([21,22,31,46].includes(b))return 'cloth';
  return b===11?'glass':b===23||b===12?'metal':'stone';
@@ -69,17 +69,18 @@ export class WorldSoundTracker{
    this.walkers.set(p.id,{x:p.x,y:p.y,z:p.z,stride,wet,ground,peak,mineAt});
   }
   for(const id of this.walkers.keys())if(!v.players.some(p=>p.id===id))this.walkers.delete(id);
-  for(const c of v.creatures){
+  const vocalists=[...v.creatures,...(v.animals??[]).map(a=>({...a,id:-a.id,fuse:0}))];
+  for(const c of vocalists){
    const near=distance(listener,c)<18;
    if(c.kind==='creeper'){
     if((c.fuse??0)>0&&near)loops.push({id:`fuse-${c.id}`,name:'fuse',at:c,gain:.4,rate:1+(c.fuse??0)*.25,range:18});
    }else{
-    const due=this.voices.get(c.id)??v.time+2+(c.id%7)*.6;
-    if(near&&v.time>=due&&!reset){cues.push({name:c.kind??'zombie',at:c,gain:.38,range:18});this.voices.set(c.id,v.time+5+(c.id%5));}
+    const due=this.voices.get(c.id)??v.time+2+(Math.abs(c.id)%7)*.6;
+    if(near&&v.time>=due&&!reset){cues.push({name:c.kind??'zombie',at:c,gain:.38,range:18});this.voices.set(c.id,v.time+5+(Math.abs(c.id)%5));}
     else this.voices.set(c.id,due);
    }
   }
-  for(const id of this.voices.keys())if(!v.creatures.some(c=>c.id===id))this.voices.delete(id);
+  for(const id of this.voices.keys())if(!vocalists.some(c=>c.id===id))this.voices.delete(id);
   if(v.revision!==this.revision){this.fires=v.edits.filter(([,b])=>b===CAMPFIRE).map(([i])=>coords(i));this.revision=v.revision;}
   const fire=[...this.fires,...(v.burningFurnaces??[]).map(coords)].filter(p=>distance(listener,p)<12).sort((a,b)=>distance(listener,a)-distance(listener,b))[0];
   if(fire)loops.push({id:'fire',name:'fire',at:fire,gain:.2,range:12});

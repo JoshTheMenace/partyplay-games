@@ -1,14 +1,16 @@
-import { APPLE, CLAY, CLAY_BALL, COBBLE, DIAMOND, DIAMOND_PICK, FUEL, IRON_PICK, RAW_IRON, SAPLING, SEEDS, STONE_SWORD, SWORD, WOOD_SWORD, W, H, EDIT_LIMIT, coords, index, stackLimit, type Player } from './model';
+import { SHORT_GRASS, WILD_CARROT, WILD_POTATO, CARROT, POTATO, APPLE, CLAY, CLAY_BALL, COBBLE, DIAMOND, DIAMOND_PICK, FUEL, IRON_PICK, RAW_IRON, SAPLING, SEEDS, STONE_SWORD, SWORD, WOOD_SWORD, W, H, EDIT_LIMIT, coords, index, stackLimit, type Player } from './model';
 import { block, hash } from './terrain';
 import type { Actor, State } from './server';
 export const selectedTier=(p:Actor)=>p.inventory[p.selected]>0?({24:1,25:2,[IRON_PICK]:3,[DIAMOND_PICK]:4} as Record<number,number>)[p.selected]??0:0;
 export const attackDamage=(p:Actor)=>p.inventory[p.selected]>0?({24:1,25:1.5,[IRON_PICK]:2,[DIAMOND_PICK]:2.5,[WOOD_SWORD]:2,[STONE_SWORD]:2.5,[SWORD]:3} as Record<number,number>)[p.selected]??.5:.5;
 export const miningTier=(b:number)=>b===9?3:[8,34].includes(b)?2:[3,15,16,17,29,33,44].includes(b)?1:0;
-export function drops(b:number,i:number,seed:number):Record<number,number>{
+export function drops(b:number,i:number,seed:number,version=5):Record<number,number>{
   if(b===11)return{};
   if(b===CLAY)return{[CLAY_BALL]:4};
   if(b===5||b===20){const r=hash(i,1,seed);return r<.12?{[SAPLING]:1}:b===5&&r<.18?{[APPLE]:1}:{};}
-  if(b===1)return hash(i,2,seed)<.18?{2:1,[SEEDS]:1}:{2:1};
+  if(b===1)return version<5&&hash(i,2,seed)<.18?{2:1,[SEEDS]:1}:{2:1};
+  if(b===SHORT_GRASS)return hash(i,2,seed)<.125?{[SEEDS]:1}:{};
+  if(b===WILD_CARROT||b===WILD_POTATO)return{[b===WILD_CARROT?CARROT:POTATO]:1};
   return{[b===3?COBBLE:b===33?FUEL:b===34?RAW_IRON:b===9?DIAMOND:b===32?2:b]:1};
 }
 export function addDrops(s:State,p:Actor,items:Record<number,number>){for(const [id,n]of Object.entries(items)){const item=Number(id);p.inventory[item]=Math.min(stackLimit(s.terrainVersion,item),(p.inventory[item]??0)+n);}}

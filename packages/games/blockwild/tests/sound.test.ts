@@ -7,7 +7,7 @@ import { eventCue, material, spatial, WorldSoundTracker } from '../src/soundscap
 import { index, neutral, CAMPFIRE, type View } from '../src/model';
 import { assertSerializable } from '../../../party-contract/src/serializable';
 const ctx={roomId:'r',roundId:'g',seed:99,nowMs:0,players:[{id:'p',name:'Builder',color:'#aabbcc'}]};
-function arena(){const s=rules.create(ctx,rules.validateSettings({}));s.grid.fill(0);for(let x=0;x<128;x++)for(let z=0;z<128;z++)s.grid[index(x,5,z)]=3;Object.assign(s.players[0]!,{x:64.5,y:6,z:66.5,yaw:0,pitch:0});return s;}
+function arena(){const s=rules.create(ctx,rules.validateSettings({}));s.animals=[];s.grid.fill(0);for(let x=0;x<128;x++)for(let z=0;z<128;z++)s.grid[index(x,5,z)]=3;Object.assign(s.players[0]!,{x:64.5,y:6,z:66.5,yaw:0,pitch:0});return s;}
 const view=(s:ReturnType<typeof arena>):View=>rules.publicView(s,{nowMs:0,phase:'playing'});
 test('only accepted crafting, eating and building emit sounds; event data is serializable',()=>{
  const s=arena(),p=s.players[0]!;assert.throws(()=>craft(s,p,'planks'));assert.equal(Boolean(s.sounds),false);
@@ -79,3 +79,5 @@ test('nearby mobs vocalize occasionally, idle creepers stay quiet, and fuse loop
  s.creatures=Array.from({length:20},(_,id)=>({id,kind:'creeper',x:p.x,y:p.y,z:p.z-2,health:10,hitAt:0,fuse:.5}));s.time+=.1;
  assert.equal(tracker.update(view(s),s.grid,p).loops.length,5);
 });
+
+test('nearby farm animals call without playing distant or repeated snapshot sounds',()=>{const s=arena(),p=s.players[0]!;s.animals=[{id:1,kind:'cow',x:p.x+3,y:p.y,z:p.z,yaw:0,health:5,adultAt:0,loveUntil:0,breedAt:0,hitAt:0}];const tracker=new WorldSoundTracker();tracker.update(view(s),s.grid,p);const calls=[];for(let t=1;t<20;t++){s.time=t;calls.push(...tracker.update(view(s),s.grid,p).cues);assert.equal(tracker.update(view(s),s.grid,p).cues.length,0);}assert.ok(calls.length>0&&calls.length<5);assert.ok(calls.every(c=>c.name==='cow'));s.animals[0]!.x=p.x+40;for(let t=20;t<40;t++){s.time=t;assert.equal(tracker.update(view(s),s.grid,p).cues.length,0);}});

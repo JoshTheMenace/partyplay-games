@@ -1,6 +1,6 @@
 import type { MobKind } from './model';
 
-export type SoundKind='break'|'place'|'hit'|'hurt'|'death'|'craft'|'eat'|'plant'|'harvest'|'smelt'|'pickup'|'sleep'|'bow'|'arrow'|'explode';
+export type SoundKind='splash'|'break'|'place'|'hit'|'hurt'|'death'|'craft'|'eat'|'plant'|'harvest'|'smelt'|'pickup'|'sleep'|'bow'|'arrow'|'explode';
 export type SoundEvent={id:number;at:number;kind:SoundKind;x:number;y:number;z:number;block?:number;mob?:MobKind;playerId?:string};
 export type SoundState={time:number;sounds?:SoundEvent[];soundSeq?:number};
 export const SOUND_LIMIT=64,SOUND_AGE=.75;

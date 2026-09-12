@@ -45,21 +45,33 @@ export const BLOCKS = [
   {name:'Oak Sapling',color:'#5d9949',hard:.1,tier:0},
   {name:'White Wool',color:'#eee9df',hard:.4,tier:0},
   {name:'Clay',color:'#9faab7',hard:.5,tier:0},
+  ...['Raw Iron','Coal','Stick','Diamond','Diamond Pickaxe','Apple','Bone','Arrow','String','Gunpowder','Rotten Flesh','Brick','Wooden Sword','Stone Sword','Charcoal','Clay Ball'].map(name=>({name,color:'#bfa681',hard:99999,tier:99})),
+  {name:'Short Grass',color:'#77a94b',hard:.05,tier:0},
+  {name:'Wild Carrots',color:'#8caf49',hard:.1,tier:0},
+  {name:'Wild Potatoes',color:'#7c9e4c',hard:.1,tier:0},
 ] as const;
-export const ITEMS = [...BLOCKS.map(b => b.name), 'Raw Iron','Coal','Stick','Diamond','Diamond Pickaxe','Apple','Bone','Arrow','String','Gunpowder','Rotten Flesh','Brick','Wooden Sword','Stone Sword','Charcoal','Clay Ball'] as const;
+export const ITEMS = [...BLOCKS.map(b => b.name), 'Wooden Hoe','Stone Hoe','Iron Hoe','Carrot','Potato','Raw Beef','Raw Porkchop','Raw Chicken','Raw Mutton','Leather','Feather','Cooked Beef','Cooked Porkchop','Cooked Chicken','Cooked Mutton','Baked Potato','Bucket','Water Bucket','Shears','Bone Meal'] as const;
 export const BENCH=28,FURNACE=29,CHEST=30,BED=31,FARMLAND=32,COAL=33,IRON_ORE=34,CAMPFIRE=35,IRON_PICK=36,SWORD=37,SEEDS=38,GRAIN=39,BREAD=40,INGOT=41,ROAST=42;
 export const TORCH=43,COBBLE=44,SAPLING=45,WOOL=46,CLAY=47,RAW_IRON=48,FUEL=49,STICK=50,DIAMOND=51,DIAMOND_PICK=52,APPLE=53,BONE=54,ARROW=55,STRING=56,GUNPOWDER=57,FLESH=58,BRICK_ITEM=59,WOOD_SWORD=60,STONE_SWORD=61,CHARCOAL=62,CLAY_BALL=63;
-export type TerrainVersion=1|2|3|4;
+export const SHORT_GRASS=64,WILD_CARROT=65,WILD_POTATO=66,WOOD_HOE=67,STONE_HOE=68,IRON_HOE=69,CARROT=70,POTATO=71,BEEF=72,PORK=73,CHICKEN=74,MUTTON=75,LEATHER=76,FEATHER=77,COOKED_BEEF=78,COOKED_PORK=79,COOKED_CHICKEN=80,COOKED_MUTTON=81,BAKED_POTATO=82;
+export const BUCKET=83,WATER_BUCKET=84,SHEARS=85,BONE_MEAL=86;
+export const FOOD_POINTS:Record<number,number>={[BREAD]:2.5,[APPLE]:2,[CARROT]:1.5,[POTATO]:.5,[BEEF]:1.5,[PORK]:1.5,[CHICKEN]:1,[MUTTON]:1,[COOKED_BEEF]:4,[COOKED_PORK]:4,[COOKED_CHICKEN]:3,[COOKED_MUTTON]:3,[BAKED_POTATO]:2.5,[27]:1,[FLESH]:2};
+export const isHoe=(id:number)=>[WOOD_HOE,STONE_HOE,IRON_HOE].includes(id);
+export const isPlant=(id:number)=>[SHORT_GRASS,WILD_CARROT,WILD_POTATO].includes(id);
+export const cropItems=[SEEDS,CARROT,POTATO];
+export type AnimalKind='cow'|'sheep'|'pig'|'chicken';
+export type Animal={sheared?:boolean;grazeAt?:number;id:number;kind:AnimalKind;x:number;y:number;z:number;yaw:number;health:number;hitAt:number;adultAt:number;loveUntil:number;breedAt:number};
+export type TerrainVersion=1|2|3|4|5;
 export const dayLength=(version:TerrainVersion)=>version>=3?1200:240;
 export const isNight=(time:number,version:TerrainVersion)=>time%dayLength(version)>dayLength(version)*.62;
-export const isWorldBlock=(id:number)=>Number.isInteger(id)&&id>=0&&id<BLOCKS.length&&!(id>=24&&id<=27)&&!(id>=36&&id<=42);
-export const isTool=(id:number)=>[24,25,26,IRON_PICK,SWORD,DIAMOND_PICK,WOOD_SWORD,STONE_SWORD].includes(id);
+export const isWorldBlock=(id:number)=>Number.isInteger(id)&&id>=0&&id<BLOCKS.length&&!(id>=24&&id<=27)&&!(id>=36&&id<=42)&&!(id>=48&&id<=63);
+export const isTool=(id:number)=>[24,25,26,IRON_PICK,SWORD,DIAMOND_PICK,WOOD_SWORD,STONE_SWORD,WOOD_HOE,STONE_HOE,IRON_HOE,SHEARS].includes(id);
 export const TOOL = 24, BERRIES=27;
 export const PALETTE = [2,3,4,10,7,11,12,15,13,16,17,18,19,20,21,22,23,5,BENCH,FURNACE,CHEST,BED,COAL,IRON_ORE,CAMPFIRE];
 export const paletteFor=(version:TerrainVersion):number[]=>version<4?PALETTE:[1,2,3,COBBLE,4,10,5,20,7,11,TORCH,15,16,17,18,19,21,22,23,WOOL,CLAY,SAPLING,BENCH,FURNACE,CHEST,BED,COAL,IRON_ORE,8,9,CAMPFIRE];
-export const stackLimit=(version:TerrainVersion,item:number)=>version<4?999:isTool(item)?1:64;
+export const stackLimit=(version:TerrainVersion,item:number)=>version<4?999:item===BUCKET?16:item===WATER_BUCKET||isTool(item)?1:64;
 export const selectable=(id:number)=>Number.isInteger(id)&&id>=0&&id<ITEMS.length&&id!==6&&id!==14;
-export const itemColor=(id:number)=>BLOCKS[id]?.color??({49:"#42464a",50:"#a87947",51:"#68e0d3",52:"#68e0d3",53:"#d84e44"} as Record<number,string>)[id]??"#c7bb9c";
+export const itemColor=(id:number)=>(isWorldBlock(id)||id<48?BLOCKS[id]?.color:undefined)??({49:"#42464a",50:"#a87947",51:"#68e0d3",52:"#68e0d3",53:"#d84e44"} as Record<number,string>)[id]??"#c7bb9c";
 export type Recipe={category?:'Construction'|'Equipment'|'Items'|'Nature';pattern?:number[][];id:string;name:string;costs:Record<number,number>;item:number;count:number;hint:string;station?:number;seconds?:number};
 export const LEGACY_RECIPES:readonly Recipe[] = [
   { id: 'planks', name: 'Planks ×4', costs: { 4: 1 }, item: 10, count: 4, hint: 'Build a shelter' },
@@ -94,9 +106,13 @@ const recipe=(id:string,item:number,count:number,pattern:number[][],category:Non
 export const RECIPES:readonly Recipe[]=[
   recipe('planks',10,4,[[4]],'Construction','Turn logs into planks.'),
   recipe('sticks',STICK,4,[[10],[10]],'Items','Handles for tools and torches.'),
+  recipe('bucket',BUCKET,1,[[INGOT,0,INGOT],[0,INGOT,0]],'Equipment','Collect water, then pour it into an irrigation hole.',BENCH),
+  recipe('shears',SHEARS,1,[[0,INGOT],[INGOT,0]],'Equipment','Shear adult sheep; wool regrows when they graze.'),
+  recipe('bone-meal',BONE_MEAL,3,[[BONE]],'Nature','Fertilize crops or grow short grass for seeds.'),
   recipe('bench',BENCH,1,[[10,10],[10,10]],'Construction','Place a crafting table to unlock 3×3 recipes.'),
   ...[[24,10,'twig'],[25,COBBLE,'stone'],[IRON_PICK,INGOT,'iron-pick'],[DIAMOND_PICK,DIAMOND,'diamond-pick']].map(([item,material,id])=>recipe(String(id),Number(item),1,[[Number(material),Number(material),Number(material)],[0,STICK,0],[0,STICK,0]],'Equipment','Select this pickaxe in the hotbar to mine.',BENCH)),
   ...[[WOOD_SWORD,10,'wood-sword'],[STONE_SWORD,COBBLE,'stone-sword'],[SWORD,INGOT,'sword']].map(([item,material,id])=>recipe(String(id),Number(item),1,[[Number(material)],[Number(material)],[STICK]],'Equipment','Select this sword to deal more damage.',BENCH)),
+  ...[[WOOD_HOE,10,'wood-hoe'],[STONE_HOE,COBBLE,'stone-hoe'],[IRON_HOE,INGOT,'iron-hoe']].map(([item,material,id])=>recipe(String(id),Number(item),1,[[Number(material),Number(material)],[0,STICK],[0,STICK]],'Equipment','Use on grass or dirt, then plant seeds in the farmland.',BENCH)),
   recipe('furnace',FURNACE,1,[[COBBLE,COBBLE,COBBLE],[COBBLE,0,COBBLE],[COBBLE,COBBLE,COBBLE]],'Construction','Smelt ore and sand using fuel.',BENCH),
   recipe('chest',CHEST,1,[[10,10,10],[10,0,10],[10,10,10]],'Construction','Shared storage for supplies.',BENCH),
   recipe('torch',TORCH,4,[[FUEL],[STICK]],'Items','Light an area to prevent nearby spawning.'),
@@ -108,7 +124,7 @@ export const RECIPES:readonly Recipe[]=[
   recipe('sandstone',16,1,[[7,7],[7,7]],'Construction','Build with sandstone.'),
   recipe('bricks',15,1,[[BRICK_ITEM,BRICK_ITEM],[BRICK_ITEM,BRICK_ITEM]],'Construction','Combine four fired bricks.'),
   recipe('campfire',CAMPFIRE,1,[[0,STICK,0],[STICK,FUEL,STICK],[4,4,4]],'Construction','A steady light for camp.',BENCH),
-  ...[[11,7,'glass'],[INGOT,RAW_IRON,'iron'],[BRICK_ITEM,CLAY_BALL,'brick'],[18,CLAY,'terracotta'],[3,COBBLE,'smooth-stone'],[CHARCOAL,4,'charcoal']].map(([item,input,id])=>({...recipe(String(id),Number(item),1,[[Number(input)]],'Items','Smelt in a nearby furnace with fuel.',FURNACE),seconds:10})),
+  ...[[COOKED_BEEF,BEEF,'beef'],[COOKED_PORK,PORK,'pork'],[COOKED_CHICKEN,CHICKEN,'chicken'],[COOKED_MUTTON,MUTTON,'mutton'],[BAKED_POTATO,POTATO,'potato'],[11,7,'glass'],[INGOT,RAW_IRON,'iron'],[BRICK_ITEM,CLAY_BALL,'brick'],[18,CLAY,'terracotta'],[3,COBBLE,'smooth-stone'],[CHARCOAL,4,'charcoal']].map(([item,input,id])=>({...recipe(String(id),Number(item),1,[[Number(input)]],'Items','Smelt in a nearby furnace with fuel.',FURNACE),seconds:10})),
 ];
 export const recipesFor=(version:TerrainVersion)=>version<4?LEGACY_RECIPES:RECIPES;
 export type Settings = { mode: 'survival' | 'creative'; seed: number; terrainVersion?:TerrainVersion };
@@ -121,15 +137,15 @@ export type Creature = { kind?:MobKind; yaw?:number; attackAt?:number; fuse?:num
 export type Projectile={id:number;x:number;y:number;z:number;vx:number;vy:number;vz:number;expires:number};
 export type Blast={id:number;x:number;y:number;z:number;at:number};
 export type Cache = { id: string; owner: string; x: number; y: number; z: number; items: Record<number,number> };
-export type Farm={i:number;readyAt:number};
+export type Farm={i:number;readyAt:number;crop?:number;plantedAt?:number};
 export type FurnaceJob={item:number;count:number;readyAt:number};
 export type Homestead={fuelUntil?:Record<number,number>;chests:Record<number,Record<number,number>>;furnaces:Record<number,FurnaceJob>;farms:Farm[]};
 export type StationView={i:number;kind:number;contents:Record<number,number>;readyAt:number};
-export type View = { sounds?:SoundEvent[]; burningFurnaces?:number[]; seed: number; terrainVersion:TerrainVersion; revision: number; edits: [number,number][]; players: Player[]; creatures: Creature[]; projectiles?:Projectile[]; blasts?:Blast[]; caches: { id: string; ownerId:string; x: number; y: number; z: number }[]; time: number; mode: Settings['mode']; beacon: boolean; complete: boolean; mined: number; built: number; farms:Farm[]; furnaces:{i:number;readyAt:number}[];sleeping:number };
-export type PrivateView = { craftingSize:2|3; nearFurnace:boolean; inventory: Record<number, number>; message: string; commandAck:number; commandResult:string; recovery:{x:number;y:number;z:number}|null;station:StationView|null;home:{x:number;y:number;z:number}|null;air:number };
+export type View = { animals?:Animal[]; sounds?:SoundEvent[]; burningFurnaces?:number[]; seed: number; terrainVersion:TerrainVersion; revision: number; edits: [number,number][]; players: Player[]; creatures: Creature[]; projectiles?:Projectile[]; blasts?:Blast[]; caches: { id: string; ownerId:string; x: number; y: number; z: number }[]; time: number; mode: Settings['mode']; beacon: boolean; complete: boolean; mined: number; built: number; farms:Farm[]; furnaces:{i:number;readyAt:number}[];sleeping:number };
+export type PrivateView = { cropStatus?:string; interaction?:string; craftingSize:2|3; nearFurnace:boolean; inventory: Record<number, number>; message: string; commandAck:number; commandResult:string; recovery:{x:number;y:number;z:number}|null;station:StationView|null;home:{x:number;y:number;z:number}|null;air:number };
 export const index = (x: number, y: number, z: number) => x + z * W + y * W * W;
 export const coords = (i: number) => ({ x: i % W, y: Math.floor(i / (W * W)), z: Math.floor(i / W) % W });
-export const solid = (b: number) => b !== 0 && b !== 6 && b !== TORCH && b !== SAPLING;
+export const solid = (b: number) => b !== 0 && b !== 6 && b !== TORCH && b !== SAPLING && !isPlant(b);
 export const neutral = (): Input => ({ command:null, x: 0, z: 0, looking:false, fly:false, sprint:false, sneak:false, down:false, yaw: 0, pitch: 0, jump: false, mine: false, place: false, slot: 10 });
 
 export function parseCommand(raw:unknown):Command|null {if(raw===null)return null;const c=raw as Command;if(!c||typeof c!=='object'||!Number.isSafeInteger(c.seq)||c.seq<1||!['craft','eat','grow','use','plant','deposit','withdraw'].includes(c.type)||Object.keys(c).some(k=>!['seq','type','recipe','item'].includes(k)))throw new Error('Invalid command.');if(c.type==='craft'){if(![...RECIPES,...LEGACY_RECIPES].some(r=>r.id===c.recipe)||c.item!==undefined)throw new Error('Invalid recipe.');return{seq:c.seq,type:c.type,recipe:c.recipe};}if(c.type==='deposit'||c.type==='withdraw'){if(!Number.isInteger(c.item)||c.item===undefined||c.item<0||c.item>=ITEMS.length||c.recipe!==undefined)throw new Error('Invalid item.');return{seq:c.seq,type:c.type,item:c.item};}if(c.recipe!==undefined||c.item!==undefined)throw new Error('Unexpected command data.');return{seq:c.seq,type:c.type};}

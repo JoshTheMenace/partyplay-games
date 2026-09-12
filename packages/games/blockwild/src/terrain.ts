@@ -1,8 +1,8 @@
-import { W, H, PLAYER_RADIUS, COAL, IRON_ORE, type TerrainVersion, index, solid } from './model';
+import { isPlant, SHORT_GRASS, WILD_CARROT, WILD_POTATO, W, H, PLAYER_RADIUS, COAL, IRON_ORE, type TerrainVersion, index, solid } from './model';
 import { legacyTerrain } from './legacy';
 export function hash(x: number, z: number, seed: number) { let n = Math.imul(x + seed, 374761393) ^ Math.imul(z + 31, 668265263); n = Math.imul(n ^ n >>> 13, 1274126177); return ((n ^ n >>> 16) >>> 0) / 4294967296; }
 export function terrain(seed:number,_version:TerrainVersion=2) {
-  if(_version>=3){const grid=naturalTerrain(seed);if(_version===4)for(let i=0;i<grid.length;i++)if(grid[i]===7&&grid[i+W*W]===6&&hash(i,4,seed)<.35)grid[i]=47;return grid;}
+  if(_version>=3){const grid=naturalTerrain(seed);if(_version>=4)for(let i=0;i<grid.length;i++)if(grid[i]===7&&grid[i+W*W]===6&&hash(i,4,seed)<.35)grid[i]=47;if(_version>=5)for(let x=2;x<W-2;x++)for(let z=2;z<W-2;z++)for(let y=1;y<H-1;y++)if(grid[index(x,y,z)]===1&&grid[index(x,y+1,z)]===0&&hash(x,z,seed+17)<.28)grid[index(x,y+1,z)]=x<45&&z>55&&hash(x,z,seed+32)<.12?WILD_CARROT:z<45&&hash(x,z,seed+32)<.12?WILD_POTATO:SHORT_GRASS;return grid;}
   const grid=new Uint8Array(W*W*H),old=legacyTerrain(seed);
   for(let x=0;x<W;x++)for(let z=0;z<W;z++){
     const edge=Math.min(x,z,W-1-x,W-1-z),channel=Math.min(Math.abs(x-32),Math.abs(x-95),Math.abs(z-32),Math.abs(z-95));
@@ -43,4 +43,4 @@ function naturalTerrain(seed:number){
 }
 export function block(grid: Uint8Array,x: number,y: number,z: number) { x=Math.floor(x);y=Math.floor(y);z=Math.floor(z); return x<0||z<0||x>=W||z>=W||y<0?14:y>=H?0:grid[index(x,y,z)]!; }
 export function fits(grid: Uint8Array,x: number,y: number,z: number) { for(let a=Math.floor(x-PLAYER_RADIUS);a<=Math.floor(x+PLAYER_RADIUS);a++) for(let b=Math.floor(y+.01);b<=Math.floor(y+1.74);b++) for(let c=Math.floor(z-PLAYER_RADIUS);c<=Math.floor(z+PLAYER_RADIUS);c++) if(solid(block(grid,a,b,c))) return false; return true; }
-export function ray(grid: Uint8Array,x: number,y: number,z: number,yaw: number,pitch: number,reach=5) { const dx=-Math.sin(yaw)*Math.cos(pitch),dy=Math.sin(pitch),dz=-Math.cos(yaw)*Math.cos(pitch); let previous={x:Math.floor(x),y:Math.floor(y),z:Math.floor(z)}; for(let d=0;d<=reach;d+=.025) { const p={x:Math.floor(x+dx*d),y:Math.floor(y+dy*d),z:Math.floor(z+dz*d)}; if(![0,6].includes(block(grid,p.x,p.y,p.z))) return { ...p, i:index(p.x,p.y,p.z), previous, distance:d }; previous=p; } return null; }
+export function ray(grid: Uint8Array,x: number,y: number,z: number,yaw: number,pitch: number,reach=5,ignorePlants=false,hitWater=false) { const dx=-Math.sin(yaw)*Math.cos(pitch),dy=Math.sin(pitch),dz=-Math.cos(yaw)*Math.cos(pitch); let previous={x:Math.floor(x),y:Math.floor(y),z:Math.floor(z)}; for(let d=0;d<=reach;d+=.025) { const p={x:Math.floor(x+dx*d),y:Math.floor(y+dy*d),z:Math.floor(z+dz*d)}; if((hitWater?block(grid,p.x,p.y,p.z)!==0:![0,6].includes(block(grid,p.x,p.y,p.z)))&&!(ignorePlants&&isPlant(block(grid,p.x,p.y,p.z)))) return { ...p, i:index(p.x,p.y,p.z), previous, distance:d }; previous=p; } return null; }

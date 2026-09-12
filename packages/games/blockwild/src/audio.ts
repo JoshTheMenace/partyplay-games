@@ -4,7 +4,7 @@ import { spatial, WorldSoundTracker, type Cue, type Loop } from './soundscape';
 import type { UiSound } from './ui-sound';
 
 const variants=['step-grass','step-stone','step-snow','step-wood','step-cloth','impact-stone','impact-wood','impact-soft','impact-glass','impact-metal','impact-hit','zombie','skeleton','spider'];
-const names=[...variants.flatMap(n=>[0,1,2].map(i=>`${n}-${i}`)),'select','open','close','chest-open','chest-close','craft','pickup','sleep','swish','fuse','fire','water','splash','explode','bow'];
+const names=['cow','sheep','pig','chicken',...variants.flatMap(n=>[0,1,2].map(i=>`${n}-${i}`)),'select','open','close','chest-open','chest-close','craft','pickup','sleep','swish','fuse','fire','water','splash','explode','bow'];
 type Voice={source:AudioBufferSourceNode;gain:GainNode;pan:StereoPannerNode;cue:Cue};
 // One mix per playing device. A watching display never constructs this class.
 export class BlockwildAudio{
