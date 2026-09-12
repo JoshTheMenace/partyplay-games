@@ -2,7 +2,6 @@ import type { ResourceScope } from '../../../party-runtime/src/index';
 import type { Player, View } from './model';
 import { spatial, WorldSoundTracker, type Cue, type Loop } from './soundscape';
 import type { UiSound } from './ui-sound';
-import { BackgroundMusic } from './music';
 
 const variants=['step-grass','step-stone','step-snow','step-wood','step-cloth','impact-stone','impact-wood','impact-soft','impact-glass','impact-metal','impact-hit','zombie','skeleton','spider'];
 const names=[...variants.flatMap(n=>[0,1,2].map(i=>`${n}-${i}`)),'select','open','close','chest-open','chest-close','craft','pickup','sleep','swish','fuse','fire','water','splash','explode','bow'];
@@ -10,7 +9,6 @@ type Voice={source:AudioBufferSourceNode;gain:GainNode;pan:StereoPannerNode;cue:
 // One mix per playing device. A watching display never constructs this class.
 export class BlockwildAudio{
  private ctx?:AudioContext;
- private music?:BackgroundMusic;
  private master?:GainNode;
  private filter?:BiquadFilterNode;
  private buffers=new Map<string,AudioBuffer>();
@@ -36,7 +34,7 @@ export class BlockwildAudio{
    const name=(e as CustomEvent<UiSound>).detail;
    if(['select','open','close','chest-open','chest-close'].includes(name))this.play({name,gain:name==='select'?.12:.32});
   });
-  scope.defer(()=>{this.closed=true;this.quiet();this.buffers.clear();this.music?.dispose();void this.ctx?.close().catch(()=>{});});
+  scope.defer(()=>{this.closed=true;this.quiet();this.buffers.clear();void this.ctx?.close().catch(()=>{});});
  }
  private async unlock(){
   if(this.closed||this.muted||document.hidden)return;
@@ -48,17 +46,14 @@ export class BlockwildAudio{
     this.filter=ctx.createBiquadFilter();this.filter.type='lowpass';this.filter.frequency.value=18000;
     const compressor=ctx.createDynamicsCompressor();compressor.threshold.value=-12;compressor.ratio.value=5;
     this.filter.connect(this.master);this.master.connect(compressor);compressor.connect(ctx.destination);
-    this.music=new BackgroundMusic(ctx,this.master);
     this.scope.listen(ctx,'statechange',()=>{if(ctx.state!=='running')this.quiet();else this.baseline=true;});
     // A failed sample is silent. Asset loading must not block graphics readiness or queue old sounds.
     void Promise.all(names.map(async name=>{try{const response=await fetch(`/games/blockwild/sounds/${name}.wav`,{signal:this.scope.signal});if(!response.ok)return;const buffer=await ctx.decodeAudioData(await response.arrayBuffer());if(!this.closed)this.buffers.set(name,buffer);}catch{}}));
    }
-   this.music?.setPlaying(this.available,true);
    if(this.ctx.state!=='running')await this.ctx.resume();
   }catch{/* Audio is optional on devices that cannot open or resume a context. */}
  }
  private quiet(){
-  this.music?.setPlaying(false);
   for(const voice of this.voices)this.stop(voice);
   this.loops.clear();this.baseline=true;
  }
@@ -89,7 +84,7 @@ export class BlockwildAudio{
   this.available=!!p&&p.connected&&connected&&now-this.receivedAt<1500;
   if(!v||!p||!this.available||document.hidden){this.quiet();return;}
   this.listener={...p,yaw};
-  const active=!this.muted&&this.ctx?.state==='running';this.music?.setPlaying(active);
+  const active=!this.muted&&this.ctx?.state==='running';
   if(!active){this.baseline=true;return;}
   const frame=this.tracker.update(v,grid,p,this.baseline);this.baseline=false;
   this.filter!.frequency.setTargetAtTime(frame.underwater?850:18000,this.ctx!.currentTime,.15);

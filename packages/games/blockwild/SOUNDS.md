@@ -1,6 +1,6 @@
 # Blockwild sound
 
-Each controller scene owns one Web Audio mix. The watching display never creates it; a host playing a seat hears that seat's perspective. The shared Sound button controls the local device. A tap or keypress unlocks audio where the browser requires a gesture. The effects bank is accompanied by the four user-supplied background tracks described below.
+Each controller scene owns one Web Audio mix. The watching display never creates an effects mix; a host playing a seat hears that seat's effects. The shared Sound button controls the local device. A tap or keypress unlocks audio where the browser requires a gesture. The effects bank is accompanied by the four user-supplied background tracks described below.
 
 `server.ts`, `survival.ts` and `mobs.ts` emit short, bounded events only after successful actions. The public snapshot repeats up to 64 recent events for 0.75 seconds. `SoundCursor` consumes each ID once and discards initial, stale and reconnect history. Sounds are not saved. Player death includes the owner ID so that player hears it after respawning while others hear it at the original position.
 
@@ -24,8 +24,8 @@ Reference: [Bedrock sound events and categories](https://learn.microsoft.com/en-
 
 ## Background music
 
-Horizon Dawn, Pastoral Horizons, Pastoral Quiet and Silent Exploration play in that order, then repeat. `music.ts` owns one streaming media element, advances when a track ends, and routes music through an 18% Web Audio gain into the existing master. This avoids preloading four complete tracks and keeps phone volume control in the same audio graph as effects.
+Horizon Dawn, Pastoral Horizons, Pastoral Quiet and Silent Exploration play in that order, then repeat. `music.ts` owns one streaming media element, advances when a track ends, and routes music through an 18% Web Audio gain into the host output. This avoids preloading four complete tracks and keeps phone volume control in the same audio graph as effects.
 
-`audio.ts` starts the playlist after an allowed gesture, pauses it on local mute, lost connection, a hidden page or audio suspension, and releases it with the scene. A playing host hears the playlist; a watching host does not construct it. Missing files are skipped, and a completely missing playlist stops after four failed files. Autoplay rejection waits for another gesture instead of repeatedly attempting playback on every frame.
+`host-music.ts` owns the playlist independently of `audio.ts`, which continues to own per-player effects. The shared scene props identify the host even when it is also a player. Music starts after the host's Start gesture where autoplay policy allows, otherwise after another host interaction. Only the host's Sound button pauses/resumes music; phone Sound buttons control their own effects. Hidden pages, a lost connection, suspended audio and disposed scenes pause or release the host playlist. Missing tracks are skipped; a completely missing playlist stops after four failed files.
 
 The MP3s are unchanged user-supplied files in `public/games/blockwild/music/`. Their provenance and order are recorded beside them.

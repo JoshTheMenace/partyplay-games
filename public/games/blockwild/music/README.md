@@ -9,4 +9,4 @@ Playback order, repeating after the fourth track:
 3. Pastoral Quiet — 2:14
 4. Silent Exploration — 2:55
 
-The playlist streams one track at a time on playing devices, with an 18% music gain before the shared effects/music master. Watching displays stay silent. Sound off pauses in place; backgrounding, losing the connection and ending a session stop playback. No new UI controls are added.
+The playlist streams one track at a time on the host, with an 18% Web Audio gain. This also applies when the host is playing; phones retain only local sound effects. The host’s Sound off pauses in place; backgrounding, losing the connection and ending a session stop playback. No new UI controls are added.
