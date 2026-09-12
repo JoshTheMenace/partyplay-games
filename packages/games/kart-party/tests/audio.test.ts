@@ -56,3 +56,10 @@ void test('a nonplaying host display hears the first human racer without stackin
   race.events.push({id:1,type:'coin',racer:'a',time:0},{id:2,type:'coin',racer:'b',time:0});audio.update(race,'host-not-racing',false,'party');assert.equal(context.oscillators.length,initial+1);
   audio.update(race,'host-not-racing',false,'party');assert.equal(context.oscillators.length,initial+1);await Promise.resolve();
 }));
+void test('bump sound plays once for the followed kart and ignores stale contact on reconnect',()=>withAudio(async audio=>{
+  const race=createRace({track:'coast',players:[{id:'a',name:'A',driver:0}]});race.phase='racing';race.time=1;
+  audio.start('coast');audio.update(race,'a',false);const context=Context.instances[0],initial=context.oscillators.length;
+  race.events.push({id:1,type:'bump',racer:'a',time:1,strength:.5},{id:2,type:'bump',racer:'other',time:1,strength:1});
+  audio.update(race,'a',false);audio.update(race,'a',false);assert.equal(context.oscillators.length,initial+1);assert.equal(context.oscillators.at(-1)?.frequency.value,110);
+  race.events.push({id:3,type:'bump',racer:'a',time:0,strength:1});audio.update(race,'a',false);assert.equal(context.oscillators.length,initial+1);await Promise.resolve();
+}));

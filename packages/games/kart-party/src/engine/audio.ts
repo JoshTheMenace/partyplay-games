@@ -60,6 +60,7 @@ export class GameAudio {
       if(event.type==='item')this.tone(660,.23,.13);
       if(event.type==='boost')this.tone(330,.4,.12,'sawtooth');
       if(event.type==='hit')this.tone(85,.35,.18,'square');
+      if(event.type==='bump'&&race.time-event.time<.4)this.tone(110,.1,.04+.1*(event.strength??0),'triangle');
       if(event.type==='finish'){this.tone(523,.5,.2);this.delayedTone(659,.5,140);this.delayedTone(784,.8,280);}
     }
   }

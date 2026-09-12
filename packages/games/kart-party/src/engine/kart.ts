@@ -3,9 +3,11 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createRacerEffects } from './item-visuals';
 import { DRIVERS } from './types';
 import { cloneModel } from './model-assets';
+import { disposeObject } from './dispose';
+import type { KartId } from './garage';
 
 export type Kart={
-  group:T.Group;wheels:T.Object3D[];body:T.Group;shield:T.Mesh;
+  kartId:KartId;group:T.Group;wheels:T.Object3D[];body:T.Group;shield:T.Mesh;
   /** Layered exhaust glow behind both pipes. Origin is the exhaust plane, so scale.z stretches the plume backwards. */
   flame:T.Group;shadow:T.Mesh;effects:T.Group;driver:number;
   /** Articulation pivots, all at rotation 0 when built. Positions are in body space (head, arms, steer) or kart space (frontWheels). */
@@ -104,8 +106,8 @@ function createProceduralRig(driver:number) {
   bake(body);bake(head);bake(armL);bake(armR);bake(steer);
   return {group,wheels,body,head,arms:[armL,armR] as [T.Group,T.Group],steer,frontWheels};
 }
-export function createKart(driver:number,garage?:T.Group):Kart {
-  const rig=garage?createAssetRig(driver,garage):createProceduralRig(driver);
+export function createKart(driver:number,garage?:T.Group,kartId:KartId='standard'):Kart {
+  const rig=garage?createAssetRig(driver,garage,kartId):createProceduralRig(driver);
   const {group,body,wheels,head,arms,steer,frontWheels}=rig;
   const shadow=new T.Mesh(new T.CircleGeometry(1.5,24),new T.MeshBasicMaterial({color:'#102039',transparent:true,opacity:.24,depthWrite:false}));shadow.rotation.x=-Math.PI/2;shadow.scale.set(.85,1.15,1);shadow.position.y=.035;group.add(shadow);
   const shield=new T.Mesh(new T.SphereGeometry(2.15,24,16),new T.MeshBasicMaterial({color:'#71e9ff',wireframe:true,transparent:true,opacity:.3}));shield.position.y=1.2;shield.visible=false;group.add(shield);
@@ -119,12 +121,18 @@ export function createKart(driver:number,garage?:T.Group):Kart {
     const mesh=new T.Mesh(merged,new T.MeshBasicMaterial({color,transparent:true,opacity,blending:T.AdditiveBlending,depthWrite:false,toneMapped:false}));mesh.renderOrder=2;flame.add(mesh);
   }
   const effects=createRacerEffects();group.add(effects);
-  return {group,wheels,body,shield,flame,shadow,effects,driver,head,arms,steer,frontWheels};
+  return {group,wheels,body,shield,flame,shadow,effects,driver,kartId,head,arms,steer,frontWheels};
 }
 
-function createAssetRig(driver:number,garage:T.Group){
+function createAssetRig(driver:number,garage:T.Group,kartId:KartId){
   const index=driver%DRIVERS.length,group=cloneModel(garage,`driver_${index}`);
   const part=(name:string)=>group.getObjectByName(`${name}_${index}`) as T.Group;
   group.rotation.order='YXZ';
-  return {group,body:part('body'),head:part('head'),arms:[part('arm_l'),part('arm_r')] as [T.Group,T.Group],steer:part('steer'),frontWheels:[part('front_l'),part('front_r')],wheels:['front_l','front_r','rear_l','rear_r'].map(name=>part(`wheel_${name}`))};
+  if(kartId!=='standard'){
+    for(const name of ['chassis','front_l','front_r','rear_l','rear_r']){const old=part(name);old.removeFromParent();disposeObject(old);}
+    const vehicle=cloneModel(garage,`kart_${kartId}`),chassis=vehicle.getObjectByName(`chassis_${kartId}`)!;
+    part('body').add(chassis);group.add(...vehicle.children.slice());
+  }
+  const wheelPart=(name:string)=>group.getObjectByName(`${name}_${kartId==='standard'?index:kartId}`) as T.Group;
+  return {group,body:part('body'),head:part('head'),arms:[part('arm_l'),part('arm_r')] as [T.Group,T.Group],steer:part('steer'),frontWheels:[wheelPart('front_l'),wheelPart('front_r')],wheels:['front_l','front_r','rear_l','rear_r'].map(name=>wheelPart(`wheel_${name}`))};
 }

@@ -1,3 +1,4 @@
+import type { KartId } from './garage';
 export type TrackId = 'coast' | 'canyon' | 'midnight' | 'rainbow';
 export type SpeedClass = 50 | 100 | 150 | 200;
 export type Item = 'boost' | 'shell' | 'banana' | 'shield' | 'pulse' | 'triple' | 'oil' | 'frost' | 'magnet' | 'star' | 'rocket' | 'decoy';
@@ -19,6 +20,8 @@ export const DRIVERS = [
   { name: 'Jade', color: '#1ca993', accent: '#c8f5d5', animal: 'rabbit' },
 ] as const;
 export type Racer = {
+  kart?:KartId; routeId?:string;
+  impact?:{time:number;strength:number};
   loopDistance?:number; loopOffset?:number;
   id: string; name: string; driver: number; bot: boolean;
   x: number; z: number; y:number; verticalSpeed:number; airborne:boolean; rampCooldown:number; heading: number; speed: number; lateral: number;
@@ -28,9 +31,10 @@ export type Racer = {
   item: Item | null; itemCooldown: number; finishTime: number | null;
   lastUse: boolean; offroad: boolean; connected: boolean; distance: number; wallTime: number; coinsTaken: number[];
 };
-export type Hazard = { s?:number; offset?:number; id: number; kind: 'shell' | 'banana' | 'oil' | 'frost' | 'rocket' | 'decoy'; owner: string; x: number; z: number; heading: number; life: number; target?: string; affected?: string[] };
-export type RaceEvent = { id: number; type: 'boost' | 'hit' | 'item' | 'coin' | 'finish' | 'lap'; racer: string; time: number; lap?: number };
+export type Hazard = { routeId?:string; s?:number; offset?:number; id: number; kind: 'shell' | 'banana' | 'oil' | 'frost' | 'rocket' | 'decoy'; owner: string; x: number; z: number; heading: number; life: number; target?: string; affected?: string[] };
+export type RaceEvent = { id: number; type: 'boost' | 'hit' | 'bump' | 'item' | 'coin' | 'finish' | 'lap'; racer: string; time: number; lap?: number; strength?:number };
 export type Race = {
+  garage?:{deadline:number;remaining:number;readyIds:string[]};
   viewMode?: 'tv' | 'personal';
   startId?: string; startAt?: number | null;
   track: TrackId; speedClass: SpeedClass; phase: Phase; time: number; countdown: number; laps: number;

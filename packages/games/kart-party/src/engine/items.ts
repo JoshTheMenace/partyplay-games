@@ -1,5 +1,7 @@
 import { angleDelta, clamp, magneticAt, mod, nearest, roadHeight, surfaceFrame, TRACKS, type Track } from './tracks';
 import type { Hazard, Item, Race, Racer } from './types';
+import { COURSE_DESIGNS } from './course-designs';
+import { routeNearest, routeSample } from './course-routes';
 
 export const ITEMS = {
   boost: { name: 'Comet Kick', description: 'A 2.3-second burst of straight-line speed.', color: '#ff9848', icon: 'flame' },
@@ -43,7 +45,9 @@ export function hit(race: Race, racer: Racer, effect: 'stun'|'frost'|'oil'|'deco
 }
 const routeDistance=(track:Track,a:number,b:number)=>Math.abs(angleDelta(a*Math.PI*2,b*Math.PI*2))/(Math.PI*2)*track.length;
 function routeNear(track:Track,a:number,b:number,radius:number){return !(magneticAt(track,a)||magneticAt(track,b))||routeDistance(track,a,b)<radius;}
-function hazardPosition(track:Track,hazard:Hazard){
+export function hazardPosition(track:Track,hazard:Hazard){
+  const route=COURSE_DESIGNS[track.id].routes.find(route=>route.id===hazard.routeId);
+  if(route){const p=routeNearest(track,route,hazard.x,hazard.z);return {x:hazard.x,y:routeSample(track,route,p.s,p.offset).y,z:hazard.z};}
   if(hazard.s!==undefined)return surfaceFrame(track,hazard.s,hazard.offset??0).position;
   const location=nearest(track,hazard.x,hazard.z);return {x:hazard.x,y:roadHeight(track,location.s,location.offset),z:hazard.z};
 }
@@ -67,6 +71,7 @@ export function activateItem(race: Race, racer: Racer) {
       const heading=racer.heading+(item==='triple'?(i-1)*.25:0),ahead=stationary?-4:4;
       const hazard:Hazard={id:++race.serial,kind,owner:racer.id,x:racer.x+Math.sin(heading)*ahead,z:racer.z+Math.cos(heading)*ahead,heading,life:stationary?25:kind==='rocket'?2:7,...(item==='triple'?{target:targets[i%Math.max(1,targets.length)]?.id}:{})};
       if(magneticAt(track,racer.s)){hazard.s=mod(racer.s+ahead/track.length);hazard.offset=clamp((racer.loopOffset??0)+(item==='triple'?(i-1)*1.8:0),-track.width/2+1,track.width/2-1);placeHazard(track,hazard);}
+      if(racer.routeId)hazard.routeId=racer.routeId;
       race.hazards.push(hazard);
     }
   }
@@ -92,7 +97,7 @@ export function updateHazards(race: Race, dt: number) {
     }
     const sourceS=hazard.s??nearest(track,hazard.x,hazard.z).s;
     if(hazard.kind==='shell') {
-      const targets=race.racers.filter(r=>!r.airborne&&r.id!==hazard.owner&&r.finishTime===null&&Math.hypot(r.x-before.x,r.y-before.y,r.z-before.z)<65&&routeNear(track,sourceS,r.s,70)&&(hazard.s===undefined||mod(r.s-sourceS)*track.length<65)).sort((a,b)=>Math.hypot(a.x-before.x,a.y-before.y,a.z-before.z)-Math.hypot(b.x-before.x,b.y-before.y,b.z-before.z)||a.id.localeCompare(b.id));
+      const targets=race.racers.filter(r=>r.routeId===hazard.routeId&&!r.airborne&&r.id!==hazard.owner&&r.finishTime===null&&Math.hypot(r.x-before.x,r.y-before.y,r.z-before.z)<65&&routeNear(track,sourceS,r.s,70)&&(hazard.s===undefined||mod(r.s-sourceS)*track.length<65)).sort((a,b)=>Math.hypot(a.x-before.x,a.y-before.y,a.z-before.z)-Math.hypot(b.x-before.x,b.y-before.y,b.z-before.z)||a.id.localeCompare(b.id));
       const target=targets.find(r=>r.id===hazard.target)??targets[0];
       if(target){
         if(hazard.s!==undefined){const lane=target.loopOffset??nearest(track,target.x,target.z).offset;hazard.offset=clamp((hazard.offset??0)+clamp(lane-(hazard.offset??0),-8*dt,8*dt),-track.width/2+1,track.width/2-1);}
@@ -101,6 +106,7 @@ export function updateHazards(race: Race, dt: number) {
     }
     if(hazard.s!==undefined){if(speed)hazard.s=mod(hazard.s+surfaceTravel/track.length);placeHazard(track,hazard);}
     else {hazard.x+=Math.sin(hazard.heading)*speed*dt;hazard.z+=Math.cos(hazard.heading)*speed*dt;}
+    if(hazard.routeId&&speed){const route=COURSE_DESIGNS[track.id].routes.find(route=>route.id===hazard.routeId);if(route&&routeNearest(track,route,hazard.x,hazard.z).s>=route.to-.5/track.length)delete hazard.routeId;}
     const after=hazardPosition(track,hazard),endS=hazard.s??nearest(track,hazard.x,hazard.z).s;
     const targets=race.racers.filter(r=>r.finishTime===null&&r.id!==hazard.owner);
     const radius=hazard.kind==='oil'?5:2.7;

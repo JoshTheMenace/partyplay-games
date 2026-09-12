@@ -39,7 +39,8 @@ export function applyCourseLane(track:Track,racer:Racer,offset:number,dt:number)
   if(lane?.kind==='launch'&&racer.rampCooldown<=0&&racer.speed>10){racer.airborne=true;racer.verticalSpeed=8;racer.rampCooldown=2;racer.boost=Math.max(racer.boost,.8);}
 }
 export function resolveCourseObstacles(track:Track,racer:Racer,obstacles:CourseObstacle[]){
-  if(racer.finishTime!==null||racer.loopDistance!==undefined)return;
+  let impact=0;
+  if(racer.finishTime!==null||racer.loopDistance!==undefined)return impact;
   for(const obstacle of obstacles){
     if(Math.abs(angleDelta(racer.s*Math.PI*2,obstacle.s*Math.PI*2))*track.length/(Math.PI*2)>9)continue;
     const p=sample(track,obstacle.s,obstacle.offset);
@@ -51,8 +52,10 @@ export function resolveCourseObstacles(track:Track,racer:Racer,obstacles:CourseO
     const nx=d>.001?dx/d:Math.cos(p.heading),nz=d>.001?dz/d:-Math.sin(p.heading);
     racer.x+=nx*(radius-d);racer.z+=nz*(radius-d);
     const closing=(Math.sin(racer.heading)*racer.speed+Math.cos(racer.heading)*racer.lateral)*nx+(Math.cos(racer.heading)*racer.speed-Math.sin(racer.heading)*racer.lateral)*nz;
+    impact=Math.max(impact,-closing);
     if(closing<0){racer.speed=Math.max(0,racer.speed-closing*nx*Math.sin(racer.heading)-closing*nz*Math.cos(racer.heading));racer.lateral-=closing*(nx*Math.cos(racer.heading)-nz*Math.sin(racer.heading));}
   }
+  return impact;
 }
 /** Steer CPUs through the same openings players see; no collision immunity. */
 export function courseBotLane(track:Track,racer:Racer,time:number,lane:number){

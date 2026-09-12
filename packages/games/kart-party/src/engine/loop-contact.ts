@@ -1,4 +1,5 @@
 import { hit } from './items';
+import { recordContact } from './contact-feedback';
 import { surfaceFrame,TRACKS } from './tracks';
 import type { Race,Racer } from './types';
 
@@ -9,7 +10,7 @@ export function resolveLoopContact(race:Race,a:Racer,b:Racer){
   const along=Math.abs(a.loopDistance-b.loopDistance),across=Math.abs((a.loopOffset??0)-(b.loopOffset??0));
   if(Math.hypot(along,across)>=2.5||Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z)>=2.7)return true;
   const direction=Math.sign(b.loopDistance-a.loopDistance),closing=(a.speed-b.speed)*direction;
-  if(closing>0){const impulse=closing*.6;a.speed=Math.max(0,a.speed-impulse*direction);b.speed=Math.max(0,b.speed+impulse*direction);}
+  if(closing>0){const impulse=closing*.6;a.speed=Math.max(0,a.speed-impulse*direction);b.speed=Math.max(0,b.speed+impulse*direction);recordContact(race,a,closing);recordContact(race,b,closing);}
   if(a.star>0)hit(race,b);if(b.star>0)hit(race,a);
   const track=TRACKS[race.track],limit=track.width/2-1.25;
   const [low,high]=(a.loopOffset??0)<(b.loopOffset??0)||((a.loopOffset??0)===(b.loopOffset??0)&&a.id<b.id)?[a,b]:[b,a];

@@ -3,12 +3,17 @@
   "license": "Original project artwork",
   "axes": "+Y up, +Z forward",
   "drivers": 10,
+  "karts": [
+    "standard",
+    "sprint",
+    "trail"
+  ],
   "props": [
     "buoy",
     "boulder",
     "traffic",
     "satellite"
   ],
-  "triangles": 289200,
-  "bytes": 7132972
+  "triangles": 331464,
+  "bytes": 8428508
 }

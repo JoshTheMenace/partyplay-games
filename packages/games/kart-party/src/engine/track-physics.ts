@@ -1,8 +1,10 @@
 import { angleDelta, mod, rampAt, roadHeight, sample, sectorAt, TRACKS } from './tracks';
 import type { Race, Racer } from './types';
+import { racerRoute } from './course-interactions';
+import { routeSample } from './course-routes';
 
 export function advanceTrackMotion(race:Race,racer:Racer,previousS:number,offset:number,dt:number){
-  const track=TRACKS[race.track],ground=roadHeight(track,racer.s,offset),previousRamp=rampAt(track,previousS,offset);
+  const track=TRACKS[race.track],route=racerRoute(track,racer),ground=route?routeSample(track,route,racer.s,offset).y:roadHeight(track,racer.s,offset),previousRamp=route?undefined:rampAt(track,previousS,offset);
   racer.rampCooldown=Math.max(0,racer.rampCooldown-dt);
   if(!racer.airborne&&previousRamp&&racer.rampCooldown===0&&racer.speed>12){
     const travel=angleDelta(racer.s*Math.PI*2,previousS*Math.PI*2)/(Math.PI*2),lip=mod(previousRamp.s+previousRamp.length/track.length);

@@ -5,6 +5,7 @@ import { disposeObject } from './dispose';
 import { TRACKS, groundHeight as terrainHeight, nearest, roadHeight, sample, type Track, sectorAt } from './tracks';
 import { courseScenery } from './course-scenery';
 import { createRainbowWorld } from './rainbow-world';
+import { branchClearance, routeGroundHeight } from './course-interactions';
 import type { Racer, TrackId } from './types';
 
 const material=(color: T.ColorRepresentation,roughness=.8)=>new T.MeshStandardMaterial({color,roughness});
@@ -23,12 +24,15 @@ function instances(group:T.Group,geometry:T.BufferGeometry,list:Instance[],emiss
   list.forEach((v,i)=>{dummy.position.fromArray(v.position);dummy.scale.fromArray(v.scale);dummy.rotation.set(...(v.rotation??[0,0,0]) as [number,number,number]);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);mesh.setColorAt(i,new T.Color(v.color));});
   mesh.receiveShadow=true;mesh.castShadow=castShadow;mesh.computeBoundingSphere();group.add(mesh);return mesh;
 }
-function ribbon(track:Track,from:number,to:number,height:number,color:string) {
+function ribbon(track:Track,from:number,to:number,height:number,color:string,clearBranches=false) {
   const positions:number[]=[],indices:number[]=[];
   for(let i=0;i<=768;i++) {for(const offset of [from,to]){const p=sample(track,i/768,offset);positions.push(p.x,p.y+height,p.z);}}
-  for(let i=0;i<768;i++){const k=i*2;indices.push(k,k+2,k+1,k+1,k+2,k+3);}
+  for(let i=0;i<768;i++){
+    if(clearBranches){const p=sample(track,(i+.5)/768,(from+to)/2);if(branchClearance(track,p.x,p.z,Math.hypot((to-from)/2,track.length/1536)+.5))continue;}
+    const k=i*2;indices.push(k,k+2,k+1,k+1,k+2,k+3);
+  }
   const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.setIndex(indices);geometry.computeVertexNormals();
-  const mesh=new T.Mesh(geometry,material(color));mesh.receiveShadow=true;return mesh;
+  const mesh=new T.Mesh(geometry,material(color));mesh.name=clearBranches?'main-road-barrier':'main-road';mesh.receiveShadow=true;return mesh;
 }
 function label(text:string,color='#ffffff',background='#14233d') {
   const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=192;
@@ -57,7 +61,7 @@ export function createWorld(id:TrackId):World {
   const terrain=new T.PlaneGeometry(1500,1500,120,120);terrain.rotateX(-Math.PI/2);
   const pos=terrain.attributes.position,colors:number[]=[];
   for(let i=0;i<pos.count;i++) {
-    const x=pos.getX(i),z=pos.getZ(i),y=terrainHeight(track,x,z);
+    const x=pos.getX(i),z=pos.getZ(i),y=routeGroundHeight(track,x,z);
     pos.setY(i,y);
     const location=nearest(track,x,z),sector=sectorAt(track,location.s);
     const c=new T.Color(sector.color).multiplyScalar(.88+random()*.2);
@@ -69,19 +73,19 @@ export function createWorld(id:TrackId):World {
     oceanMaterial=createOceanMaterial();const ocean=new T.Mesh(new T.PlaneGeometry(7000,7000),oceanMaterial);ocean.rotation.x=-Math.PI/2;ocean.position.y=-7;group.add(ocean);
   }
   group.add(ribbon(track,-track.width/2,track.width/2,.04,night?'#333b54':'#52636b'));
-  group.add(ribbon(track,-track.width/2-1.1,-track.width/2,.065,'#f1e9d8'),ribbon(track,track.width/2,track.width/2+1.1,.065,'#f1e9d8'));
+  group.add(ribbon(track,-track.width/2-1.1,-track.width/2,.065,'#f1e9d8',true),ribbon(track,track.width/2,track.width/2+1.1,.065,'#f1e9d8',true));
   const lights:Instance[]=[],markings:Instance[]=[],curbs:Instance[]=[],posts:Instance[]=[],rails:Instance[]=[],trunks:Instance[]=[],leaves:Instance[]=[],rocks:Instance[]=[],buildings:Instance[]=[],roofs:Instance[]=[],windows:Instance[]=[],decor:Instance[]=[];
   const count=Math.floor(track.length/5);
   for(let i=0;i<count;i++) {
     for(const side of [-1,1]) {
       const p=sample(track,i/count,side*(track.width/2+.55));
-      curbs.push({position:[p.x,p.y+.13,p.z],scale:[1.1,.2,track.length/count*.5],color:i%2?'#ffffff':night?'#b777ef':'#f46758',rotation:[0,p.heading,0]});
-      if(i%4===0){const r=sample(track,i/count,side*(track.width/2+3));posts.push({position:[r.x,r.y+1.4,r.z],scale:[.23,2.8,.23],color:night?'#49637d':'#879b9e'});}
+      if(!branchClearance(track,p.x,p.z,1.7))curbs.push({position:[p.x,p.y+.13,p.z],scale:[1.1,.2,track.length/count*.5],color:i%2?'#ffffff':night?'#b777ef':'#f46758',rotation:[0,p.heading,0]});
+      if(i%4===0){const r=sample(track,i/count,side*(track.width/2+3));if(!branchClearance(track,r.x,r.z,.4))posts.push({position:[r.x,r.y+1.4,r.z],scale:[.23,2.8,.23],color:night?'#49637d':'#879b9e'});}
     }
-    if(night&&i%16===0)for(const side of [-1,1]){const p=sample(track,i/count,side*(track.width/2+4));posts.push({position:[p.x,p.y+5,p.z],scale:[.3,10,.3],color:'#50698f'});lights.push({position:[p.x,p.y+9.8,p.z],scale:[1.2,.25,1.2],color:side===1?'#ffcf8a':'#92e9ff'});}
+    if(night&&i%16===0)for(const side of [-1,1]){const p=sample(track,i/count,side*(track.width/2+4));if(branchClearance(track,p.x,p.z,.9))continue;posts.push({position:[p.x,p.y+5,p.z],scale:[.3,10,.3],color:'#50698f'});lights.push({position:[p.x,p.y+9.8,p.z],scale:[1.2,.25,1.2],color:side===1?'#ffcf8a':'#92e9ff'});}
     if(i%3===0){const p=sample(track,i/count);markings.push({position:[p.x,p.y+.07,p.z],scale:[.16,.02,3],color:night?'#a0b4d0':'#dbdfd2',rotation:[0,p.heading,0]});}
   }
-  for(const side of [-1,1])group.add(ribbon(track,side*(track.width/2+3)-.12,side*(track.width/2+3)+.12,2.3,night?'#bf88ff':'#d8e5d6'));
+  for(const side of [-1,1])group.add(ribbon(track,side*(track.width/2+3)-.12,side*(track.width/2+3)+.12,2.3,night?'#bf88ff':'#d8e5d6',true));
   for(let a=0;a<12;a++)for(let b=0;b<4;b++){const p=sample(track,b*1.3/track.length,(a-5.5)*1.45);markings.push({position:[p.x,p.y+.1,p.z],scale:[1.45,.03,1.3],color:(a+b)%2?'#ffffff':'#14253a',rotation:[0,p.heading,0]});}
   // Gantry: slim posts, a shallow truss beam, and a plaque-sized sign. Structure merges to one mesh, accents to one more.
   const steel=material(night?'#3b4266':'#66727f',.55);
@@ -118,7 +122,7 @@ export function createWorld(id:TrackId):World {
   }
   for(let i=0;i<650;i++) {
     const s=random(),side=random()>.5?1:-1,offset=side*(22+random()*115),p=sample(track,s,offset);
-    const n=nearest(track,p.x,p.z);if(n.distance<(id==='canyon'?40:id==='midnight'?33:23))continue;
+    const n=nearest(track,p.x,p.z);if(n.distance<(id==='canyon'?40:id==='midnight'?33:23)||branchClearance(track,p.x,p.z,14))continue;
     const base=terrainHeight(track,p.x,p.z)-.3,height=5+random()*13;
     if(id==='coast'&&base<-4)continue;
     const sector=sectorAt(track,s);
@@ -193,7 +197,8 @@ export function createWorld(id:TrackId):World {
     const mast=new T.Mesh(new T.CylinderGeometry(.13,.13,15,5),material('#eee6cf'));mast.position.y=7;boat.add(mast);
     const sail=new T.Mesh(new T.ConeGeometry(6,12,3),material('#fff9de'));sail.scale.z=.06;sail.position.set(2,8,0);boat.add(sail);group.add(boat);
   }
-  instances(group,box,markings);instances(group,box,curbs);instances(group,box,posts);instances(group,box,rails);
+  instances(group,box,markings);instances(group,box,rails);
+  for(const [name,pieces] of [['main-road-curbs',curbs],['main-road-posts',posts]] as const){const mesh=instances(group,box,pieces);if(mesh)mesh.name=name;}
   instances(group,cylinder,trunks,false,true);instances(group,frond,leaves,false,true);instances(group,sphere,rocks,false,true);instances(group,box,buildings,false,true);instances(group,cone,roofs,false,true);instances(group,night?windowPane:box,windows,night);instances(group,box,lights,true);instances(group,box,decor,true);
   return {group,track,animated,boxes:itemBoxes,coins,update(time){atmosphere.update(time);oceanMaterial?.userData.update(time);},dispose(){disposeObject(group);}};
 }

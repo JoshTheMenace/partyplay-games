@@ -3,6 +3,7 @@ import { disposeObject } from './dispose';
 import { bankAt, mod, sample, surfaceFrame, magneticAt, TRACKS, type Track } from './tracks';
 import type { Racer } from './types';
 import type { World } from './world';
+import { branchClearance } from './course-interactions';
 
 const basis=(f:ReturnType<typeof surfaceFrame>)=>new T.Matrix4().makeBasis(new T.Vector3(f.right.x,f.right.y,f.right.z),new T.Vector3(f.up.x,f.up.y,f.up.z),new T.Vector3(f.forward.x,f.forward.y,f.forward.z));
 const spectrum=(h:number,l=.57)=>new T.Color().setHSL(mod(h),.88,l);
@@ -14,13 +15,16 @@ function batch(group:T.Group,geometry:T.BufferGeometry,pieces:Piece[],lit=false)
   pieces.forEach((p,i)=>{dummy.position.copy(p.position);dummy.scale.copy(p.scale);dummy.rotation.copy(p.rotation);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);mesh.setColorAt(i,p.color);});
   mesh.castShadow=!lit;mesh.receiveShadow=!lit;mesh.computeBoundingSphere();group.add(mesh);return mesh;
 }
-function ribbon(track:Track,left:number,right:number,height:number,from=0,to=1){
+function ribbon(track:Track,left:number,right:number,height:number,from=0,to=1,clearBranches=false){
   const positions:number[]=[],uv:number[]=[],indices:number[]=[],steps=Math.max(2,Math.ceil((to-from)*track.length/1.5));
   // Narrow cross-road cells follow the twisting loop surface; a single wide
   // diagonal triangle can cut through the kart on the inverted bend.
   const columns=from===0&&to===1?Math.max(1,Math.ceil(Math.abs(right-left)/3)):1;
   for(let i=0;i<=steps;i++)for(let j=0;j<=columns;j++){const offset=left+(right-left)*j/columns,s=from+(to-from)*i/steps,p=surfaceFrame(track,s,offset,height).position;positions.push(p.x,p.y,p.z);uv.push(s*track.length/6,(offset+track.width/2)/track.width);}
-  for(let i=0;i<steps;i++)for(let j=0;j<columns;j++){const k=i*(columns+1)+j,n=k+columns+1;indices.push(k,n,k+1,k+1,n,n+1);}
+  for(let i=0;i<steps;i++)for(let j=0;j<columns;j++){
+    if(clearBranches){const p=surfaceFrame(track,from+(to-from)*(i+.5)/steps,left+(right-left)*(j+.5)/columns,height).position;if(branchClearance(track,p.x,p.z,Math.hypot((right-left)/columns/2,(to-from)*track.length/steps/2)+.5))continue;}
+    const k=i*(columns+1)+j,n=k+columns+1;indices.push(k,n,k+1,k+1,n,n+1);
+  }
   const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
 }
 const vertex=`varying vec2 vUv; varying vec3 vPosition; varying vec3 vNormal;
@@ -46,13 +50,13 @@ export function rainbowScenery(track:Track){
   const posts:Piece[]=[],lights:Piece[]=[],rocks:Piece[]=[],crystals:Piece[]=[];
   const piece=(list:Piece[],s:number,offset:number,y:number,scale:number[],color:T.Color,rotation?:T.Euler)=>{const frame=surfaceFrame(track,s,offset,y),p=frame.position;list.push({position:new T.Vector3(p.x,p.y,p.z),scale:new T.Vector3(...scale as [number,number,number]),rotation:magneticAt(track,s)?new T.Euler().setFromRotationMatrix(basis(frame)):rotation??new T.Euler(0,sample(track,s).heading,bankAt(track,s),'YXZ'),color});};
   for(const side of [-1,1]){
-    group.add(new T.Mesh(ribbon(track,side*track.width/2,side*(track.width/2+1.5),.04),paint('#293351')));
+    const shoulder=new T.Mesh(ribbon(track,side*track.width/2,side*(track.width/2+1.5),.04,0,1,true),paint('#293351'));shoulder.name='main-road-barrier';group.add(shoulder);
     const edge=side*(track.width/2+1.5);
     for(const [width,height,alpha] of [[.13,.25,1],[.12,1.3,1],[.5,1.3,.13]]){
-      const line=new T.Mesh(ribbon(track,edge-width,edge+width,height),glow(side===1?'#ffd2f2':'#95fff4',alpha));line.name='safety-rail';group.add(line);
+      const line=new T.Mesh(ribbon(track,edge-width,edge+width,height,0,1,true),glow(side===1?'#ffd2f2':'#95fff4',alpha));line.name='safety-rail';group.add(line);
     }
-    for(let i=0;i<track.length/15;i++)piece(posts,i*15/track.length,edge,.65,[.22,1.3,.24],new T.Color('#657194'));
-    for(let i=0;i<track.length/7;i++)piece(lights,i*7/track.length,side*(track.width/2+.72),.11,[.55,.06,2.6],spectrum(i*.014+side*.1,.65));
+    for(let i=0;i<track.length/15;i++){const s=i*15/track.length,p=sample(track,s,edge);if(!branchClearance(track,p.x,p.z,.4))piece(posts,s,edge,.65,[.22,1.3,.24],new T.Color('#657194'));}
+    for(let i=0;i<track.length/7;i++){const s=i*7/track.length,offset=side*(track.width/2+.72),p=sample(track,s,offset);if(!branchClearance(track,p.x,p.z,1.5))piece(lights,s,offset,.11,[.55,.06,2.6],spectrum(i*.014+side*.1,.65));}
   }
   // Stars across the deck, reflective chevrons, and launch pads make the fast route readable.
   const star=new T.Shape();for(let i=0;i<10;i++){const a=i*Math.PI/5,r=i%2?.38:.9;if(i)star.lineTo(Math.sin(a)*r,Math.cos(a)*r);else star.moveTo(0,r);}star.closePath();
@@ -98,7 +102,7 @@ export function rainbowScenery(track:Track){
     const s=.735+i*.0042,side=i%2?1:-1;piece(rocks,s,side*(32+i%7*6),-8+(i%6)*6,[3+i%4,3+i%3,4+i%5],new T.Color().setHSL(.64+i*.001,.25,.2+(i%3)*.055),new T.Euler(i,i*.7,i*.3));
     if(i%3===0)piece(crystals,s,side*(36+i%7*6),3+i%5*5,[.5,.5,7],spectrum(.02+i*.012,.67));
   }
-  batch(group,new T.BoxGeometry(1,1,1),posts);batch(group,new T.BoxGeometry(1,1,1),lights,true);
+  batch(group,new T.BoxGeometry(1,1,1),posts).name='main-road-posts';batch(group,new T.BoxGeometry(1,1,1),lights,true);
   batch(group,new T.IcosahedronGeometry(1,1),rocks);batch(group,new T.OctahedronGeometry(1),crystals);
   const nebula=new T.Mesh(new T.SphereGeometry(4100,32,16),new T.ShaderMaterial({vertexShader:vertex,side:T.BackSide,depthWrite:false,fragmentShader:`varying vec2 vUv;varying vec3 vPosition;varying vec3 vNormal;
 void main(){vec3 p=normalize(vPosition);float band=exp(-pow((p.y-.18+sin(p.x*3.)*.13)/.23,2.));float dust=.5+.5*sin(p.x*18.+sin(p.z*14.)*2.+sin(p.y*17.));dust*=.6+.4*sin(p.z*32.+sin(p.x*27.));vec3 cloud=mix(vec3(.03,.065,.13),vec3(.10,.025,.16),.5+.5*sin(p.x*4.+p.z*6.));gl_FragColor=vec4(vec3(.0015,.0018,.007)+cloud*band*(.2+dust*.8),1.);

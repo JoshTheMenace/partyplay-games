@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { groundHeight, sample, type Track } from './tracks';
 import { rainbowScenery } from './rainbow-world';
+import { branchClearance } from './course-interactions';
 
 type Shape='box'|'rock'|'pillar'|'roof'|'light';
 type Instance={p:number[];s:number[];c:string;r:number[]};
@@ -24,6 +25,7 @@ export function courseScenery(track:Track){
       strip(sector.from,sector.to,track.width+1,'#516075',-.7);
       for(let s=sector.from;s<sector.to;s+=22/track.length)for(const side of [-1,1]){
         const p=sample(track,s,side*(track.width/2+.7)),ground=groundHeight(track,p.x,p.z),h=p.y-ground;
+        if(branchClearance(track,p.x,p.z,.9))continue;
         if(h>2)add('pillar',[p.x,ground+h/2,p.z],[1.6,h,1.6],track.id==='coast'?'#775643':'#62758b');
         add('box',[p.x,p.y+1.5,p.z],[.45,3,.45],track.id==='canyon'?'#925942':'#718aa1');
         if(track.id==='midnight')add('light',[p.x,p.y+3,p.z],[.8,.2,3],'#66efff',[0,p.heading,0]);

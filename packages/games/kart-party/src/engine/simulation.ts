@@ -1,6 +1,11 @@
 import { applyCourseLane, courseBotLane, courseObstacles, resolveCourseObstacles } from './course-features';
 import { TRACKS, angleDelta, clamp, mod, nearest, roadHeight, sample, sectorAt, magneticAt, surfaceFrame } from './tracks';
 import { resolveKartContact } from './kart-contact';
+import { recordContact } from './contact-feedback';
+import { drivingSpeed } from './driving';
+import { kartStats } from './garage';
+import { applyRouteZones, racerRoute, resolveCourseGates, routeBotTarget, routeLocation } from './course-interactions';
+import { routeSample } from './course-routes';
 import { advanceTrackMotion } from './track-physics';
 import { raceTimeRemaining } from './race-timing';
 import { isSpeedClass, speedMultiplier } from './speed';
@@ -29,12 +34,13 @@ export function sanitizeInput(value: unknown): Input {
 export function botInput(race: Race,racer: Racer): Input {
   const track=TRACKS[race.track],pace=speedMultiplier(race.speedClass),lookahead=12+racer.speed/pace*.62,lane=courseBotLane(track,racer,race.time,Math.sin(racer.driver*2.1)*3.3);
   if(racer.loopDistance!==undefined)return {steer:clamp(((lane-(racer.loopOffset??0))*.3),-1,1),throttle:true,brake:false,drift:false,use:!!racer.item&&racer.itemCooldown<=0};
-  const target=sample(track,racer.s+lookahead/track.length,lane);
+  const branch=routeBotTarget(track,racer,race.time,lookahead),target=branch?.point??sample(track,racer.s+lookahead/track.length,lane);
   const delta=angleDelta(Math.atan2(target.x-racer.x,target.z-racer.z),racer.heading);
   const curve=Math.abs(angleDelta(sample(track,racer.s+35/track.length).heading,sample(track,racer.s).heading));
   return {steer:clamp(delta*2.7,-1,1),throttle:true,brake:curve>.8&&racer.speed>22*pace,drift:false,use:!!racer.item&&racer.itemCooldown<=0};
 }
 export function respawn(race: Race,racer: Racer) {
+  delete racer.routeId;
   const track=TRACKS[race.track];
   // Recover within the current earned sector; an invalid sector falls back to its gate.
   const gate=mod((racer.checkpoints-1)/track.gates),progress=mod(racer.s-gate);
@@ -62,7 +68,7 @@ function placeMagnetic(racer:Racer,track:typeof TRACKS.coast){
   Object.assign(racer,{...f.position,s,heading:Math.atan2(f.forward.x,f.forward.z),airborne:false,verticalSpeed:0,offroad:false,wallTime:0,rampCooldown:1});
 }
 function move(race: Race,racer: Racer,input: Input,dt: number) {
-  const track=TRACKS[race.track],surface=sectorAt(track,racer.s),pace=speedMultiplier(race.speedClass);
+  const track=TRACKS[race.track],surface=sectorAt(track,racer.s),pace=speedMultiplier(race.speedClass),kart=kartStats(racer.kart),branch=racerRoute(track,racer);
   tickStatuses(racer,dt);
   if(input.use&&!racer.lastUse&&racer.stun<=0&&racer.finishTime===null) activateItem(race,racer);
   racer.lastUse=input.use;
@@ -74,10 +80,14 @@ function move(race: Race,racer: Racer,input: Input,dt: number) {
     racer.drift=0;racer.driftSide=0;
   }
   const skill=racer.bot?({easy:.83,normal:.94,hard:1}[race.difficulty] + (racer.driver%3)*.012):1;
-  const maximum=(30+racer.coins*.25)*pace*skill*surface.speed*(racer.boost>0?1.55:1)*(racer.star>0?1.4:1)*(racer.offroad&&racer.star<=0?.49:1)*(racer.stun>0?.32:1)*(racer.frost>0?.6:1);
-  const slope=racer.loopDistance!==undefined?0:(sample(track,racer.s+3/track.length).y-sample(track,racer.s-3/track.length).y)/6;
-  const acceleration=(input.throttle?17:-7)*pace-(racer.airborne?0:slope*9.8);
-  racer.speed=clamp(racer.speed+(acceleration-(input.brake?34*pace:0))*dt,0,maximum);
+  const maximum=(30+racer.coins*.25)*pace*skill*surface.speed*kart.speed*(branch?.speed??1)*(racer.boost>0?1.55:1)*(racer.star>0?1.4:1)*(racer.offroad&&racer.star<=0?.49:1)*(racer.stun>0?.32:1)*(racer.frost>0?.6:1);
+  const height=(s:number)=>branch?routeSample(track,branch,s).y:sample(track,s).y;
+  const slope=racer.loopDistance!==undefined?0:(height(racer.s+3/track.length)-height(racer.s-3/track.length))/6;
+  const acceleration=(input.throttle?17*kart.acceleration:-7)*pace-(racer.airborne?0:slope*9.8);
+  // Item penalties remain immediate; ordinary surface and boost transitions ease out.
+  if(racer.stun>0||racer.frost>0)racer.speed=Math.min(racer.speed,maximum);
+  const resistance=(racer.offroad&&racer.star<=0?30:12)*pace;
+  racer.speed=drivingSpeed(racer.speed,maximum,acceleration-(input.brake?34*pace:0),resistance,dt);
   let location={s:racer.s,offset:0,distance:0};
   if(racer.loopDistance!==undefined&&track.magnetic){
     racer.loopDistance+=racer.speed*dt;
@@ -87,7 +97,7 @@ function move(race: Race,racer: Racer,input: Input,dt: number) {
     if(racer.loopDistance!>=track.magnetic.length){racer.loopDistance=undefined;racer.loopOffset=undefined;}
   }else{
   // Scale yaw with speed to preserve corner radius across engine classes.
-  const steering=(1.5*pace/(1+racer.speed/pace*.024))*(racer.driftSide?1.2:1)*surface.grip*(racer.airborne?.92*Math.max(1,pace):1);
+  const steering=(1.5*pace/(1+racer.speed/pace*.024))*(racer.driftSide?1.2:1)*surface.grip*kart.handling*(branch?.grip??1)*(racer.airborne?.92*Math.max(1,pace):1);
   racer.heading+=input.steer*steering*dt*clamp(racer.speed/7,0,1)*(racer.stun>0?.3:1)*(racer.oil>0?.55:1);
   const lateralTarget=racer.oil>0?-input.steer*racer.speed*.45:racer.driftSide?-racer.driftSide*racer.speed*.16:0;
   racer.lateral+=(lateralTarget-racer.lateral)*Math.min(1,dt*(racer.oil>0?.8:5));
@@ -100,24 +110,27 @@ function move(race: Race,racer: Racer,input: Input,dt: number) {
     const lane=dx*entry.right.x+dy*entry.right.y+dz*entry.right.z;
     if(along>=0&&Math.abs(lane)<=track.width/2+(track.shoulder??0)&&Math.abs(angleDelta(racer.heading,Math.atan2(entry.forward.x,entry.forward.z)))<1){racer.loopDistance=along;racer.loopOffset=clamp(lane,-track.width/2+1.25,track.width/2-1.25);placeMagnetic(racer,track);}
   }
-  location=racer.loopDistance!==undefined?{s:racer.s,offset:racer.loopOffset??0,distance:Math.abs(racer.loopOffset??0)}:nearest(track,racer.x,racer.z);racer.s=location.s;racer.offroad=location.distance>track.width/2;
-  const shoulder=track.shoulder??5;
-  racer.wallTime=location.distance>track.width/2+shoulder-.5?racer.wallTime+dt:0;
-  if(location.distance>track.width/2+16||racer.wallTime>2) {respawn(race,racer);return;}
+  const fork=routeLocation(track,racer),roadWidth=fork?.route.width??track.width;
+  location=racer.loopDistance!==undefined?{s:racer.s,offset:racer.loopOffset??0,distance:Math.abs(racer.loopOffset??0)}:fork??nearest(track,racer.x,racer.z);racer.s=location.s;racer.offroad=location.distance>roadWidth/2;
+  const shoulder=fork?1.5:track.shoulder??5;
+  racer.wallTime=location.distance>roadWidth/2+shoulder-.5?racer.wallTime+dt:0;
+  if(location.distance>roadWidth/2+16||racer.wallTime>2) {respawn(race,racer);return;}
   // Soft barriers keep a missed bend recoverable without letting it become a shortcut.
-  if(location.distance>track.width/2+shoulder) {
-    location.offset=Math.sign(location.offset)*(track.width/2+shoulder);
-    const p=sample(track,location.s,location.offset);
+  if(location.distance>roadWidth/2+shoulder) {
+    location.offset=Math.sign(location.offset)*(roadWidth/2+shoulder);
+    const p=fork?routeSample(track,fork.route,location.s,location.offset):sample(track,location.s,location.offset);
     racer.x=p.x;racer.z=p.z;racer.speed*=.96;
   }
   const wasAirborne=racer.airborne;if(racer.loopDistance===undefined)advanceTrackMotion(race,racer,previousS,location.offset,dt);
   if(wasAirborne&&!racer.airborne)event(race,'boost',racer);
 
   }
-  applyCourseLane(track,racer,location.offset,dt);
+  if(!racer.routeId)applyCourseLane(track,racer,location.offset,dt);
+  applyRouteZones(race,racer,track,location.offset,dt);
+  resolveCourseGates(race,racer,track,previousS);
   advanceCheckpoints(race,racer,previousS,racer.s,location.offset,dt);
   const crossed=(s: number)=>{const delta=mod(racer.s-previousS);return delta<.025&&mod(s-previousS)<=delta;};
-  if(!racer.offroad&&racer.finishTime===null&&!racer.airborne) {
+  if(!racer.routeId&&!racer.offroad&&racer.finishTime===null&&!racer.airborne) {
     for(const s of track.boxes) if(crossed(s)&&!racer.item&&racer.itemCooldown<=0) {
       racer.item=selectItem(race,racer.rank);racer.itemCooldown=1.5;event(race,'item',racer);
     }
@@ -140,7 +153,7 @@ export function stepRace(race: Race,inputs: Record<string,Input>,dt=STEP) {
   race.time+=dt;
   for(const racer of race.racers) move(race,racer,racer.bot||!racer.connected||racer.finishTime!==null?botInput(race,racer):sanitizeInput(inputs[racer.id]),dt);
   const obstacles=courseObstacles(TRACKS[race.track],race.time);
-  for(const racer of race.racers)resolveCourseObstacles(TRACKS[race.track],racer,obstacles);
+  for(const racer of race.racers)if(!racer.routeId)recordContact(race,racer,resolveCourseObstacles(TRACKS[race.track],racer,obstacles));
   for(let i=0;i<race.racers.length;i++) for(let j=i+1;j<race.racers.length;j++) {
     resolveKartContact(race,race.racers[i],race.racers[j]);
   }
