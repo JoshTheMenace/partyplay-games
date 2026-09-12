@@ -1,0 +1,217 @@
+{
+  "source": "Original Blender-authored Kitchen Rush kit",
+  "units": "metres",
+  "up": "Y",
+  "forward": "Z",
+  "rig": "Rigid pivots: ArmL/ArmR, LegL/LegR, Head; runtime walk, carry and work poses",
+  "assets": {
+    "chef0": {
+      "triangles": 7680,
+      "meshes": 10
+    },
+    "chef1": {
+      "triangles": 7680,
+      "meshes": 10
+    },
+    "chef2": {
+      "triangles": 7680,
+      "meshes": 10
+    },
+    "chef3": {
+      "triangles": 7680,
+      "meshes": 10
+    },
+    "lettuce_raw": {
+      "triangles": 552,
+      "meshes": 1
+    },
+    "lettuce_chopped": {
+      "triangles": 168,
+      "meshes": 1
+    },
+    "lettuce_cooked": {
+      "triangles": 552,
+      "meshes": 1
+    },
+    "lettuce_burnt": {
+      "triangles": 552,
+      "meshes": 1
+    },
+    "tomato_raw": {
+      "triangles": 756,
+      "meshes": 1
+    },
+    "tomato_chopped": {
+      "triangles": 756,
+      "meshes": 1
+    },
+    "tomato_cooked": {
+      "triangles": 756,
+      "meshes": 1
+    },
+    "tomato_burnt": {
+      "triangles": 756,
+      "meshes": 1
+    },
+    "onion_raw": {
+      "triangles": 768,
+      "meshes": 1
+    },
+    "onion_chopped": {
+      "triangles": 756,
+      "meshes": 1
+    },
+    "onion_cooked": {
+      "triangles": 768,
+      "meshes": 1
+    },
+    "onion_burnt": {
+      "triangles": 768,
+      "meshes": 1
+    },
+    "patty_raw": {
+      "triangles": 672,
+      "meshes": 1
+    },
+    "patty_chopped": {
+      "triangles": 756,
+      "meshes": 1
+    },
+    "patty_cooked": {
+      "triangles": 672,
+      "meshes": 1
+    },
+    "patty_burnt": {
+      "triangles": 672,
+      "meshes": 1
+    },
+    "bun_raw": {
+      "triangles": 1008,
+      "meshes": 1
+    },
+    "bun_chopped": {
+      "triangles": 756,
+      "meshes": 1
+    },
+    "bun_cooked": {
+      "triangles": 1008,
+      "meshes": 1
+    },
+    "bun_burnt": {
+      "triangles": 1008,
+      "meshes": 1
+    },
+    "dough_raw": {
+      "triangles": 300,
+      "meshes": 1
+    },
+    "dough_chopped": {
+      "triangles": 756,
+      "meshes": 1
+    },
+    "dough_cooked": {
+      "triangles": 300,
+      "meshes": 1
+    },
+    "dough_burnt": {
+      "triangles": 300,
+      "meshes": 1
+    },
+    "cheese_raw": {
+      "triangles": 368,
+      "meshes": 1
+    },
+    "cheese_chopped": {
+      "triangles": 756,
+      "meshes": 1
+    },
+    "cheese_cooked": {
+      "triangles": 368,
+      "meshes": 1
+    },
+    "cheese_burnt": {
+      "triangles": 368,
+      "meshes": 1
+    },
+    "plate": {
+      "triangles": 448,
+      "meshes": 1
+    },
+    "plate_dirty": {
+      "triangles": 600,
+      "meshes": 1
+    },
+    "dish_salad": {
+      "triangles": 508,
+      "meshes": 1
+    },
+    "dish_soup": {
+      "triangles": 932,
+      "meshes": 1
+    },
+    "dish_burger": {
+      "triangles": 1540,
+      "meshes": 1
+    },
+    "dish_pizza": {
+      "triangles": 1108,
+      "meshes": 1
+    },
+    "station_counter": {
+      "triangles": 788,
+      "meshes": 2
+    },
+    "station_board": {
+      "triangles": 2396,
+      "meshes": 4
+    },
+    "station_stove": {
+      "triangles": 2636,
+      "meshes": 2
+    },
+    "station_oven": {
+      "triangles": 4852,
+      "meshes": 2
+    },
+    "station_sink": {
+      "triangles": 2148,
+      "meshes": 2
+    },
+    "station_plates": {
+      "triangles": 824,
+      "meshes": 2
+    },
+    "station_return": {
+      "triangles": 2192,
+      "meshes": 2
+    },
+    "station_serve": {
+      "triangles": 1784,
+      "meshes": 2
+    },
+    "station_crate": {
+      "triangles": 2436,
+      "meshes": 1
+    },
+    "station_belt": {
+      "triangles": 1520,
+      "meshes": 2
+    },
+    "station_bin": {
+      "triangles": 648,
+      "meshes": 2
+    },
+    "bell": {
+      "triangles": 332,
+      "meshes": 1
+    },
+    "planter": {
+      "triangles": 600,
+      "meshes": 1
+    },
+    "fan": {
+      "triangles": 248,
+      "meshes": 1
+    }
+  }
+}

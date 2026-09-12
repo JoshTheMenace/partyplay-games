@@ -44,3 +44,13 @@ The manager owns immutable integration builds. See [current status](../../../out
 Opening orders introduce the enabled menu in order; later orders vary by round seed and avoid a third simultaneous copy when another dish is available. Fresh Start remains salad-only and replaces unused cookers with extra prep boards. The display shows streak bonuses, progress to the next star and service celebrations; results compare the host's score with its previous best.
 
 Phones show the first ticket's recipe and patience, with Use beneath Dash. Cooker feedback distinguishes cooking, ready, near-burning, burnt and power-paused food, using the same timing for phone and scene indicators. Campaign saves and the ten-stage order are unchanged. Scene diagnostics require `?metrics`.
+
+## Authored Blender models
+
+The current source uses an original52-asset Blender kit for chefs, workstations, ingredients and finished dishes. [Asset source and rebuilding](art/README.md) documents the editable `.blend`, exported GLB, budgets and rigid animation pivots. `src/models.ts` owns abortable model loading and shared-resource cleanup; `src/scene.tsx` instances equipment and drives chef walk/carry/work poses from public gameplay state. No gameplay rules changed. The September11 art pass passed43 Kitchen tests, TypeScript, scoped lint, an isolated build and a real ten-controller service with five delivered dishes, plus replay/reload/reduced-motion/loading-failure recovery. Exact local evidence and limits: `output/kitchen-rush/blender/QA.md` in the platform checkout. The existing user runtime was preserved.
+
+## Sound effects
+
+Recorded chopping, cooking, ignition, fire, washing, dish handling, ready/warning bells, delivery and service start/end cues now play on the shared display or solo host. Use the platform's **Sound on/off** button. Phone controllers do not play the room's sound effects. No music is included; the soundtrack can be added separately.
+
+The [audio guide](audio/README.md) explains triggers, source licenses, volume limits and rebuilding. The in-game instructions link to `/games/kitchen-rush/audio/index.html` for individual clip previews and credits. Current focused QA is recorded in `output/kitchen-rush/audio/QA.md` in the consumer workspace.

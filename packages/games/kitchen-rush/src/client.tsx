@@ -3,7 +3,20 @@ import { ArcadeButton, Countdown, HoldButton, Panel, SteerPad, ToggleRow, type G
 import { INGREDIENTS, choppable, KITCHENS, RECIPES, foodLabel, hasBelt, hasPower, itemLabel, neutral, recipeFor, stationLabel, unbakedPizza, type Input, type Item, type Settings, type Ticket, type View } from './model';
 import {cookingStatus} from './presentation';
 import { readCampaign, recordCampaign, unlockedThrough } from './campaign';
+import { KitchenAudio } from './audio';
 import './style.css';
+let soundingService: number | null = null;
+function useKitchenSound(view: View, enabled = true, results = false) {
+  const audio = useRef<KitchenAudio | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    const opening = results ? soundingService === view.startedAt ? 'end' : null : view.now - view.startedAt < 1500 ? 'start' : null;
+    soundingService = results ? null : view.startedAt;
+    audio.current = new KitchenAudio(opening);
+    return () => { audio.current?.dispose(); audio.current = null; };
+  }, [enabled, view.startedAt, results]);
+  useEffect(() => { audio.current?.update(view); }, [view]);
+}
 const Kitchen = lazy(() => import('./scene'));
 type Props = GameViewProps<Input, never, View, null>;
 function FoodIcons({ item }: { item: Item | null }) { return <span className="kr-food-icons" aria-hidden="true">{!item ? '✋' : item.kind === 'plate' ? <>{item.dirty ? '🫧' : '🍽️'}{item.food.map((food, i) => <span key={i}>{INGREDIENTS[food.kind].icon}</span>)}</> : INGREDIENTS[item.food[0].kind].icon}</span>; }
@@ -38,6 +51,7 @@ function Controller({ publicView: view, playerId, setInput, releaseInput, connec
   </Panel>;
 }
 function Display({ publicView: view, serverNowMs }: Props) {
+  useKitchenSound(view);
   const level = KITCHENS[view.settings.kitchen],previous=useRef({served:view.served,stars:view.stars}),[celebration,setCelebration]=useState<{text:string;id:number}|null>(null);
   useEffect(()=>{const before=previous.current;previous.current={served:view.served,stars:view.stars};if(view.served>before.served||view.stars>before.stars)setCelebration({text:view.stars>before.stars?'★ A new star!':view.event.includes('served!')?view.event:'Order served!',id:view.served});},[view.served,view.stars]);
   useEffect(()=>{if(!celebration)return;const timer=setTimeout(()=>setCelebration(null),2000);return()=>clearTimeout(timer);},[celebration]);
@@ -61,6 +75,7 @@ function CampaignSettings({ settings, onChange, disabled }: SettingsViewProps<Se
     <label>Service length<select aria-label="Service length" value={settings.seconds ?? 180} disabled={disabled} onChange={event => onChange({ ...settings, seconds: Number(event.target.value) })}><option value={180}>3 minutes</option><option value={240}>4 minutes</option><option value={300}>5 minutes</option></select></label><RecipeGuide kitchen={stage}/>{!progress.saved && <p>Storage unavailable. You can still play every stage in Practice.</p>}</div>;
 }
 function Results({ publicView: view, playerId, isHost = !playerId }: ResultsViewProps<View>) {
+  useKitchenSound(view, isHost || !playerId, true);
   const [progress, setProgress] = useState(readCampaign),previousBest=useRef(progress.scores[view.settings.kitchen]??0);
   useEffect(() => { if (isHost && view.complete && !view.settings.practice) setProgress(recordCampaign(view.settings.kitchen, view.stars, view.score)); }, [isHost, view.complete, view.settings.kitchen, view.settings.practice, view.stars, view.score]);
   return <div className="kr-results"><span className="kr-brand">STAGE {view.settings.kitchen + 1} · {KITCHENS[view.settings.kitchen].name} · SERVICE COMPLETE</span><h1>{view.served ? view.stars === 3 ? 'A three-star crew.' : 'Aprons off, chefs.' : 'The kitchen is still warming up.'}</h1><div className="kr-result-stars" aria-label={`${view.stars} stars out of 3`}>{[0,1,2].map(i=><span key={i} className={i<view.stars?'kr-earned-star':''} style={{animationDelay:`${i*.18}s`}}>{i<view.stars?'★':'☆'}</span>)}</div><div className="kr-result-score">{view.score}<small>TEAM POINTS</small></div>{isHost&&!view.settings.practice&&<p className="kr-best">{view.score>previousBest.current?`New best! Previous: ${previousBest.current}`:`Your best: ${progress.scores[view.settings.kitchen]??0}`}</p>}<div className="kr-result-stats"><span><b>{view.served}</b>orders served</span><span><b>{view.missed}</b>orders missed</span><span><b>{view.waste}</b>food discarded</span><span><b>{view.fires}</b>stove fires</span></div><div className="kr-result-recipes">{RECIPES.filter(recipe => view.recipeCounts[recipe.id]).map(recipe => <span key={recipe.id}>{recipe.icon} {recipe.name} × {view.recipeCounts[recipe.id]}</span>)}</div><p>{view.settings.practice ? 'Practice service: your score is real, but campaign stars stay unchanged.' : view.stars > 0 ? view.settings.kitchen === 9 ? 'All ten stages complete. Replay for three stars in every kitchen.' : `Next stage unlocked: ${KITCHENS[view.settings.kitchen + 1].name}. Play again, then open Settings to choose it.` : `Earn ${view.thresholds[0]} points for one star${view.settings.kitchen < 9 ? ' and the next stage' : ''}. Split up the prep, cooking and dishes.`}</p><p className="kr-storage-note">{progress.saved ? 'Campaign stars are saved in this browser.' : 'Browser storage is unavailable. Practice still opens every stage.'}</p><div className="kr-result-roster">{view.players.map((chef, i) => <span key={chef.id}><b style={{ color: chef.color }}>#{i + 1}</b> {chef.name}<small>{chef.served} served · {chef.worked} prep / wash jobs</small></span>)}</div></div>;
@@ -80,7 +95,7 @@ export const client: GameClientModule<Input, never, Settings, View, null> = {
   PersonalView: Solo,
   SceneView: props => <Suspense fallback={null}><Kitchen {...props}/></Suspense>, DisplayView: Display, ControllerView: Controller,
   SettingsView: CampaignSettings,
-  InstructionsView: () => <div className="kr-instructions"><h2>Good food. Great teamwork.</h2><p>Follow the order tickets. Take ingredients, hold Use to chop, cook on the stove, then combine everything on a clean plate and serve.</p><p>Tap Use to pick up or place. Hold it to chop, wash or extinguish. Toss ingredients to teammates; carry plates. Dirty dishes return after serving. Everyone shares the score.</p><p>Pad / WASD to move · E use · Q drop · F toss · Shift dash</p></div>,
+  InstructionsView: () => <div className="kr-instructions"><h2>Good food. Great teamwork.</h2><p>Follow the order tickets. Take ingredients, hold Use to chop, cook on the stove, then combine everything on a clean plate and serve.</p><p>Tap Use to pick up or place. Hold it to chop, wash or extinguish. Toss ingredients to teammates; carry plates. Dirty dishes return after serving. Everyone shares the score.</p><p>Pad / WASD to move · E use · Q drop · F toss · Shift dash</p><p><a href="/games/kitchen-rush/audio/index.html" target="_blank" rel="noreferrer">Sound effects and credits</a></p></div>,
   ResultsView: Results,
   prepare() {}, dispose() {},
 };
