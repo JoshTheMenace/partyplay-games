@@ -1,0 +1,26 @@
+{
+  "zombie": {
+    "triangles": 420,
+    "meshes": 6,
+    "bytes": 44760,
+    "height": 1.89
+  },
+  "skeleton": {
+    "triangles": 540,
+    "meshes": 6,
+    "bytes": 55868,
+    "height": 1.87
+  },
+  "spider": {
+    "triangles": 336,
+    "meshes": 10,
+    "bytes": 40976,
+    "height": 0.839
+  },
+  "creeper": {
+    "triangles": 492,
+    "meshes": 6,
+    "bytes": 51852,
+    "height": 1.735
+  }
+}
