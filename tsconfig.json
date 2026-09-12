@@ -20,7 +20,6 @@
     ]
   },
   "include": [
-    "packages",
-    "modules"
+    "packages"
   ]
 }

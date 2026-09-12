@@ -1,0 +1,671 @@
+[
+  {
+    "id": "mario",
+    "name": "Mario",
+    "sourceIndex": 0,
+    "profile": "mario",
+    "style": "plumber",
+    "color": "#e94b43",
+    "height": 1.68,
+    "radius": 0.34,
+    "specials": [
+      "Fireball",
+      "Cape",
+      "Super Jump Punch",
+      "Mario Tornado"
+    ],
+    "bonus": false,
+    "file": "Mario.json",
+    "sha256": "065157294f8aa31b5f441ef89fd95970d33a38a40f5881ebe316dd906d67376a",
+    "node": "ftDataMario",
+    "archive": "PlMr.dat"
+  },
+  {
+    "id": "fox",
+    "name": "Fox",
+    "sourceIndex": 1,
+    "profile": "fox",
+    "style": "pilot",
+    "color": "#f2a653",
+    "height": 1.92,
+    "radius": 0.34,
+    "specials": [
+      "Blaster",
+      "Fox Illusion",
+      "Fire Fox",
+      "Reflector"
+    ],
+    "bonus": false,
+    "file": "Fox.json",
+    "sha256": "4533034a5db1b2d7949763b196f5a9cb2361b567da8ba6f8ad7c5a898a55e98f",
+    "node": "ftDataFox",
+    "archive": "PlFx.dat"
+  },
+  {
+    "id": "captain-falcon",
+    "name": "Captain Falcon",
+    "sourceIndex": 2,
+    "profile": "captain-falcon",
+    "style": "brawler",
+    "color": "#746bdb",
+    "height": 2.05,
+    "radius": 0.37,
+    "specials": [
+      "Falcon Punch",
+      "Raptor Boost",
+      "Falcon Dive",
+      "Falcon Kick"
+    ],
+    "bonus": false,
+    "file": "Captain Falcon.json",
+    "sha256": "52f1c65c9f8355c816217fae84c25eb1fb4e3b62730a345d62c4ec511c6a90d8",
+    "node": "ftDataCaptain",
+    "archive": "PlCa.dat"
+  },
+  {
+    "id": "donkey-kong",
+    "name": "Donkey Kong",
+    "sourceIndex": 3,
+    "profile": "donkey-kong",
+    "style": "heavy",
+    "color": "#b88953",
+    "height": 2.1,
+    "radius": 0.58,
+    "specials": [
+      "Giant Punch",
+      "Headbutt",
+      "Spinning Kong",
+      "Hand Slap"
+    ],
+    "bonus": false,
+    "file": "Donkey Kong.json",
+    "sha256": "7c9a649f93d094f83a406ef600ccfd583d1cd08f0f63ce45506de4f04802fb49",
+    "node": "ftDataDonkey",
+    "archive": "PlDk.dat"
+  },
+  {
+    "id": "kirby",
+    "name": "Kirby",
+    "sourceIndex": 4,
+    "profile": "kirby",
+    "style": "round",
+    "color": "#f39ec9",
+    "height": 1.05,
+    "radius": 0.4,
+    "specials": [
+      "Inhale",
+      "Hammer",
+      "Final Cutter",
+      "Stone"
+    ],
+    "bonus": false,
+    "file": "Kirby.json",
+    "sha256": "46430fed0126490504222a6bd4bced0db3bba211ca792ff071bb943b61013148",
+    "node": "ftDataKirby",
+    "archive": "PlKb.dat"
+  },
+  {
+    "id": "bowser",
+    "name": "Bowser",
+    "sourceIndex": 5,
+    "profile": "bowser",
+    "style": "heavy",
+    "color": "#e7b14c",
+    "height": 2.25,
+    "radius": 0.57,
+    "specials": [
+      "Fire Breath",
+      "Koopa Klaw",
+      "Whirling Fortress",
+      "Bowser Bomb"
+    ],
+    "bonus": false,
+    "file": "Bowser.json",
+    "sha256": "c1ae0ebf35301f46749ebe3c918cf364bf9786ce95e75ba9269d2bb90868926a",
+    "node": "ftDataKoopa",
+    "archive": "PlKp.dat"
+  },
+  {
+    "id": "link",
+    "name": "Link",
+    "sourceIndex": 6,
+    "profile": "link",
+    "style": "sword",
+    "color": "#70c982",
+    "height": 1.98,
+    "radius": 0.34,
+    "specials": [
+      "Bow",
+      "Boomerang",
+      "Spin Attack",
+      "Bomb"
+    ],
+    "bonus": false,
+    "file": "Link.json",
+    "sha256": "65a052dc7e471d581502cb24812e6227cfcbd279ff4d4324d8628176e68fa539",
+    "node": "ftDataLink",
+    "archive": "PlLk.dat"
+  },
+  {
+    "id": "sheik",
+    "name": "Sheik",
+    "sourceIndex": 7,
+    "profile": "sheik",
+    "style": "ninja",
+    "color": "#8598d8",
+    "height": 1.92,
+    "radius": 0.3,
+    "specials": [
+      "Needles",
+      "Chain",
+      "Vanish",
+      "Transform burst"
+    ],
+    "bonus": false,
+    "file": "Sheik.json",
+    "sha256": "634e571601c3f06fabcec2712c549bb48b9ea347efffaab6c100545bba2ac485",
+    "node": "ftDataSeak",
+    "archive": "PlSk.dat"
+  },
+  {
+    "id": "ness",
+    "name": "Ness",
+    "sourceIndex": 8,
+    "profile": "ness",
+    "style": "child",
+    "color": "#e46b69",
+    "height": 1.42,
+    "radius": 0.31,
+    "specials": [
+      "PK Flash",
+      "PK Fire",
+      "PK Thunder",
+      "PSI Magnet"
+    ],
+    "bonus": false,
+    "file": "Ness.json",
+    "sha256": "5c543b67de72b0a5783f4b4edf95f05feaa26b3d0ff6fa0f95b96691af182dc9",
+    "node": "ftDataNess",
+    "archive": "PlNs.dat"
+  },
+  {
+    "id": "peach",
+    "name": "Peach",
+    "sourceIndex": 9,
+    "profile": "peach",
+    "style": "royal",
+    "color": "#f698bc",
+    "height": 1.98,
+    "radius": 0.38,
+    "specials": [
+      "Toad",
+      "Peach Bomber",
+      "Parasol",
+      "Vegetable"
+    ],
+    "bonus": false,
+    "file": "Peach.json",
+    "sha256": "e834774c42c5b7aa99003b0c8644b7d6e98a25b692a2059c1ebbd58d1ce129eb",
+    "node": "ftDataPeach",
+    "archive": "PlPe.dat"
+  },
+  {
+    "id": "popo",
+    "name": "Popo",
+    "sourceIndex": 10,
+    "profile": "popo",
+    "style": "climber",
+    "color": "#73bfff",
+    "height": 1.3,
+    "radius": 0.35,
+    "specials": [
+      "Ice Shot",
+      "Squall Hammer",
+      "Belay",
+      "Blizzard"
+    ],
+    "bonus": false,
+    "file": "Ice Climbers - Popo.json",
+    "sha256": "0952e082ed4af1aa9c0907a36e48aaf42e87d394bc1b36d934ae3985678fa9a3",
+    "node": "ftDataPopo",
+    "archive": "PlPp.dat"
+  },
+  {
+    "id": "nana",
+    "name": "Nana",
+    "sourceIndex": 11,
+    "profile": "nana",
+    "style": "climber",
+    "color": "#f69bbd",
+    "height": 1.3,
+    "radius": 0.35,
+    "specials": [
+      "Ice Shot",
+      "Squall Hammer",
+      "Belay",
+      "Blizzard"
+    ],
+    "bonus": false,
+    "file": "Ice Climbers - Nana.json",
+    "sha256": "2f59957e5e144e8f6d05e47b5205218b4e2432e391237374d3d2d0e53187f9cf",
+    "node": "ftDataNana",
+    "archive": "PlNn.dat"
+  },
+  {
+    "id": "pikachu",
+    "name": "Pikachu",
+    "sourceIndex": 12,
+    "profile": "pikachu",
+    "style": "rodent",
+    "color": "#f4d958",
+    "height": 1.25,
+    "radius": 0.33,
+    "specials": [
+      "Thunder Jolt",
+      "Skull Bash",
+      "Quick Attack",
+      "Thunder"
+    ],
+    "bonus": false,
+    "file": "Pikachu.json",
+    "sha256": "082b4ff0efd2c86ca6e3b751ee93a3a0f6d450d5fada4b3df7b46031e6de90c3",
+    "node": "ftDataPikachu",
+    "archive": "PlPk.dat"
+  },
+  {
+    "id": "samus",
+    "name": "Samus",
+    "sourceIndex": 13,
+    "profile": "samus",
+    "style": "armored",
+    "color": "#ee9c45",
+    "height": 2.08,
+    "radius": 0.36,
+    "specials": [
+      "Charge Shot",
+      "Missile",
+      "Screw Attack",
+      "Bomb"
+    ],
+    "bonus": false,
+    "file": "Samus.json",
+    "sha256": "001552e86cf5f038d9557a1cc1e83e50bf69aedc0c43ff5565f8139da3997404",
+    "node": "ftDataSamus",
+    "archive": "PlSs.dat"
+  },
+  {
+    "id": "yoshi",
+    "name": "Yoshi",
+    "sourceIndex": 14,
+    "profile": "yoshi",
+    "style": "dinosaur",
+    "color": "#79cc68",
+    "height": 1.7,
+    "radius": 0.4,
+    "specials": [
+      "Egg Lay",
+      "Egg Roll",
+      "Egg Throw lift",
+      "Yoshi Bomb"
+    ],
+    "bonus": false,
+    "file": "Yoshi.json",
+    "sha256": "436175ec24d7476eeaabbee6bdce9f7d81025e009188860f86ab78265cb09b88",
+    "node": "ftDataYoshi",
+    "archive": "PlYs.dat"
+  },
+  {
+    "id": "jigglypuff",
+    "name": "Jigglypuff",
+    "sourceIndex": 15,
+    "profile": "jigglypuff",
+    "style": "round",
+    "color": "#f5b6d3",
+    "height": 1.1,
+    "radius": 0.43,
+    "specials": [
+      "Rollout",
+      "Pound",
+      "Sing lift",
+      "Rest"
+    ],
+    "bonus": false,
+    "file": "Jigglypuff.json",
+    "sha256": "7aa910bb6f1e71c62282b369ff8b627b341674c2b02ff6668220f2da33d00caf",
+    "node": "ftDataPurin",
+    "archive": "PlPr.dat"
+  },
+  {
+    "id": "mewtwo",
+    "name": "Mewtwo",
+    "sourceIndex": 16,
+    "profile": "mewtwo",
+    "style": "alien",
+    "color": "#b5a0e8",
+    "height": 2.12,
+    "radius": 0.34,
+    "specials": [
+      "Shadow Ball",
+      "Confusion",
+      "Teleport",
+      "Disable"
+    ],
+    "bonus": false,
+    "file": "Mewtwo.json",
+    "sha256": "7c0831ea90ac541ad8ad947eff308696458a6cd6084320235799df7268da1dcb",
+    "node": "ftDataMewtwo",
+    "archive": "PlMt.dat"
+  },
+  {
+    "id": "luigi",
+    "name": "Luigi",
+    "sourceIndex": 17,
+    "profile": "luigi",
+    "style": "plumber",
+    "color": "#75c780",
+    "height": 1.88,
+    "radius": 0.32,
+    "specials": [
+      "Fireball",
+      "Green Missile",
+      "Super Jump Punch",
+      "Luigi Cyclone"
+    ],
+    "bonus": false,
+    "file": "Luigi.json",
+    "sha256": "e09fbfb17e2bdae76279c56f7e7c2692180aaca084f80e737cf865b46846b3ec",
+    "node": "ftDataLuigi",
+    "archive": "PlLg.dat"
+  },
+  {
+    "id": "marth",
+    "name": "Marth",
+    "sourceIndex": 18,
+    "profile": "marth",
+    "style": "sword",
+    "color": "#7b9ee6",
+    "height": 2.08,
+    "radius": 0.32,
+    "specials": [
+      "Shield Breaker",
+      "Dancing Blade",
+      "Dolphin Slash",
+      "Counter"
+    ],
+    "bonus": false,
+    "file": "Marth.json",
+    "sha256": "94c46d97f30130d4f92d94429e4a44ac60fdebd051fdb00d2cce6effdfa7cc6c",
+    "node": "ftDataMars",
+    "archive": "PlMs.dat"
+  },
+  {
+    "id": "zelda",
+    "name": "Zelda",
+    "sourceIndex": 19,
+    "profile": "zelda",
+    "style": "royal",
+    "color": "#d8a4e8",
+    "height": 1.95,
+    "radius": 0.35,
+    "specials": [
+      "Nayru\u2019s Love",
+      "Din\u2019s Fire",
+      "Farore\u2019s Wind",
+      "Transform burst"
+    ],
+    "bonus": false,
+    "file": "Zelda.json",
+    "sha256": "0b17648028752459fd9d1a87bd8f930757daa5e47809c9e682537b59c2459b8d",
+    "node": "ftDataZelda",
+    "archive": "PlZd.dat"
+  },
+  {
+    "id": "young-link",
+    "name": "Young Link",
+    "sourceIndex": 20,
+    "profile": "young-link",
+    "style": "sword",
+    "color": "#9bcc60",
+    "height": 1.45,
+    "radius": 0.28,
+    "specials": [
+      "Fire Bow",
+      "Boomerang",
+      "Spin Attack",
+      "Bomb"
+    ],
+    "bonus": false,
+    "file": "Young Link.json",
+    "sha256": "1e6249783b7b0472296b2bcf6dd438b59765bfd7a165664d5f8dc0906f362129",
+    "node": "ftDataClink",
+    "archive": "PlCl.dat"
+  },
+  {
+    "id": "dr-mario",
+    "name": "Dr. Mario",
+    "sourceIndex": 21,
+    "profile": "dr-mario",
+    "style": "doctor",
+    "color": "#dadce5",
+    "height": 1.68,
+    "radius": 0.34,
+    "specials": [
+      "Megavitamin",
+      "Super Sheet",
+      "Super Jump Punch",
+      "Dr. Tornado"
+    ],
+    "bonus": false,
+    "file": "Dr Mario.json",
+    "sha256": "1ac7f9a7809e66e6b38e89a5ed1c94b802b3a801d5c907e72c353b3b37cf6cf3",
+    "node": "ftDataDrmario",
+    "archive": "PlDr.dat"
+  },
+  {
+    "id": "falco",
+    "name": "Falco",
+    "sourceIndex": 22,
+    "profile": "falco",
+    "style": "pilot",
+    "color": "#63aaff",
+    "height": 1.92,
+    "radius": 0.34,
+    "specials": [
+      "Blaster",
+      "Falco Phantasm",
+      "Fire Bird",
+      "Reflector"
+    ],
+    "bonus": false,
+    "file": "Falco.json",
+    "sha256": "5db4392df8e9fe288bb31eaea1d8f2191df1d893b7812b9b50b171934ce43e79",
+    "node": "ftDataFalco",
+    "archive": "PlFc.dat"
+  },
+  {
+    "id": "pichu",
+    "name": "Pichu",
+    "sourceIndex": 23,
+    "profile": "pichu",
+    "style": "rodent",
+    "color": "#f8df83",
+    "height": 0.96,
+    "radius": 0.27,
+    "specials": [
+      "Thunder Jolt",
+      "Skull Bash",
+      "Agility",
+      "Thunder"
+    ],
+    "bonus": false,
+    "file": "Pichu.json",
+    "sha256": "267599b62c193ce3062880df6e0c0f143e84edc4e0f247f7e8eda3be9db17e89",
+    "node": "ftDataPichu",
+    "archive": "PlPc.dat"
+  },
+  {
+    "id": "game-watch",
+    "name": "Mr. Game & Watch",
+    "sourceIndex": 24,
+    "profile": "game-watch",
+    "style": "flat",
+    "color": "#9ce0d7",
+    "height": 1.7,
+    "radius": 0.28,
+    "specials": [
+      "Chef",
+      "Judgment",
+      "Fire",
+      "Oil Panic"
+    ],
+    "bonus": false,
+    "file": "Game & Watch.json",
+    "sha256": "032aa70cdd9aa74216ed2cb760a04e7d6d7e22564a9faa3c9a8ffa329c951fa0",
+    "node": "ftDataGamewatch",
+    "archive": "PlGw.dat"
+  },
+  {
+    "id": "ganondorf",
+    "name": "Ganondorf",
+    "sourceIndex": 25,
+    "profile": "ganondorf",
+    "style": "heavy",
+    "color": "#b284c4",
+    "height": 2.25,
+    "radius": 0.42,
+    "specials": [
+      "Warlock Punch",
+      "Gerudo Dragon",
+      "Dark Dive",
+      "Wizard\u2019s Foot"
+    ],
+    "bonus": false,
+    "file": "Ganondorf.json",
+    "sha256": "dd9c64722c6874a1af12df37c4cba03043bcb510a03618e958efd256285f225a",
+    "node": "ftDataGanon",
+    "archive": "PlGn.dat"
+  },
+  {
+    "id": "roy",
+    "name": "Roy",
+    "sourceIndex": 26,
+    "profile": "roy",
+    "style": "sword",
+    "color": "#ec8061",
+    "height": 1.95,
+    "radius": 0.33,
+    "specials": [
+      "Flare Blade",
+      "Double-Edge Dance",
+      "Blazer",
+      "Counter"
+    ],
+    "bonus": false,
+    "file": "Roy.json",
+    "sha256": "bde53496994c290323bfecb6a99c73e6d2cdf4f3138ecfe365f43deda9d30954",
+    "node": "ftDataEmblem",
+    "archive": "PlFe.dat"
+  },
+  {
+    "id": "master-hand",
+    "name": "Master Hand",
+    "sourceIndex": 27,
+    "profile": "mewtwo",
+    "style": "hand",
+    "color": "#e4d9fa",
+    "height": 1.95,
+    "radius": 0.48,
+    "specials": [
+      "Finger Bullet",
+      "Finger Walk",
+      "Ascend",
+      "Palm Slam"
+    ],
+    "bonus": true
+  },
+  {
+    "id": "crazy-hand",
+    "name": "Crazy Hand",
+    "sourceIndex": 28,
+    "profile": "mewtwo",
+    "style": "hand",
+    "color": "#bda4ee",
+    "height": 1.95,
+    "radius": 0.48,
+    "specials": [
+      "Spark Shot",
+      "Spider Rush",
+      "Ascend",
+      "Crush"
+    ],
+    "bonus": true
+  },
+  {
+    "id": "male-wireframe",
+    "name": "Male Wireframe",
+    "sourceIndex": 29,
+    "profile": "captain-falcon",
+    "style": "wire",
+    "color": "#ca87ed",
+    "height": 2.05,
+    "radius": 0.37,
+    "specials": [
+      "Energy Strike",
+      "Raptor Rush",
+      "Wire Dive",
+      "Sweep"
+    ],
+    "bonus": true
+  },
+  {
+    "id": "female-wireframe",
+    "name": "Female Wireframe",
+    "sourceIndex": 30,
+    "profile": "zelda",
+    "style": "wire",
+    "color": "#e59acb",
+    "height": 1.95,
+    "radius": 0.35,
+    "specials": [
+      "Energy Orb",
+      "Flame Burst",
+      "Phase Step",
+      "Pulse"
+    ],
+    "bonus": true
+  },
+  {
+    "id": "giga-bowser",
+    "name": "Giga Bowser",
+    "sourceIndex": 31,
+    "profile": "bowser",
+    "style": "heavy",
+    "color": "#ca9855",
+    "height": 2.7,
+    "radius": 0.69,
+    "specials": [
+      "Giga Flame",
+      "Giga Claw",
+      "Giga Fortress",
+      "Giga Bomb"
+    ],
+    "bonus": true
+  },
+  {
+    "id": "sandbag",
+    "name": "Sandbag",
+    "sourceIndex": 32,
+    "profile": "mario",
+    "style": "bag",
+    "color": "#e4dfca",
+    "height": 1.6,
+    "radius": 0.4,
+    "specials": [
+      "Sand Burst",
+      "Body Check",
+      "Bounce",
+      "Sand Slam"
+    ],
+    "bonus": true
+  }
+]

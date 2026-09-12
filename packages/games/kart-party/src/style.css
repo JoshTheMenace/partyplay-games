@@ -34,3 +34,16 @@
 .kp-landscape-controller .kp-scene-stage:has(.pk-controller) .kp-scene-surface { inset:0; }
 .kp-landscape-controller .kp-scene-stage:has(.pk-controller) .kp-scene-overlay { inset:0; width:auto; }
 .kp-landscape-controller .kp-scene-stage .pk-controller { background:transparent; pointer-events:none; }
+.pk-view-hint{display:block;text-align:center;color:var(--kp-sun);font-weight:800}
+.pk-view-help{margin:0;color:var(--kp-cream)}
+.pk-broadcast{left:0;top:0;max-width:calc(100% - 1rem)}
+.kp-scene-stage:has(.pk-controller[data-screen="controls"]) .kp-scene-surface{display:none}
+.kp-scene-stage:has(.pk-controller[data-screen="controls"]) .kp-scene-overlay{inset:0;width:auto;display:grid;align-items:center}
+.pk-controller[data-screen="controls"]{height:auto;min-height:240px;display:grid;grid-template-rows:auto auto 1fr}
+.kp-landscape-controller .pk-controller[data-screen="controls"]{background:var(--kp-navy);grid-template-rows:auto auto 1fr}
+.kp-landscape-controller .pk-controller[data-screen="personal"]>strong{justify-self:center;background:#11162ddd;border-radius:.4rem;padding:.2rem .5rem;max-width:calc(100% - 1rem)}
+@media(orientation:landscape) and (max-height:600px){
+ .pk-controller[data-screen="controls"] .pk-controls{grid-template-columns:140px minmax(0,1fr) 150px;grid-template-rows:repeat(3,1fr);height:190px}
+ .pk-controller[data-screen="controls"] .kp-steer-control{grid-column:1;grid-row:1/4}
+ .pk-controller[data-screen="controls"] .kp-hold-button{grid-column:3;min-height:44px}
+}

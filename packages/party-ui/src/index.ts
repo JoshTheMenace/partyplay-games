@@ -11,7 +11,7 @@ export type PrepareContext = { role: 'display' | 'controller' | 'personal'; sign
 /** Mounted before round.ready and retained through play. No secret/server state exists during preparation. */
 export type SceneViewProps<Settings, PublicView, PrivateView = unknown> = {
   roundId: string; phase: 'preparing' | 'playing' | 'results'; settings: Settings;
-  playerId: string | null; viewRole: 'display' | 'controller'; connected: boolean;
+  playerId: string | null; viewRole: 'display' | 'controller'; isHost?: boolean; connected: boolean;
   privateView: PrivateView | null; setInput(input: unknown): void; releaseInput(): void; sendAction(action: unknown): Promise<ActionResult>;
   players: readonly { id: string; name: string; color: string }[];
   publicView: PublicView | null; snapshotTime: number | null; signal: AbortSignal;

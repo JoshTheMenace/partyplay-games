@@ -1,0 +1,5 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { loadHotbar, storeHotbar, defaultHotbar } from '../src/hotbar';
+test('hotbar preserves tools and empty hand and rejects malformed or legacy layouts in new worlds',()=>{const bar={slots:[0,2,4,24,25,36,52,43,53],active:6};let saved='';const storage={getItem:()=>saved,setItem:(_key:string,value:string)=>{saved=value;}};storeHotbar('round:p',bar,storage);assert.deepEqual(loadHotbar('round:p',4,{},storage),bar);for(const raw of [{...bar,active:9},{...bar,slots:[13,...bar.slots.slice(1)]},{...bar,slots:[14,...bar.slots.slice(1)]},{...bar,slots:[0]}]){saved=JSON.stringify(raw);assert.deepEqual(loadHotbar('round:p',4,{},storage),defaultHotbar(4,{}));}});
+test('blocked browser storage keeps a usable nine-slot hotbar',()=>{const storage={getItem(){throw new Error('denied');},setItem(){throw new Error('denied');}};const bar=loadHotbar('r:p',4,{},storage);assert.equal(bar.slots.length,9);assert.doesNotThrow(()=>storeHotbar('r:p',bar,storage));assert.ok(!bar.slots.includes(13));});
