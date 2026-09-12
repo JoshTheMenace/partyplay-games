@@ -5,9 +5,9 @@ Josh's game collection, versioned separately from the [Party Place platform](htt
 ## Contents
 
 - `packages/games/`: Kart Party, Blockwild, Kitchen Rush, Quip Clash, Sketch Bluff, Tall Tales, Shirt Show, Odd One In and Quiz Panic. Scene Lab is a development-only fixture.
-- `modules/kart-party/`: the original racing engine, renderer, protocol reference and tests used by the integrated Kart Party adapter.
+- `packages/games/kart-party/src/engine/`: Kart’s racing engine, alongside its shared-room adapter and tests in the same game directory.
 - `packages/party-*`: the shared contracts, UI/controller components, client session, simulation and 3D helpers that these games use.
-- `public/games/`: game assets, music and font license notices.
+- `packages/games/kart-party/public/`: Kart assets, music and font license notices. `public/games/kart-party` links here to preserve the served asset paths.
 
 The discovery website, personal library, curator catalog, room service and deployment scripts live in `partyplace`. These are source modules consumed by that workspace, not independently deployed websites. Shared packages stay here so game imports resolve within the same versioned collection.
 
@@ -25,7 +25,7 @@ npm run test:kart
 npm run build
 ```
 
-The platform mounts this repository at `game-modules/`. Tracked relative directory links expose its packages, Kart module and assets at the platform's existing import paths. Edit either path; both refer to these files. Run integration builds/tests from the platform root. The games repository does not depend on the platform server implementation: transport serialization validation is part of the shared contract.
+The platform mounts this repository at `game-modules/`. Tracked relative directory links expose its packages and assets at the platform's existing import paths. Edit either path; both refer to these files. Run integration builds/tests from the platform root. The games repository does not depend on the platform server implementation: transport serialization validation is part of the shared contract.
 
 Work on a games branch before editing a submodule checkout, which is normally detached:
 

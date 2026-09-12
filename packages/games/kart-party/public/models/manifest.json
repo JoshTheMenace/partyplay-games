@@ -1,0 +1,14 @@
+{
+  "generator": "Blender 5.2.1 LTS",
+  "license": "Original project artwork",
+  "axes": "+Y up, +Z forward",
+  "drivers": 10,
+  "props": [
+    "buoy",
+    "boulder",
+    "traffic",
+    "satellite"
+  ],
+  "triangles": 289200,
+  "bytes": 7132972
+}
