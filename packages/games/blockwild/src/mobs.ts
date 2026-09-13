@@ -1,5 +1,6 @@
+import { activeArea } from './chunk-world';
 import { emitSound } from './sound-events';
-import { ARROW, BONE, CAMPFIRE, FLESH, GUNPOWDER, H, STRING, TORCH, W, coords, index, isNight, solid, type Creature, type MobKind } from './model';
+import { inWorld, ARROW, BONE, CAMPFIRE, FLESH, GUNPOWDER, H, STRING, TORCH, coords, index, isNight, solid, type Creature, type MobKind } from './model';
 import { block, hash, ray } from './terrain';
 import type { Actor, State } from './server';
 const kinds:MobKind[]=['zombie','skeleton','spider','creeper'];
@@ -16,15 +17,16 @@ export function tickMobs(s:State,dt:number,hurt:(s:State,p:Actor,n:number)=>void
     s.spawnClock=0;const id=s.nextCreature++,anchor=players[id%players.length]!,angle=hash(id,3,s.seed)*Math.PI*2,x=anchor.x+Math.cos(angle)*24,z=anchor.z+Math.sin(angle)*24;let y=H-2;
     while(y>1&&!solid(block(s.grid,x,y-1,z)))y--;
     const c:Creature={id,kind:kinds[(id-1)%4]!,x,y,z,health:kinds[(id-1)%4]==='spider'?8:10,hitAt:0,yaw:0,attackAt:0,fuse:0};
-    if(x>2&&z>2&&x<W-2&&z<W-2&&mobFits(s,c,x,y,z)&&block(s.grid,x,y,z)!==6&&players.every(p=>Math.hypot(p.x-x,p.z-z)>=16)&&lights.every(l=>Math.hypot(l.x-x,l.y-y,l.z-z)>7))s.creatures.push(c);
+    if(inWorld(s.terrainVersion,x,z,2)&&mobFits(s,c,x,y,z)&&block(s.grid,x,y,z)!==6&&players.every(p=>Math.hypot(p.x-x,p.z-z)>=16)&&lights.every(l=>Math.hypot(l.x-x,l.y-y,l.z-z)>7))s.creatures.push(c);
   }
   for(const c of s.creatures){
+    if(!activeArea(s,c)){c.health=0;continue;}
     if(!c.kind)c.kind='zombie';
     if(!night&&['zombie','skeleton'].includes(c.kind)&&exposed(s,c))c.health-=dt;
     const target=players.reduce<Actor|undefined>((best,p)=>!best||Math.hypot(p.x-c.x,p.z-c.z)<Math.hypot(best.x-c.x,best.z-c.z)?p:best,undefined);
     if(!target||s.mode==='creative')continue;
-    const d=Math.hypot(target.x-c.x,target.z-c.z),los=clear(s,c.x,c.y+eye(c),c.z,target.x,target.y+1,target.z);
-    if(d>55){c.health=0;continue;}c.yaw=Math.atan2(-(target.x-c.x),-(target.z-c.z));
+    const d=Math.hypot(target.x-c.x,target.z-c.z);
+    if(d>55){c.health=0;continue;}const los=clear(s,c.x,c.y+eye(c),c.z,target.x,target.y+1,target.z);c.yaw=Math.atan2(-(target.x-c.x),-(target.z-c.z));
     const angry=c.kind!=='spider'||night||c.hitAt>0,canSee=los&&d<32;
     if(c.kind==='creeper'){
       c.fuse=Math.max(0,Math.min(1.5,(c.fuse??0)+(d<3&&canSee&&Math.abs(target.y-c.y)<2?dt:-dt*2)));
@@ -32,7 +34,7 @@ export function tickMobs(s:State,dt:number,hurt:(s:State,p:Actor,n:number)=>void
         emitSound(s,'explode',c);s.blasts.push({id:c.id,x:c.x,y:c.y+.8,z:c.z,at:s.time});
         for(const p of players){const distance=Math.hypot(p.x-c.x,p.y-c.y,p.z-c.z);if(distance<4&&clear(s,c.x,c.y+.8,c.z,p.x,p.y+1,p.z))hurt(s,p,Math.max(1,Math.ceil((4-distance)*2)));}
         // Keep station inventories and planted crops intact instead of deleting stored supplies.
-        for(let dx=-2;dx<=2;dx++)for(let dy=-1;dy<=2;dy++)for(let dz=-2;dz<=2;dz++){const x=Math.floor(c.x)+dx,y=Math.floor(c.y)+dy,z=Math.floor(c.z)+dz,i=index(x,y,z),b=block(s.grid,x,y,z);if(x<0||z<0||x>=W||z>=W||y<1||y>=H||Math.hypot(dx,dy,dz)>2.4||![1,2,4,5,7,10,11,19,20,21,22,43,45,46].includes(b)||s.chests[i]||s.furnaces[i]||s.farms.some(f=>f.i===i))continue;setBlock(s,i,0);}
+        for(let dx=-2;dx<=2;dx++)for(let dy=-1;dy<=2;dy++)for(let dz=-2;dz<=2;dz++){const x=Math.floor(c.x)+dx,y=Math.floor(c.y)+dy,z=Math.floor(c.z)+dz,i=index(x,y,z),b=block(s.grid,x,y,z);if(!inWorld(s.terrainVersion,x,z)||y<1||y>=H||Math.hypot(dx,dy,dz)>2.4||![1,2,4,5,7,10,11,19,20,21,22,43,45,46].includes(b)||s.chests[i]||s.furnaces[i]||s.farms.some(f=>f.i===i))continue;setBlock(s,i,0);}
         c.health=0;continue;
       }
     }

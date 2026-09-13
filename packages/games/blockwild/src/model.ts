@@ -61,7 +61,7 @@ export const isPlant=(id:number)=>[SHORT_GRASS,WILD_CARROT,WILD_POTATO].includes
 export const cropItems=[SEEDS,CARROT,POTATO];
 export type AnimalKind='cow'|'sheep'|'pig'|'chicken';
 export type Animal={sheared?:boolean;grazeAt?:number;id:number;kind:AnimalKind;x:number;y:number;z:number;yaw:number;health:number;hitAt:number;adultAt:number;loveUntil:number;breedAt:number};
-export type TerrainVersion=1|2|3|4|5;
+export type TerrainVersion=1|2|3|4|5|6|7;
 export const dayLength=(version:TerrainVersion)=>version>=3?1200:240;
 export const isNight=(time:number,version:TerrainVersion)=>time%dayLength(version)>dayLength(version)*.62;
 export const isWorldBlock=(id:number)=>Number.isInteger(id)&&id>=0&&id<BLOCKS.length&&!(id>=24&&id<=27)&&!(id>=36&&id<=42)&&!(id>=48&&id<=63);
@@ -143,9 +143,18 @@ export type Homestead={fuelUntil?:Record<number,number>;chests:Record<number,Rec
 export type StationView={i:number;kind:number;contents:Record<number,number>;readyAt:number};
 export type View = { animals?:Animal[]; sounds?:SoundEvent[]; burningFurnaces?:number[]; seed: number; terrainVersion:TerrainVersion; revision: number; edits: [number,number][]; players: Player[]; creatures: Creature[]; projectiles?:Projectile[]; blasts?:Blast[]; caches: { id: string; ownerId:string; x: number; y: number; z: number }[]; time: number; mode: Settings['mode']; beacon: boolean; complete: boolean; mined: number; built: number; farms:Farm[]; furnaces:{i:number;readyAt:number}[];sleeping:number };
 export type PrivateView = { cropStatus?:string; interaction?:string; craftingSize:2|3; nearFurnace:boolean; inventory: Record<number, number>; message: string; commandAck:number; commandResult:string; recovery:{x:number;y:number;z:number}|null;station:StationView|null;home:{x:number;y:number;z:number}|null;air:number };
-export const index = (x: number, y: number, z: number) => x + z * W + y * W * W;
-export const coords = (i: number) => ({ x: i % W, y: Math.floor(i / (W * W)), z: Math.floor(i / W) % W });
+export const WORLD_RADIUS=2048, WORLD_WIDTH=WORLD_RADIUS*2;
+const LEGACY_CELLS=W*W*H;
+export const index=(x:number,y:number,z:number)=>x<-WORLD_RADIUS||x>=WORLD_RADIUS||z<-WORLD_RADIUS||z>=WORLD_RADIUS||y<0||y>=H?-1:x>=0&&x<W&&z>=0&&z<W?x+z*W+y*W*W:LEGACY_CELLS+x+WORLD_RADIUS+(z+WORLD_RADIUS)*WORLD_WIDTH+y*WORLD_WIDTH*WORLD_WIDTH;
+export const worldMin=(v:TerrainVersion)=>v===7?-WORLD_RADIUS:0;
+export const worldMax=(v:TerrainVersion)=>v===7?WORLD_RADIUS:W;
+export const inWorld=(v:TerrainVersion,x:number,z:number,margin=0)=>x>=worldMin(v)+margin&&z>=worldMin(v)+margin&&x<worldMax(v)-margin&&z<worldMax(v)-margin;
+export function validVoxel(i:number,v:TerrainVersion){if(!Number.isSafeInteger(i)||i<0)return false;const c=coords(i);return c.y>=1&&c.y<H&&inWorld(v,c.x,c.z)&&index(c.x,c.y,c.z)===i;}
+export const coords=(i:number)=>i<LEGACY_CELLS?{x:i%W,y:Math.floor(i/(W*W)),z:Math.floor(i/W)%W}:{x:(i-LEGACY_CELLS)%WORLD_WIDTH-WORLD_RADIUS,y:Math.floor((i-LEGACY_CELLS)/(WORLD_WIDTH*WORLD_WIDTH)),z:Math.floor((i-LEGACY_CELLS)/WORLD_WIDTH)%WORLD_WIDTH-WORLD_RADIUS};
 export const solid = (b: number) => b !== 0 && b !== 6 && b !== TORCH && b !== SAPLING && !isPlant(b);
 export const neutral = (): Input => ({ command:null, x: 0, z: 0, looking:false, fly:false, sprint:false, sneak:false, down:false, yaw: 0, pitch: 0, jump: false, mine: false, place: false, slot: 10 });
 
 export function parseCommand(raw:unknown):Command|null {if(raw===null)return null;const c=raw as Command;if(!c||typeof c!=='object'||!Number.isSafeInteger(c.seq)||c.seq<1||!['craft','eat','grow','use','plant','deposit','withdraw'].includes(c.type)||Object.keys(c).some(k=>!['seq','type','recipe','item'].includes(k)))throw new Error('Invalid command.');if(c.type==='craft'){if(![...RECIPES,...LEGACY_RECIPES].some(r=>r.id===c.recipe)||c.item!==undefined)throw new Error('Invalid recipe.');return{seq:c.seq,type:c.type,recipe:c.recipe};}if(c.type==='deposit'||c.type==='withdraw'){if(!Number.isInteger(c.item)||c.item===undefined||c.item<0||c.item>=ITEMS.length||c.recipe!==undefined)throw new Error('Invalid item.');return{seq:c.seq,type:c.type,item:c.item};}if(c.recipe!==undefined||c.item!==undefined)throw new Error('Unexpected command data.');return{seq:c.seq,type:c.type};}
+
+// Keep the existing download envelope bounded even with longer global voxel identifiers.
+export const editLimit=(version:TerrainVersion)=>version===7?8192:EDIT_LIMIT;

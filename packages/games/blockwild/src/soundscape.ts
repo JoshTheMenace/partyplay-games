@@ -1,3 +1,4 @@
+import { read, type Grid } from './chunk-world';
 import { CAMPFIRE, coords, solid, type Player, type View } from './model';
 import { block } from './terrain';
 import { SoundCursor, type SoundEvent } from './sound-events';
@@ -42,7 +43,7 @@ export class WorldSoundTracker{
  private voices=new Map<number,number>();
  private fires:Point[]=[];
  private revision=-1;
- update(v:View,grid:Uint8Array,listener:Player,reset=false):{cues:Cue[];loops:Loop[];underwater:boolean}{
+ update(v:View,grid:Grid,listener:Player,reset=false):{cues:Cue[];loops:Loop[];underwater:boolean}{
   reset=reset||this.time<0||v.time<this.time||v.time-this.time>2;
   if(reset){this.walkers.clear();this.voices.clear();this.revision=-1;}
   const cues=this.cursor.take(v.sounds??[],v.time,reset).map(e=>eventCue(e,listener.id)),loops:Loop[]=[];
@@ -63,7 +64,7 @@ export class WorldSoundTracker{
       cues.push({name:wet?'splash':`step-${['glass','metal'].includes(material(floor))?'stone':material(floor)}`,at:p,gain:p.sneaking?.06:wet?.22:.3,rate:wet?.85:1});stride=0;
      }
     }
-    if(p.progress>0&&p.target!==null&&v.time-mineAt>.26){cues.push({name:impact(grid[p.target]??3),at:coords(p.target),gain:.2,rate:1.15});mineAt=v.time;}
+    if(p.progress>0&&p.target!==null&&v.time-mineAt>.26){cues.push({name:impact(read(grid,p.target)??3),at:coords(p.target),gain:.2,rate:1.15});mineAt=v.time;}
    }else if(d>=4){stride=0;peak=p.y;}
    if(ground||wet||p.flying)peak=p.y;
    this.walkers.set(p.id,{x:p.x,y:p.y,z:p.z,stride,wet,ground,peak,mineAt});

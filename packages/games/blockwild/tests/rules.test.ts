@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rules, craft, growTree, serializeWorld, restoreWorld } from '../src/server';
+import { rules } from './legacy';
+import { craft, growTree, serializeWorld, restoreWorld } from '../src/server';
 import { terrain, fits, ray } from '../src/terrain';
 import { index, neutral, W, H, TOOL, BERRIES, CACHE_ITEM_LIMIT } from '../src/model';
 const ctx={roomId:'room',roundId:'round',seed:99,nowMs:1000,players:Array.from({length:10},(_,i)=>({id:`p${i}`,name:`Explorer${i}`,color:'#ffaa55'}))};

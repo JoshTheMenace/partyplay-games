@@ -1,4 +1,5 @@
-import { SHORT_GRASS, WILD_CARROT, WILD_POTATO, CARROT, POTATO, APPLE, CLAY, CLAY_BALL, COBBLE, DIAMOND, DIAMOND_PICK, FUEL, IRON_PICK, RAW_IRON, SAPLING, SEEDS, STONE_SWORD, SWORD, WOOD_SWORD, W, H, EDIT_LIMIT, coords, index, stackLimit, type Player } from './model';
+import { read, write, activeArea } from './chunk-world';
+import { inWorld, SHORT_GRASS, WILD_CARROT, WILD_POTATO, CARROT, POTATO, APPLE, CLAY, CLAY_BALL, COBBLE, DIAMOND, DIAMOND_PICK, FUEL, IRON_PICK, RAW_IRON, SAPLING, SEEDS, STONE_SWORD, SWORD, WOOD_SWORD, H, editLimit, coords, index, stackLimit, type Player } from './model';
 import { block, hash } from './terrain';
 import type { Actor, State } from './server';
 export const selectedTier=(p:Actor)=>p.inventory[p.selected]>0?({24:1,25:2,[IRON_PICK]:3,[DIAMOND_PICK]:4} as Record<number,number>)[p.selected]??0:0;
@@ -19,11 +20,11 @@ export const overlaps=(p:Player,x:number,y:number,z:number)=>p.connected&&Math.a
 export function growSaplings(s:State,dt:number){
   if(Math.floor(s.time/30)===Math.floor((s.time-dt)/30))return;
   for(const [i,b]of s.edits)if(b===SAPLING&&hash(i,Math.floor(s.time/30),s.seed)<.35){
-    const p=coords(i),cells:[number,number][]=[];
+    const p=coords(i);if(!activeArea(s,p))continue;const cells:[number,number][]=[];
     for(let dy=0;dy<5;dy++)cells.push([index(p.x,p.y+dy,p.z),4]);
     for(let dy=2;dy<5;dy++)for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)if((dx||dz)&&Math.abs(dx)+Math.abs(dz)<(dy===4?3:4))cells.push([index(p.x+dx,p.y+dy,p.z+dz),5]);
-    if(p.x<2||p.z<2||p.x>=W-2||p.z>=W-2||p.y+5>=H||![1,2].includes(block(s.grid,p.x,p.y-1,p.z))||s.edits.size+cells.filter(([n])=>!s.edits.has(n)).length>EDIT_LIMIT)continue;
-    if(cells.some(([n])=>{const c=coords(n);return n!==i&&s.grid[n]!==0||s.players.some(a=>overlaps(a,c.x,c.y,c.z));}))continue;
-    for(const [n,kind]of cells){s.grid[n]=kind;if(s.base[n]===kind)s.edits.delete(n);else s.edits.set(n,kind);}s.revision++;
+    if(!inWorld(s.terrainVersion,p.x,p.z,2)||p.y+5>=H||![1,2].includes(block(s.grid,p.x,p.y-1,p.z))||s.edits.size+cells.filter(([n])=>!s.edits.has(n)).length>editLimit(s.terrainVersion))continue;
+    if(cells.some(([n])=>{const c=coords(n);return n!==i&&read(s.grid,n)!==0||s.players.some(a=>overlaps(a,c.x,c.y,c.z));}))continue;
+    for(const [n,kind]of cells){write(s.grid,n,kind);if(read(s.base,n)===kind)s.edits.delete(n);else s.edits.set(n,kind);}s.revision++;
   }
 }

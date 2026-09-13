@@ -1,6 +1,6 @@
 # Farming, wildlife and exploration
 
-New worlds use terrain version 5. This update adds a connected food loop without adding another persistent HUD panel. The existing action button reads Till, Plant, Harvest or Feed; its accessible label names the animal. Desktop right-click uses the selected item, and E handles the aimed interaction. The aiming caption names animals as well as blocks.
+Farming terrain was introduced in version 5. New worlds use version 6, which additionally moves diamonds deeper. This update adds a connected food loop without adding another persistent HUD panel. The existing action button reads Till, Plant, Harvest or Feed; its accessible label names the animal. Desktop right-click uses the selected item, and E handles the aimed interaction. The aiming caption names animals as well as blocks.
 
 ## Play loop
 

@@ -1,6 +1,9 @@
+import { write } from '../src/chunk-world';
+import type { State as WorldState } from '../src/server';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rules, craft, serializeWorld, restoreWorld } from '../src/server';
+import { rules } from './legacy';
+import { craft, serializeWorld, restoreWorld } from '../src/server';
 import { bucketUse, fertilize, shear, graze, spreadGrass } from '../src/toolkit';
 import { cropEnvironment, cropStatus, tickCrops } from '../src/farming';
 import { tickAnimals } from '../src/animals';
@@ -8,7 +11,7 @@ import { homesteadAction } from '../src/survival';
 import { BUCKET, WATER_BUCKET, SHEARS, BONE_MEAL, BONE, BENCH, INGOT, WOOL, FARMLAND, SHORT_GRASS, TORCH, BEEF, COOKED_BEEF, POTATO, index, neutral, type Animal } from '../src/model';
 const ctx={roomId:'toolkit',roundId:'r',seed:1,nowMs:0,players:[{id:'p',name:'Farmer',color:'#abcdef'}]};
 function make(){const s=rules.create(ctx,rules.validateSettings({}));s.grid.fill(0);s.base.fill(0);s.edits.clear();s.animals=[];for(let x=0;x<128;x++)for(let z=0;z<128;z++)s.grid[index(x,5,z)]=1;Object.assign(s.players[0]!,{x:64.5,y:6,z:66.5,pitch:-1.1,yaw:0});return s;}
-const edit=(s:ReturnType<typeof make>,i:number,b:number)=>{s.grid[i]=b;s.edits.set(i,b);s.revision++;return true;};
+const edit=(s:WorldState,i:number,b:number)=>{write(s.grid,i,b);s.edits.set(i,b);s.revision++;return true;};
 const sheep=():Animal=>({id:1,kind:'sheep',x:64.5,y:6,z:64.5,yaw:0,health:5,adultAt:0,hitAt:0,breedAt:0,loveUntil:0});
 test('recipes connect iron and bones to practical farm tools without spending on failed crafts',()=>{const s=make(),p=s.players[0]!;p.inventory={[INGOT]:5,[BONE]:1};craft(s,p,'shears');craft(s,p,'bone-meal');assert.equal(p.inventory[SHEARS],1);assert.equal(p.inventory[BONE_MEAL],3);assert.throws(()=>craft(s,p,'bucket'),/table/);assert.equal(p.inventory[INGOT],3);edit(s,index(63,6,66),BENCH);craft(s,p,'bucket');assert.equal(p.inventory[BUCKET],1);assert.equal(p.inventory[INGOT],0);});
 test('a bucket transfers one water cell and preserves both bucket forms across save/reload',()=>{const s=make(),p=s.players[0]!,source=index(64,5,65);edit(s,source,6);p.selected=BUCKET;p.inventory={[BUCKET]:1};assert.equal(bucketUse(s,p,edit),true);assert.equal(s.grid[source],0);assert.equal(p.inventory[BUCKET],0);assert.equal(p.inventory[WATER_BUCKET],1);edit(s,index(64,4,65),3);p.selected=WATER_BUCKET;bucketUse(s,p,edit);assert.equal(s.grid[source],6);assert.equal(p.inventory[WATER_BUCKET],0);assert.equal(p.inventory[BUCKET],1);const copy=rules.create(ctx,rules.validateSettings({}));restoreWorld(copy,serializeWorld(s));assert.equal(copy.grid[source],6);assert.equal(copy.players[0]!.inventory[BUCKET],1);});

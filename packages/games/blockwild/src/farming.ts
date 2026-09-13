@@ -1,3 +1,4 @@
+import { read, activeArea } from './chunk-world';
 import { bucketUse, shear, fertilize } from './toolkit';
 import { BONE_MEAL, SHEARS, isNight, FARMLAND, GRAIN, H, ITEMS, SEEDS, TORCH, CAMPFIRE, coords, cropItems, isHoe, stackLimit, solid } from './model';
 import { block, ray } from './terrain';
@@ -11,7 +12,7 @@ export function farmUse(s:State,p:Actor,set:(s:State,i:number,b:number)=>boolean
   const animal=aimedAnimal(s,p);if(animal){if(p.selected===SHEARS)shear(s,p,animal);else feedAnimal(s,p,animal);return true;}
   const hit=ray(s.grid,p.x,p.y+1.55,p.z,p.yaw,p.pitch);if(!hit)return false;
   if(p.selected===BONE_MEAL){fertilize(s,p,hit.i,set);return true;}
-  const kind=s.grid[hit.i],open=hit.previous.y===hit.y+1&&block(s.grid,hit.x,hit.y+1,hit.z)===0;
+  const kind=read(s.grid,hit.i),open=hit.previous.y===hit.y+1&&block(s.grid,hit.x,hit.y+1,hit.z)===0;
   if(isHoe(p.selected)&&[1,2].includes(kind!)){
     if(!open)throw new Error('Clear the grass above the soil and aim at its top to till it.');
     if(s.mode!=='creative'&&!(p.inventory[p.selected]>0))throw new Error('Craft and select a hoe first.');
@@ -24,7 +25,7 @@ export function farmUse(s:State,p:Actor,set:(s:State,i:number,b:number)=>boolean
 }
 export function plantCrop(s:State,p:Actor,i:number){
   const c=coords(i),crop=cropItems.includes(p.selected)?p.selected:SEEDS;
-  if(s.grid[i]!==FARMLAND||block(s.grid,c.x,c.y+1,c.z)!==0)throw new Error('Use a hoe on clear grass or dirt first. Plant only on open farmland.');
+  if(read(s.grid,i)!==FARMLAND||block(s.grid,c.x,c.y+1,c.z)!==0)throw new Error('Use a hoe on clear grass or dirt first. Plant only on open farmland.');
   if(s.farms.some(f=>f.i===i))throw new Error('A crop is already growing here.');
   if(s.farms.length>=128)throw new Error('Harvest an existing crop before planting more.');
   if(s.mode!=='creative'&&!(p.inventory[crop]>0))throw new Error(`Gather ${ITEMS[crop]} first.`);
@@ -46,7 +47,7 @@ export function cropEnvironment(s:State,i:number){
 }
 export function tickCrops(s:State,dt:number){
   for(const f of s.farms){if(f.readyAt<=s.time-dt)continue;const c=coords(f.i);
-    if(block(s.grid,c.x,c.y+1,c.z)!==0||!cropEnvironment(s,f.i).light)f.readyAt+=dt;
+    if(!activeArea(s,c)||block(s.grid,c.x,c.y+1,c.z)!==0||!cropEnvironment(s,f.i).light)f.readyAt+=dt;
     else if(cropEnvironment(s,f.i).wet)f.readyAt-=dt; // Baseline dry growth; water doubles the remaining rate.
   }
 }

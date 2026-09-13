@@ -1,3 +1,4 @@
+import type { Grid } from './chunk-world';
 import type { ResourceScope } from '../../../party-runtime/src/index';
 import type { Player, View } from './model';
 import { spatial, WorldSoundTracker, type Cue, type Loop } from './soundscape';
@@ -78,7 +79,7 @@ export class BlockwildAudio{
   const voice={source,gain,pan,cue};this.voices.add(voice);this.mix(voice);
   source.onended=()=>this.stop(voice);source.start();return voice;
  }
- update(v:View|null|undefined,grid:Uint8Array,playerId:string|null,connected:boolean,yaw:number){
+ update(v:View|null|undefined,grid:Grid,playerId:string|null,connected:boolean,yaw:number){
   const p=v?.players.find(p=>p.id===playerId),now=performance.now();
   if(v&&v.time!==this.lastView){this.receivedAt=now;this.lastView=v.time;}
   this.available=!!p&&p.connected&&connected&&now-this.receivedAt<1500;
