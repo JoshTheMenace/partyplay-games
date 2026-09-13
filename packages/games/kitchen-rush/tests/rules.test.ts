@@ -85,3 +85,33 @@ test('solo service has a reachable star target, longer ticket patience, results 
   assert.equal(solo.served,2); assert(solo.stars>=1);
   rules.tick(solo,new Map(),1/60,solo.endsAt); assert(rules.outcome(solo).complete); assert.equal(create(1).score,0);
 });
+
+test('a stationary dash moves along facing for one burst, then stops', () => {
+  const state = create(), chef = state.players[0]; chef.x = 0; chef.z = 2; chef.facingX = 1; chef.facingZ = 0;
+  tick(state, { p0: { ...neutral(), dash: true } }); tick(state, {}, .4);
+  assert.ok(chef.x > 2 && chef.x < 2.4, 'dash covers about 2.24 metres without held movement');
+  assert.equal(chef.z, 2); const x = chef.x; tick(state, {}, .3); assert.equal(chef.x, x);
+});
+test('released dash commands execute once, acknowledge cooldown presses and preserve held food', () => {
+  const state = create(), chef = state.players[0]; chef.x = 0; chef.z = 2; chef.facingX = 1; chef.facingZ = 0; chef.held = food(99, 'lettuce');
+  const dash = rules.parseInput({ ...neutral(), command: 'dash', seq: 1 });
+  tick(state, { p0: dash }, .2); assert.ok(chef.x > 1.1); assert.equal(chef.commandSeq, 1); assert.equal(chef.held?.id, 99);
+  const ready = chef.dashReady;
+  tick(state, { p0: { ...dash, seq: 2 } }, 1.8); assert.equal(chef.commandSeq, 2); assert.equal(chef.dashReady, ready, 'cooldown taps cannot queue a later dash');
+  tick(state, { p0: dash }); assert.equal(chef.dashReady, ready, 'old commands cannot retrigger');
+  chef.x = 0; tick(state, { p0: { ...dash, seq: 3 } }); assert.ok(chef.dashReady > ready); assert.ok(chef.x > 0);
+});
+test('dash normalizes a partial diagonal stick and cannot pass through a counter', () => {
+  const state = create(), chef = state.players[0]; chef.x = 0; chef.z = 2;
+  tick(state, { p0: { ...neutral(), x: .2, y: -.2, dash: true } }, .1);
+  assert.ok(Math.abs(Math.hypot(chef.x, chef.z - 2) - .64) < .001, 'dash speed does not shrink with joystick deflection');
+  const board = station(state, 'board'); at(state, board); const x = chef.x, z = chef.z; chef.dashReady = 0; tick(state); tick(state, { p0: { ...neutral(), dash: true } }, .4);
+  assert.ok(walkable(state, chef.x, chef.z)); assert.ok(Math.hypot(chef.x - x, chef.z - z) < .3, 'counter blocks the burst');
+});
+
+test('disconnect cancels an active dash before the chef returns', () => {
+  const state = create(), chef = state.players[0]; chef.x = 0; chef.z = 2; chef.facingX = 1; chef.facingZ = 0;
+  tick(state, { p0: { ...neutral(), command: 'dash', seq: 1 } }); const x = chef.x;
+  rules.onPresenceChange(state, chef.id, false, state.now); rules.onPresenceChange(state, chef.id, true, state.now);
+  tick(state, {}, .4); assert.equal(chef.x, x); assert.equal(chef.dashUntil, 0);
+});

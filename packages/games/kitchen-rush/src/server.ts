@@ -69,7 +69,7 @@ function addTicket(state: State) {
 }
 export const rules: GameRules<State, Input, never, Settings, View, null> = {
   validateSettings(raw) { if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Settings must be an object.'); const value = raw as Partial<Settings>; if (Object.keys(value).some(key => !['kitchen', 'seconds', 'practice'].includes(key))) throw new Error('Unknown kitchen setting.'); const settings = { kitchen: value.kitchen ?? 0, seconds: value.seconds ?? 180, practice: value.practice ?? false }; if ((!Number.isInteger(settings.kitchen) || settings.kitchen < 0 || settings.kitchen >= KITCHENS.length) || ![180, 240, 300].includes(settings.seconds) || typeof settings.practice !== 'boolean') throw new Error('Choose a kitchen, 3–5 minute service and practice setting.'); return settings; },
-  parseInput(raw) { const value = raw as Input; if (!value || typeof value !== 'object' || Object.keys(value).some(key => !['x', 'y', 'use', 'dash', 'command', 'seq'].includes(key)) || !Number.isFinite(value.x) || !Number.isFinite(value.y) || Math.abs(value.x) > 1 || Math.abs(value.y) > 1 || typeof value.use !== 'boolean' || typeof value.dash !== 'boolean' || ![null, 'use', 'drop', 'toss'].includes(value.command) || !Number.isSafeInteger(value.seq) || value.seq < 0) throw new Error('Invalid kitchen input.'); const length = Math.max(1, Math.hypot(value.x, value.y)); return { ...value, x: value.x / length, y: value.y / length }; },
+  parseInput(raw) { const value = raw as Input; if (!value || typeof value !== 'object' || Object.keys(value).some(key => !['x', 'y', 'use', 'dash', 'command', 'seq'].includes(key)) || !Number.isFinite(value.x) || !Number.isFinite(value.y) || Math.abs(value.x) > 1 || Math.abs(value.y) > 1 || typeof value.use !== 'boolean' || typeof value.dash !== 'boolean' || ![null, 'use', 'drop', 'toss', 'dash'].includes(value.command) || !Number.isSafeInteger(value.seq) || value.seq < 0) throw new Error('Invalid kitchen input.'); const length = Math.max(1, Math.hypot(value.x, value.y)); return { ...value, x: value.x / length, y: value.y / length }; },
   neutralInput: neutral, parseAction() { throw new Error('Kitchen Rush uses acknowledged input commands.'); }, applyAction() {},
   create(ctx, settings) {
     const size = dimensions(ctx.players.length), targetScore = Math.round((settings.seconds / 180) * (ctx.players.length === 1 ? 110 : 160 + ctx.players.length * 35) * (1 + settings.kitchen * .09));
@@ -91,12 +91,13 @@ export const rules: GameRules<State, Input, never, Settings, View, null> = {
     const workers = new Set<string>();
     for (const chef of state.players) {
       if (!chef.connected) continue; const input = inputs.get(chef.id) ?? neutral();
-      if (input.dash && !state.lastDash[chef.id] && now >= chef.dashReady) { chef.dashUntil = now + 350; chef.dashReady = now + 1600; } state.lastDash[chef.id] = input.dash;
+      const command = input.seq > chef.commandSeq ? input.command : null;
+      if (((input.dash && !state.lastDash[chef.id]) || command === 'dash') && now >= chef.dashReady) { chef.dashUntil = now + 350; chef.dashReady = now + 1600; } state.lastDash[chef.id] = input.dash;
       const length = Math.hypot(input.x, input.y); if (length > .1) { chef.facingX = input.x / length; chef.facingZ = input.y / length; }
       const gust = hasGust(level) && state.hazard === 'active' && Math.abs(chef.z) < 1.8;
-      const speed = (now < chef.dashUntil ? 6.4 : SPEED) * (gust ? .5 : 1), nextX = chef.x + input.x * speed * dt, nextZ = chef.z + input.y * speed * dt;
+      const dashing = now < chef.dashUntil, speed = (dashing ? 6.4 : SPEED) * (gust ? .5 : 1), nextX = chef.x + (dashing ? chef.facingX : input.x) * speed * dt, nextZ = chef.z + (dashing ? chef.facingZ : input.y) * speed * dt;
       if (walkable(state, nextX, chef.z)) chef.x = nextX; if (walkable(state, chef.x, nextZ)) chef.z = nextZ;
-      if (input.command && input.seq > chef.commandSeq) { chef.commandSeq = input.seq; if (input.command === 'use') use(state, chef); else drop(state, chef, input.command === 'toss'); }
+      if (command) { chef.commandSeq = input.seq; if (command === 'use') use(state, chef); else if (command !== 'dash') drop(state, chef, command === 'toss'); }
       const station = target(state, chef); chef.target = station?.id ?? null;
       if (input.use && station && !chef.held && !workers.has(station.id)) {
         workers.add(station.id);
@@ -125,7 +126,7 @@ export const rules: GameRules<State, Input, never, Settings, View, null> = {
     if (now >= state.nextOrderAt && state.tickets.length < capacity) { addTicket(state); state.nextOrderAt = now + 1500; }
     state.stars = state.thresholds.filter(score => state.score >= score).length;
   },
-  onPresenceChange(state, id, connected) { const chef = state.players.find(player => player.id === id); if (!chef) return; chef.connected = connected; if (!connected) { drop(state, chef, false, true); state.lastDash[id] = false; } },
+  onPresenceChange(state, id, connected) { const chef = state.players.find(player => player.id === id); if (!chef) return; chef.connected = connected; if (!connected) { drop(state, chef, false, true); state.lastDash[id] = false; chef.dashUntil = 0; } },
   publicView(state) { const { orderSeed:_orderSeed,nextId: _nextId, nextOrderAt: _nextOrderAt, orderIndex: _orderIndex, returns: _returns, lastDash: _lastDash, nextBeltAt: _nextBeltAt, ...view } = state; return structuredClone(view); }, playerView: () => null,
   outcome(state) { return { complete: state.complete, winners: state.served ? state.players.map(player => player.id) : [], rows: state.players.map(player => ({ playerId: player.id, score: state.score, rank: 1, label: `${player.served} served · ${player.worked} jobs` })) }; }, dispose() {},
 };

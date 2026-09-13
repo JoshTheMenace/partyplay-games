@@ -4,7 +4,7 @@ A cooperative 3D kitchen campaign for 1–10 players. Play solo on one device or
 
 ## Play
 
-Select Kitchen Rush in the shared launcher. Phones join and ready through the normal room flow. Drag the movement pad, then tap Use to take/place an ingredient or plate; hold Use to chop, wash or extinguish. Drop puts an item at your feet. Toss passes ingredients in your last movement direction; plates are carried safely. Dash recharges after each short burst. Keyboard: focus the pad for WASD/arrows, E to use, Q to drop, F to toss, Shift to dash.
+Select Kitchen Rush in the shared launcher. Phones join and ready through the normal room flow. Drag the movement pad, then tap Use to take/place an ingredient or plate; hold Use to chop, wash or extinguish. Drop puts an item at your feet. Toss passes ingredients in your last movement direction; plates are carried safely. Tap Dash for a short burst in your movement direction, or your facing direction when standing still; releasing the controls does not cancel the burst. Dash recharges after 1.6 seconds. Keyboard: focus the pad for WASD/arrows, E to use, Q to drop, F to toss, Shift to dash.
 
 Follow the ticket exactly. Chopped lettuce + chopped tomato makes salad. Chopped tomato and onion each need stove cooking for soup. Burgers need cooked patty, chopped lettuce and a bun. Pizza is assembled as raw dough + chopped tomato + cheese on a plate, then the whole plate goes into an oven. Green means cooked; collect before burning. All recipes need a clean plate. Served plates return dirty after five seconds; take one to the sink and hold Use to wash it. The food bin clears mistakes while preserving plates. Empty-handed Use extinguishes fire.
 
