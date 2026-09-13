@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react';
+import type { RoomPhase } from '../../party-contract/src/protocol';
 import type { ActionResult, GameClientContext, Outcome } from '../../party-contract/src/index';
 export * from './primitives';
 export * from './drawing';
@@ -17,7 +18,10 @@ export type SceneViewProps<Settings, PublicView, PrivateView = unknown> = {
   publicView: PublicView | null; snapshotTime: number | null; signal: AbortSignal;
   serverNowMs(): number; onReady(): void; onError(error: unknown): void;
 };
+/** Optional nonvisual audio owner, retained from lobby through results. Never receives private state. */
+export type GameAudioProps<PublicView> = { phase: RoomPhase; roundId: string | null; publicView: PublicView | null; connected: boolean; viewRole: 'display' | 'controller'; isHost: boolean; serverNowMs(): number };
 export type GameClientModule<Input, Action, Settings, PublicView, PrivateView> = {
+  AudioView?: ComponentType<GameAudioProps<PublicView>>;
   sceneRoles?: readonly ('display' | 'controller')[];
   SceneView?: ComponentType<SceneViewProps<Settings, PublicView, PrivateView>>;
   DisplayView: ComponentType<GameViewProps<Input, Action, PublicView, PrivateView>>;

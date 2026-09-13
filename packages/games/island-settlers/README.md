@@ -2,6 +2,8 @@
 
 An in-progress Catan-inspired game for 3–10 people. The laptop/TV shows the board; each player joins with a phone for private cards, trading, and placement. Claude Fable authors the frontend and animations; Codex owns rules, integration, and verification.
 
+Players can open **Rules** from their phone header during play. The topic picker covers the base game, this room’s turn style and victory target, and enabled expansions, missions and variants. It preserves unfinished actions and does not pause the room.
+
 ## Implemented rules
 
 - Snake-order setup, seeded terrain and number placement, five finite resource supplies, dice production, ports, roads, settlements, cities, and piece limits.
@@ -25,7 +27,7 @@ Connect-style preserves private hands, the shared contested board, classic cards
 
 All bank/card transfers and placements are server-authoritative. Selection previews stay local until confirmed. The server sends explicit public/private projections; the frontend never imports server state or RNG. Actions carry a phase/turn ID and reliable transport IDs. Transactions operate on a copy so rejection cannot partially spend cards or change random state.
 
-Save/resume across server restarts is deferred. Closing the room or losing the host beyond its shared two-minute grace ends the room. AI opponents, music, the published scenario campaigns, Event Cards and the two-player variant are not implemented. All expansion maps are generated adaptations, including the combined coastal/warehouse layout and river paths. Human balance and physical-device acceptance remain unfinished; automated completion is not a production certification.
+Save/resume across server restarts is deferred. Closing the room or losing the host beyond its shared two-minute grace ends the room. AI opponents, the published scenario campaigns, Event Cards and the two-player variant are not implemented. All expansion maps are generated adaptations, including the combined coastal/warehouse layout and river paths. Human balance and physical-device acceptance remain unfinished; automated completion is not a production certification.
 
 ## Code map
 
@@ -41,6 +43,12 @@ Save/resume across server restarts is deferred. Closing the room or losing the h
 - `tests/bot.ts`: QA choices based only on phone-visible information; no production bot or hidden-state access.
 
 Game content lives in the games submodule. The parent integrates the two registries, discovery metadata, and a trusted registration setting for 4,096 actions/player with 1 KiB maximum action payloads. Other games keep their existing 256-action allowance. The product of count and size is bounded below the original worst-case retained-payload limit, and old acknowledgements remain available for deduplication.
+
+## Background music
+
+The host plays the three user-supplied tracks in order, repeating after roughly 20 minutes. Phones and guest displays do not fetch or play them. The platform’s Sound on/off control pauses/resumes the current track at a 22% background volume. Playback also stops outside the round, while hidden or disconnected, and is disposed when leaving the game. Browser autoplay restrictions can require a host tap. Failed files are skipped; reconnecting or a user gesture can retry a failed playlist.
+
+`src/music.ts` owns rotation and streaming; `src/audio.tsx` uses the existing shared AudioView hook for host ownership, sound preference and cleanup. Original MP3s and provenance are in `public/games/island-settlers/music/` in the games repository.
 
 ## Validation
 

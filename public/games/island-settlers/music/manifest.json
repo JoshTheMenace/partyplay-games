@@ -1,0 +1,24 @@
+{
+  "source": "User supplied for Island Settlers background music on 2026-09-13.",
+  "modifications": "None; original MP3 bytes retained.",
+  "tracks": [
+    {
+      "file": "isle-of-kingdoms.mp3",
+      "originalFilename": "Isle of Kingdoms (Board Game Soundtrack).mp3",
+      "bytes": 4628170,
+      "sha256": "68f0a01d9dc61583500bcceb50888115afb927f55f4969ccf49dffd38f1e779e"
+    },
+    {
+      "file": "isle-of-two-paths.mp3",
+      "originalFilename": "Isle of Two Paths.mp3",
+      "bytes": 11418017,
+      "sha256": "54bac0088d6ad11d580ed5ea5e6a8072fd2e222ca2daa1e937ca489d0ae616b5"
+    },
+    {
+      "file": "island-kingdom-suite.mp3",
+      "originalFilename": "Knights, Robbers & Settlers - The Island Kingdom Suite.mp3",
+      "bytes": 12158389,
+      "sha256": "ff916ec013553c28c39aedc38ca516d5542fb3849eaa9edfcc55c6e31b46e3fe"
+    }
+  ]
+}

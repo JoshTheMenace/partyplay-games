@@ -5,6 +5,7 @@ import { MISSIONS, SCENARIOS, VARIANTS, type Mission, type Scenario, type Varian
 import { DEFAULT_SETTINGS, SCENARIO_NAMES, VARIANT_NAMES, expansionRestrictions, maximumTargetPoints, suggestedPoints } from './expansion-settings';
 import { Display } from './display';
 import { Controller } from './controller';
+import { AudioView } from './audio';
 import { MISSION_META, describeSettings, expansionPlayer, playerOf, withDefaults } from './presentation';
 import './style.css';
 
@@ -53,6 +54,7 @@ function Results({ outcome, publicView: view, playerId }: ResultsViewProps<Publi
   </div>;
 }
 export const client: GameClientModule<null, Action, Settings, PublicView, PrivateView> = {
+  AudioView,
   settingsWide: true,
   SceneView: props => <Suspense fallback={null}><IslandScene {...props}/></Suspense>,
   DisplayView: Display, ControllerView: Controller,
