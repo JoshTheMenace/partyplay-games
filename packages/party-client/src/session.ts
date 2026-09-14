@@ -11,6 +11,7 @@ export class PartySession {
   private socket: WebSocket | null = null;
   private listeners = new Set<() => void>();
   private pending = new Map<string, Pending>();
+  private nextActionSequence = 1;
   private retry: ReturnType<typeof setTimeout> | null = null;
   private timer: ReturnType<typeof setInterval>;
   private inputTimer: ReturnType<typeof setInterval>;
@@ -29,7 +30,7 @@ export class PartySession {
       if (now - this.lastPingAt > 5000) { this.lastPingAt = now; this.send('clock.ping', { clientTime: now }); }
       for (const [id, action] of this.pending) {
         if (now >= action.expires || action.roundId !== this.state.room?.roundId) { this.pending.delete(id); action.resolve({ accepted: false, reason: 'Submission expired. Check the current round before trying again.' }); }
-        else if (now - action.sentAt > 1200 && this.state.connection === 'connected') { action.sentAt = now; this.send('game.action', { roundId: action.roundId, actionId: id, payload: action.payload }); }
+        else if (now - action.sentAt > 1200 && this.state.connection === 'connected') { action.sentAt = now; this.sendPending(action); }
       }
     }, 500);
   }
@@ -46,8 +47,8 @@ export class PartySession {
       let message: Wire; try { message = JSON.parse(event.data); } catch { this.update({ error: 'The server sent an unreadable response. Reload the page.' }); return; }
       if (message.v !== CONTRACT_VERSION) { this.update({ error: 'Client version changed. Refresh this browser.' }); return; }
       if (message.type === 'clock.pong') { const rtt = Date.now() - Number(message.clientTime); if (rtt >= 0 && rtt < this.bestRtt) { this.bestRtt = rtt; this.offset = Number(message.serverTime) - (Number(message.clientTime) + rtt / 2); } }
-      if (message.type === 'room.welcome') { const welcome = message as unknown as Welcome; this.credentials = { code: welcome.room.code, token: welcome.token }; try { sessionStorage.setItem(this.storageKey, JSON.stringify(this.credentials)); } catch { /* Continue without persisted reconnect. */ } this.initial = null; this.attempt = 0; this.update({ identity: { clientId: welcome.clientId, playerId: welcome.playerId }, room: welcome.room, games: welcome.games, error: null }); }
-      if (message.type === 'room.state') { const room = message.room as RoomView; if (!this.state.room || room.id !== this.state.room.id || room.revision >= this.state.room.revision) { const changed = room.roundId !== this.state.room?.roundId; this.update({ room, ...(changed ? { snapshot: null } : {}) }); if (changed || room.phase !== 'playing') this.held.release(false); if (changed) { this.snapshotDecoder.reset(); this.syncPending = false; this.clearActions('The round changed.'); } } }
+      if (message.type === 'room.welcome') { const welcome = message as unknown as Welcome; if (welcome.room.roundId !== this.state.room?.roundId) { this.clearActions('The round changed.'); this.nextActionSequence = 1; } this.nextActionSequence = Math.max(this.nextActionSequence, welcome.nextActionSequence ?? 1); this.credentials = { code: welcome.room.code, token: welcome.token }; try { sessionStorage.setItem(this.storageKey, JSON.stringify(this.credentials)); } catch { /* Continue without persisted reconnect. */ } this.initial = null; this.attempt = 0; this.update({ identity: { clientId: welcome.clientId, playerId: welcome.playerId }, room: welcome.room, games: welcome.games, error: null }); }
+      if (message.type === 'room.state') { const room = message.room as RoomView; if (!this.state.room || room.id !== this.state.room.id || room.revision >= this.state.room.revision) { const changed = room.roundId !== this.state.room?.roundId; this.update({ room, ...(changed ? { snapshot: null } : {}) }); if (changed || room.phase !== 'playing') this.held.release(false); if (changed) { this.nextActionSequence = 1; this.snapshotDecoder.reset(); this.syncPending = false; this.clearActions('The round changed.'); } } }
       if (message.type === 'game.snapshot' || message.type === 'round.results') { const snapshot = message as unknown as Snapshot; if (snapshot.roundId === this.state.room?.roundId && (!this.state.snapshot || snapshot.revision >= this.state.snapshot.revision)) { const decoded = this.snapshotDecoder.decode(snapshot, this.state.games.find(game => game.id === this.state.room?.gameId)?.snapshotCache); if (decoded) { this.syncPending = false; this.update({ snapshot: decoded }); } else if (!this.syncPending) { this.syncPending = true; this.send('snapshot.sync', { roundId: snapshot.roundId }); } } }
       if (message.type === 'action.ack') { const action = this.pending.get(String(message.actionId)); if (action && message.roundId === action.roundId) { this.pending.delete(action.actionId); action.resolve({ accepted: message.accepted === true, ...(typeof message.reason === 'string' ? { reason: message.reason } : {}) }); } }
       if (message.type === 'error') { if (message.code === 'REJOIN') { this.forget(); this.update({ identity: null, room: null, snapshot: null }); } this.initial = null; this.update({ error: String(message.reason) }); }
@@ -91,14 +92,22 @@ export class PartySession {
   private canInput() { return this.state.connection === 'connected' && this.state.room?.phase === 'playing' && !!this.state.identity?.playerId && this.state.room.activePlayerIds.includes(this.state.identity.playerId); }
   setInput = (payload: unknown) => { if (this.canInput() && !document.hidden) this.held.set(payload, performance.now()); };
   releaseInput = () => this.held.release();
+  private sendPending(action: Pending) {
+    // Retire only below every unresolved action, including retries from before reconnect.
+    const retireThrough = Math.min(this.nextActionSequence, ...[...this.pending.keys()].map(Number)) - 1;
+    this.send('game.action', { roundId: action.roundId, actionId: action.actionId, payload: action.payload, ...(this.state.room?.actionWindow ? { retireThrough } : {}) });
+  }
   sendAction = (payload: unknown): Promise<ActionResult> => {
     if (!this.state.room?.roundId || this.state.room.phase !== 'playing') return Promise.resolve({ accepted: false, reason: 'Wait for the round to begin.' });
     if (this.pending.size >= 16) return Promise.resolve({ accepted: false, reason: 'Too many pending submissions. Wait for a response.' });
     const roundId = this.state.room.roundId;
-    const actionId = globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${this.seq++}`;
+    const actionId = this.state.room.actionWindow ? String(this.nextActionSequence) : globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${this.seq++}`;
     // Random ID fallback supports ordinary HTTP LAN origins, where randomUUID is unavailable.
-    if (new TextEncoder().encode(JSON.stringify({ v: CONTRACT_VERSION, type: 'game.action', roundId, actionId, payload })).length > MAX_MESSAGE_BYTES) return Promise.resolve({ accepted: false, reason: 'Drawing submission exceeds 32 KiB.' });
-    return new Promise(resolve => { this.pending.set(actionId, { roundId, actionId, payload, resolve, expires: Date.now() + 20000, sentAt: Date.now() }); this.send('game.action', { roundId, actionId, payload }); });
+    if (new TextEncoder().encode(JSON.stringify({ v: CONTRACT_VERSION, type: 'game.action', roundId, actionId, payload, ...(this.state.room.actionWindow ? { retireThrough: this.nextActionSequence - 1 } : {}) })).length > MAX_MESSAGE_BYTES) return Promise.resolve({ accepted: false, reason: 'Drawing submission exceeds 32 KiB.' });
+    if (this.state.room.actionWindow) this.nextActionSequence++;
+    // Capture the submitted value so caller edits cannot change a reconnect retry.
+    payload = JSON.parse(JSON.stringify(payload ?? null));
+    return new Promise(resolve => { const action = { roundId, actionId, payload, resolve, expires: Date.now() + 20000, sentAt: Date.now() }; this.pending.set(actionId, action); this.sendPending(action); });
   };
   assetsReady = (roundId = this.state.room?.roundId) => { if (roundId === this.state.room?.roundId && this.state.room?.phase === 'preparing') this.send('round.ready', { roundId: this.state.room.roundId }); };
   private clearActions(reason: string) { for (const action of this.pending.values()) action.resolve({ accepted: false, reason }); this.pending.clear(); }

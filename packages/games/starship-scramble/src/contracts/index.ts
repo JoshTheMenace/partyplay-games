@@ -1,9 +1,10 @@
 import type { GameClientContext } from '../../../../party-contract/src/index';
 export const SCHEMA_VERSION = 1;
-export const CONTENT_VERSION = 1;
+export const CONTENT_VERSION = 2;
 export type CaptainId = string;
 export type ShipId = string;
 export type CrewId = string;
+export type SpeciesId = 'human' | 'bastion' | 'skitter' | 'ember';
 export type Phase = 'assignment' | 'hangar' | 'route' | 'event' | 'combat' | 'rewards' | 'store' | 'results';
 export type Settings = { difficulty: 'relaxed' | 'standard'; expedition: 'standard' | 'training' };
 export type WeaponFamily = 'laser' | 'beam' | 'missile' | 'flak' | 'ion' | 'plasma' | 'boarding' | 'support';
@@ -23,7 +24,7 @@ export type InstalledWeapon = { itemId: string; definitionId: string; chargeMs: 
 export type InstalledSystem = { id: SystemId; tier: number; cooldownUntilMs: number; activeUntilMs: number; targetShipId: ShipId | null; targetRoomId: string | null };
 export type Ship = { id: ShipId; ownerCaptainId: CaptainId | null; faction: 'allied' | 'enemy'; hullId: string; name: string; color: string; formation: number; hull: number; maxHull: number; status: 'active' | 'surrendered' | 'escaped' | 'destroyed' | 'abandoned'; rooms: Room[]; weapons: InstalledWeapon[]; systems: InstalledSystem[]; augments: string[]; shield: number; shieldChargeMs: number; ammo: number; ai: EnemyDefinition['ai'] | null; escapeAtMs: number | null };
 export type CrewOrder = { kind: 'move' | 'repair' | 'fight' | 'heal' | 'hold'; roomId: string };
-export type Crew = { id: CrewId; ownerCaptainId: CaptainId | null; homeShipId: ShipId; currentShipId: ShipId; name: string; roomId: string; x: number; y: number; hp: number; maxHp: number; status: 'alive' | 'dead' | 'captured'; skill: 'pilot' | 'engineer' | 'gunner' | 'medic' | 'fighter' | 'scientist'; traits: string[]; order: CrewOrder; activity: 'idle' | 'moving' | 'repairing' | 'fighting' | 'healing' | 'direct'; controlEpoch: number };
+export type Crew = { id: CrewId; species?: SpeciesId; ownerCaptainId: CaptainId | null; homeShipId: ShipId; currentShipId: ShipId; name: string; roomId: string; x: number; y: number; hp: number; maxHp: number; status: 'alive' | 'dead' | 'captured' | 'dismissed'; skill: 'pilot' | 'engineer' | 'gunner' | 'medic' | 'fighter' | 'scientist'; traits: string[]; order: CrewOrder; activity: 'idle' | 'moving' | 'repairing' | 'fighting' | 'healing' | 'direct'; controlEpoch: number };
 export type Projectile = { id: string; sourceShipId: ShipId; targetShipId: ShipId; roomId: string; weaponId: string; arriveAtMs: number; damage: number; shieldDamage: number; pierce: number; roomDamage: number; crewDamage: number; fire: number; breach: number; ionMs: number; family: WeaponFamily };
 export type Drone = { id: string; definitionId: string; sourceShipId: ShipId; targetShipId: ShipId; targetRoomId: string; hp: number; nextAtMs: number };
 export type CombatEffect = { id: string; kind: 'shot' | 'impact' | 'teleport' | 'repair' | 'destroyed' | 'shield' | 'warning'; sourceShipId: string; targetShipId: string; text: string; atMs: number };
@@ -37,6 +38,11 @@ export type EventEffect =
   | { kind: 'items'; count: number; tags?: string[] }
   | { kind: 'damage' | 'repair'; amount: number }
   | { kind: 'combat'; objective: CombatObjective['kind']; threat: number }
+  | { kind: 'crew-health'; amount: number; skill?: Crew['skill'] }
+  | { kind: 'ammo'; amount: number }
+  | { kind: 'hazard'; hazard: 'fire' | 'breach' | 'oxygen'; amount: number }
+  | { kind: 'reputation'; faction: string; amount: number }
+  | { kind: 'timed-status'; system: SystemId; durationMs: number }
   | { kind: 'store' }
   | { kind: 'recruit'; skill: Crew['skill'] }
   | { kind: 'replacement'; hullId: string; cost: number }
@@ -44,10 +50,10 @@ export type EventEffect =
   | { kind: 'flag'; id: string; value: boolean }
   | { kind: 'followup'; eventId: string };
 export type EventChoice = { id: string; label: string; text: string; requirement: Capability | null; cost: number; effects: EventEffect[]; outcomes?: { weight: number; text: string; effects: EventEffect[] }[] };
-export type EventDefinition = { id: string; category: 'travel' | 'distress' | 'hostile' | 'trade' | 'science' | 'faction' | 'quest'; title: string; text: string; tags: string[]; weight: number; sectors: string[]; requiresFlag?: string; choices: EventChoice[]; effects: EventEffect[]; repeatable: boolean };
+export type EventDefinition = { id: string; category: 'travel' | 'distress' | 'hostile' | 'trade' | 'science' | 'faction' | 'quest'; title: string; text: string; tags: string[]; weight: number; sectors: string[]; requiresFlag?: string; minReputation?: { faction: string; amount: number }; choices: EventChoice[]; effects: EventEffect[]; repeatable: boolean };
 export type Beacon = { id: string; column: number; lane: number; kind: 'event' | 'store' | 'combat' | 'exit'; label: string; next: string[]; visited: boolean; eventId: string | null };
 export type EventInstance = { id: string; definitionId: string; resolved: boolean; choiceId: string | null; text: string; result: string; optionIds: string[] };
-export type Expedition = { rng: number; sectorIds: string[]; sectorIndex: number; beacons: Beacon[]; currentBeaconId: string; seenRoots: string[]; event: EventInstance | null; items: Item[]; rewardRemainder: number; rewardSerial: number; threat: number; flags: Record<string, boolean>; completedBeacons: number; nextItemId: number };
+export type Expedition = { rng: number; sectorIds: string[]; sectorIndex: number; beacons: Beacon[]; currentBeaconId: string; seenRoots: string[]; event: EventInstance | null; items: Item[]; rewardRemainder: number; rewardSerial: number; threat: number; flags: Record<string, boolean>; reputation: Record<string, number>; completedBeacons: number; nextItemId: number };
 export type DomainEvent = { kind: 'ship-destroyed'; shipId: string } | { kind: 'crew-lost'; crewId: string } | { kind: 'enemy-escaped'; shipId: string } | { kind: 'combat-complete'; result: 'victory' | 'escape' | 'defeat' | 'surrender' };
 export type SimulationCommand =
   | { type: 'targetWeapon'; weaponId: string; targetShipId: string; roomId: string }
@@ -67,18 +73,20 @@ export type EconomyCommand =
   | { type: 'repairHull' }
   | { type: 'buyAmmo' }
   | { type: 'transferCargo'; itemId: string | null; shipId: string }
-  | { type: 'recruitCrew'; replaceCrewId: string | null; skill: Crew['skill'] };
+  | { type: 'recruitCrew'; replaceCrewId: string | null; skill: Crew['skill']; species?: SpeciesId };
 export type Action = { epoch: number } & (SimulationCommand | EconomyCommand
   | { type: 'chooseHull'; hullId: string; name: string; color: string }
   | { type: 'claimCaptain'; captainId: string }
   | { type: 'ready' }
   | { type: 'pause' }
+  | { type: 'retreat' }
   | { type: 'resume'; force: boolean }
   | { type: 'vote'; choiceId: string }
   | { type: 'commitChoice'; choiceId: string }
   | { type: 'contribute'; choiceId: string }
   | { type: 'continue' }
   | { type: 'abandonCrew' }
+  | { type: 'abandonShip'; shipId: string }
   | { type: 'inspectShip'; shipId: string; requestId: number });
 export type Input = { crewId: string | null; controlEpoch: number; x: number; y: number; action: 'none' | 'repair' | 'fight' | 'heal' };
 export type Inspection = { shipId: string; requestId: number };

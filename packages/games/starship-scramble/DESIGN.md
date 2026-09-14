@@ -1,3 +1,7 @@
+# Implementation update from the user
+
+Unclaimed loot is discarded when the fleet leaves. Captains may claim items freely. No persistent shared cargo or shared-carrier management is needed. Claimed items remain personal inventory.
+
 # Starship Scramble: cooperative fleet expedition
 
 Design and implementation handoff · revised 2026-09-12 · Status: full-game plan for review, no game implementation yet.
@@ -155,7 +159,7 @@ Centralize destruction in one simulation rule. Define the step ordering before p
 
 Recommended consequence policy: installed equipment and physical cargo aboard the destroyed vessel are lost. Keep cargo location separate from item ownership so survivors can store later pickups on a surviving allied vessel without transferring ownership. Personal scrap remains a captain-held currency, not a physical cargo item. Each active captain has a persistent cargo destination: default to their own surviving ship, otherwise the first surviving ally in stable formation order, with a visible option to change it at a safe phase. Crew presence on that carrier is not required, so survivors aboard an enemy can still collect into the allied fleet. The host cannot seize personally owned cargo merely by carrying it. A pickup uses this destination atomically without adding a per-item dialog. If no friendly carrier exists, do not award rewards before resolving fleet defeat.
 
-Shared cargo has its own explicit carrier, defaulting to the first surviving allied ship. The expedition leader can designate a different carrier at a safe phase; personally owned cargo transfers require its owner's action. Removing items from shared cargo still uses unrestricted tap-to-collect. UI shows carrier location and destruction risk. These physical-cargo rules are proposed defaults beyond the user's loot instructions and must be reviewed consistently with the desired loss severity.
+There is no persistent shared cargo. Unclaimed loot is discarded on departure. Personally owned cargo transfers require its owner's action; its carrier and destruction risk remain visible.
 
 A shipless captain with living owned crew remains an active participant: switch to those vessels, move/repair/fight/man rooms, use authorized transport, collect items, and participate in choices. They cannot remotely use destroyed weapons or take command of an ally's ship. Recommended full-release policy: optional ship purchase/salvage events may provide a new vessel for that same captain slot, with an explicit cost or event consequence; this is not automatic resurrection and does not restore dead crew or the old ship.
 
@@ -213,7 +217,7 @@ All phones see the same currently available items. Tap once to collect. The card
 
 If two people tap the same instance, the first valid server-processed action receives it. The other gets a brief “Collected by Alex” result and remains able to collect other items. Honest simultaneous taps are expected, not errors that should disrupt the phase. Inventory ownership and pool removal must be one atomic mutation; transport deduplication alone does not protect two different action IDs collecting the same item.
 
-Picking up an item does not force equipment replacement. Store it in personally owned cargo on a living carrier; install later. Physical weapon/system slots limit equipped builds, not the number of reward items someone is allowed to take. Uncollected items move into shared cargo on the designated surviving fleet carrier when the fleet leaves and remain available through the same tap-to-collect interface. Ownership and carrier location are separate. The carrier and its destruction risk are visible, and active players can explicitly transfer cargo at safe phases under owner-valid rules. Mark Ready at the phase level, not on each item. No automatic conversion or disappearance of uncollected equipment merely because the loot screen closed.
+Picking up an item does not force equipment replacement. Store it in personally owned cargo on a living carrier; install later. Physical weapon/system slots limit equipped builds, not the number of reward items someone is allowed to take. Uncollected items are discarded when the fleet leaves. Ownership and carrier location are separate. The carrier and its destruction risk are visible, and active players can explicitly transfer cargo at safe phases under owner-valid rules. Mark Ready at the phase level, not on each item. There is no persistent pool or shared-carrier management after departure.
 
 Bound the amount of generated content over a finite expedition and keep save size within the platform limit. Stack consumables by type, reference definitions by ID, and avoid recording every historical pickup. Validate the densest legal inventory, including one player collecting all rewards and buying heavily. Do not introduce a small hidden cargo cap that contradicts unrestricted pickup.
 

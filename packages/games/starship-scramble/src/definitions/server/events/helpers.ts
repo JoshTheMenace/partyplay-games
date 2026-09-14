@@ -1,0 +1,4 @@
+import type { EventChoice, EventDefinition, EventEffect } from '../../../contracts';
+
+export const choice = (id: string, label: string, text: string, effects: EventEffect[], extra: Partial<EventChoice> = {}): EventChoice => ({ id, label, text, requirement: null, cost: 0, effects, ...extra });
+export const root = (category: EventDefinition['category'], id: string, title: string, text: string, choices: EventChoice[], effects: EventEffect[] = [], extra: Partial<EventDefinition> = {}): EventDefinition => ({ id, category, title, text, choices: choices.length && !choices.some(option => !option.requirement && option.cost === 0 && !option.effects.some(effect => effect.kind === 'replacement' || effect.kind === 'ammo' && effect.amount < 0)) ? [...choices, choice('leave', 'Continue without this service', 'Leave this opportunity behind and keep the fleet moving.', [])] : choices, effects, tags: [category], sectors: [], weight: 1, repeatable: false, ...extra });
