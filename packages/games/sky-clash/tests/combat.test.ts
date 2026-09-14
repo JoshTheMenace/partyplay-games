@@ -19,21 +19,24 @@ test('selection rejects stale/invalid choices and all choices advance after a re
   for (const p of state.players) rules.applyAction(state, p.id, { turnId: 'round', kind: 'falco' }, 1000);
   assert.throws(() => rules.applyAction(state, 'p0', { turnId: 'round', kind: 'fox' }, 1100));
   tick(state); assert.equal(state.phase, 'select');
+  rules.tick(state, new Map(), 1 / 60, 4000); assert.equal(state.phase, 'vote');
+  for (const p of state.players) rules.applyAction(state, p.id, { turnId: 'round', stage: 'cloudbreak' }, 4000);
   rules.tick(state, new Map(), 1 / 60, 4000); assert.equal(state.phase, 'countdown');
   assert.throws(() => rules.applyAction(state, 'p0', { turnId: 'round', kind: 'fox' }, 4000));
   rules.tick(state, new Map(), 1 / 60, 7000); assert.equal(state.phase, 'fight'); assert.equal(state.endsAt, 67000);
 });
 
 test('missing choices use defaults, and wall time ends a match even after a stall', () => {
-  const state = create(); rules.tick(state, new Map(), 1 / 60, 21000); assert.equal(state.phase, 'countdown');
-  rules.tick(state, new Map(), 1 / 60, 24000); assert.equal(state.phase, 'fight');
-  rules.tick(state, new Map(), 1 / 60, 100000); assert.equal(rules.outcome(state).complete, true);
+  const state = create(); rules.tick(state, new Map(), 1 / 60, 61000); assert.equal(state.phase, 'vote');
+  rules.tick(state, new Map(), 1 / 60, 81000); assert.equal(state.phase, 'countdown');
+  rules.tick(state, new Map(), 1 / 60, 84000); assert.equal(state.phase, 'fight');
+  rules.tick(state, new Map(), 1 / 60, 150000); assert.equal(rules.outcome(state).complete, true);
 });
 
 test('inputs reject malformed axes, buttons, counters, extra fields, and settings', () => {
   for (const value of [null, [], { ...input(), x: NaN }, { ...input(), x: 2 }, { ...input(), jump: 1 }, { ...input(), presses: { jump: -1, attack: 0, special: 0, smash: 0 } }, { ...input(), extra: 1 }]) assert.throws(() => rules.parseInput(value));
-  for (const value of [{ seconds: 0 }, { stocks: 999 }, { extra: true }]) assert.throws(() => rules.validateSettings(value));
-  assert.deepEqual(rules.validateSettings({}), { stocks: 3, seconds: 120 });
+  for (const value of [{ seconds: -1 }, { stocks: 999 }, { extra: true }]) assert.throws(() => rules.validateSettings(value));
+  assert.deepEqual(rules.validateSettings({}), { stocks: 3, seconds: 900 });
 });
 
 test('a coalesced short tap jumps once and old counter heartbeats cannot repeat it', () => {

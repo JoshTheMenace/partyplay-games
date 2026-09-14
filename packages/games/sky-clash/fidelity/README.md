@@ -1,6 +1,6 @@
 # Original-data foundation
 
-This folder preserves the original-data foundation and isolated reference viewer. The playable Fox/Falco adaptation now consumes these helpers plus `attributes.ts` and `scripts.ts`; see [the game README](../README.md). Neither the viewer nor the game establishes frame-perfect parity.
+This folder preserves the original-data foundation and isolated reference viewer. The playable 33-fighter adaptation now consumes these helpers plus `attributes.ts` and `scripts.ts`; see [the game README](../README.md). Neither the viewer nor the game establishes frame-perfect parity.
 
 ## What is reusable now
 
@@ -41,3 +41,5 @@ Recover and verify the character-specific special parameter bank, common `PlCo.d
 The browser conversion and PartyPlay input/timing integration remain engineering work even after these data gaps are filled. The earlier Bolt/Atlas game is retained separately as an experiment and does not supply missing Melee behavior.
 
 Source links and acceptance history: [REFERENCE.md](../REFERENCE.md).
+
+The roster importer now pins all 27 regular public dumps in `roster.json`, preserving 53 attributes per form and 331 selected normal-action streams. Six bonus entities explicitly borrow profiles. See [the roster and reconstruction limits](../README.md#roster) and [source command corrections](../REFERENCE.md#full-roster-expansion-2026-09-12).

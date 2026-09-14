@@ -5,9 +5,9 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { SkinnedMesh, Vector3 } from 'three';
 import { Actor, makeCache } from '../src/rig';
 import { rules } from '../src/server';
-import { getMove, type FighterKind, type Move } from '../src/model';
+import { getMove, ROSTER, type Move } from '../src/model';
 const moves: Move[] = ['jab','side','upper','sweep','smash','upsmash','downsmash','aerial','forwardair','backair','upair','downair','dash','rise','laser','reflect'];
-for (const kind of ['fox', 'falco'] as FighterKind[]) test(`${kind} production actor animates real skin in every move; clones and disposal stay independent`, async () => {
+for (const kind of ROSTER) test(`${kind} production actor animates real skin in every move; clones and disposal stay independent`, async () => {
   const bytes = await readFile(new URL(`../assets/${kind}-replacement.glb`, import.meta.url));
   const model = (await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), '')).scene;
   const owned: { dispose(): void }[] = [], cache = makeCache(resource => { owned.push(resource); return resource; });

@@ -24,7 +24,8 @@ export function compileScript(events: readonly string[], frames: number, routine
       else if (op === 2) advance(Math.max(frame, arg));
       else if (op === 3) loops.push({ start: i, remaining: arg });
       else if (op === 4) { const loop = loops.at(-1); if (!loop) throw new Error('Unmatched attack loop'); if (--loop.remaining > 0) i = loop.start; else loops.pop(); }
-      else if (op === 5 || op === 7) { const offset = String(parseInt(hex.slice(8, 16), 16)); if (!routines[offset]) throw new Error('Missing attack subroutine'); run(routines[offset], depth + 1); if (op === 5) break; }
+      // lbcommand.c: 5 calls and returns; 7 jumps. The public dump labels these backwards.
+      else if (op === 5 || op === 7) { const offset = String(parseInt(hex.slice(8, 16), 16)); if (!routines[offset]) throw new Error('Missing attack subroutine'); run(routines[offset], depth + 1); if (op === 7) break; }
       else if (op === 11) { const hit = decodeHitbox(hex); active.set(hit.id, hit); }
       else if (op === 12 || op === 13) { const id = arg >>> 23, hit = active.get(id); if (hit) active.set(id, { ...hit, ...(op === 12 ? { damage: arg & 0x7fffff } : { size: (arg & 0x7fffff) * .003906 }) }); }
       else if (op === 15) active.delete(arg & 7);
@@ -43,10 +44,11 @@ export function compileScript(events: readonly string[], frames: number, routine
 const normal = Object.fromEntries(ROSTER.map(kind => {
   const profile = ROSTER_DATA[kind].profile as keyof typeof SCRIPTS, data = SCRIPTS[profile];
   return [kind, Object.fromEntries(Object.entries(names).map(([move, name]) => {
-    const aliases = name === 'AttackS3S' ? [name, 'AttackS3'] : name === 'AttackS4' ? [name, 'AttackS4S', 'AttackS41'] : [name];
-    const action = data.actions.find(a => aliases.includes(a.name));
-    if (!action) throw new Error(`Missing ${kind} ${name}`);
-    return [move, compileScript(action.events, action.frames, data.subroutines)];
+    const aliases = name === 'AttackS3S' ? [name, 'AttackS3','AttackS31'] : name === 'AttackS4' ? [name, 'AttackS4S', 'AttackS41'] : [name];
+    // Peach includes a non-damaging selection action before her weapon variants.
+    const spec = data.actions.filter(a => aliases.includes(a.name)).map(a => compileScript(a.events, a.frames, data.subroutines)).find(a => a.windows.length);
+    if (!spec) throw new Error(`Missing ${kind} ${name}`);
+    return [move, spec];
   }))];
 })) as Record<FighterKind, Record<keyof typeof names, MoveSpec>>;
 // Missing special parameter banks: explicit reconstructed timing, travel and hitboxes.

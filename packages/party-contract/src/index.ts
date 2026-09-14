@@ -15,11 +15,13 @@ export type GameManifest = {
   snapshotCache?: SnapshotCachePolicy;
   simulation?: { stepHz: number; snapshotHz: number; maxCatchUpSteps: number };
 };
-export type RoundContext = { roomId: string; roundId: string; players: readonly { id: PlayerId; name: string; color: string }[]; seed: number; nowMs: number };
+export type RoundContext = { roomId: string; roundId: string; players: readonly { id: PlayerId; name: string; color: string; lobbyChoice?: unknown }[]; seed: number; nowMs: number };
 export type ViewContext = { nowMs: number; phase: 'preparing' | 'playing' | 'results' };
 export type Outcome = { complete: boolean; winners: PlayerId[]; rows: { playerId: PlayerId; score?: number; rank?: number; label?: string }[] };
 export type GameRules<State, Input, Action, Settings, PublicView, PrivateView> = {
   validateSettings(raw: unknown): Settings; parseInput(raw: unknown): Input; parseAction(raw: unknown): Action;
+  /** Public, per-seat setup. Validate incomplete drafts; require a complete choice when ready is true. */
+  parseLobbyChoice?(raw: unknown, ready: boolean): unknown;
   create(ctx: RoundContext, settings: Settings): State; neutralInput(): Input;
   applyAction(state: State, playerId: PlayerId, action: Action, nowMs: number): void;
   tick(state: State, inputs: ReadonlyMap<PlayerId, Input>, dtSeconds: number, nowMs: number): void;

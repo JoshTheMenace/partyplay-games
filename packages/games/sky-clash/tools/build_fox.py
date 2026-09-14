@@ -20,22 +20,24 @@ def finish(obj, name, material, bone):
     obj.name=name; obj.data.materials.append(materials[material]); bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     parts.append((obj,bone)); return obj
 
-def ellipsoid(name, pos, scale, material, bone, segments=16, rings=8):
+def ellipsoid(name, pos, scale, material, bone, segments=24, rings=14):
     bpy.ops.mesh.primitive_uv_sphere_add(segments=segments, ring_count=rings, location=pos)
     obj=bpy.context.object; obj.scale=scale
+    for p in obj.data.polygons: p.use_smooth=True
     return finish(obj,name,material,bone)
 
 def box(name, pos, scale, material, bone, bevel=.035):
     bpy.ops.mesh.primitive_cube_add(size=1,location=pos); obj=bpy.context.object; obj.scale=scale
     finish(obj,name,material,bone)
     if bevel:
-        mod=obj.modifiers.new('Soft manufactured edges','BEVEL'); mod.width=bevel; mod.segments=2
+        mod=obj.modifiers.new('Soft manufactured edges','BEVEL'); mod.width=bevel; mod.segments=3
         bpy.context.view_layer.objects.active=obj; bpy.ops.object.modifier_apply(modifier=mod.name)
     return obj
 
-def limb(name, start, end, r1, r2, material, bone, vertices=10):
+def limb(name, start, end, r1, r2, material, bone, vertices=16):
     a,b=Vector(start),Vector(end); bpy.ops.mesh.primitive_cone_add(vertices=vertices,radius1=r1,radius2=r2,depth=(b-a).length,location=(a+b)/2)
     obj=bpy.context.object; obj.rotation_mode='QUATERNION'; obj.rotation_quaternion=(b-a).to_track_quat('Z','Y')
+    for p in obj.data.polygons: p.use_smooth=len(p.vertices)==4
     return finish(obj,name,material,bone)
 
 def prism(name, points, depth, material, bone):
@@ -103,6 +105,14 @@ else:
     limb('Tail plume',(0,.35,.66),(0,.66,.65),.15,.145,'fur','tail.02',12)
     limb('Tail tip',(0,.66,.65),(0,.85,.83),.145,.018,'cream','tail.03',12)
 
+# Small raised uniform details share the existing materials and hand/chest bones.
+for side,suffix in [(-1,'R'),(1,'L')]:
+    box('Utility pouch '+suffix,(side*.22,-.14,.83),(.12,.08,.14),'jacket','pelvis',.015)
+    box('Pouch fastener '+suffix,(side*.22,-.189,.85),(.036,.018,.022),'gold','pelvis',.004)
+    for i in range(3):
+        ellipsoid('Glove knuckle '+suffix,(side*(.459+i*.031),-.115,.765),(.019,.023,.024),'armor','hand.'+suffix,12,8)
+        box('Shoulder vent '+suffix,(side*(.235+i*.033),-.141,1.275),(.016,.016,.042),'dark','upper_arm.'+suffix,.003)
+    limb('Jacket piping '+suffix,(side*.23,-.153,.96),(side*.26,-.15,1.24),.009,.009,'trim','chest')
 arm=bpy.data.armatures.new('Replacement skeleton');rig=bpy.data.objects.new(NAME.title()+'ReplacementRig',arm);bpy.context.collection.objects.link(rig)
 bpy.context.view_layer.objects.active=rig;rig.select_set(True);bpy.ops.object.mode_set(mode='EDIT')
 def bone(name,head,tail,parent=None):
@@ -122,7 +132,7 @@ bpy.context.view_layer.objects.active=parts[0][0];bpy.ops.object.join();body=bpy
 rig['provenance']='New Blender geometry; not extracted from Melee. Visual skeleton is not a collision skeleton.'
 rig['forward']='glTF +Z';rig['units']='meters';rig['animations']='Authored by Fable in lab viewer; no original game animation samples.'
 bpy.ops.object.select_all(action='DESELECT');body.select_set(True);rig.select_set(True)
-bpy.ops.export_scene.gltf(filepath=str(OUT/(NAME+'-replacement.glb')),export_format='GLB',use_selection=True,export_animations=False,export_yup=True)
+bpy.ops.export_scene.gltf(filepath=str(OUT/(NAME+'-replacement.glb')),export_format='GLB',use_selection=True,export_animations=False,export_yup=True,export_texcoords=False)
 # Small studio render for asset review. Excluded from the GLB.
 bpy.ops.mesh.primitive_plane_add(size=200);floor=bpy.context.object;floor.name='PreviewFloor';floor.data.materials.append(materials['dark'])
 world=bpy.context.scene.world;world.use_nodes=True;world.node_tree.nodes['Background'].inputs[0].default_value=(.035,.055,.085,1);world.node_tree.nodes['Background'].inputs[1].default_value=.35

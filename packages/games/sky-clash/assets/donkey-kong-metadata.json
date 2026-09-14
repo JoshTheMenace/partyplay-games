@@ -1,0 +1,30 @@
+{
+  "authored": true,
+  "originalAsset": false,
+  "bones": [
+    "root",
+    "pelvis",
+    "chest",
+    "neck",
+    "head",
+    "upper_arm.R",
+    "forearm.R",
+    "hand.R",
+    "upper_arm.L",
+    "forearm.L",
+    "hand.L",
+    "thigh.R",
+    "shin.R",
+    "foot.R",
+    "thigh.L",
+    "shin.L",
+    "foot.L",
+    "tail.01",
+    "tail.02",
+    "tail.03"
+  ],
+  "triangles": 13904,
+  "materials": 8,
+  "height": 2.1,
+  "glbBytes": 470260
+}

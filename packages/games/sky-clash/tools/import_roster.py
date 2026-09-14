@@ -13,7 +13,7 @@ for r in roster:
  raw=(Path(sys.argv[1])/r['file']).read_bytes();assert hashlib.sha256(raw).hexdigest()==r['sha256'],r['id']
  d=json.loads(raw);dumps[r['id']]=(d,next(n['data'] for n in d['nodes'] if n['name']==r['node']))
 attrs={};scripts={}
-names={'Attack11','AttackS3S','AttackS3','AttackHi3','AttackLw3','AttackS4','AttackS4S','AttackS41','AttackHi4','AttackLw4','AttackAirN','AttackAirF','AttackAirB','AttackAirHi','AttackAirLw'}
+names={'Attack11','AttackS3S','AttackS3','AttackS31','AttackHi3','AttackLw3','AttackS4','AttackS4S','AttackS41','AttackHi4','AttackLw4','AttackAirN','AttackAirF','AttackAirB','AttackAirHi','AttackAirLw'}
 for r in roster:
  if r['bonus']:continue
  kind=r['id'];d,data=dumps[kind];values={}

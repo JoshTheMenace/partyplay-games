@@ -1,6 +1,6 @@
-/** Launcher/lobby art: tiny Fox and Falco replacements clashing over Cloudbreak. Pure SVG, no Three import. */
+/** Launcher/lobby art: two replacement fighters clashing over Cloudbreak. Pure SVG, no Three import. */
 export function SkyClashArt({ className = '' }: { className?: string }) {
-  return <svg className={`kp-game-art ${className}`} viewBox="0 0 300 130" role="img" aria-label="Sky Clash: Fox and Falco clash on the floating Cloudbreak arena at sunset">
+  return <svg className={`kp-game-art ${className}`} viewBox="0 0 300 130" role="img" aria-label="Sky Clash: fighters clash on the floating Cloudbreak arena at sunset">
     <defs>
       <linearGradient id="sc-art-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#1d1650"/><stop offset=".45" stopColor="#6b3d8f"/><stop offset=".75" stopColor="#ff7d5c"/><stop offset="1" stopColor="#ffc27a"/></linearGradient>
       <radialGradient id="sc-art-glow"><stop offset="0" stopColor="#ffb469" stopOpacity=".7"/><stop offset="1" stopColor="#ffb469" stopOpacity="0"/></radialGradient>

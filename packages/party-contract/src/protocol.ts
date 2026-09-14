@@ -1,10 +1,10 @@
 import type { GameManifest, Outcome } from './index';
 export type RoomPhase = 'picker' | 'lobby' | 'preparing' | 'playing' | 'results';
-export type RosterPlayer = { id: string; name: string; color: string; connected: boolean; ready: boolean };
+export type RosterPlayer = { id: string; name: string; color: string; connected: boolean; ready: boolean; lobbyChoice?: unknown };
 export type RoomView = {
   id: string; code: string; revision: number; phase: RoomPhase; hostId: string; hostConnected: boolean;
   players: RosterPlayer[]; gameId: string | null; settings: unknown; roundId: string | null;
-  activePlayerIds: string[]; startAt: number | null; preparationDeadline: number | null; notice: string | null;
+  lobbyId?: string; activePlayerIds: string[]; startAt: number | null; preparationDeadline: number | null; notice: string | null;
 };
 export type PairPatch = { set: [number, number][]; remove: number[] };
 export type PublicCache = { revision: number; reused: boolean; baseRevision?: number; patches?: Record<string, PairPatch> };
