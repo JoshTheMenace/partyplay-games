@@ -3,7 +3,7 @@ import { MISSIONS, SCENARIOS, VARIANTS, type Scenario, type Variant } from './ex
 
 export const SCENARIO_NAMES: Record<Scenario, string> = { fishing: 'Fishing on Catan', rivers: 'Rivers of Catan', caravans: 'Merchant Trains', 'barbarian-attack': 'Barbarian Attack', traders: 'Traders & Barbarians: deliveries' };
 export const VARIANT_NAMES: Record<Variant, string> = { 'friendly-robber': 'Friendly robber', harbormaster: 'Strongest ports' };
-export const DEFAULT_SETTINGS: Settings = { mode: 'standard', expansion: 'seafarers', roundSeconds: 90, targetPoints: 12, citiesKnights: false, scenarios: [], variants: [], missions: [...MISSIONS] };
+export const DEFAULT_SETTINGS: Settings = { tableSize: 3, mode: 'standard', expansion: 'seafarers', roundSeconds: 90, targetPoints: 12, citiesKnights: false, scenarios: [], variants: [], missions: [...MISSIONS] };
 /** Configuration only; shared with the settings UI so rejected combinations have the same explanation. */
 export function expansionRestrictions(s: Partial<Settings>): Partial<Record<Scenario | Variant, string>> {
   const reasons: Partial<Record<Scenario | Variant, string>> = {};
@@ -32,11 +32,12 @@ export function validateExpansionSettings(raw: Record<string, unknown>): Setting
     return allowed.filter(v => value.includes(v));
   }
   if (!['base', 'seafarers', 'explorers'].includes(s.expansion) || !['standard', 'connect'].includes(s.mode) || ![60, 90, 120].includes(s.roundSeconds) || typeof s.citiesKnights !== 'boolean') throw new Error('Choose valid game settings.');
+  if (!Number.isInteger(s.tableSize) || s.tableSize! < 3 || s.tableSize! > 10) throw new Error('Choose a table size from 3 to 10.');
   s.scenarios = list(s.scenarios, SCENARIOS); s.variants = list(s.variants, VARIANTS); s.missions = list(s.missions, MISSIONS);
   if (s.expansion === 'explorers' && !s.missions.length) throw new Error('Choose at least one expedition mission.');
   s.targetPoints = raw.targetPoints === undefined ? suggestedPoints(s) : Number(raw.targetPoints);
   if (!Number.isInteger(s.targetPoints) || s.targetPoints < 10 || s.targetPoints > maximumTargetPoints(s)) throw new Error(`Choose a victory target from 10 to ${maximumTargetPoints(s)} for this setup.`);
   const reasons = expansionRestrictions(s);
   for (const key of [...s.scenarios, ...s.variants]) if (reasons[key]) throw new Error(reasons[key]);
-  return { mode: s.mode, expansion: s.expansion, roundSeconds: s.roundSeconds, targetPoints: s.targetPoints, citiesKnights: s.citiesKnights, scenarios: s.scenarios, variants: s.variants, missions: s.missions };
+  return { tableSize: s.tableSize, mode: s.mode, expansion: s.expansion, roundSeconds: s.roundSeconds, targetPoints: s.targetPoints, citiesKnights: s.citiesKnights, scenarios: s.scenarios, variants: s.variants, missions: s.missions };
 }

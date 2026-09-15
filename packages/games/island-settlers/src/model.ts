@@ -5,7 +5,7 @@ export type Resource = typeof RESOURCES[number];
 export type Hand = Record<Resource, number> & Partial<Record<Commodity, number>>;
 export const emptyHand = (): Hand => ({ wood: 0, brick: 0, wool: 0, grain: 0, ore: 0 });
 export const COSTS = { road: { ...emptyHand(), wood: 1, brick: 1 }, ship: { ...emptyHand(), wood: 1, wool: 1 }, settlement: { ...emptyHand(), wood: 1, brick: 1, wool: 1, grain: 1 }, city: { ...emptyHand(), ore: 3, grain: 2 }, development: { ...emptyHand(), ore: 1, wool: 1, grain: 1 } };
-export type Settings = { mode: 'standard' | 'connect'; expansion: 'base' | 'seafarers' | 'explorers'; roundSeconds: 60 | 90 | 120; targetPoints: number; citiesKnights?: boolean; scenarios?: Scenario[]; variants?: Variant[]; missions?: Mission[] };
+export type Settings = { tableSize?: number; mode: 'standard' | 'connect'; expansion: 'base' | 'seafarers' | 'explorers'; roundSeconds: 60 | 90 | 120; targetPoints: number; citiesKnights?: boolean; scenarios?: Scenario[]; variants?: Variant[]; missions?: Mission[] };
 export type Tile = { id: string; q: number; r: number; x: number; y: number; terrain: Resource | 'desert' | 'sea' | 'gold' | 'fog' | 'spice' | 'shoal' | 'lake' | 'swamp' | 'oasis' | 'castle' | 'quarry' | 'glassworks'; number: number; island: number };
 export type Vertex = { id: string; x: number; y: number; tiles: string[]; edges: string[] };
 export type Edge = { id: string; a: string; b: string; tiles: string[]; land: boolean; sea: boolean };
@@ -21,13 +21,13 @@ export type PublicView = {
   actorId: string; secondary: boolean; activeIds: string[]; readyIds: string[]; pausedPlayers: string[];
   deadline: number | null; dice: [number, number] | null; robber: string; pirate: string | null;
   routes: Route[]; buildings: Building[]; offers: Offer[]; events: GameEvent[];
-  players: { id: string; name: string; color: string; score: number; handCount: number; developmentCount: number; knights: number; longestRoute: number; connected: boolean; pieces: { roads: number; ships: number; settlements: number; cities: number } }[];
+  players: { id: string; name: string; color: string; cpu?: boolean; score: number; handCount: number; developmentCount: number; knights: number; longestRoute: number; connected: boolean; pieces: { roads: number; ships: number; settlements: number; cities: number } }[];
   longestOwner: string | null; armyOwner: string | null; deckCount: number; winners: string[];
 };
 export type PrivateView = {
   expansion?: ExpansionPrivate; bank: Hand; hand: Hand; development: { id: string; kind: DevKind; playable: boolean }[]; score: number;
   discardDue: number; goldDue: number; freeRoutes: number; canRoll: boolean; canAct: boolean; canEnd: boolean; canTrade: boolean;
-  legal: { roads: string[]; ships: string[]; settlements: string[]; cities: string[]; shipMoves: { from: string; to: string[] }[]; robber: string[]; pirate: string[]; victims: Record<string, string[]> };
+  legal: { offers: string[]; roads: string[]; ships: string[]; settlements: string[]; cities: string[]; shipMoves: { from: string; to: string[] }[]; robber: string[]; pirate: string[]; victims: Record<string, string[]> };
   rates: Hand;
 };
 export type Action = { turnId: number } & (

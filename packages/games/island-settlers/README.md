@@ -1,6 +1,8 @@
 # Island Settlers
 
-An in-progress Catan-inspired game for 3–10 people. The laptop/TV shows the board; each player joins with a phone for private cards, trading, and placement. Claude Fable authors the frontend and animations; Codex owns rules, integration, and verification.
+An in-progress Catan-inspired game for 1–10 people, with CPUs filling tables to at least three players. The laptop/TV shows the board; players can join with phones for private cards, trading, and placement. A seated host can switch between their hand and the board on one device. Claude Fable authored the frontend and animations; Codex owns rules, integration, and verification.
+
+Players can open **Rules** from their phone header during play. The topic picker covers the base game, this room’s turn style and victory target, and enabled expansions, missions and variants. It preserves unfinished actions and does not pause the room.
 
 ## Implemented rules
 
@@ -25,7 +27,13 @@ Connect-style preserves private hands, the shared contested board, classic cards
 
 All bank/card transfers and placements are server-authoritative. Selection previews stay local until confirmed. The server sends explicit public/private projections; the frontend never imports server state or RNG. Actions carry a phase/turn ID and reliable transport IDs. Transactions operate on a copy so rejection cannot partially spend cards or change random state.
 
-Save/resume across server restarts is deferred. Closing the room or losing the host beyond its shared two-minute grace ends the room. AI opponents, music, the published scenario campaigns, Event Cards and the two-player variant are not implemented. All expansion maps are generated adaptations, including the combined coastal/warehouse layout and river paths. Human balance and physical-device acceptance remain unfinished; automated completion is not a production certification.
+Save/resume across server restarts is deferred. Closing the room or losing the host beyond its shared two-minute grace ends the room. The published scenario campaigns, Event Cards and the two-player variant are not implemented. All expansion maps are generated adaptations, including the combined coastal/warehouse layout and river paths. Human balance and physical-device acceptance remain unfinished; automated completion is not a production certification.
+
+## CPU opponents
+
+Choose **Play on this screen**, then start a round alone to face two CPUs. In Settings, **Fill the table with CPUs** sets a total of 3–10 seats; human players always take priority. Three or more humans with the default three-seat setting play without CPUs. For a laptop/TV with one phone, select **Watch only**, join the phone and start. A playing host has **Your hand** and **Board** tabs; switching views preserves unfinished selections.
+
+CPUs act on the server, one action every 700ms, using only public information and their own private projection. They use the same action validation as humans and pause when a human disconnects. They support both turn styles and supported expansion combinations, including required choices, expedition movement and deliveries. They accept affordable, useful offers at fair value; the human proposer still confirms the exchange. On its own Standard turn, a CPU waits eight seconds after accepting to allow confirmation. They do not initiate offers or counteroffers. This is a basic strategy level, without selectable difficulty or expert negotiation. CPU seats are chosen at round start, not substituted for disconnected friends.
 
 ## Code map
 
@@ -38,9 +46,15 @@ Save/resume across server restarts is deferred. Closing the room or losing the h
 - `expansion-state.ts`: server-only decks, unrevealed terrain, and per-turn bookkeeping.
 - Frontend files: Fable's host scene/HUD, phone map and controls, presentation helpers, and styles.
 - `tests/rules.test.ts`, `tests/expansions.test.ts`: deterministic rules, privacy, conservation, combination overrides, clocks, and completed ten-player simulations.
-- `tests/bot.ts`: QA choices based only on phone-visible information; no production bot or hidden-state access.
+- `cpu-base.ts`, `cpu.ts`: production CPU choices based only on public/own-private views; the QA drivers reuse these policies. `tests/cpu.test.ts` covers filling, pacing, disconnects, trades and complete ten-seat matches.
 
 Game content lives in the games submodule. The parent integrates the two registries, discovery metadata, and a trusted registration setting for 4,096 actions/player with 1 KiB maximum action payloads. Other games keep their existing 256-action allowance. The product of count and size is bounded below the original worst-case retained-payload limit, and old acknowledgements remain available for deduplication.
+
+## Background music
+
+The host plays the three user-supplied tracks in order, repeating after roughly 20 minutes. Phones and guest displays do not fetch or play them. The platform’s Sound on/off control pauses/resumes the current track at a 22% background volume. Playback also stops outside the round, while hidden or disconnected, and is disposed when leaving the game. Browser autoplay restrictions can require a host tap. Failed files are skipped; reconnecting or a user gesture can retry a failed playlist.
+
+`src/music.ts` owns rotation and streaming; `src/audio.tsx` uses the existing shared AudioView hook for host ownership, sound preference and cleanup. Original MP3s and provenance are in `public/games/island-settlers/music/` in the games repository.
 
 ## Validation
 

@@ -10,6 +10,7 @@ import {GOODS} from './core';
 import {total, has, need, player, vertex, edge, building, route, paused, random, transfer, event, phase, acting, preRoutes, domestic, pieceCount, score, awards, finishIfWon} from './core';
 import type {Player, State} from './state';
 export type { State } from './state';
+import { chooseExpansionAction } from './cpu';
 export { longestRoute } from './core';
 import type {GameRules} from '../../../party-contract/src/index';
 import {makeBoard, shuffled} from './board';
@@ -124,8 +125,9 @@ function rates(s: State, p: Player): Hand {
   return result;
 }
 function legal(s: State, p: Player): PrivateView['legal'] {
-  const result: PrivateView['legal'] = { roads: [], ships: [], settlements: [], cities: [], shipMoves: [], robber: [], pirate: [], victims: {} };
+  const result: PrivateView['legal'] = { offers: [], roads: [], ships: [], settlements: [], cities: [], shipMoves: [], robber: [], pirate: [], victims: {} };
   if (paused(s)) return result;
+  result.offers = s.offers.filter(o => respond(s, p, o)).map(o => o.id);
   const setup = s.phase === 'setup' && s.actorId === p.id, act = acting(s, p), pieces = pieceCount(s, p);
   if (setup || act || preRoutes(s, p)) {
     if (pieces.settlements && (setup && !s.setupVertex || act && has(p.hand, COSTS.settlement))) result.settlements = s.board.vertices.filter(v => availableSettlement(s, v.id, setup, p)).map(v => v.id);
@@ -317,7 +319,7 @@ function projections(s: State) {
     activeIds: s.phase === 'choice' ? [s.modules!.prompts[0].playerId] : s.phase === 'setup' || s.phase === 'roll' || s.phase === 'robber' ? [s.actorId] : s.phase === 'discard' ? s.players.filter(p => p.discardDue).map(p => p.id) : s.phase === 'gold' ? s.players.filter(p => p.goldDue).map(p => p.id) : s.players.filter(p => acting(s, p) || moving(s, p.id)).map(p => p.id),
     readyIds: s.readyIds, pausedPlayers: s.players.filter(p => !p.connected).map(p => p.id), deadline: s.deadline, dice: s.dice,
     robber: s.robber, pirate: s.pirate, routes: s.routes, buildings: s.buildings, offers: s.offers, events: s.events,
-    players: s.players.map(p => ({ id: p.id, name: p.name, color: p.color, score: score(s, p, s.phase === 'ended'), handCount: total(p.hand), developmentCount: p.development.length, knights: p.knights, longestRoute: p.longestRoute, connected: p.connected, pieces: pieceCount(s, p) })),
+    players: s.players.map(p => ({ id: p.id, name: p.name, color: p.color, cpu: p.cpu, score: score(s, p, s.phase === 'ended'), handCount: total(p.hand), developmentCount: p.development.length, knights: p.knights, longestRoute: p.longestRoute, connected: p.connected, pieces: pieceCount(s, p) })),
     longestOwner: s.longestOwner, armyOwner: s.armyOwner, deckCount: s.deck.length, winners: s.winners,
   };
   const privateViews = new Map(s.players.map(p => [p.id, {
@@ -333,18 +335,23 @@ export const rules: GameRules<State, null, Action, Settings, PublicView, Private
   },
   parseInput(raw) { need(raw === null, 'This game uses discrete actions.'); return null; }, neutralInput: () => null, parseAction,
   create(ctx, settings) {
-    need(ctx.players.length >= 3 && ctx.players.length <= 10, 'Island Settlers needs 3–10 players.');
+    need(ctx.players.length >= 1 && ctx.players.length <= 10, 'Island Settlers needs 1–10 human players.');
+    const roster = ctx.players.map(p => ({ ...p, cpu: false })), colors = ['#ff5748', '#28c6e7', '#78d955', '#b58aff', '#ffd24a', '#fb8cd0', '#41dbcb', '#ffab57', '#9eaaff', '#d9f282'];
+    for (let i = 1; roster.length < (settings.tableSize ?? 3); i++) {
+      const id = `cpu:${i}`; if (roster.some(p => p.id === id)) continue;
+      roster.push({ id, name: `CPU ${i}`, color: colors.find(color => !roster.some(p => p.color === color)) ?? colors[roster.length], cpu: true });
+    }
     const s: State = {
-      modules: null, settings, board: { tiles: [], vertices: [], edges: [], ports: [] }, players: ctx.players.map(p => ({ ...p, hand: emptyHand(), development: [], turns: 0, played: false, freeRoutes: 0, moved: false, builtShips: [], knights: 0, longestRoute: 0, islands: [], connected: true, discardDue: 0, goldDue: 0 })),
-      bank: Object.fromEntries(RESOURCES.map(r => [r, ctx.players.length <= 4 ? 19 : ctx.players.length <= 6 ? 24 : Math.ceil(ctx.players.length * 4.75)])) as Hand,
+      cpuAt: ctx.nowMs + 700, cpuCursor: 0, modules: null, settings, board: { tiles: [], vertices: [], edges: [], ports: [] }, players: roster.map(p => ({ ...p, hand: emptyHand(), development: [], turns: 0, played: false, freeRoutes: 0, moved: false, builtShips: [], knights: 0, longestRoute: 0, islands: [], connected: true, discardDue: 0, goldDue: 0 })),
+      bank: Object.fromEntries(RESOURCES.map(r => [r, roster.length <= 4 ? 19 : roster.length <= 6 ? 24 : Math.ceil(roster.length * 4.75)])) as Hand,
       random: (ctx.seed >>> 0) || 1, deck: [], routes: [], buildings: [], offers: [], events: [], serial: 0, revision: 0,
       phase: 'setup', returnPhase: 'action', actorId: ctx.players[0].id, primary: 0, secondary: false, setupIndex: 0, setupVertex: null,
       turnId: 1, turn: 0, deadline: null, actionStarted: ctx.nowMs, readyIds: [], pausedAt: null, interruptedAt: null, dice: null, robber: '', pirate: null, longestOwner: null, armyOwner: null, winners: [],
     };
-    s.board = makeBoard(ctx.players.length, settings.expansion, () => random(s));
+    s.board = makeBoard(roster.length, settings.expansion, () => random(s));
     s.robber = s.board.tiles.find(t => t.terrain === 'desert')!.id;
     s.pirate = settings.expansion === 'seafarers' ? s.board.tiles.find(t => t.terrain === 'sea')!.id : null;
-    const copies = ctx.players.length <= 4 ? 1 : ctx.players.length <= 6 ? 1.4 : 2;
+    const copies = roster.length <= 4 ? 1 : roster.length <= 6 ? 1.4 : 2;
     s.deck = shuffled<DevKind>([...Array(Math.round(14 * copies)).fill('knight'), ...Array(Math.round(5 * (copies === 1.4 ? 1 : copies))).fill('victory'), ...(['road-building', 'plenty', 'monopoly'] as const).flatMap(k => Array(Math.round(2 * copies)).fill(k))], () => random(s));
     s.modules = initializeExpansions(s); initializeScenarios(s); initializeBarbarians(s); initializeExplorers(s); syncBarbarianPaths(s); scenarioAwards(s);
     event(s, 'phase', 'Place starting settlements and routes. The second placement goes in reverse order.'); return s;
@@ -354,14 +361,26 @@ export const rules: GameRules<State, null, Action, Settings, PublicView, Private
     const next = structuredClone(state); apply(next, id, action, now); next.revision++; Object.assign(state, next);
   },
   tick(s, _inputs, _dt, now) {
-    if (paused(s) || s.phase !== 'action' || s.settings.mode !== 'connect') return;
+    if (paused(s) || s.phase === 'ended') return;
+    if (now >= s.cpuAt && !(s.phase === 'action' && s.deadline !== null && now >= s.deadline)) {
+      s.cpuAt = now + 700;
+      for (let n = 0; n < s.players.length; n++) {
+        const index = (s.cpuCursor + n) % s.players.length, p = s.players[index]; if (!p.cpu) continue;
+        const view = projections(s), action = chooseExpansionAction(view.public, view.private.get(p.id)!, p.id);
+        if (!action) continue;
+        rules.applyAction(s, p.id, action, now); s.cpuCursor = (index + 1) % s.players.length;
+        if (action.type === 'accept-offer' && s.settings.mode === 'standard' && s.actorId === p.id) s.cpuAt = now + 8000;
+        break;
+      }
+    }
+    if (s.phase !== 'action' || s.settings.mode !== 'connect') return;
     if (s.deadline !== null && now >= s.deadline || s.readyIds.length === s.players.length && now >= s.actionStarted + 3000) {
       for (const p of s.players.filter(p => !s.readyIds.includes(p.id))) { if (endExpansionTurn(s, p.id, now, true)) { s.revision++; return; } p.freeRoutes = 0; if (s.modules) s.modules.players[p.id].movement = false; s.readyIds.push(p.id); }
       syncBarbarianPaths(s); scenarioAwards(s); awards(s); if (!finishIfWon(s, true)) nextTurn(s, now); s.revision++;
     }
   },
   onPresenceChange(s, id, connected, now) {
-    const p = s.players.find(p => p.id === id); if (!p || p.connected === connected) return;
+    const p = s.players.find(p => p.id === id); if (!p || p.cpu || p.connected === connected) return;
     p.connected = connected;
     if (!connected && s.pausedAt === null) s.pausedAt = now;
     if (!paused(s) && s.pausedAt !== null) { const elapsed = now - s.pausedAt; if (s.deadline !== null) s.deadline += elapsed; if (s.interruptedAt !== null) s.interruptedAt += elapsed; if (s.modules?.choiceStarted !== null && s.modules?.choiceStarted !== undefined) s.modules.choiceStarted += elapsed; s.actionStarted += elapsed; s.pausedAt = null; }
