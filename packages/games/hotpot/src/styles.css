@@ -1,0 +1,77 @@
+.hotpot { color: var(--kp-cream); font-family: var(--font-body); overflow-wrap: anywhere; }
+.hotpot h2, .hotpot h3 { margin: .2em 0 .6em; }
+
+.hotpot-card { --w: 4.6em; position: relative; display: inline-block; flex: 0 0 auto; width: var(--w); aspect-ratio: 300 / 460; padding: 0; border: 0; border-radius: .45em; background: none; color: inherit; font: inherit; }
+.hotpot-card img { display: block; width: 100%; height: 100%; border-radius: .45em; box-shadow: 0 .25em .6em #0009; user-select: none; -webkit-user-drag: none; }
+button.hotpot-card { cursor: pointer; transition: translate 160ms ease; }
+button.hotpot-card:hover { translate: 0 -.4em; z-index: 2; }
+button.hotpot-card:focus-visible { outline: 3px solid var(--kp-sun); outline-offset: 3px; z-index: 2; }
+.hotpot-card[data-glow] img { animation: hotpot-glow 1.6s ease-in-out infinite; }
+@keyframes hotpot-glow { 0%, 100% { box-shadow: 0 0 0 3px #fb923cd9, 0 0 1.2em #fbbf2499; } 50% { box-shadow: 0 0 0 3px #fb923c, 0 0 2.2em #fbbf24dd; } }
+.hotpot-xs { --w: 2.2em; } .hotpot-sm { --w: 3.4em; } .hotpot-md { --w: 4.6em; } .hotpot-lg { --w: 5.6em; }
+.hotpot-card[data-pos=top] img { rotate: 180deg; }
+.hotpot-card:is([data-pos=left], [data-pos=right]) { width: calc(var(--w) * 460 / 300); aspect-ratio: 460 / 300; }
+.hotpot-card:is([data-pos=left], [data-pos=right]) img { position: absolute; left: 50%; top: 50%; width: var(--w); height: calc(var(--w) * 460 / 300); translate: -50% -50%; rotate: 90deg; }
+.hotpot-card[data-pos=right] img { rotate: -90deg; }
+.hotpot-empty { border: 2px dashed #a0581f99; }
+
+.hotpot-name { display: inline-block; max-width: 16em; padding: .3em .8em; border: 2px solid var(--seat, #a0581f); border-radius: 99em; background: #241105e6; font-family: var(--font-display); text-align: center; }
+.hotpot-name[data-turn] { background: #c2410c; border-color: var(--kp-sun); box-shadow: 0 0 1.2em #fb923c99; }
+.hotpot-pill { justify-self: start; padding: .3em .9em; border: 1px solid #a0581f; border-radius: 99em; background: #241105cc; font-family: var(--font-display); white-space: nowrap; }
+.hotpot-status { margin: 0; font-family: var(--font-display); color: #fed7aa; }
+.hotpot-log { display: grid; gap: .3em; margin: 0; padding: 0; list-style: none; font-size: .85em; }
+.hotpot-log li { padding: .25em .7em; border: 1px solid #a0581f99; border-radius: 99em; background: #241105d9; }
+.hotpot-log li:not(:last-child) { opacity: .6; }
+.hotpot-deck { grid-area: deck; display: grid; justify-items: center; gap: .3em; font-size: .75em; letter-spacing: .12em; text-transform: uppercase; color: #fed7aa; }
+.hotpot-deck .hotpot-card { font-size: calc(1em / .75); }
+
+/* Shared display and a playing host on a wide screen. Card sizes are em so the table scales with viewport height. */
+.hotpot-table { position: relative; display: grid; grid-template: "hud hud hud" auto ". top ." auto "left pot right" 1fr ". bottom ." auto / minmax(0, 1fr) auto minmax(0, 1fr); gap: .8em; min-height: calc(100dvh - 100px); padding: max(1em, var(--safe-top)) max(1em, var(--safe-right)) max(1em, var(--safe-bottom)) max(1em, var(--safe-left)); font-size: clamp(11px, 1.8dvh, 18px); background: radial-gradient(circle at 50% 55%, #7a3f16 0, #4a1f08 38%, #2b1106 70%, #160803 100%); border-radius: var(--radius); overflow-x: clip; }
+.hotpot-hud { grid-area: hud; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 1em; padding-right: min(24em, 30%); }
+.hotpot-table .hotpot-status { text-align: center; font-size: 1.7em; }
+.hotpot-table .hotpot-log { position: absolute; top: 1em; right: 1em; z-index: 3; max-width: min(24em, 30%); justify-items: end; }
+.hotpot-seat { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .5em; min-width: 0; }
+.hotpot-seat[data-pos=top] { grid-area: top; }
+.hotpot-seat[data-pos=left] { grid-area: left; flex-direction: row; justify-self: start; }
+.hotpot-seat[data-pos=right] { grid-area: right; flex-direction: row-reverse; justify-self: end; }
+.hotpot-seat[data-pos=bottom] { grid-area: bottom; }
+.hotpot-backs { display: flex; }
+.hotpot-backs > * + * { margin-left: -1.3em; }
+.hotpot-seat:is([data-pos=left], [data-pos=right]) .hotpot-backs { flex-direction: column; }
+.hotpot-seat:is([data-pos=left], [data-pos=right]) .hotpot-backs > * + * { margin: -.85em 0 0; }
+.hotpot-pot { grid-area: pot; display: grid; grid-template: ". p-top ." auto "p-left deck p-right" auto ". p-bottom ." auto / auto auto auto; place-items: center; place-self: center; gap: .6em 1.2em; padding: 1.6em 2.4em; border-radius: 50%; background: radial-gradient(closest-side, #ffc480d9 0, #ea580c8c 45%, #7c2d1226 80%, transparent 100%); }
+.hotpot-pile[data-pos=top] { grid-area: p-top; } .hotpot-pile[data-pos=left] { grid-area: p-left; }
+.hotpot-pile[data-pos=right] { grid-area: p-right; } .hotpot-pile[data-pos=bottom] { grid-area: p-bottom; }
+.hotpot-hand { display: flex; align-items: flex-end; justify-content: center; }
+.hotpot-table .hotpot-hand > .hotpot-card { margin-left: -1em; transform: rotate(calc(var(--i) * 3deg)) translateY(calc(var(--i) * var(--i) * .1em)); }
+.hotpot-drawn { position: relative; display: grid; justify-items: center; margin-right: 1.8em; }
+.hotpot-drawn > span { position: absolute; top: -.7em; z-index: 3; padding: .05em .5em; border-radius: 99em; background: var(--kp-sun); color: var(--kp-ink); font: .75em var(--font-display); }
+.hotpot-error { position: absolute; left: 50%; bottom: 1em; z-index: 4; translate: -50% 0; }
+
+/* Phone controller and a playing host on a small screen. */
+.hotpot-phone { display: grid; gap: .6rem; max-width: 34rem; margin: auto; padding: max(.75rem, var(--safe-top)) max(.75rem, var(--safe-right)) max(2rem, var(--safe-bottom)) max(.75rem, var(--safe-left)); }
+.hotpot-phone-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.hotpot-phone .hotpot-status { text-align: right; }
+.hotpot-phone .hotpot-log { justify-items: center; }
+.hotpot-rows { display: grid; gap: .4rem; margin: 0; padding: 0; list-style: none; }
+.hotpot-rows li { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .4rem .6rem; border: 1px solid #a0581f66; border-radius: .8rem; background: #24110599; }
+.hotpot-rows li[data-turn] { border-color: var(--kp-sun); background: #7c2d1255; }
+.hotpot-rows small { display: block; margin-top: .3rem; opacity: .75; }
+.hotpot-phone-pot { display: flex; align-items: center; justify-content: center; gap: 1rem; padding: .6rem; border-radius: 1rem; background: radial-gradient(closest-side, #ea580c59, transparent), #2b110680; }
+.hotpot-phone-pot p { flex: 0 1 7rem; margin: 0; font-size: .85rem; }
+.hotpot-phone-hand { display: grid; gap: .6rem; padding: .6rem; border-radius: 1rem; background: #241105b3; }
+.hotpot-phone-hand > .hotpot-name { justify-self: start; }
+.hotpot-phone .hotpot-hand { display: grid; grid-template-columns: repeat(auto-fill, minmax(3.3rem, 1fr)); gap: .5rem; }
+.hotpot-phone .hotpot-hand .hotpot-card { --w: 100%; }
+.hotpot-phone .hotpot-drawn { margin: 0; }
+
+.hotpot-results { text-align: center; }
+.hotpot-sets { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; margin: 1rem 0; }
+.hotpot-sets figure { margin: 0; }
+.hotpot-sets figure > div { display: flex; gap: .3rem; padding: .35rem; border: 3px solid var(--set); border-radius: .7rem; }
+.hotpot-sets figcaption { margin-top: .3rem; text-transform: capitalize; }
+.hotpot-hands { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .6rem; text-align: left; }
+.hotpot-hands section { padding: .5rem .7rem; border: 1px solid var(--border); border-radius: .7rem; }
+.hotpot-hands section > div { display: flex; flex-wrap: wrap; gap: .25rem; }
+.hotpot-instructions { text-align: left; }
+.hotpot-instructions ol { padding-left: 1.2rem; line-height: 1.5; }
