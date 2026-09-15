@@ -1,0 +1,23 @@
+/* Character selection: the phone picker and the shared-screen roster shown before service. */
+.kr-picker { display: grid; gap: .7rem; }
+.kr-characters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .6rem; }
+.kr-characters button { display: grid; justify-items: center; align-content: start; gap: .15rem; min-height: 44px; padding: .45rem .35rem .6rem; border: 3px solid transparent; border-radius: 1rem; background: #fff8ea; color: #25413a; font: inherit; cursor: pointer; }
+.kr-characters button.kr-selected { border-color: #f2ae51; background: #fff0cf; box-shadow: 0 .25rem 0 #25413a33; }
+.kr-characters button:focus-visible { outline: 3px solid #2a8f7e; outline-offset: 2px; }
+.kr-characters button:disabled { opacity: .6; cursor: default; }
+.kr-characters button small { color: #7a5a3a; font-size: .75rem; }
+.kr-portrait { display: block; width: 100%; max-width: 6.5rem; aspect-ratio: 1; object-fit: contain; }
+@media (min-aspect-ratio: 3/2) { .kr-characters { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+@media (max-width: 420px) { .kr-characters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Solo hides the phone heading during service; the picker needs its number and countdown, and a full-width grid. */
+.kr-solo .kr-picker { max-height: 62dvh; overflow: auto; grid-template-columns: 1fr; }
+.kr-solo .kr-picker .kr-phone-heading { display: flex; }
+.kr-solo .kr-picker .kr-characters { grid-column: 1 / -1; }
+
+.kr-pick-roster { display: flex; flex-wrap: wrap; justify-content: center; gap: .8rem; padding: 1rem; }
+.kr-pick-roster > span { display: grid; grid-template-columns: auto 4.5rem auto; align-items: center; gap: .5rem; padding: .35rem 1rem .35rem .35rem; border-radius: 99rem; background: #fff8eaee; color: #25413a; box-shadow: 0 .3rem 1rem #0002; }
+.kr-pick-roster > span.kr-away { opacity: .55; }
+.kr-pick-roster b { display: grid; place-items: center; width: 2.2rem; height: 2.2rem; border-radius: 50%; color: #18362d; font-size: 1.1rem; }
+.kr-pick-roster .kr-portrait { max-width: 4.5rem; }
+.kr-pick-roster em { display: grid; place-items: center; width: 4.5rem; aspect-ratio: 1; font: 700 2rem var(--font-display); font-style: normal; opacity: .45; }
+.kr-pick-roster small { display: block; opacity: .75; }

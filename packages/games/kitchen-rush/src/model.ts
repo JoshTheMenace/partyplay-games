@@ -3,7 +3,13 @@ export type Food = { kind: Ingredient; stage: 'raw' | 'chopped' | 'cooked' | 'bu
 export type Item = { id: number; kind: 'food' | 'plate'; food: Food[]; dirty: boolean };
 export type StationKind = 'crate' | 'board' | 'stove' | 'oven' | 'belt' | 'counter' | 'plates' | 'return' | 'sink' | 'serve' | 'bin';
 export type Station = { id: string; kind: StationKind; x: number; z: number; ingredient?: Ingredient; item: Item | null; progress: number; heat: number; fire: number; working: boolean; powered: boolean };
-export type Chef = { id: string; name: string; color: string; x: number; z: number; facingX: number; facingZ: number; held: Item | null; connected: boolean; dashUntil: number; dashReady: number; worked: number; served: number; target: string | null; feedback: string; feedbackAt: number; commandSeq: number };
+/** Selectable cooks. Mesh names in the GLB are `<id>_body`, `<id>_color` and `<id>_left_hand`/`_right_hand`. */
+export const CHARACTERS = [{ id: 'chef', name: 'Chef' }, { id: 'chef_f', name: 'Head chef' }, { id: 'cat', name: 'Cat' }, { id: 'dog', name: 'Dog' }, { id: 'iguana', name: 'Iguana' }, { id: 'axolotl', name: 'Axolotl' }] as const;
+export type CharacterId = typeof CHARACTERS[number]['id'];
+/** Seconds to pick before service starts regardless, and the pause once everyone has picked. */
+export const PICK_SECONDS = 20, PICK_GRACE = 2.5;
+export type Action = { type: 'character'; turnId: 1; character: CharacterId };
+export type Chef = { id: string; name: string; color: string; character: CharacterId | null; x: number; z: number; facingX: number; facingZ: number; held: Item | null; connected: boolean; dashUntil: number; dashReady: number; worked: number; served: number; target: string | null; feedback: string; feedbackAt: number; commandSeq: number };
 export type Input = { x: number; y: number; use: boolean; dash: boolean; command: 'use' | 'drop' | 'toss' | null; seq: number };
 export type Settings = { kitchen: number; seconds: number; practice: boolean };
 export type Recipe = { id: string; name: string; icon: string; parts: Food[]; value: number };
@@ -36,7 +42,7 @@ export const hasGust = (level: Level) => level.mechanic === 'gust' || level.mech
 export const hasBelt = (level: Level) => level.mechanic === 'conveyor' || level.mechanic === 'finale';
 export type Ticket = { id: number; recipe: string; createdAt: number; expiresAt: number };
 export type LooseItem = { item: Item; x: number; z: number; vx: number; vz: number; flight: number };
-export type View = { players: Chef[]; stations: Station[]; loose: LooseItem[]; tickets: Ticket[]; settings: Settings; halfX: number; halfZ: number; startedAt: number; endsAt: number; now: number; complete: boolean; score: number; served: number; missed: number; waste: number; fires: number; combo: number; cleanPlates: number; dirtyPlates: number; thresholds: number[]; stars: number; event: string; eventAt: number; hazard: 'calm' | 'warning' | 'active'; recipeCounts: Record<string, number>; powerBank: number; powerWarning: boolean };
+export type View = { stage: 'pick' | 'service'; pickEndsAt: number; players: Chef[]; stations: Station[]; loose: LooseItem[]; tickets: Ticket[]; settings: Settings; halfX: number; halfZ: number; startedAt: number; endsAt: number; now: number; complete: boolean; score: number; served: number; missed: number; waste: number; fires: number; combo: number; cleanPlates: number; dirtyPlates: number; thresholds: number[]; stars: number; event: string; eventAt: number; hazard: 'calm' | 'warning' | 'active'; recipeCounts: Record<string, number>; powerBank: number; powerWarning: boolean };
 export const SPEED = 3.6, RADIUS = .36, REACH = 1.72, CHOP_SECONDS = 2.4, COOK_SECONDS = 6, WASH_SECONDS = 2.5;
 export const neutral = (): Input => ({ x: 0, y: 0, use: false, dash: false, command: null, seq: 0 });
 export const foodLabel = (food: Food) => `${food.stage === 'raw' ? '' : food.stage + ' '}${INGREDIENTS[food.kind].name}`;
