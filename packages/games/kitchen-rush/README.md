@@ -44,3 +44,9 @@ The manager owns immutable integration builds. See [current status](../../../out
 Opening orders introduce the enabled menu in order; later orders vary by round seed and avoid a third simultaneous copy when another dish is available. Fresh Start remains salad-only and replaces unused cookers with extra prep boards. The display shows streak bonuses, progress to the next star and service celebrations; results compare the host's score with its previous best.
 
 Phones show the first ticket's recipe and patience, with Use beneath Dash. Cooker feedback distinguishes cooking, ready, near-burning, burnt and power-paused food, using the same timing for phone and scene indicators. Campaign saves and the ten-stage order are unchanged. Scene diagnostics require `?metrics`.
+
+### Blender asset remake — 2026-09-14
+
+The kitchen now loads an original Blender kit: rounded enamel appliances, wooden prep stations, food in every preparation state, finished dishes, articulated chefs with four skin tones, and modular scenery. Matching Blender-rendered icons replace the food/plate emoji artwork on tickets and controllers. The server still owns gameplay and collisions.
+
+The 114-mesh / 40-icon pack is original generated artwork. The shipped GLB, icons, manifest, and runtime integration live under `public/games/kitchen-rush/`; generation source and review evidence are maintained separately from this game repository. GPU/physical-phone performance is not yet verified.

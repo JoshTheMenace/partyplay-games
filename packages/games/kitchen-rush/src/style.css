@@ -139,3 +139,11 @@
 .kp-landscape-controller .kr-solo .kr-score { white-space:nowrap; }
 .kp-landscape-controller .kr-solo .kr-score-stack { width:auto; }
 .kp-landscape-controller .kp-scene-stage:has(.kr-solo) { height:100%; min-height:0; }
+
+/* Blender art is decorative; adjacent names and preparation labels remain accessible. */
+.kr-art-icon { width: 1.5em; height: 1.5em; object-fit: contain; display: inline-block; vertical-align: middle; flex: 0 0 auto; }
+.kr-food-icons .kr-art-icon { width: 1.25em; height: 1.25em; }
+.kr-ticket > div > b .kr-art-icon { width: 1.4em; height: 1.4em; }
+.kr-ticket p > span > .kr-art-icon { width: 1.6em; height: 1.6em; }
+.kr-ticket-plate .kr-art-icon { width: 1em; height: 1em; }
+.kr-chef-strip small .kr-art-icon { width: 1.5em; height: 1.5em; }

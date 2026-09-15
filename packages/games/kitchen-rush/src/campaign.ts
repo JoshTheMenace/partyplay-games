@@ -16,4 +16,5 @@ export function recordCampaign(kitchen: number, stars: number, score: number, st
   try { (storage ?? localStorage).setItem(CAMPAIGN_KEY, JSON.stringify({ version: 1, stars: progress.stars, scores: progress.scores })); progress.saved = true; } catch { progress.saved = false; }
   return progress;
 }
-export function unlockedThrough(progress: Campaign) { let highest = 0; while (highest < KITCHENS.length - 1 && progress.stars[highest] > 0) highest++; return highest; }
+/** Every stage is open from the start; stars and best scores are still recorded per stage. */
+export function unlockedThrough(_progress: Campaign) { return KITCHENS.length - 1; }

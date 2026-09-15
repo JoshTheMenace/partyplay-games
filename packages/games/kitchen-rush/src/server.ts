@@ -1,7 +1,22 @@
 import {chooseRecipe} from './orders';
 import type { GameRules } from '../../../party-contract/src/index';
-import { choppable, CHOP_SECONDS, COOK_SECONDS, KITCHENS, RADIUS, REACH, SPEED, WASH_SECONDS, dimensions, hasBelt, hasGust, hasPower, layout, neutral, recipeFor, unbakedPizza, type Chef, type Food, type Input, type Item, type Settings, type Station, type View } from './model';
-export type State = View & { orderSeed:number; nextId: number; nextOrderAt: number; orderIndex: number; returns: { item: Item; at: number }[]; lastDash: Record<string, boolean>; nextBeltAt: number };
+import { CHARACTERS, choppable, CHOP_SECONDS, COOK_SECONDS, KITCHENS, PICK_GRACE, PICK_SECONDS, RADIUS, REACH, SPEED, WASH_SECONDS, dimensions, hasBelt, hasGust, hasPower, layout, neutral, recipeFor, unbakedPizza, type Action, type Chef, type Food, type Input, type Item, type Settings, type Station, type View } from './model';
+export type State = View & { orderSeed:number; nextId: number; nextOrderAt: number; orderIndex: number; returns: { item: Item; at: number }[]; lastDash: Record<string, boolean>; nextBeltAt: number; pickDeadline: number };
+/* Picking a cook happens before service, inside the round: the room lobby is the shell's.
+ * Once every connected chef has picked, a short grace lets the last one see their choice.
+ * Changing your mind restarts that grace. */
+function settlePick(state: State, now: number) {
+  const present = state.players.filter(chef => chef.connected);
+  state.pickEndsAt = present.length && present.every(chef => chef.character) ? Math.min(state.pickDeadline, now + PICK_GRACE * 1000) : state.pickDeadline;
+}
+/** Service opens with the whole timeline moved to now, so picking never spends service time or ticket patience. */
+function beginService(state: State, now: number) {
+  const shift = now - state.startedAt;
+  state.startedAt += shift; state.endsAt += shift; state.nextOrderAt += shift; state.nextBeltAt += shift;
+  for (const ticket of state.tickets) { ticket.createdAt += shift; ticket.expiresAt += shift; }
+  state.players.forEach((chef, index) => { chef.character ??= CHARACTERS[index % CHARACTERS.length].id; chef.feedbackAt = now; });
+  state.stage = 'service'; event(state, 'Service open! Follow the first ticket.');
+}
 const FLOOR_LIMIT = 80;
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 function say(state: State, chef: Chef, text: string) { chef.feedback = text; chef.feedbackAt = state.now; }
@@ -67,19 +82,22 @@ function addTicket(state: State) {
   const recipe = chooseRecipe(state.orderSeed,state.orderIndex++,KITCHENS[state.settings.kitchen].recipes,state.tickets);
   state.tickets.push({ id: state.nextId++, recipe: recipe.id, createdAt: state.now, expiresAt: state.now + (KITCHENS[state.settings.kitchen].patience + (state.players.length === 1 ? 45 : state.players.length > 4 ? 15 : 0)) * 1000 });
 }
-export const rules: GameRules<State, Input, never, Settings, View, null> = {
+export const rules: GameRules<State, Input, Action, Settings, View, null> = {
   validateSettings(raw) { if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Settings must be an object.'); const value = raw as Partial<Settings>; if (Object.keys(value).some(key => !['kitchen', 'seconds', 'practice'].includes(key))) throw new Error('Unknown kitchen setting.'); const settings = { kitchen: value.kitchen ?? 0, seconds: value.seconds ?? 180, practice: value.practice ?? false }; if ((!Number.isInteger(settings.kitchen) || settings.kitchen < 0 || settings.kitchen >= KITCHENS.length) || ![180, 240, 300].includes(settings.seconds) || typeof settings.practice !== 'boolean') throw new Error('Choose a kitchen, 3–5 minute service and practice setting.'); return settings; },
   parseInput(raw) { const value = raw as Input; if (!value || typeof value !== 'object' || Object.keys(value).some(key => !['x', 'y', 'use', 'dash', 'command', 'seq'].includes(key)) || !Number.isFinite(value.x) || !Number.isFinite(value.y) || Math.abs(value.x) > 1 || Math.abs(value.y) > 1 || typeof value.use !== 'boolean' || typeof value.dash !== 'boolean' || ![null, 'use', 'drop', 'toss'].includes(value.command) || !Number.isSafeInteger(value.seq) || value.seq < 0) throw new Error('Invalid kitchen input.'); const length = Math.max(1, Math.hypot(value.x, value.y)); return { ...value, x: value.x / length, y: value.y / length }; },
-  neutralInput: neutral, parseAction() { throw new Error('Kitchen Rush uses acknowledged input commands.'); }, applyAction() {},
+  neutralInput: neutral,
+  parseAction(raw) { const value = raw as Action; if (!value || typeof value !== 'object' || Object.keys(value).some(key => !['type', 'turnId', 'character'].includes(key)) || value.type !== 'character') throw new Error('Unknown action.'); if (value.turnId !== 1) throw new Error('Character selection is over.'); if (!CHARACTERS.some(character => character.id === value.character)) throw new Error('No such character.'); return { type: 'character', turnId: 1, character: value.character }; },
+  applyAction(state, playerId, action, now) { if (state.stage !== 'pick') throw new Error('Service has already started.'); const chef = state.players.find(player => player.id === playerId); if (!chef) throw new Error('Only a seated chef can pick a character.'); chef.character = action.character; settlePick(state, now); },
   create(ctx, settings) {
     const size = dimensions(ctx.players.length), targetScore = Math.round((settings.seconds / 180) * (ctx.players.length === 1 ? 110 : 160 + ctx.players.length * 35) * (1 + settings.kitchen * .09));
-    const state: State = { ...size, orderSeed:ctx.seed, settings: { ...settings }, players: ctx.players.map((player, index) => ({ ...player, x: -size.halfX + 2 + index * (2 * size.halfX - 4) / Math.max(1, ctx.players.length - 1), z: size.halfZ - 3, facingX: 0, facingZ: -1, held: null, connected: true, dashUntil: 0, dashReady: 0, worked: 0, served: 0, target: null, feedback: 'Pick up an ingredient. Follow the tickets.', feedbackAt: ctx.nowMs, commandSeq: 0 })), stations: layout(settings.kitchen, ctx.players.length), loose: [], tickets: [], startedAt: ctx.nowMs, endsAt: ctx.nowMs + settings.seconds * 1000, now: ctx.nowMs, complete: false, score: 0, served: 0, missed: 0, waste: 0, fires: 0, combo: 0, cleanPlates: KITCHENS[settings.kitchen].mechanic === 'scarce' ? Math.max(2, Math.ceil(ctx.players.length / 2)) : ctx.players.length + 2, dirtyPlates: 0, thresholds: [targetScore, targetScore * 2, targetScore * 3], stars: 0, event: 'Service open! Follow the first ticket.', eventAt: ctx.nowMs, hazard: 'calm', recipeCounts: {}, powerBank: 0, powerWarning: false, nextId: 1, nextOrderAt: ctx.nowMs + 15000, orderIndex: 0, returns: [], lastDash: {}, nextBeltAt: ctx.nowMs + 3000 };
+    const state: State = { ...size, stage: 'pick', pickEndsAt: ctx.nowMs + PICK_SECONDS * 1000, pickDeadline: ctx.nowMs + PICK_SECONDS * 1000, orderSeed:ctx.seed, settings: { ...settings }, players: ctx.players.map((player, index) => ({ ...player, character: null, x: -size.halfX + 2 + index * (2 * size.halfX - 4) / Math.max(1, ctx.players.length - 1), z: size.halfZ - 3, facingX: 0, facingZ: -1, held: null, connected: true, dashUntil: 0, dashReady: 0, worked: 0, served: 0, target: null, feedback: 'Pick up an ingredient. Follow the tickets.', feedbackAt: ctx.nowMs, commandSeq: 0 })), stations: layout(settings.kitchen, ctx.players.length), loose: [], tickets: [], startedAt: ctx.nowMs, endsAt: ctx.nowMs + settings.seconds * 1000, now: ctx.nowMs, complete: false, score: 0, served: 0, missed: 0, waste: 0, fires: 0, combo: 0, cleanPlates: KITCHENS[settings.kitchen].mechanic === 'scarce' ? Math.max(2, Math.ceil(ctx.players.length / 2)) : ctx.players.length + 2, dirtyPlates: 0, thresholds: [targetScore, targetScore * 2, targetScore * 3], stars: 0, event: 'Service open! Follow the first ticket.', eventAt: ctx.nowMs, hazard: 'calm', recipeCounts: {}, powerBank: 0, powerWarning: false, nextId: 1, nextOrderAt: ctx.nowMs + 15000, orderIndex: 0, returns: [], lastDash: {}, nextBeltAt: ctx.nowMs + 3000 };
     for (const chef of state.players) { if (!walkable(state, chef.x, chef.z)) { for (let z = size.halfZ - 2.5; z > -size.halfZ; z -= .5) if (walkable(state, chef.x, z)) { chef.z = z; break; } } }
     for (let i = 0; i < (ctx.players.length > 7 ? 4 : ctx.players.length > 4 ? 3 : 2); i++) addTicket(state);
     return state;
   },
   tick(state, inputs, dt, now) {
     if (state.complete) return; state.now = now;
+    if (state.stage === 'pick') { if (now >= state.pickEndsAt) beginService(state, now); return; }
     if (now >= state.endsAt) { state.complete = true; event(state, state.served ? 'Service complete. Thank you, chefs!' : 'Service complete. No orders served.'); return; }
     const level = KITCHENS[state.settings.kitchen], elapsed = (now - state.startedAt) / 1000, cycle = elapsed % (level.topology === 'bridge' ? 24 : 30), previousHazard = state.hazard;
     state.hazard = state.settings.practice ? 'calm' : level.topology === 'bridge' ? cycle >= 17 ? 'active' : cycle >= 13 ? 'warning' : 'calm' : hasGust(level) ? cycle >= 23 ? 'active' : cycle >= 18 ? 'warning' : 'calm' : 'calm';
@@ -125,8 +143,8 @@ export const rules: GameRules<State, Input, never, Settings, View, null> = {
     if (now >= state.nextOrderAt && state.tickets.length < capacity) { addTicket(state); state.nextOrderAt = now + 1500; }
     state.stars = state.thresholds.filter(score => state.score >= score).length;
   },
-  onPresenceChange(state, id, connected) { const chef = state.players.find(player => player.id === id); if (!chef) return; chef.connected = connected; if (!connected) { drop(state, chef, false, true); state.lastDash[id] = false; } },
-  publicView(state) { const { orderSeed:_orderSeed,nextId: _nextId, nextOrderAt: _nextOrderAt, orderIndex: _orderIndex, returns: _returns, lastDash: _lastDash, nextBeltAt: _nextBeltAt, ...view } = state; return structuredClone(view); }, playerView: () => null,
+  onPresenceChange(state, id, connected, now) { const chef = state.players.find(player => player.id === id); if (!chef) return; chef.connected = connected; if (!connected) { drop(state, chef, false, true); state.lastDash[id] = false; } if (state.stage === 'pick') settlePick(state, now); },
+  publicView(state) { const { pickDeadline: _pickDeadline, orderSeed:_orderSeed,nextId: _nextId, nextOrderAt: _nextOrderAt, orderIndex: _orderIndex, returns: _returns, lastDash: _lastDash, nextBeltAt: _nextBeltAt, ...view } = state; return structuredClone(view); }, playerView: () => null,
   outcome(state) { return { complete: state.complete, winners: state.served ? state.players.map(player => player.id) : [], rows: state.players.map(player => ({ playerId: player.id, score: state.score, rank: 1, label: `${player.served} served · ${player.worked} jobs` })) }; }, dispose() {},
 };
 export default rules;

@@ -2,8 +2,10 @@ import { assertSerializable } from '../../../party-contract/src/serializable';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { rules, walkable, type State } from '../src/server';
-import { KITCHENS, RECIPES, layout, neutral, recipeFor, type Food, type Input, type Item, type Station } from '../src/model';
-const create = (count = 2, kitchen = 0, practice = false) => rules.create({ roomId: 'kitchen', roundId: 'round', nowMs: 1000, seed: 42, players: Array.from({ length: count }, (_, i) => ({ id: `p${i}`, name: `Chef-${i}-LongName`, color: '#abcdef' })) }, { kitchen, seconds: 180, practice });
+import { CHARACTERS, KITCHENS, PICK_GRACE, PICK_SECONDS, RECIPES, layout, neutral, recipeFor, type Food, type Input, type Item, type Station } from '../src/model';
+const round = (count = 2, kitchen = 0, practice = false) => rules.create({ roomId: 'kitchen', roundId: 'round', nowMs: 1000, seed: 42, players: Array.from({ length: count }, (_, i) => ({ id: `p${i}`, name: `Chef-${i}-LongName`, color: '#abcdef' })) }, { kitchen, seconds: 180, practice });
+/** A round already past character selection, which the service rules below assume. */
+const create = (count = 2, kitchen = 0, practice = false) => { const state = round(count, kitchen, practice); rules.tick(state, new Map(), 0, state.pickEndsAt); return state; };
 function tick(state: State, inputs: Record<string, Input> = {}, seconds = 1 / 60) { const steps = Math.ceil(seconds * 60); for (let i = 0; i < steps; i++) rules.tick(state, new Map(Object.entries(inputs)), seconds / steps, state.now + seconds * 1000 / steps); }
 function food(id: number, kind: Food['kind'], stage: Food['stage'] = 'raw'): Item { return { id, kind: 'food', food: [{ kind, stage }], dirty: false }; }
 function at(state: State, station: Station, player = 0) { const chef = state.players[player]; const positions = [[0, 1.3], [0, -1.3], [1.3, 0], [-1.3, 0]]; for (const [dx, dz] of positions) if (walkable(state, station.x + dx, station.z + dz)) { chef.x = station.x + dx; chef.z = station.z + dz; chef.facingX = -dx / 1.3; chef.facingZ = -dz / 1.3; return chef; } throw new Error(`No approach to ${station.id}`); }
@@ -78,6 +80,22 @@ test('tap-place, release, then a fresh hold washes a dirty dish; only a clean di
 test('a serve at the ticket deadline is rejected before expiry cleanup and preserves the dish', () => { const state = create(2, 1), chef = at(state, station(state, 'serve')); chef.held = { id: 100, kind: 'plate', food: structuredClone(RECIPES[0].parts), dirty: false }; const deadline = state.tickets[0].expiresAt; rules.tick(state, new Map([['p0', { ...neutral(), command: 'use' as const, seq: 1 }]]), 1 / 60, deadline); assert.equal(state.served, 0); assert.equal(chef.held?.id, 100); assert.equal(state.missed, 2); });
 test('serving just before expiry remains valid, and practice accepts its non-expiring tickets', () => { for (const practice of [false, true]) { const state = create(2, 1, practice), chef = at(state, station(state, 'serve')); chef.held = { id: 100, kind: 'plate', food: structuredClone(RECIPES[0].parts), dirty: false }; rules.tick(state, new Map([['p0', { ...neutral(), command: 'use' as const, seq: 1 }]]), 1 / 60, state.tickets[0].expiresAt + (practice ? 100 : -1)); assert.equal(state.served, 1); assert.equal(chef.held, null); } });
 
+test('character pick holds the whole service timeline, shortens once everyone present has picked, and dresses the rest', () => {
+  const state = round(3), chef = state.players[0], x = chef.x, patience = state.tickets[0].expiresAt - state.startedAt;
+  assert.equal(state.stage, 'pick'); assert.equal(state.pickEndsAt, 1000 + PICK_SECONDS * 1000);
+  rules.tick(state, new Map([['p0', { ...neutral(), x: 1 }]]), 1, 5000); assert.equal(state.stage, 'pick'); assert.equal(chef.x, x);
+  for (const raw of [{ type: 'character', turnId: 1, character: 'dragon' }, { type: 'character', turnId: 2, character: 'cat' }, { type: 'character', turnId: 1, character: 'cat', extra: 1 }, null]) assert.throws(() => rules.parseAction(raw));
+  rules.applyAction(state, 'p0', rules.parseAction({ type: 'character', turnId: 1, character: 'axolotl' }), 5000);
+  rules.applyAction(state, 'p1', rules.parseAction({ type: 'character', turnId: 1, character: 'axolotl' }), 5000);
+  assert.equal(state.pickEndsAt, 1000 + PICK_SECONDS * 1000, 'a chef still choosing holds the pick open');
+  rules.onPresenceChange(state, 'p2', false, 6000); assert.equal(state.pickEndsAt, 6000 + PICK_GRACE * 1000);
+  rules.applyAction(state, 'p1', rules.parseAction({ type: 'character', turnId: 1, character: 'dog' }), 7000); assert.equal(state.pickEndsAt, 7000 + PICK_GRACE * 1000, 'changing your mind restarts the grace');
+  rules.tick(state, new Map(), 0, state.pickEndsAt); assert.equal(state.stage, 'service');
+  assert.deepEqual(state.players.map(p => p.character), ['axolotl', 'dog', CHARACTERS[2].id]);
+  assert.equal(state.endsAt - state.startedAt, 180000); assert.equal(state.tickets[0].expiresAt - state.startedAt, patience);
+  assert.throws(() => rules.applyAction(state, 'p0', { type: 'character', turnId: 1, character: 'cat' }, state.now), /already started/);
+  const late = round(1); rules.tick(late, new Map(), 0, late.pickEndsAt); assert.equal(late.stage, 'service'); assert.equal(late.players[0].character, 'chef');
+});
 test('solo service has a reachable star target, longer ticket patience, results and a fresh replay', () => {
   const solo=create(1), team=create(2);
   assert(solo.thresholds[0]<team.thresholds[0]); assert(solo.tickets[0].expiresAt>team.tickets[0].expiresAt);
