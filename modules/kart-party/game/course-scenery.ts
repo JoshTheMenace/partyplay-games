@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { groundHeight, sample, type Track } from './tracks';
 import { rainbowScenery } from './rainbow-world';
+import { createSceneryInstances, createSceneryModel, type SceneryTransform } from './powerup-models';
 
 type Shape='box'|'rock'|'pillar'|'roof'|'light';
 type Instance={p:number[];s:number[];c:string;r:number[]};
@@ -52,10 +53,24 @@ export function courseScenery(track:Track){
     const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.setIndex(indices);geometry.computeVertexNormals();const roof=mesh(geometry,tunnel.color);roof.material.side=T.DoubleSide;roof.receiveShadow=true;group.add(roof);
   }
   if(track.id==='coast'){
-    for(const s of [.055,.16]){
-      const p=at(s,40);add('pillar',[p.x,p.y+13,p.z],[1.2,26,1.2],'#e7bd45');add('box',[p.x+9,p.y+25,p.z],[23,1.2,1.2],'#e7bd45');add('box',[p.x+19,p.y+18,p.z],[.16,14,.16],'#526476');add('box',[p.x+19,p.y+9,p.z],[5,4,5],'#387d8c');
-      for(let k=0;k<4;k++)add('box',[p.x-10+k*5,p.y+2,p.z+8],[4.5,4,9],['#e89963','#5caaaf','#e1ba63','#77926b'][k]);
-    }
+    const transform=(s:number,offset:number,scale=1,yaw=0):SceneryTransform=>{const p=at(s,offset);return {position:[p.x,p.y,p.z],rotation:[0,p.heading+yaw,0],scale:[scale,scale,scale]};};
+    const place=(name:string,value:SceneryTransform)=>{const model=createSceneryModel(name);if(!model)return;model.position.fromArray(value.position);model.rotation.set(...(value.rotation??[0,0,0]));model.scale.fromArray(value.scale??[1,1,1]);group.add(model);};
+    // Near-road authored props stay beyond the shoulder and chase-camera envelope. Repeated
+    // silhouettes are split into harbor and cliff batches so the other sector can be culled.
+    for(const [name,values] of [
+      ['PalmA',[[.035,-30,1.05],[.08,34,.9],[.145,-38,1.1],[.20,29,.85]]],
+      ['PalmB',[[.055,45,.9],[.115,-31,1.05],[.18,42,.95]]],
+      ['PalmC',[[.025,26,.95],[.095,-48,1.1],[.165,31,.9],[.215,-34,1.0]]],
+      ['CliffA',[[.245,-34,1.5],[.30,38,1.8],[.37,-42,1.6],[.43,35,1.7]]],
+      ['CliffB',[[.27,48,1.6],[.34,-52,1.8],[.405,47,1.7]]],
+      ['CliffC',[[.255,-55,1.45],[.32,58,1.6],[.39,-57,1.55],[.445,52,1.5]]],
+    ] as [string,number[][]][]){const batch=createSceneryInstances(name,values.map(value=>transform(value[0],value[1],value[2],value[0]*7)));if(batch)group.add(batch);}
+    for(const [name,values] of [
+      ['HarborHouseA',[[.045,39,1.1,Math.PI],[.145,-41,.95,0]]],['HarborHouseB',[[.085,34,1,Math.PI],[.19,-35,1.08,0]]],
+      ['HarborDock',[[.065,54,1.15,Math.PI/2],[.17,-55,1,Math.PI/2]]],['HarborCrane',[[.105,61,1.08,0],[.205,-63,.9,Math.PI]]],
+      ['ContainerCoral',[[.09,45,1.05,0],[.185,-48,.95,0]]],['ContainerTeal',[[.115,43,1,0],[.16,-46,1.05,0]]],
+    ] as [string,number[][]][]){const batch=createSceneryInstances(name,values.map(value=>transform(value[0],value[1],value[2],value[3])));if(batch)group.add(batch);}
+    place('Lighthouse',transform(.335,42,1.7,Math.PI));
     const falls=at(.56,-36),waterfall=new T.Group();waterfall.position.set(falls.x,falls.y,falls.z);waterfall.rotation.y=falls.heading+Math.PI/2;
     const cliff=mesh(new T.IcosahedronGeometry(1,1),'#527766');cliff.position.y=13;cliff.scale.set(20,24,12);waterfall.add(cliff);
     const water=mesh(new T.BoxGeometry(7,23,.3),'#6ddbdc',true);water.position.set(0,12,11);waterfall.add(water);

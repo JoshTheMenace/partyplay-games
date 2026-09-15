@@ -1,4 +1,5 @@
 import { hit } from './items';
+import { recordContact } from './race-contact';
 import { surfaceFrame,TRACKS } from './tracks';
 import type { Race,Racer } from './types';
 
@@ -17,5 +18,6 @@ export function resolveLoopContact(race:Race,a:Racer,b:Racer){
   lowMove+=Math.min(needed-lowMove-highMove,(low.loopOffset??0)+limit-lowMove);
   low.loopOffset=(low.loopOffset??0)-lowMove;high.loopOffset=(high.loopOffset??0)+highMove;
   for(const racer of [a,b]){const frame=surfaceFrame(track,racer.s,racer.loopOffset);Object.assign(racer,frame.position);}
+  recordContact(race,a,b,Math.min(1,(needed+Math.abs(a.speed-b.speed)/12)/2.5));
   return true;
 }

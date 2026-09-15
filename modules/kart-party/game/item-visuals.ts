@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Hazard, Racer } from './types';
+import { createHeldPowerupModel } from './powerup-models';
 
 const paint=(color:string)=>new T.MeshStandardMaterial({color,roughness:.32,metalness:.18});
 const glow=(color:string,opacity=.65)=>new T.MeshBasicMaterial({color,transparent:true,opacity,depthWrite:false,blending:T.AdditiveBlending});
@@ -34,14 +35,9 @@ export function createHazardVisual(h:Hazard):T.Group {
   const group=new T.Group(),model=new T.Group();group.add(model);group.name=`hazard-${h.kind}`;
   model.position.y=h.kind==='shell'||h.kind==='frost'?.7:.2;
   if(h.kind==='shell') {
-    const green=paint('#83e951'),dark=paint('#214945'),gold=paint('#edff99'),white=paint('#ffffff');
-    orb(model,green,0,0,0,.78,.5,.95);orb(model,dark,0,-.17,0,.82,.18,.95);
-    part(model,new T.BoxGeometry(.07,.08,1.3),gold,0,.45,-.07);
-    orb(model,dark,0,.05,.76,.42,.3,.35);
-    for(const side of [-1,1]) {
-      orb(model,white,side*.2,.23,1,.13);orb(model,dark,side*.2,.24,1.1,.06);
-      for(let i=0;i<3;i++) {const leg=part(model,new T.CapsuleGeometry(.055,.45,2,5),dark,side*.75,-.16,(i-1)*.52);leg.rotation.z=side*1.1;}
-    }
+    const authored=createHeldPowerupModel('shell');
+    if(authored){authored.scale.setScalar(1.35);model.add(authored);}
+    else {const green=paint('#83e951'),dark=paint('#214945'),gold=paint('#edff99'),white=paint('#ffffff');orb(model,green,0,0,0,.78,.5,.95);orb(model,dark,0,-.17,0,.82,.18,.95);part(model,new T.BoxGeometry(.07,.08,1.3),gold,0,.45,-.07);orb(model,dark,0,.05,.76,.42,.3,.35);for(const side of [-1,1]){orb(model,white,side*.2,.23,1,.13);orb(model,dark,side*.2,.24,1.1,.06);}}
   } else if(h.kind==='banana') {
     const yellow=paint('#ffe055'),cream=paint('#fff4b0'),brown=paint('#895c35');
     const peel=new T.Shape();peel.moveTo(0,1);peel.quadraticCurveTo(.3,.17,1.45,0);peel.quadraticCurveTo(.95,.58,.12,1.25);peel.closePath();

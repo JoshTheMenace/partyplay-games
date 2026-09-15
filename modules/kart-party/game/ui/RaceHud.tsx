@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { Coins, Pause, Play, LogOut, Flag, Timer } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -18,6 +18,7 @@ import { ItemIcon, StatusBadges } from './items';
 import { useCoarsePointer } from './useCoarsePointer';
 import { useOrientation } from './orientation';
 import { raceTimeRemaining } from '../race-timing';
+import { itemRoulette } from '../item-roulette';
 
 export { ItemIcon } from './items';
 
@@ -95,17 +96,17 @@ function DriftMeter({ racer, compact }: { racer: Racer; compact?: boolean }) {
   );
 }
 
-function ItemSlot({ racer, size }: { racer: Racer; size: number }) {
-  const item = racer.item;
+function ItemSlot({ race, racer, size }: { race:Race; racer: Racer; size: number }) {
+  const roulette=itemRoulette(race,racer),item=roulette.item;
   return (
     <div
       key={item ?? 'empty'}
       className={cn(
         'relative flex items-center justify-center rounded-2xl border-[3px] border-kp-ink bg-kp-navy/80 shadow-[0_6px_0_rgba(5,7,26,0.8)]',
-        item && 'kp-anim-pop',
+        item && 'kp-anim-pop',roulette.active&&'kp-item-roulette',
       )}
       style={{ width: size, height: size, borderColor: item ? ITEM_COLOR[item] : undefined, boxShadow: item ? `0 6px 0 rgba(5,7,26,0.8), 0 0 24px ${ITEM_COLOR[item]}66` : undefined }}
-      aria-label={item ? `Holding ${ITEM_LABEL[item]}` : 'No item'}
+      aria-label={roulette.active?'Choosing item':item ? `Holding ${ITEM_LABEL[item]}` : 'No item'}
     >
       {item ? (
         <span className="p-[22%]" style={{ color: ITEM_COLOR[item] }}>
@@ -256,7 +257,7 @@ export function ViewportHud({
       {/* Touch mode is a grid so the corner control sits under the coins in portrait and beside the item in landscape. */}
       <div className={cn('absolute right-0 top-0 grid justify-items-end', dense ? 'gap-1 p-1.5' : compact ? 'gap-2 p-2.5' : 'gap-2 p-4', touch && 'landscape:grid-cols-[auto_auto] landscape:items-start')}>
         <div className={cn(touch && 'landscape:col-start-2 landscape:row-start-1')}>
-          <ItemSlot racer={racer} size={dense ? 40 : compact ? 52 : side ? 60 : touch ? 72 : 84} />
+          <ItemSlot race={race} racer={racer} size={dense ? 40 : compact ? 52 : side ? 60 : touch ? 72 : 84} />
         </div>
         {!dense ? <StatusBadges racer={racer} size={compact ? 22 : 30} showTime={!compact} className={cn(touch && 'landscape:col-span-2')} /> : null}
         {!dense ? (

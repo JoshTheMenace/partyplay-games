@@ -27,13 +27,17 @@ export type Racer = {
   drift: number; driftSide: number; boost: number; shield: number; stun: number;
   item: Item | null; itemCooldown: number; finishTime: number | null;
   lastUse: boolean; offroad: boolean; connected: boolean; distance: number; wallTime: number; coinsTaken: number[];
+  contactCooldown?:number; stats?:RaceStats;
 };
+export type RaceStats={startRank:number;maxSpeed:number;itemsUsed:number;hitsDealt:number;hitsTaken:number;shieldsBlocked:number;coinsCollected:number;driftBoosts:number;collisions:number;airtime:number};
 export type Hazard = { s?:number; offset?:number; id: number; kind: 'shell' | 'banana' | 'oil' | 'frost' | 'rocket' | 'decoy'; owner: string; x: number; z: number; heading: number; life: number; target?: string; affected?: string[] };
-export type RaceEvent = { id: number; type: 'boost' | 'hit' | 'item' | 'coin' | 'finish' | 'lap'; racer: string; time: number; lap?: number };
+export type HitEffect = 'stun' | 'frost' | 'oil' | 'decoy' | 'shield';
+export type RaceEvent = { id: number; type: 'boost' | 'hit' | 'contact' | 'item' | 'use' | 'coin' | 'finish' | 'lap'; racer: string; time: number; lap?: number; item?: Item; effect?: HitEffect; source?: string; intensity?:number };
 export type Race = {
   startId?: string; startAt?: number | null;
   track: TrackId; speedClass: SpeedClass; phase: Phase; time: number; countdown: number; laps: number;
   racers: Racer[]; hazards: Hazard[]; events: RaceEvent[]; seed: number; serial: number;
+  personalCameraIds: string[];
   firstFinish: number | null; firstHumanFinish: number | null; difficulty: 'easy' | 'normal' | 'hard';
 };
 export type Player = { id: string; name: string; driver: number; connected: boolean; ready: boolean };

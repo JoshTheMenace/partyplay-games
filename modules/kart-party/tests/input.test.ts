@@ -1,10 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PerspectiveCamera, Vector3 } from 'three';
-import { humanInput } from '../game/input';
+import { humanInput, screenSteer } from '../game/input';
 import { createRace, stepRace } from '../game/simulation';
 import { sample, TRACKS } from '../game/tracks';
 import { NEUTRAL } from '../game/types';
+
+void test('screen steering maps left and right to the simulation exactly once',()=>{
+  assert.equal(screenSteer(-1),1);assert.equal(screenSteer(1),-1);assert.equal(screenSteer(0),0);
+  assert.equal(screenSteer(-4),1);assert.equal(screenSteer(4),-1);
+});
 
 for(const [key,direction] of [['arrowleft',-1],['a',-1],['arrowright',1],['d',1]] as const) void test(`${key} moves toward the requested side of the chase camera`,()=>{
   const race=createRace({track:'coast',players:[{id:'human',name:'Human',driver:0}]}),r=race.racers[0],p=sample(TRACKS.coast,.1);

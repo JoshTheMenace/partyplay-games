@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import React, { type CSSProperties } from 'react';
 import { Banana, Crosshair, Droplets, Flame, Gift, Magnet, Orbit, Radio, Rocket, Shield, Snowflake, Star } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../lib/utils';

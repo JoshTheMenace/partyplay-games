@@ -1,11 +1,13 @@
 import type { Race } from './types';
 import { selectPlaylist, StreamedMusic, type AudioMode, type MusicSpeedClass, type MusicTrack } from './music';
+import { createKartSfx, type KartSfx } from './kart-sfx.js';
 
 export class GameAudio {
   private context:AudioContext|null=null;
   private master:GainNode|null=null;
   private engine:OscillatorNode|null=null;
   private engineGain:GainNode|null=null;
+  private sfx:KartSfx|null=null;
   private music=new StreamedMusic();
   private lastEvent=0;
   private lastCountdown=4;
@@ -13,7 +15,6 @@ export class GameAudio {
   private racePhase:Race['phase']|null=null;
   private silenced=false;
   private disposed=false;
-  private timers=new Set<ReturnType<typeof setTimeout>>();
   muted=false;
   start(track?:MusicTrack,speedClass:MusicSpeedClass=100,mode:AudioMode='solo'){
     if(this.disposed)return;
@@ -24,17 +25,9 @@ export class GameAudio {
     if(!this.context&&typeof AudioContext!=='undefined'){
       this.context=new AudioContext();this.master=this.context.createGain();this.master.gain.value=.25;this.master.connect(this.context.destination);
       this.engine=this.context.createOscillator();this.engine.type='triangle';this.engineGain=this.context.createGain();this.engineGain.gain.value=0;this.engine.connect(this.engineGain);this.engineGain.connect(this.master);this.engine.start();
+      this.sfx=createKartSfx(this.context);
     }
     void this.context?.resume().catch(()=>{});
-  }
-  private tone(frequency:number,duration:number,volume=.12,type:OscillatorType='sine'){
-    if(!this.context||!this.master||this.muted||this.silenced||this.disposed)return;
-    const oscillator=this.context.createOscillator(),gain=this.context.createGain(),now=this.context.currentTime;
-    oscillator.type=type;oscillator.frequency.value=frequency;gain.gain.setValueAtTime(volume,now);gain.gain.exponentialRampToValueAtTime(.001,now+duration);oscillator.connect(gain);gain.connect(this.master);oscillator.start();oscillator.stop(now+duration);
-    oscillator.onended=()=>{oscillator.disconnect();gain.disconnect();};
-  }
-  private delayedTone(frequency:number,duration:number,delay:number){
-    const timer=setTimeout(()=>{this.timers.delete(timer);this.tone(frequency,duration,.2);},delay);this.timers.add(timer);
   }
   update(race:Race|null,playerId:string,paused:boolean,mode:AudioMode='solo'){
     if(this.disposed)return;
@@ -50,21 +43,24 @@ export class GameAudio {
     if(!this.context||!this.master||!this.engine||!this.engineGain)return;
     const now=this.context.currentTime,racer=race?.racers.find(r=>r.id===playerId)??race?.racers.find(r=>!r.bot)??race?.racers[0];
     this.master.gain.setTargetAtTime(this.silenced?0:.25,now,.1);
+    this.sfx?.setMuted(this.silenced);
     this.engine.frequency.setTargetAtTime(45+(racer?.speed??0)*3,now,.12);this.engineGain.gain.setTargetAtTime(race?.phase==='racing'?.06:0,now,.15);
     if(!race){this.lastEvent=0;this.lastCountdown=4;return;}
     if(race.phase==='countdown'){
-      const count=Math.ceil(race.countdown);if(count!==this.lastCountdown){this.lastCountdown=count;this.tone(440,.14,.22);}this.lastEvent=0;
-    } else if(race.phase==='racing'&&this.lastCountdown!==0){this.tone(880,.45,.22);this.lastCountdown=0;}
+      const count=Math.ceil(race.countdown);if(count!==this.lastCountdown){this.lastCountdown=count;this.sfx?.play('countdown',{id:`count-${count}`});}this.lastEvent=0;
+    } else if(race.phase==='racing'&&this.lastCountdown!==0){this.sfx?.play('go',{id:'go'});this.lastCountdown=0;}
     for(const event of race.events)if(event.id>this.lastEvent){this.lastEvent=event.id;if(event.racer!==racer?.id)continue;
-      if(event.type==='coin')this.tone(1320,.12,.09);
-      if(event.type==='item')this.tone(660,.23,.13);
-      if(event.type==='boost')this.tone(330,.4,.12,'sawtooth');
-      if(event.type==='hit')this.tone(85,.35,.18,'square');
-      if(event.type==='finish'){this.tone(523,.5,.2);this.delayedTone(659,.5,140);this.delayedTone(784,.8,280);}
+      if(event.type==='coin')this.sfx?.play('coin',event);
+      if(event.type==='item'){for(let i=0;i<7;i++)this.sfx?.play('roulette_tick',{id:`${event.id}-${i}`,delay:i*.105});this.sfx?.play('item_reveal',{id:event.id,delay:.82});}
+      if(event.type==='use'&&event.item)this.sfx?.play(({boost:'boost_launch',shell:'shell_launch',banana:'banana_drop',shield:'shield_on',pulse:'pulse_blast',triple:'triple_launch',oil:'oil_drop',frost:'frost_launch',magnet:'magnet_on',star:'star_on',rocket:'rocket_launch',decoy:'decoy_drop'} as const)[event.item],event);
+      if(event.type==='boost')this.sfx?.play('boost_launch',event);
+      if(event.type==='hit')this.sfx?.play(event.effect==='shield'?'shield_block':event.effect==='frost'?'hit_frost':event.effect==='oil'?'hit_oil':event.effect==='decoy'?'hit_decoy':'hit_stun',event);
+      if(event.type==='contact')this.sfx?.play('kart_bump',{id:event.id,value:event.intensity??.5});
+      if(event.type==='finish')this.sfx?.play('finish',event);
     }
   }
   private closeContext(){
-    for(const timer of this.timers)clearTimeout(timer);this.timers.clear();
+    this.sfx?.panic();this.sfx=null;
     if(this.master)this.master.gain.value=0;
     this.engine?.stop();this.engine?.disconnect();this.engineGain?.disconnect();this.master?.disconnect();void this.context?.close().catch(()=>{});
     this.context=null;this.master=null;this.engine=null;this.engineGain=null;

@@ -49,10 +49,10 @@ void test('Rainbow grants one landing boost for a completed jump',()=>{
 void test('Rainbow instanced coins retain bank height and independent split-screen collection visibility',()=>{
   const world=createRainbowWorld(),race=createRace({track:'rainbow',players:[]}),a=race.racers[0],b=race.racers[1];
   try{
-    const coins=world.group.children.find((o):o is InstancedMesh=>o instanceof InstancedMesh&&o.geometry.type==='CylinderGeometry')!;
-    assert.ok(coins);const matrix=new Matrix4(),position=new Vector3(),scale=new Vector3();
-    a.coinsTaken=[0];world.prepareView!(a);coins.getMatrixAt(0,matrix);scale.setFromMatrixScale(matrix);assert.equal(scale.length(),0);
-    world.prepareView!(b);coins.getMatrixAt(0,matrix);scale.setFromMatrixScale(matrix);assert.ok(Math.abs(scale.length()-Math.sqrt(3))<1e-6);
-    track.coins.forEach((coin,i)=>{coins.getMatrixAt(i,matrix);position.setFromMatrixPosition(matrix);const f=surfaceFrame(track,coin.s,coin.offset,1.5).position;assert.ok(position.distanceTo(new Vector3(f.x,f.y,f.z))<.001);});
+    let coins:InstancedMesh|undefined;world.group.getObjectByName('field_coin-instances')?.traverse(object=>{if(!coins&&object instanceof InstancedMesh)coins=object;});
+    assert.ok(coins);const coinInstances=coins,matrix=new Matrix4(),position=new Vector3(),scale=new Vector3();
+    a.coinsTaken=[0];world.prepareView!(a);coinInstances.getMatrixAt(0,matrix);scale.setFromMatrixScale(matrix);assert.equal(scale.length(),0);
+    world.prepareView!(b);coinInstances.getMatrixAt(0,matrix);scale.setFromMatrixScale(matrix);assert.ok(Math.abs(scale.length()-Math.sqrt(3))<1e-6);
+    track.coins.forEach((coin,i)=>{coinInstances.getMatrixAt(i,matrix);position.setFromMatrixPosition(matrix);const f=surfaceFrame(track,coin.s,coin.offset,1.5).position;assert.ok(position.distanceTo(new Vector3(f.x,f.y,f.z))<.001);});
   }finally{world.dispose();}
 });

@@ -587,6 +587,10 @@ select:focus-visible,
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
 }
+@keyframes kp-item-roulette {
+  50% { filter: brightness(1.35) saturate(1.25); transform: scale(.94) rotate(-2deg); }
+}
+.kp-item-roulette { animation: kp-item-roulette 120ms steps(2, end) infinite; }
 .kp-anim-pop { animation: kp-pop 420ms cubic-bezier(0.2, 1.4, 0.4, 1) both; }
 .kp-anim-rise { animation: kp-rise 460ms cubic-bezier(0.2, 1.2, 0.4, 1) both; }
 .kp-anim-up { animation: kp-slide-up 460ms cubic-bezier(0.2, 1.2, 0.4, 1) both; }
@@ -603,7 +607,7 @@ select:focus-visible,
 .kp-delay-4 { animation-delay: 320ms; }
 
 @media (prefers-reduced-motion: reduce) {
-  .kp-anim-pop, .kp-anim-rise, .kp-anim-up, .kp-anim-in, .kp-anim-pulse, .kp-anim-flag, .kp-anim-rotate {
+  .kp-anim-pop, .kp-anim-rise, .kp-anim-up, .kp-anim-in, .kp-anim-pulse, .kp-anim-flag, .kp-anim-rotate, .kp-item-roulette {
     animation-duration: 1ms;
     animation-iteration-count: 1;
   }

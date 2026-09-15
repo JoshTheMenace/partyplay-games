@@ -10,6 +10,7 @@ import { ItemIcon, StatusBadges } from './items';
 import { DriverAvatar, Logo } from './primitives';
 import { RaceMenu } from './RaceMenu';
 import { DRIFT_FULL, DRIFT_TIER_COLOR, ITEM_COLOR, ITEM_LABEL, ITEM_SHORT, displayLap, driftTier, driverOf, ordinalSuffix, speedReadout } from './format';
+import { itemRoulette } from '../item-roulette';
 
 const DEAD_ZONE = 0.08;
 
@@ -390,7 +391,7 @@ export function Controller({ game }: { game: GameClient }) {
   const racer = race?.racers.find((r) => r.id === game.playerId) ?? null;
   const auto = game.autoAccelerate;
   const { sendSteer, sendDrift, sendBrake, sendUse, sendThrottle } = useTouchSenders(game);
-  const item = racer?.item ?? null;
+  const roulette=race&&racer?itemRoulette(race,racer):{active:false,item:null},item=roulette.item;
   const orientation = useOrientation();
 
   return (
@@ -433,11 +434,11 @@ export function Controller({ game }: { game: GameClient }) {
         >
           <HoldButton label="Brake" hint="slow" color="#ff5748" send={sendBrake} />
           <HoldButton
-            label={item ? ITEM_SHORT[item] : 'Item'}
-            announce={item ? `Fire ${ITEM_LABEL[item]}` : 'Item, empty'}
-            hint={item ? 'fire' : 'empty'}
+            label={roulette.active?'Choosing':item ? ITEM_SHORT[item] : 'Item'}
+            announce={roulette.active?'Choosing item':item ? `Fire ${ITEM_LABEL[item]}` : 'Item, empty'}
+            hint={roulette.active?'wait':item ? 'fire' : 'empty'}
             color={item ? ITEM_COLOR[item] : '#3a3f6b'}
-            send={sendUse}
+            send={roulette.active?()=>{}:sendUse}
             icon={item ? <ItemIcon item={item} /> : <Sparkles className="opacity-40" />}
           />
           <HoldButton label="Drift" hint="hold" color="#28c6e7" send={sendDrift} className={auto ? 'landscape:col-span-2' : undefined} />
@@ -472,16 +473,16 @@ export function Controller({ game }: { game: GameClient }) {
  *  `side`: landscape phones. Steering pad bottom-left, a two by two key block bottom-right, full-height road between them. */
 export function TouchControls({ game, layout = 'strip' }: { game: GameClient; layout?: 'strip' | 'side' }) {
   const auto = game.autoAccelerate;
-  const item = game.race?.racers.find((r) => r.id === game.playerId)?.item ?? null;
+  const racer=game.race?.racers.find((r) => r.id === game.playerId),roulette=game.race&&racer?itemRoulette(game.race,racer):{active:false,item:null},item=roulette.item;
   const { sendSteer, sendDrift, sendBrake, sendUse, sendThrottle } = useTouchSenders(game);
   const keys = (
     <>
       <HoldButton compact label="Brake" color="#ff5748" send={sendBrake} icon={<Octagon />} className={layout === 'side' ? 'kp-side-key' : undefined} />
       <HoldButton
         compact
-        label={item ? `Fire ${ITEM_LABEL[item]}` : 'Item, empty'}
+        label={roulette.active?'Choosing item':item ? `Fire ${ITEM_LABEL[item]}` : 'Item, empty'}
         color={item ? ITEM_COLOR[item] : '#3a3f6b'}
-        send={sendUse}
+        send={roulette.active?()=>{}:sendUse}
         icon={item ? <ItemIcon item={item} /> : <Sparkles className="opacity-40" />}
         className={layout === 'side' ? 'kp-side-key' : undefined}
       />
