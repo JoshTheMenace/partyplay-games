@@ -1,4 +1,5 @@
 // Presentation only: never pass these poses back to stepRace, ranking, or input handling.
+import {PresentationDelay} from '../../../packages/party-runtime/src/presentation';
 export type MotionRacer = {
   loopDistance?:number;loopOffset?:number;
   id:string;x:number;y:number;z:number;heading:number;s:number;speed:number;
@@ -8,18 +9,24 @@ export type MotionRace = {
   startId?:string;startAt?:number|null;
   track:string;phase:'countdown'|'racing'|'results';time:number;countdown:number;racers:MotionRacer[];
 };
-export type MotionFrame<R extends MotionRace> = {race:R;snappedIds:string[];extrapolatedSeconds:number};
+export type MotionFrame<R extends MotionRace> = {race:R;snappedIds:string[];extrapolatedSeconds:number;delaySeconds:number};
+export type MotionBufferOptions = {delaySeconds?:number;maxExtrapolationSeconds?:number;adaptiveDelay?:{minSeconds:number;maxSeconds:number}};
+/* Party rooms present 100ms behind to start and adapt between 75 and 150ms to observed arrival gaps.
+ * 50ms with no extrapolation froze on ordinary Wi-Fi jitter; extrapolation stays off so hits and
+ * finishes are never shown before they are authoritative. */
+export const PARTY_PRESENTATION:MotionBufferOptions={delaySeconds:.1,adaptiveDelay:{minSeconds:.075,maxSeconds:.15},maxExtrapolationSeconds:0};
 const clamp=(n:number,a:number,b:number)=>Math.max(a,Math.min(b,n));
 const wrap=(n:number,period:number)=>((n%period)+period)%period;
 const delta=(to:number,from:number,period:number)=>wrap(to-from+period/2,period)-period/2;
 const stamp=(race:MotionRace)=>race.phase==='countdown'?-race.countdown:race.time;
 const jumped=(a:MotionRacer,b:MotionRacer,dt:number)=>{const distance=Math.hypot(b.x-a.x,b.y-a.y,b.z-a.z);return distance>Math.max(12,Math.max(a.speed,b.speed)*dt*2.5+3)||a.speed>3&&b.speed<.5&&distance>3;};
 
-export function createMotionBuffer<R extends MotionRace>(options:{delaySeconds?:number;maxExtrapolationSeconds?:number}={}){
-  const delay=clamp(options.delaySeconds??.05,0,.15),maxExtrapolation=clamp(options.maxExtrapolationSeconds??.1,0,.15);
-  let frames:{race:R;at:number;arrival:number}[]=[],clockSamples:number[]=[],offset=0,targetOffset=0,lastSample:number|null=null,resetPending=false;
+export function createMotionBuffer<R extends MotionRace>(options:MotionBufferOptions={}){
+  const fixedDelay=clamp(options.delaySeconds??.05,0,.15),maxExtrapolation=clamp(options.maxExtrapolationSeconds??.1,0,.15);
+  const adaptive=options.adaptiveDelay?new PresentationDelay({initialMs:fixedDelay*1000,minMs:options.adaptiveDelay.minSeconds*1000,maxMs:options.adaptiveDelay.maxSeconds*1000}):null;
+  let frames:{race:R;at:number;arrival:number}[]=[],clockSamples:number[]=[],offset=0,targetOffset=0,lastSample:number|null=null,lastAt:number|null=null,resetPending=false;
   const teleports=new Map<string,number>();
-  function reset(){frames=[];clockSamples=[];lastSample=null;teleports.clear();resetPending=true;}
+  function reset(){frames=[];clockSamples=[];lastSample=null;lastAt=null;teleports.clear();adaptive?.resume();resetPending=true;}
   function push(race:R,arrivalSeconds:number){
     const at=stamp(race);if(!Number.isFinite(at)||!Number.isFinite(arrivalSeconds))return;
     let previous=frames.at(-1);
@@ -37,13 +44,17 @@ export function createMotionBuffer<R extends MotionRace>(options:{delaySeconds?:
       const old=new Map(previous.race.racers.map(racer=>[racer.id,racer]));
       for(const racer of race.racers){const before=old.get(racer.id);if(!before||jumped(before,racer,at-previous.at))teleports.set(racer.id,at);}
     }
+    adaptive?.arrival(arrivalSeconds*1000);
     frames.push({race,at,arrival:arrivalSeconds});if(frames.length>12)frames.shift();
   }
   function sample(nowSeconds:number):MotionFrame<R>|null{
     const latest=frames.at(-1);if(!latest)return null;
     const dt=lastSample===null?0:clamp(nowSeconds-lastSample,0,.1);lastSample=nowSeconds;
     offset+=clamp(targetOffset-offset,-dt*.02,dt*.02);
-    const wanted=nowSeconds-offset-delay,at=Math.min(wanted,latest.at+maxExtrapolation);
+    adaptive?.advance(dt*1000);
+    // Clock slew and delay slew each run presentation within a few percent of real time; never behind the last frame shown.
+    const delay=adaptive?adaptive.ms/1000:fixedDelay,wanted=nowSeconds-offset-delay;
+    let at=Math.min(wanted,latest.at+maxExtrapolation);if(lastAt!==null)at=Math.max(at,Math.min(lastAt,latest.at+maxExtrapolation));lastAt=at;
     let a=frames[0],b=a;
     for(let i=1;i<frames.length;i++){b=frames[i];if(b.at>=at)break;a=b;}
     const extrapolatedSeconds=latest.race.phase==='racing'?clamp(at-latest.at,0,maxExtrapolation):0;
@@ -72,7 +83,7 @@ export function createMotionBuffer<R extends MotionRace>(options:{delaySeconds?:
     });
     // Keep discrete race/UI metadata current; only the renderer receives a smoothed time/pose.
     const displayedTime=latest.race.phase==='racing'?Math.max(0,at):latest.race.time;
-    return {race:{...latest.race,time:displayedTime,racers} as R,snappedIds,extrapolatedSeconds};
+    return {race:{...latest.race,time:displayedTime,racers} as R,snappedIds,extrapolatedSeconds,delaySeconds:delay};
   }
   return {push,sample,reset};
 }

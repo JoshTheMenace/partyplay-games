@@ -1,8 +1,10 @@
 import * as T from 'three';
 import { disposeObject } from './dispose';
+import { createCoinViews, createPickupInstances } from './powerup-models';
 import { bankAt, mod, sample, surfaceFrame, magneticAt, TRACKS, type Track } from './tracks';
 import type { Racer } from './types';
 import type { World } from './world';
+import { createTurnGuides } from './turn-guides';
 
 const basis=(f:ReturnType<typeof surfaceFrame>)=>new T.Matrix4().makeBasis(new T.Vector3(f.right.x,f.right.y,f.right.z),new T.Vector3(f.up.x,f.up.y,f.up.z),new T.Vector3(f.forward.x,f.forward.y,f.forward.z));
 const spectrum=(h:number,l=.57)=>new T.Color().setHSL(mod(h),.88,l);
@@ -131,13 +133,13 @@ void main(){float bands=.5+.5*sin(vUv.y*65.+sin(vUv.x*20.)*1.2+sin(vUv.y*28.)*2.
 
 export function createRainbowWorld():World{
   const track=TRACKS.rainbow,{group,animated,update}=rainbowScenery(track),dummy=new T.Object3D();let time=0;
-  const coins=new T.InstancedMesh(new T.CylinderGeometry(.65,.65,.17,12),new T.MeshStandardMaterial({color:'#ffe996',emissive:'#b88016',emissiveIntensity:.6,metalness:.65,roughness:.25}),track.coins.length);group.add(coins);
+  group.add(createTurnGuides(track));
+  const coins=createPickupInstances('field_coin',track.coins.length);group.add(coins.group);
   // Per-camera instance visibility avoids 108 separate coin draw calls in phone and split-screen races.
-  const prepareView=(racer?:Racer)=>{
-    track.coins.forEach((coin,i)=>{const frame=surfaceFrame(track,coin.s,coin.offset,1.5),p=frame.position,taken=racer?.coinsTaken?.includes((racer.lap-1)*track.coins.length+i);dummy.position.set(p.x,p.y,p.z);dummy.quaternion.setFromRotationMatrix(basis(frame));dummy.rotateX(Math.PI/2);dummy.rotateZ(time*.8);dummy.scale.setScalar(taken?0:1);dummy.updateMatrix();coins.setMatrixAt(i,dummy.matrix);});coins.instanceMatrix.needsUpdate=true;
-  };prepareView();coins.computeBoundingSphere();
-  const boxes=track.boxes.flatMap(s=>[-5,0,5].map(offset=>({s,offset}))),boxGeometry=new T.BoxGeometry(1.7,1.7,1.7);
-  const pickups=new T.InstancedMesh(boxGeometry,new T.MeshStandardMaterial({color:'#b2fbff',emissive:'#43cce5',emissiveIntensity:1.2,roughness:.22,metalness:.4}),boxes.length),frames=new T.InstancedMesh(boxGeometry.clone(),new T.MeshBasicMaterial({color:'#ffffff',wireframe:true}),boxes.length);group.add(pickups,frames);
-  const tick=(now:number)=>{time=now;update(now);boxes.forEach((box,i)=>{const frame=surfaceFrame(track,box.s,box.offset,2.2+Math.sin(now*2+i)*.22),p=frame.position;dummy.position.set(p.x,p.y,p.z);dummy.quaternion.setFromRotationMatrix(basis(frame));dummy.rotateY(now*.65);dummy.rotateZ(Math.PI/4);dummy.scale.setScalar(1);dummy.updateMatrix();pickups.setMatrixAt(i,dummy.matrix);frames.setMatrixAt(i,dummy.matrix);});pickups.instanceMatrix.needsUpdate=true;frames.instanceMatrix.needsUpdate=true;};tick(0);pickups.computeBoundingSphere();frames.computeBoundingSphere();
+  const coinViews=createCoinViews(coins,track.coins.map(coin=>{const frame=surfaceFrame(track,coin.s,coin.offset,1.5),p=frame.position;return {position:new T.Vector3(p.x,p.y,p.z),quaternion:new T.Quaternion().setFromRotationMatrix(basis(frame))};}));
+  const prepareView=(racer?:Racer)=>coinViews(time,i=>!!racer?.coinsTaken?.includes((racer.lap-1)*track.coins.length+i));
+  prepareView();coins.commit(true);
+  const boxes=track.boxes.flatMap(s=>[-5,0,5].map(offset=>({s,offset}))),pickups=createPickupInstances('item_box',boxes.length);group.add(pickups.group);
+  const tick=(now:number)=>{time=now;update(now);boxes.forEach((box,i)=>{const frame=surfaceFrame(track,box.s,box.offset,2.2+Math.sin(now*2+i)*.22),p=frame.position;dummy.position.set(p.x,p.y,p.z);dummy.quaternion.setFromRotationMatrix(basis(frame));dummy.rotateY(now*.65);dummy.rotateZ(Math.PI/4);dummy.scale.setScalar(1);dummy.updateMatrix();pickups.setMatrixAt(i,dummy.matrix);});pickups.commit();prepareView();};tick(0);pickups.commit(true);
   return {group,track,animated,boxes:[],coins:[],prepareView,update:tick,dispose(){disposeObject(group);}};
 }

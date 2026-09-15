@@ -2,12 +2,15 @@ import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createGroundAtmosphere, createOceanMaterial, createTerrainMaterial } from './ground-atmosphere';
 import { disposeObject } from './dispose';
-import { TRACKS, groundHeight as terrainHeight, nearest, roadHeight, sample, type Track, sectorAt } from './tracks';
+import { createCoinViews, createPickupInstances } from './powerup-models';
+import { TRACKS, groundHeight as terrainHeight, nearest, sample, surfaceFrame, type Track, sectorAt } from './tracks';
 import { courseScenery } from './course-scenery';
 import { createRainbowWorld } from './rainbow-world';
 import type { Racer, TrackId } from './types';
+import { createTurnGuides } from './turn-guides';
 
 const material=(color: T.ColorRepresentation,roughness=.8)=>new T.MeshStandardMaterial({color,roughness});
+const pickupBasis=(frame:ReturnType<typeof surfaceFrame>)=>new T.Matrix4().makeBasis(new T.Vector3(frame.right.x,frame.right.y,frame.right.z),new T.Vector3(frame.up.x,frame.up.y,frame.up.z),new T.Vector3(frame.forward.x,frame.forward.y,frame.forward.z));
 function palmFrond() {
   const p:number[]=[],indices:number[]=[];
   for(let i=0;i<=8;i++){const t=i/8;for(const side of [-1,1])p.push(side*Math.sin(t*Math.PI)*.32,Math.sin(t*Math.PI)*.2-t*t*.35,t*2);if(i<8){const k=i*2;indices.push(k,k+2,k+1,k+1,k+2,k+3);}}
@@ -51,6 +54,7 @@ export type World={group:T.Group;track:Track;animated:T.Object3D[];boxes:T.Objec
 export function createWorld(id:TrackId):World {
   if(id==='rainbow')return createRainbowWorld();
   const track=TRACKS[id],group=new T.Group(),animated:T.Object3D[]=[],itemBoxes:T.Object3D[]=[],coins:T.Object3D[]=[];
+  group.add(createTurnGuides(track));
   const atmosphere=createGroundAtmosphere(track);group.add(atmosphere.group);let oceanMaterial:T.MeshStandardMaterial|undefined;
   const night=id==='midnight';let seed=1237;
   const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
@@ -107,15 +111,12 @@ export function createWorld(id:TrackId):World {
   for(const s of track.boosts) {
     for(let i=0;i<5;i++){const p=sample(track,s+(i-2)*1.8/track.length);decor.push({position:[p.x,p.y+.12,p.z],scale:[8,.1,.8],color:night?'#c699ff':'#63e9e4',rotation:[0,p.heading,0]});}
   }
-  for(const s of track.boxes)for(const offset of [-5,0,5]) {
-    const p=sample(track,s,offset),g=new T.Group();g.position.set(p.x,roadHeight(track,s,offset)+2,p.z);
-    const cube=new T.Mesh(new T.BoxGeometry(1.7,1.7,1.7),new T.MeshStandardMaterial({color:'#88f5f1',emissive:'#14b4cf',emissiveIntensity:.7,metalness:.15,roughness:.2,transparent:true,opacity:.85}));
-    const edge=new T.LineSegments(new T.EdgesGeometry(cube.geometry),new T.LineBasicMaterial({color:'#ffffff'}));cube.add(edge);g.add(cube);group.add(g);itemBoxes.push(g);
-  }
-  for(const location of track.coins) {
-    const p=sample(track,location.s,location.offset);
-    const coin=new T.Mesh(new T.CylinderGeometry(.55,.55,.12,12),new T.MeshStandardMaterial({color:'#ffdf64',emissive:'#b8790c',emissiveIntensity:.4,metalness:.65,roughness:.25}));coin.rotation.x=Math.PI/2;coin.position.set(p.x,roadHeight(track,location.s,location.offset)+1.5,p.z);group.add(coin);animated.push(coin);coins.push(coin);
-  }
+  const boxLocations=track.boxes.flatMap(s=>[-5,0,5].map(offset=>({s,offset}))),coinModels=createPickupInstances('field_coin',track.coins.length),boxModels=createPickupInstances('item_box',boxLocations.length),pickupDummy=new T.Object3D();let pickupTime=0;
+  group.add(coinModels.group,boxModels.group);
+  const coinViews=createCoinViews(coinModels,track.coins.map(coin=>{const frame=surfaceFrame(track,coin.s,coin.offset,1.5);return {position:new T.Vector3(frame.position.x,frame.position.y,frame.position.z),quaternion:new T.Quaternion().setFromRotationMatrix(pickupBasis(frame))};}));
+  const prepareView=(racer?:Racer)=>coinViews(pickupTime,index=>!!racer?.coinsTaken?.includes((racer.lap-1)*track.coins.length+index));
+  const updatePickups=(time:number)=>{pickupTime=time;boxLocations.forEach((box,index)=>{const frame=surfaceFrame(track,box.s,box.offset,2.2+Math.sin(time*2+index)*.22);pickupDummy.position.set(frame.position.x,frame.position.y,frame.position.z);pickupDummy.quaternion.setFromRotationMatrix(pickupBasis(frame));pickupDummy.rotateY(time*.65);pickupDummy.rotateZ(Math.PI/4);pickupDummy.scale.setScalar(1);pickupDummy.updateMatrix();boxModels.setMatrixAt(index,pickupDummy.matrix);});boxModels.commit();prepareView();};
+  updatePickups(0);coinModels.commit(true);boxModels.commit(true);
   for(let i=0;i<650;i++) {
     const s=random(),side=random()>.5?1:-1,offset=side*(22+random()*115),p=sample(track,s,offset);
     const n=nearest(track,p.x,p.z);if(n.distance<(id==='canyon'?40:id==='midnight'?33:23))continue;
@@ -162,6 +163,7 @@ export function createWorld(id:TrackId):World {
   const features=courseScenery(track);group.add(features.group);animated.push(...features.animated);
   // Course landmarks are deliberately larger than roadside detail, making each sector recognizable.
   for(let sector=0;sector<8;sector++) {
+    if(id==='coast'&&sector<4)continue; // Authored harbor and lighthouse kit owns this reference stretch.
     const p=sample(track,(sector+.3)/8,(sector%2?1:-1)*65),g=new T.Group();g.position.set(p.x,terrainHeight(track,p.x,p.z)-.3,p.z);
     if(id==='coast') {
       if(sector%2===0) {
@@ -195,5 +197,5 @@ export function createWorld(id:TrackId):World {
   }
   instances(group,box,markings);instances(group,box,curbs);instances(group,box,posts);instances(group,box,rails);
   instances(group,cylinder,trunks,false,true);instances(group,frond,leaves,false,true);instances(group,sphere,rocks,false,true);instances(group,box,buildings,false,true);instances(group,cone,roofs,false,true);instances(group,night?windowPane:box,windows,night);instances(group,box,lights,true);instances(group,box,decor,true);
-  return {group,track,animated,boxes:itemBoxes,coins,update(time){atmosphere.update(time);oceanMaterial?.userData.update(time);},dispose(){disposeObject(group);}};
+  return {group,track,animated,boxes:itemBoxes,coins,prepareView,update(time){atmosphere.update(time);oceanMaterial?.userData.update(time);updatePickups(time);},dispose(){disposeObject(group);}};
 }

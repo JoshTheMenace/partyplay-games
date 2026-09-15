@@ -1,14 +1,17 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createRacerEffects } from './item-visuals';
-import { DRIVERS } from './types';
+import { createKartChassisModel, createKartDriverModel, type KartDriverModel } from './powerup-models';
+import { DRIVERS, type Item } from './types';
 
 export type Kart={
-  group:T.Group;wheels:T.Mesh[];body:T.Group;shield:T.Mesh;
+  group:T.Group;wheels:T.Object3D[];body:T.Group;shield:T.Mesh;
   /** Layered exhaust glow behind both pipes. Origin is the exhaust plane, so scale.z stretches the plume backwards. */
   flame:T.Group;shadow:T.Mesh;effects:T.Group;driver:number;
+  /** The currently held GLB powerup, floating independently above the driver. */
+  heldItem:T.Group;heldItemId:Item|null;
   /** Articulation pivots, all at rotation 0 when built. Positions are in body space (head, arms, steer) or kart space (frontWheels). */
-  head?:T.Group;arms?:[T.Group,T.Group];steer?:T.Group;frontWheels?:T.Group[];
+  head?:T.Group;arms?:[T.Group,T.Group];driverArms?:KartDriverModel['arms'];steer?:T.Group;frontWheels?:T.Group[];
 };
 function roundedBox(w:number,h:number,d:number,r=.08){
   const shape=new T.Shape();shape.moveTo(-w/2+r,-h/2);shape.lineTo(w/2-r,-h/2);shape.quadraticCurveTo(w/2,-h/2,w/2,-h/2+r);shape.lineTo(w/2,h/2-r);shape.quadraticCurveTo(w/2,h/2,w/2-r,h/2);shape.lineTo(-w/2+r,h/2);shape.quadraticCurveTo(-w/2,h/2,-w/2,h/2-r);shape.lineTo(-w/2,-h/2+r);shape.quadraticCurveTo(-w/2,-h/2,-w/2+r,-h/2);
@@ -26,25 +29,24 @@ function pivotAt(g:T.Group,x:number,y:number,z:number) {
 }
 export function createKart(driver:number):Kart {
   const d=DRIVERS[driver%DRIVERS.length],group=new T.Group(),body=new T.Group();group.rotation.order='YXZ';group.add(body);
+  const chassis=createKartChassisModel(d.color),driverModel=createKartDriverModel(d.color,d.accent,d.animal);
   const paint=new T.MeshStandardMaterial({color:d.color,roughness:.28,metalness:.3}),dark=new T.MeshStandardMaterial({color:'#202937',roughness:.65}),fur=new T.MeshStandardMaterial({color:d.accent,roughness:.88}),white=new T.MeshStandardMaterial({color:'#fff5dd',roughness:.6}),metal=new T.MeshStandardMaterial({color:'#9db8c5',metalness:.8,roughness:.24}),gold=new T.MeshStandardMaterial({color:'#ffc14a',roughness:.5});
   // Articulated groups. Parts are authored in body space and re-based onto their pivots at the end.
-  const head=new T.Group(),armL=new T.Group(),armR=new T.Group(),steer=new T.Group();
+  const head=new T.Group(),armL=new T.Group(),armR=new T.Group(),steer=chassis?.steer??new T.Group();
   let target:T.Object3D=body;
   const part=(geometry:T.BufferGeometry,mat:T.Material,x:number,y:number,z:number,parent:T.Object3D=target)=>{const mesh=new T.Mesh(geometry,mat);mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;parent.add(mesh);return mesh;};
   const oval=(mat:T.Material,x:number,y:number,z:number,sx:number,sy:number,sz:number)=>{const mesh=part(new T.SphereGeometry(1,16,10),mat,x,y,z);mesh.scale.set(sx,sy,sz);return mesh;};
-  part(roundedBox(1.75,.42,2.65),paint,0,.76,0);part(roundedBox(1.9,.15,2.8,.04),dark,0,.5,0);
-  oval(paint,0,.88,.81,.84,.37,.95);part(roundedBox(.24,.035,1.25,.01),white,0,1.14,.62);
-  for(const side of [-1,1]){
-    part(roundedBox(.32,.38,1.65),paint,side*.92,.75,-.1);
-    part(roundedBox(.17,.06,1.4,.02),white,side*.94,.96,-.08);
-    part(new T.CylinderGeometry(.065,.065,.7,8),metal,side*.72,1.2,-1.1);
-    const exhaust=part(new T.CylinderGeometry(.16,.16,.42,12),metal,side*.61,.68,-1.42);exhaust.rotation.x=Math.PI/2;
-    const hole=part(new T.CircleGeometry(.11,12),dark,side*.61,.68,-1.64);hole.rotation.y=Math.PI;
-    part(roundedBox(.3,.12,.07,.025),new T.MeshBasicMaterial({color:'#ff5d51'}),side*.6,.97,-1.36);
+  if(chassis)body.add(chassis.body);else{
+    part(roundedBox(1.75,.42,2.65),paint,0,.76,0);part(roundedBox(1.9,.15,2.8,.04),dark,0,.5,0);
+    oval(paint,0,.88,.81,.84,.37,.95);part(roundedBox(.24,.035,1.25,.01),white,0,1.14,.62);
+    for(const side of [-1,1]){
+      part(roundedBox(.32,.38,1.65),paint,side*.92,.75,-.1);part(roundedBox(.17,.06,1.4,.02),white,side*.94,.96,-.08);part(new T.CylinderGeometry(.065,.065,.7,8),metal,side*.72,1.2,-1.1);
+      const exhaust=part(new T.CylinderGeometry(.16,.16,.42,12),metal,side*.61,.68,-1.42);exhaust.rotation.x=Math.PI/2;const hole=part(new T.CircleGeometry(.11,12),dark,side*.61,.68,-1.64);hole.rotation.y=Math.PI;part(roundedBox(.3,.12,.07,.025),new T.MeshBasicMaterial({color:'#ff5d51'}),side*.6,.97,-1.36);
+    }
+    part(roundedBox(2.05,.13,.48,.04),paint,0,1.59,-1.17);part(roundedBox(.25,.015,.48,.005),white,0,1.67,-1.17);for(const side of [-1,1])part(roundedBox(.1,.35,.55,.04),dark,side*1.03,1.64,-1.17);
+    const seat=part(roundedBox(.85,.9,.42),dark,0,1.2,-.51);seat.rotation.x=-.15;
   }
-  part(roundedBox(2.05,.13,.48,.04),paint,0,1.59,-1.17);part(roundedBox(.25,.015,.48,.005),white,0,1.67,-1.17);
-  for(const side of [-1,1])part(roundedBox(.1,.35,.55,.04),dark,side*1.03,1.64,-1.17);
-  const seat=part(roundedBox(.85,.9,.42),dark,0,1.2,-.51);seat.rotation.x=-.15;
+  if(driverModel)body.add(driverModel.root);else{
   oval(paint,0,1.57,-.23,.49,.57,.43);
   for(const side of [-1,1]){const shoulder=part(roundedBox(.13,.56,.08,.03),white,side*.27,1.76,-.55);shoulder.rotation.z=side*.12;}
   const isBird=d.animal==='penguin'||d.animal==='duck',isFrog=d.animal==='frog';
@@ -83,16 +85,14 @@ export function createKart(driver:number):Kart {
   if(d.animal==='raccoon')for(let i=0;i<5;i++)oval(i%2?dark:fur,.42+i*.055,1.1+i*.11,-.65-i*.08,.19,.16,.17);
   if(d.animal==='rabbit'||d.animal==='bear')oval(fur,0,1.16,-.77,.22,.21,.19);
   // Steering wheel: rim, three spokes, and hub in a tilted group; the column stays on the body.
-  const column=part(new T.CylinderGeometry(.04,.04,.48,8),metal,0,1.33,.42);column.rotation.x=.6;
-  steer.position.set(0,1.57,.54);steer.rotation.x=-.65;
-  part(new T.TorusGeometry(.29,.045,6,20),dark,0,0,0,steer);
-  for(let i=0;i<3;i++){const spoke=part(roundedBox(.045,.27,.035,.01),metal,Math.sin(i*Math.PI*2/3)*.135,Math.cos(i*Math.PI*2/3)*.135,0,steer);spoke.rotation.z=-i*Math.PI*2/3;}
-  const hub=part(new T.CylinderGeometry(.075,.075,.06,10),paint,0,0,0,steer);hub.rotation.x=Math.PI/2;
+  if(!chassis){const column=part(new T.CylinderGeometry(.04,.04,.48,8),metal,0,1.33,.42);column.rotation.x=.6;steer.position.set(0,1.57,.54);steer.rotation.x=-.65;part(new T.TorusGeometry(.29,.045,6,20),dark,0,0,0,steer);for(let i=0;i<3;i++){const spoke=part(roundedBox(.045,.27,.035,.01),metal,Math.sin(i*Math.PI*2/3)*.135,Math.cos(i*Math.PI*2/3)*.135,0,steer);spoke.rotation.z=-i*Math.PI*2/3;}const hub=part(new T.CylinderGeometry(.075,.075,.06,10),paint,0,0,0,steer);hub.rotation.x=Math.PI/2;}
   pivotAt(head,0,1.95,-.16);pivotAt(armL,-.46,1.8,-.02);pivotAt(armR,.46,1.8,-.02);
   body.add(head,armL,armR,steer);
+  }
+  if(driverModel)body.add(steer);
   // Wheels: rear pairs sit directly on the kart; front pairs sit in yaw pivots so the renderer can point them into the turn.
-  const wheels:T.Mesh[]=[],frontWheels:T.Group[]=[];
-  for(const x of [-1,1])for(const z of [-.88,.87]){
+  const wheels:T.Object3D[]=chassis?.wheels??[],frontWheels:T.Group[]=chassis?.frontWheels??[];
+  if(chassis)group.add(...chassis.wheelRoots);else for(const x of [-1,1])for(const z of [-.88,.87]){
     const front=z>0,parent=front?new T.Group():group;
     if(front){parent.position.set(x,.46,z);group.add(parent);frontWheels.push(parent as T.Group);}
     const at=front?0:x,ay=front?0:.46,az=front?0:z;
@@ -112,7 +112,8 @@ export function createKart(driver:number):Kart {
     const mesh=new T.Mesh(merged,new T.MeshBasicMaterial({color,transparent:true,opacity,blending:T.AdditiveBlending,depthWrite:false,toneMapped:false}));mesh.renderOrder=2;flame.add(mesh);
   }
   // Bake static details by material. Articulated groups are baked separately so each stays one draw call per material.
-  bake(body);bake(head);bake(armL);bake(armR);bake(steer);
+  if(!driverModel){bake(body);bake(head);bake(armL);bake(armR);bake(steer);}
   const effects=createRacerEffects();group.add(effects);
-  return {group,wheels,body,shield,flame,shadow,effects,driver,head,arms:[armL,armR],steer,frontWheels};
+  const heldItem=new T.Group();heldItem.position.y=4.15;heldItem.scale.setScalar(.72);group.add(heldItem);
+  return {group,wheels,body,shield,flame,shadow,effects,heldItem,heldItemId:null,driver,head:driverModel?.head??head,arms:driverModel?undefined:[armL,armR],driverArms:driverModel?.arms,steer,frontWheels};
 }

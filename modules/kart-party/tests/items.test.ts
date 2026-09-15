@@ -27,8 +27,9 @@ void test('all twelve items have complete metadata and deterministic placement-w
   assert.equal(seen.size,12);assert.ok(rearPower>frontPower*2);
 });
 void test('Comet Kick grants a bounded boost and Bubble Guard blocks exactly one attack',()=>{
-  const {race,a}=setup('boost');activateItem(race,a);assert.equal(a.boost,2.3);assert.equal(a.item,null);
+  const {race,a}=setup('boost');activateItem(race,a);assert.equal(a.boost,2.3);assert.equal(a.item,null);assert.deepEqual(race.events.at(-1)?.item,'boost');assert.equal(race.events.at(-1)?.type,'use');
   a.item='shield';activateItem(race,a);assert.equal(a.shield,7);a.coins=5;hit(race,a);assert.equal(a.shield,0);assert.equal(a.stun,0);assert.equal(a.coins,5);
+  assert.equal(race.events.at(-1)?.effect,'shield');
   hit(race,a);assert.equal(a.stun,1.2);assert.equal(a.coins,3);
 });
 void test('Seeker Beetle homes toward a rival and excludes finishers as targets',()=>{

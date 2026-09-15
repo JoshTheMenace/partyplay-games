@@ -88,9 +88,10 @@ export function nearest(track: Track,x: number,z: number) {
   const m=track.magnetic;if(m){const base=result.s;result.s=(base*m.baseLength+(base>=m.baseTo?m.length-(m.baseTo-m.baseFrom)*m.baseLength:0))/track.length;}
   return result;
 }
-export function groundHeight(track:Track,x:number,z:number) {
+/** `near` lets a caller that already holds nearest(track,x,z) for these exact coordinates skip a second scan. */
+export function groundHeight(track:Track,x:number,z:number,near?:ReturnType<typeof nearest>) {
   if(track.id==='rainbow')return -900;
-  const p=nearest(track,x,z),road=sample(track,p.s),wave=Math.sin(x*.018)*Math.cos(z*.016);
+  const p=near??nearest(track,x,z),road=sample(track,p.s),wave=Math.sin(x*.018)*Math.cos(z*.016);
   // Coarse terrain triangles need a wide flat shoulder to stay below the road.
   let y=road.y-.65+clamp((p.distance-track.width/2-24)/45,0,1)*wave*(track.id==='canyon'?13:4);
   if(track.id==='coast')y-=Math.max(0,p.distance-65)*.28;

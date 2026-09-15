@@ -5,6 +5,7 @@ import type { Race, Racer } from '../types';
 import { TRACKS } from '../tracks';
 import { ArcadeButton, DriverAvatar, Eyebrow, Logo, Panel, Spinner } from './primitives';
 import { DIFFICULTY_LABEL, driverOf, formatGap, formatTime, ordinal, ordinalSuffix, standings, speedLabel } from './format';
+import { partyAwards } from '../awards';
 
 const PODIUM_HEIGHT = ['h-32 sm:h-40', 'h-24 sm:h-30', 'h-16 sm:h-22'];
 const PODIUM_ORDER = [1, 0, 2];
@@ -99,6 +100,7 @@ export function ResultsScreen({ game }: { game: GameClient }) {
   const controlsRematch = isSolo || isHost;
   const isController = game.mode === 'controller';
   const pending = race.phase !== 'results';
+  const awards=partyAwards(race);
 
   return (
     <div className="kp-layer kp-scroll">
@@ -139,6 +141,13 @@ export function ResultsScreen({ game }: { game: GameClient }) {
             <StandingsTable race={race} order={order} playerId={game.playerId} />
           </Panel>
         </div>
+
+        <Panel className="kp-anim-up kp-delay-2 p-4 sm:p-5">
+          <Eyebrow className="mb-3">Party awards</Eyebrow>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+            {awards.map(award=>{const d=driverOf(award.racer.driver);return <div key={award.id} className="rounded-2xl border-2 bg-kp-ink/45 p-3" style={{borderColor:d.color}}><span className="block text-[10px] font-black uppercase tracking-widest text-kp-cream/55">{award.blurb}</span><strong className="kp-display block truncate text-kp-sun">{award.title}</strong><span className="block truncate font-black" style={{color:d.color}}>{award.racer.name}</span><small className="kp-numeral text-kp-cream/70">{award.value}</small></div>;})}
+          </div>
+        </Panel>
 
         <div className="mt-auto flex flex-col gap-3 sm:flex-row sm:justify-center">
           {controlsRematch ? (

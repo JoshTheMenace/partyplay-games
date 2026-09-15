@@ -1,4 +1,4 @@
-import { useId, useMemo } from 'react';
+import React, { useId, useMemo } from 'react';
 import type { CSSProperties } from 'react';
 import { cn } from '../../lib/utils';
 import type { Hazard, Racer, TrackId } from '../types';

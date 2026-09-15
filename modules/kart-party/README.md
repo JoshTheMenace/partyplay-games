@@ -16,6 +16,6 @@ The game keeps its own race protocol and lobby. Its WebSocket endpoint is `/kart
 
 `game/` contains simulation, renderer and UI. `server/party-server.ts` can mount on the collection server while the original standalone factory remains available for its focused tests. `app/globals.css` builds separately so its Tailwind styles cannot alter the other games. Public music/fonts live under `public/games/kart-party/` in the repository root. `vite.kart.config.ts` and `scripts/build-collection.mjs` build both clients and one server into each isolated run.
 
-The retained 350 focused tests cover original mechanics, networking and rendering contracts. Root `tests/kart-mount.test.ts` additionally verifies both game protocols on one server and namespaced QR links. Browser acceptance of the migrated build is recorded in `output/dashboard/QA.md`; static tests do not prove physical-device behavior.
+The focused test suite covers mechanics, networking, rendering contracts, shared runtime timing, and namespaced asset delivery. Static tests do not prove physical-device behavior, so phone and shared-display acceptance remains part of release validation.
 
 See [PROVENANCE.md](PROVENANCE.md) for imported scope and [REFERENCE.md](REFERENCE.md) for the original standalone documentation.
