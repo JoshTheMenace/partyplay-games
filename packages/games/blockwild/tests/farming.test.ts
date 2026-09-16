@@ -1,6 +1,9 @@
+import { write } from '../src/chunk-world';
+import type { State as WorldState } from '../src/server';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rules, craft, restoreWorld, serializeWorld } from '../src/server';
+import { rules } from './legacy';
+import { craft, restoreWorld, serializeWorld } from '../src/server';
 import { aimedAnimal, animalLoot, feedAnimal, tickAnimals, ANIMAL_LIMIT } from '../src/animals';
 import { farmUse, harvestCrop, plantCrop, tickCrops } from '../src/farming';
 import { drops } from '../src/bedrock';
@@ -9,10 +12,10 @@ import { BENCH, CARROT, FARMLAND, GRAIN, POTATO, SEEDS, SHORT_GRASS, STICK, WILD
 import { assertSerializable } from '../../../party-contract/src/serializable';
 const ctx={roomId:'farm',roundId:'f',seed:1,nowMs:0,players:[{id:'p',name:'Farmer',color:'#abcabc'}]};
 const make=()=>rules.create(ctx,rules.validateSettings({seed:38471}));
-const edit=(s:ReturnType<typeof make>,i:number,b:number)=>{s.grid[i]=b;s.edits.set(i,b);s.revision++;return true;};
+const edit=(s:WorldState,i:number,b:number)=>{write(s.grid,i,b);s.edits.set(i,b);s.revision++;return true;};
 function flat(){const s=make();s.grid.fill(0);s.base.fill(0);s.edits.clear();s.animals=[];for(let x=0;x<128;x++)for(let z=0;z<128;z++)s.grid[index(x,5,z)]=1;Object.assign(s.players[0]!,{x:64.5,y:6,z:66.5,yaw:0,pitch:-.9});return s;}
 function cow(id=1,x=64.5,z=64.5):Animal{return{id,kind:'cow',x,y:6,z,yaw:0,health:5,adultAt:0,loveUntil:0,breedAt:0,hitAt:0};}
-test('new terrain has walk-through short grass and region-specific crop discoveries; old terrain unchanged',()=>{const s=make();assert.equal(s.terrainVersion,5);for(const id of [SHORT_GRASS,WILD_CARROT,WILD_POTATO])assert.ok(s.grid.includes(id));assert.ok(!terrain(38471,4).includes(SHORT_GRASS));assert.equal(s.animals.length,16);assert.deepEqual(new Set(s.animals.map(a=>a.kind)),new Set(['cow','sheep','pig','chicken']));});
+test('new terrain has walk-through short grass and region-specific crop discoveries; old terrain unchanged',()=>{const s=make();assert.equal(s.terrainVersion,6);for(const id of [SHORT_GRASS,WILD_CARROT,WILD_POTATO])assert.ok(s.grid.includes(id));assert.ok(!terrain(38471,4).includes(SHORT_GRASS));assert.equal(s.animals.length,16);assert.deepEqual(new Set(s.animals.map(a=>a.kind)),new Set(['cow','sheep','pig','chicken']));});
 test('seeds come from short grass, never leaves or grass blocks in new worlds',()=>{let seeds=0;for(let i=0;i<1000;i++){assert.equal(drops(1,i,42)[SEEDS],undefined);assert.equal(drops(5,i,42)[SEEDS],undefined);assert.equal(drops(20,i,42)[SEEDS],undefined);seeds+=drops(SHORT_GRASS,i,42)[SEEDS]??0;}assert.ok(seeds>80&&seeds<180);assert.deepEqual(drops(WILD_CARROT,0,0),{[CARROT]:1});assert.deepEqual(drops(WILD_POTATO,0,0),{[POTATO]:1});});
 test('hoe crafting, tilling, planting, hydration, harvesting and replanting form one loop',()=>{const s=flat(),p=s.players[0]!,i=index(64,5,65);p.inventory={10:2,[STICK]:2,[SEEDS]:2};edit(s,index(63,6,66),BENCH);craft(s,p,'wood-hoe');p.selected=WOOD_HOE;assert.equal(farmUse(s,p,edit),true);assert.equal(s.grid[i],FARMLAND);p.selected=SEEDS;assert.equal(farmUse(s,p,edit),true);assert.equal(p.inventory[SEEDS],1);edit(s,index(60,5,65),6);for(let n=0;n<180;n++){s.time++;tickCrops(s,1);}assert.ok(s.farms[0]!.readyAt<=s.time);harvestCrop(s,p,i);assert.equal(p.inventory[GRAIN],1);assert.equal(p.inventory[SEEDS],3);plantCrop(s,p,i);assert.equal(s.farms.length,1);});
 test('plain dirt, blocked soil, missing hoe and empty seed stacks cannot plant for free',()=>{const s=flat(),p=s.players[0]!,i=index(64,5,65);p.inventory={[SEEDS]:2};assert.throws(()=>plantCrop(s,p,i),/hoe/);p.selected=WOOD_HOE;assert.throws(()=>farmUse(s,p,edit),/hoe/);assert.equal(s.grid[i],1);edit(s,i,FARMLAND);p.selected=SEEDS;p.inventory[SEEDS]=0;assert.throws(()=>plantCrop(s,p,i),/Gather/);assert.equal(s.farms.length,0);});

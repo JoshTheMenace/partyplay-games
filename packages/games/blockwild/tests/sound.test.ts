@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rules, craft, serializeWorld, restoreWorld } from '../src/server';
+import { rules } from './legacy';
+import { craft, serializeWorld, restoreWorld } from '../src/server';
 import { homesteadAction } from '../src/survival';
 import { emitSound, SoundCursor, SOUND_LIMIT } from '../src/sound-events';
 import { eventCue, material, spatial, WorldSoundTracker } from '../src/soundscape';

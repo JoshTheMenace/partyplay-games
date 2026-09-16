@@ -1,8 +1,14 @@
 import { isPlant, SHORT_GRASS, WILD_CARROT, WILD_POTATO, W, H, PLAYER_RADIUS, COAL, IRON_ORE, type TerrainVersion, index, solid } from './model';
 import { legacyTerrain } from './legacy';
-export function hash(x: number, z: number, seed: number) { let n = Math.imul(x + seed, 374761393) ^ Math.imul(z + 31, 668265263); n = Math.imul(n ^ n >>> 13, 1274126177); return ((n ^ n >>> 16) >>> 0) / 4294967296; }
-export function terrain(seed:number,_version:TerrainVersion=2) {
-  if(_version>=3){const grid=naturalTerrain(seed);if(_version>=4)for(let i=0;i<grid.length;i++)if(grid[i]===7&&grid[i+W*W]===6&&hash(i,4,seed)<.35)grid[i]=47;if(_version>=5)for(let x=2;x<W-2;x++)for(let z=2;z<W-2;z++)for(let y=1;y<H-1;y++)if(grid[index(x,y,z)]===1&&grid[index(x,y+1,z)]===0&&hash(x,z,seed+17)<.28)grid[index(x,y+1,z)]=x<45&&z>55&&hash(x,z,seed+32)<.12?WILD_CARROT:z<45&&hash(x,z,seed+32)<.12?WILD_POTATO:SHORT_GRASS;return grid;}
+export { hash } from './noise';
+import { hash } from './noise';
+import { ChunkWorld, type Grid } from './chunk-world';
+export function terrain(seed:number):Uint8Array;
+export function terrain(seed:number,_version:Exclude<TerrainVersion,7>):Uint8Array;
+export function terrain(seed:number,_version?:TerrainVersion):Grid;
+export function terrain(seed:number,_version:TerrainVersion=2):Grid {
+  if(_version===7)return new ChunkWorld(seed);
+  if(_version>=3){const grid=naturalTerrain(seed,_version>=6);if(_version>=4)for(let i=0;i<grid.length;i++)if(grid[i]===7&&grid[i+W*W]===6&&hash(i,4,seed)<.35)grid[i]=47;if(_version>=5)for(let x=2;x<W-2;x++)for(let z=2;z<W-2;z++)for(let y=1;y<H-1;y++)if(grid[index(x,y,z)]===1&&grid[index(x,y+1,z)]===0&&hash(x,z,seed+17)<.28)grid[index(x,y+1,z)]=x<45&&z>55&&hash(x,z,seed+32)<.12?WILD_CARROT:z<45&&hash(x,z,seed+32)<.12?WILD_POTATO:SHORT_GRASS;return grid;}
   const grid=new Uint8Array(W*W*H),old=legacyTerrain(seed);
   for(let x=0;x<W;x++)for(let z=0;z<W;z++){
     const edge=Math.min(x,z,W-1-x,W-1-z),channel=Math.min(Math.abs(x-32),Math.abs(x-95),Math.abs(z-32),Math.abs(z-95));
@@ -22,7 +28,7 @@ export function terrain(seed:number,_version:TerrainVersion=2) {
   return grid;
 }
 // Continuous terrain: resources occur throughout the world, with no authored route.
-function naturalTerrain(seed:number){
+function naturalTerrain(seed:number,deepDiamonds=false){
   const grid=new Uint8Array(W*W*H),heights=new Uint8Array(W*W);
   for(let x=0;x<W;x++)for(let z=0;z<W;z++){
     const edge=Math.min(x,z,W-1-x,W-1-z),river=Math.abs(x-(29+Math.sin(z*.055+seed)*8));
@@ -34,6 +40,12 @@ function naturalTerrain(seed:number){
       grid[index(x,y,z)]=y===0?14:y>h?6:cave?0:y===h?(h<7||desert?7:snow?19:1):y>h-3?(desert?7:2):ore>.977&&y<10?9:ore>.94?IRON_ORE:ore>.89?8:ore>.83?COAL:3;
     }
   }
+  // A low Y alone is shallow under beaches. Require ten layers of cover across nearby slopes too.
+  if(deepDiamonds)for(let x=0;x<W;x++)for(let z=0;z<W;z++){
+    let roof=heights[x+z*W]!;
+    for(let dx=-4;dx<=4;dx++)for(let dz=-4;dz<=4;dz++)roof=Math.min(roof,x+dx<0||z+dz<0||x+dx>=W||z+dz>=W?0:heights[x+dx+(z+dz)*W]!);
+    for(let y=1;y<10;y++)if(grid[index(x,y,z)]===9&&(y>5||roof-y<10))grid[index(x,y,z)]=3;
+  }
   for(let x=3;x<W-3;x++)for(let z=3;z<W-3;z++){
     const h=heights[x+z*W]!;if(grid[index(x,h,z)]!==1||hash(x,z,seed)<.972||Math.hypot(x-64,z-66)<3)continue;
     for(let y=1;y<=4;y++)grid[index(x,h+y,z)]=4;
@@ -41,6 +53,6 @@ function naturalTerrain(seed:number){
   }
   return grid;
 }
-export function block(grid: Uint8Array,x: number,y: number,z: number) { x=Math.floor(x);y=Math.floor(y);z=Math.floor(z); return x<0||z<0||x>=W||z>=W||y<0?14:y>=H?0:grid[index(x,y,z)]!; }
-export function fits(grid: Uint8Array,x: number,y: number,z: number) { for(let a=Math.floor(x-PLAYER_RADIUS);a<=Math.floor(x+PLAYER_RADIUS);a++) for(let b=Math.floor(y+.01);b<=Math.floor(y+1.74);b++) for(let c=Math.floor(z-PLAYER_RADIUS);c<=Math.floor(z+PLAYER_RADIUS);c++) if(solid(block(grid,a,b,c))) return false; return true; }
-export function ray(grid: Uint8Array,x: number,y: number,z: number,yaw: number,pitch: number,reach=5,ignorePlants=false,hitWater=false) { const dx=-Math.sin(yaw)*Math.cos(pitch),dy=Math.sin(pitch),dz=-Math.cos(yaw)*Math.cos(pitch); let previous={x:Math.floor(x),y:Math.floor(y),z:Math.floor(z)}; for(let d=0;d<=reach;d+=.025) { const p={x:Math.floor(x+dx*d),y:Math.floor(y+dy*d),z:Math.floor(z+dz*d)}; if((hitWater?block(grid,p.x,p.y,p.z)!==0:![0,6].includes(block(grid,p.x,p.y,p.z)))&&!(ignorePlants&&isPlant(block(grid,p.x,p.y,p.z)))) return { ...p, i:index(p.x,p.y,p.z), previous, distance:d }; previous=p; } return null; }
+export function block(grid: Grid,x: number,y: number,z: number) { x=Math.floor(x);y=Math.floor(y);z=Math.floor(z); if(grid instanceof ChunkWorld)return grid.get(x,y,z);return x<0||z<0||x>=W||z>=W||y<0?14:y>=H?0:grid[index(x,y,z)]!; }
+export function fits(grid: Grid,x: number,y: number,z: number) { for(let a=Math.floor(x-PLAYER_RADIUS);a<=Math.floor(x+PLAYER_RADIUS);a++) for(let b=Math.floor(y+.01);b<=Math.floor(y+1.74);b++) for(let c=Math.floor(z-PLAYER_RADIUS);c<=Math.floor(z+PLAYER_RADIUS);c++) if(solid(block(grid,a,b,c))) return false; return true; }
+export function ray(grid: Grid,x: number,y: number,z: number,yaw: number,pitch: number,reach=5,ignorePlants=false,hitWater=false) { const dx=-Math.sin(yaw)*Math.cos(pitch),dy=Math.sin(pitch),dz=-Math.cos(yaw)*Math.cos(pitch); let previous={x:Math.floor(x),y:Math.floor(y),z:Math.floor(z)}; for(let d=0;d<=reach;d+=.025) { const p={x:Math.floor(x+dx*d),y:Math.floor(y+dy*d),z:Math.floor(z+dz*d)}; if((hitWater?block(grid,p.x,p.y,p.z)!==0:![0,6].includes(block(grid,p.x,p.y,p.z)))&&!(ignorePlants&&isPlant(block(grid,p.x,p.y,p.z)))) return { ...p, i:index(p.x,p.y,p.z), previous, distance:d }; previous=p; } return null; }

@@ -1,5 +1,6 @@
+import { activeArea } from './chunk-world';
 import { graze } from './toolkit';
-import { BEEF, CARROT, CHICKEN, FEATHER, GRAIN, H, LEATHER, MUTTON, PORK, POTATO, SEEDS, W, WOOL, solid, type Animal, type AnimalKind } from './model';
+import { inWorld, BEEF, CARROT, CHICKEN, FEATHER, GRAIN, H, LEATHER, MUTTON, PORK, POTATO, SEEDS, W, WOOL, solid, type Animal, type AnimalKind } from './model';
 import { block, hash, ray } from './terrain';
 import { emitSound } from './sound-events';
 import type { Actor, State } from './server';
@@ -35,13 +36,13 @@ export function feedAnimal(s:State,p:Actor,a:Animal){
   if(a.adultAt>s.time)throw new Error('This baby is still growing.');
   if(a.breedAt>s.time)throw new Error(`This ${a.kind} can breed again in ${Math.ceil(a.breedAt-s.time)} seconds.`);
   if(a.loveUntil>s.time)throw new Error('Already fed. Feed a second adult of the same species.');
-  if(s.animals.length>=ANIMAL_LIMIT)throw new Error('This island has room for 48 animals.');
+  if(s.animals.length>=ANIMAL_LIMIT)throw new Error('This world has room for 48 animals.');
   if(s.mode!=='creative')p.inventory[p.selected]--;a.loveUntil=s.time+30;emitSound(s,'eat',a);p.message=`Fed ${a.kind}. Feed another nearby adult to breed them.`;
 }
 export const animalLoot=(a:Animal,time:number):Record<number,number>=>a.adultAt>time?{}:a.kind==='cow'?{[BEEF]:2,[LEATHER]:1}:a.kind==='sheep'?(a.sheared?{[MUTTON]:2}:{[MUTTON]:2,[WOOL]:1}):a.kind==='pig'?{[PORK]:2}:{[CHICKEN]:1,[FEATHER]:1};
 function visible(s:State,a:Animal,b:{x:number;y:number;z:number}){const dx=b.x-a.x,dz=b.z-a.z,dy=b.y+.4-(a.y+.4),d=Math.hypot(dx,dy,dz);const wall=ray(s.grid,a.x,a.y+.4,a.z,Math.atan2(-dx,-dz),Math.atan2(dy,Math.hypot(dx,dz)),d,true);return !wall||wall.distance>d-.2;}
 export function tickAnimals(s:State,dt:number,set?:(s:State,i:number,b:number)=>boolean){
-  for(let n=0,count=s.animals.length;n<count;n++){const a=s.animals[n]!;if(set)graze(s,a,set);
+  for(let n=0,count=s.animals.length;n<count;n++){const a=s.animals[n]!;if(!activeArea(s,a))continue;if(set)graze(s,a,set);
     const mate=a.adultAt<=s.time&&a.loveUntil>s.time?s.animals.find(b=>b!==a&&b.kind===a.kind&&b.adultAt<=s.time&&b.loveUntil>s.time&&Math.hypot(b.x-a.x,b.z-a.z)<8&&visible(s,a,b)):undefined;
     if(mate&&Math.hypot(mate.x-a.x,mate.y-a.y,mate.z-a.z)<1.6&&s.animals.length<ANIMAL_LIMIT){
       const baby={...a,sheared:false,grazeAt:0,id:Math.max(0,...s.animals.map(b=>b.id))+1,health:a.kind==='chicken'?2:5,adultAt:s.time+BABY_SECONDS,loveUntil:0,breedAt:0,hitAt:0};
@@ -64,5 +65,5 @@ export function tickAnimals(s:State,dt:number,set?:(s:State,i:number,b:number)=>
 export function readAnimals(raw:unknown,s:Pick<State,'grid'|'seed'|'time'|'terrainVersion'>):Animal[]{
   if(raw===undefined)return initialAnimals(s);
   if(!Array.isArray(raw)||raw.length>ANIMAL_LIMIT)throw new Error('Invalid animals.');const ids=new Set<number>();
-  return raw.map((a:Animal)=>{if(!a||(a.sheared!==undefined&&typeof a.sheared!=='boolean')||(a.grazeAt!==undefined&&(!Number.isFinite(a.grazeAt)||a.grazeAt<0||a.grazeAt>1e9+300))||!['cow','sheep','pig','chicken'].includes(a.kind)||!Number.isSafeInteger(a.id)||a.id<1||a.id>1e9||ids.has(a.id)||!['x','y','z','yaw','health','hitAt','adultAt','loveUntil','breedAt'].every(k=>Number.isFinite(a[k as keyof Animal]))||a.x<.4||a.z<.4||a.x>W-.4||a.z>W-.4||a.y<1||a.y>H||Math.abs(a.yaw)>Math.PI*2||a.health<=0||a.health>5||[a.hitAt,a.adultAt,a.loveUntil,a.breedAt].some(t=>t<0||t>1e9+BABY_SECONDS))throw new Error('Invalid animal.');ids.add(a.id);return{...(a.sheared!==undefined?{sheared:a.sheared}:{}),...(a.grazeAt!==undefined?{grazeAt:a.grazeAt}:{}),id:a.id,kind:a.kind,x:a.x,y:a.y,z:a.z,yaw:a.yaw,health:a.health,hitAt:a.hitAt,adultAt:a.adultAt,loveUntil:a.loveUntil,breedAt:a.breedAt};});
+  return raw.map((a:Animal)=>{if(!a||(a.sheared!==undefined&&typeof a.sheared!=='boolean')||(a.grazeAt!==undefined&&(!Number.isFinite(a.grazeAt)||a.grazeAt<0||a.grazeAt>1e9+300))||!['cow','sheep','pig','chicken'].includes(a.kind)||!Number.isSafeInteger(a.id)||a.id<1||a.id>1e9||ids.has(a.id)||!['x','y','z','yaw','health','hitAt','adultAt','loveUntil','breedAt'].every(k=>Number.isFinite(a[k as keyof Animal]))||!inWorld(s.terrainVersion,a.x,a.z,.4)||a.y<1||a.y>H||Math.abs(a.yaw)>Math.PI*2||a.health<=0||a.health>5||[a.hitAt,a.adultAt,a.loveUntil,a.breedAt].some(t=>t<0||t>1e9+BABY_SECONDS))throw new Error('Invalid animal.');ids.add(a.id);return{...(a.sheared!==undefined?{sheared:a.sheared}:{}),...(a.grazeAt!==undefined?{grazeAt:a.grazeAt}:{}),id:a.id,kind:a.kind,x:a.x,y:a.y,z:a.z,yaw:a.yaw,health:a.health,hitAt:a.hitAt,adultAt:a.adultAt,loveUntil:a.loveUntil,breedAt:a.breedAt};});
 }

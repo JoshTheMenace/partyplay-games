@@ -1,6 +1,9 @@
+import { write } from '../src/chunk-world';
+import type { State as WorldState } from '../src/server';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rules, craft, serializeWorld, restoreWorld } from '../src/server';
+import { rules } from './legacy';
+import { craft, serializeWorld, restoreWorld } from '../src/server';
 import { bedSpawn, canRemove, homesteadAction, readHomestead, sleepTick } from '../src/survival';
 import { BED, BENCH, BERRIES, BREAD, CHEST, COAL, FARMLAND, FURNACE, GRAIN, INGOT, IRON_ORE, IRON_PICK, SEEDS, TOOL, W, H, EDIT_LIMIT, PALETTE, index, neutral, type Action } from '../src/model';
 import { terrain, fits } from '../src/terrain';
@@ -8,7 +11,7 @@ import { assertSerializable } from '../../../party-contract/src/serializable';
 const ctx={roomId:'r',roundId:'g',seed:99,nowMs:0,players:Array.from({length:10},(_,i)=>({id:`p${i}`,name:`EXPLORER${String(i).padStart(8,'0')}`,color:'#ffaa55'}))};
 const make=()=>rules.create(ctx,rules.validateSettings({terrainVersion:3}));
 type State=ReturnType<typeof make>;
-const set=(s:State,i:number,b:number)=>{if(s.edits.size>=EDIT_LIMIT&&!s.edits.has(i))return false;s.grid[i]=b;s.edits.set(i,b);s.revision++;return true;};
+const set=(s:WorldState,i:number,b:number)=>{if(s.edits.size>=EDIT_LIMIT&&!s.edits.has(i))return false;write(s.grid,i,b);s.edits.set(i,b);s.revision++;return true;};
 function fixture(kind:number){const s=make(),p=s.players[0]!;for(let x=47;x<=53;x++)for(let z=47;z<=55;z++)for(let y=1;y<30;y++)set(s,index(x,y,z),y<12?3:0);Object.assign(p,{x:50.5,y:12,z:53,yaw:0,pitch:-.25});const i=index(50,12,50);set(s,i,kind);return{s,p,i};}
 const act=(s:State,a:Action,id='p0')=>rules.applyAction(s,id,rules.parseAction(a),s.time*1000);
 const tick=(s:State,seconds:number)=>{for(let i=0;i<Math.ceil(seconds*30);i++)rules.tick(s,new Map(),1/30,i*1000/30);};

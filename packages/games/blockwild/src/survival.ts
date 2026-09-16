@@ -1,6 +1,7 @@
+import { read, type Grid } from './chunk-world';
 import { farmUse, plantCrop, harvestCrop } from './farming';
 import { emitSound } from './sound-events';
-import { FOOD_POINTS, CARROT, POTATO, BEEF, PORK, CHICKEN, MUTTON, COOKED_BEEF, COOKED_PORK, COOKED_CHICKEN, COOKED_MUTTON, BAKED_POTATO, cropItems, APPLE, CHARCOAL, FUEL, FLESH, stackLimit, BED, BENCH, BERRIES, BREAD, CAMPFIRE, CHEST, COAL, FARMLAND, FURNACE, GRAIN, H, ITEMS, ROAST, SEEDS, W, coords, dayLength, isNight, type TerrainVersion, type Action, type Homestead, type Recipe, type StationView } from './model';
+import { validVoxel, FOOD_POINTS, CARROT, POTATO, BEEF, PORK, CHICKEN, MUTTON, COOKED_BEEF, COOKED_PORK, COOKED_CHICKEN, COOKED_MUTTON, BAKED_POTATO, cropItems, APPLE, CHARCOAL, FUEL, FLESH, stackLimit, BED, BENCH, BERRIES, BREAD, CAMPFIRE, CHEST, COAL, FARMLAND, FURNACE, GRAIN, ITEMS, ROAST, SEEDS, coords, dayLength, isNight, type TerrainVersion, type Action, type Homestead, type Recipe, type StationView } from './model';
 import { block, fits, ray } from './terrain';
 import type { Actor, State } from './server';
 
@@ -8,7 +9,7 @@ const distance=(p:Actor,i:number)=>{const c=coords(i);return Math.hypot(p.x-c.x-
 export function nearby(s:State,p:Actor,kind:number){let best:number|null=null,d=4;for(const [i,b]of s.edits)if(b===kind&&distance(p,i)<d){best=i;d=distance(p,i);}return best;}
 export function stationView(s:State,p:Actor):StationView|null {
   const hit=ray(s.grid,p.x,p.y+1.55,p.z,p.yaw,p.pitch),i=hit?.i;
-  if(i===undefined)return null;const kind=s.grid[i]!;
+  if(i===undefined)return null;const kind=read(s.grid,i)!;
   if(![BENCH,FURNACE,CHEST,BED,CAMPFIRE,FARMLAND].includes(kind))return null;
   return{i,kind,contents:kind===CHEST?{...s.chests[i]}:{},readyAt:s.furnaces[i]?.readyAt??s.farms.find(f=>f.i===i)?.readyAt??0};
 }
@@ -38,7 +39,7 @@ export function homesteadAction(s:State,p:Actor,a:Action,setBlock:(s:State,i:num
   }
   if(a.type==='use'&&s.terrainVersion>=4&&farmUse(s,p,setBlock))return;
   const hit=ray(s.grid,p.x,p.y+1.55,p.z,p.yaw,p.pitch);
-  if(!hit)throw new Error('Aim at something within reach first.');const i=hit.i,kind=s.grid[i]!;
+  if(!hit)throw new Error('Aim at something within reach first.');const i=hit.i,kind=read(s.grid,i)!;
   if(a.type==='plant'){
     if(s.terrainVersion>=4){if(hit.previous.y!==hit.y+1)throw new Error('Aim at the top of farmland to plant.');plantCrop(s,p,i);return;}
     if(![1,2,FARMLAND].includes(kind)||hit.previous.y!==hit.y+1||block(s.grid,hit.x,hit.y+1,hit.z)!==0)throw new Error('Aim at open grass or earth to plant.');
@@ -62,14 +63,14 @@ export function homesteadAction(s:State,p:Actor,a:Action,setBlock:(s:State,i:num
   if(kind===BED){if(s.players.some(other=>other.id!==p.id&&other.connected&&other.sleeping&&other.home?.bed===i))throw new Error('Someone is resting in this bed. Use another bed.');const home=bedSpawn(s,i);if(!home)throw new Error('Leave a clear standing space beside the bed.');p.home={...home,bed:i};p.sleeping=isNight(s.time,s.terrainVersion);emitSound(s,'sleep',hit);p.message=p.sleeping?'Resting. Night passes when every connected explorer rests. Move to wake up.':'Home set. You will return here after death.';return;}
   p.message=kind===CHEST?'Open Craft to store or take supplies from this chest.':kind===BENCH?'Open Craft. Advanced recipes are available near this workbench.':kind===CAMPFIRE?'A warm fire. Brambles keep their distance.':'Use works on beds, furnaces, chests and crops.';
 }
-export function bedSpawn(s:State,i:number){if(s.grid[i]!==BED)return null;const c=coords(i);for(const [dx,dz]of [[1,0],[-1,0],[0,1],[0,-1]]){const x=c.x+dx+.5,z=c.z+dz+.5,y=c.y;if(fits(s.grid,x,y,z)&&![0,6].includes(block(s.grid,x,y-1,z)))return{x,y,z};}return null;}
+export function bedSpawn(s:State,i:number){if(read(s.grid,i)!==BED)return null;const c=coords(i);for(const [dx,dz]of [[1,0],[-1,0],[0,1],[0,-1]]){const x=c.x+dx+.5,z=c.z+dz+.5,y=c.y;if(fits(s.grid,x,y,z)&&![0,6].includes(block(s.grid,x,y-1,z)))return{x,y,z};}return null;}
 export function sleepTick(s:State){for(const p of s.players)if(p.sleeping&&(!p.home||!bedSpawn(s,p.home.bed)||distance(p,p.home.bed)>5))p.sleeping=false;const awake=s.players.filter(p=>p.connected);if(awake.length&&awake.every(p=>p.sleeping)&&isNight(s.time,s.terrainVersion)){s.time=(Math.floor(s.time/dayLength(s.terrainVersion))+1)*dayLength(s.terrainVersion);s.creatures=[];s.projectiles=[];for(const p of s.players){p.sleeping=false;p.message='Morning. Your world is waiting.';}}}
 
 // Validate the entire save extension before mutating the live world.
-export function readHomestead(raw:unknown,grid:Uint8Array,version:TerrainVersion=3):Homestead {
+export function readHomestead(raw:unknown,grid:Grid,version:TerrainVersion=3):Homestead {
   if(raw===undefined)return{chests:{},furnaces:{},farms:[]};
   const h=raw as Homestead;if(!h||typeof h!=='object'||Array.isArray(h)||!h.chests||!h.furnaces||!Array.isArray(h.farms)||h.farms.length>128)throw new Error('Invalid homestead.');
-  const validIndex=(key:string,kind:number)=>/^(0|[1-9]\d*)$/.test(key)&&Number(key)>=W*W&&Number(key)<W*W*H&&grid[Number(key)]===kind;
+  const validIndex=(key:string,kind:number)=>/^(0|[1-9]\d*)$/.test(key)&&validVoxel(Number(key),version)&&read(grid,Number(key))===kind;
   const inventory=(v:unknown)=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length<=16&&Object.entries(v).every(([k,n])=>/^(0|[1-9]\d*)$/.test(k)&&Number(k)<ITEMS.length&&Number.isInteger(n)&&n>0&&n<=stackLimit(version,Number(k)));
   for(const [record,kind]of [[h.chests,CHEST],[h.furnaces,FURNACE]] as const)if(typeof record!=='object'||Array.isArray(record)||Object.keys(record).length>32||Object.keys(record).some(k=>!validIndex(k,kind)))throw new Error('Invalid station storage.');
   if(Object.values(h.chests).some(v=>!inventory(v))||Object.values(h.furnaces).some(j=>!j||!Number.isInteger(j.item)||j.item<0||j.item>=ITEMS.length||!Number.isInteger(j.count)||j.count<1||j.count>4||!Number.isFinite(j.readyAt)||j.readyAt<0||j.readyAt>1e9+180))throw new Error('Invalid station contents.');
