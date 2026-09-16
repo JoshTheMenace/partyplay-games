@@ -48,7 +48,7 @@ Serving requires an exact recipe and a matching ticket whose deadline has not pa
 
 Normal plate stock is players + 2. Simultaneous tickets scale to 2/3/4 by roster; larger groups receive additional patience. The first-star target is round((seconds / 180) × (160 + players × 35) × (1 + stageIndex × .09)); second and third stars require twice and three times that score. At two players, stage one starts at 230 points. Deterministic cycling introduces every available recipe without requiring random selection.
 
-Completed non-Practice results save best scores and stars in the display browser under party.kitchen-rush.campaign.v1. One star unlocks the next stage sequentially. Invalid or blocked storage cannot crash a service; Practice remains available. The settings map shows all stages, challenges, stars and locks. Play again returns to the lobby for stage selection. A first pass takes 30–50 minutes, with further play for better stars.
+Completed non-Practice results save best scores and stars in the display browser under party.kitchen-rush.campaign.v1. All ten stages are selectable immediately, regardless of prior completion. Invalid or blocked storage cannot crash a service or restrict stage access. The settings map shows all stages, challenges and earned stars. Play again returns to the lobby for stage selection. A first pass takes 30–50 minutes, with further play for better stars.
 
 ## Presentation and budgets
 

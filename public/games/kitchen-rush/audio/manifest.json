@@ -1,0 +1,101 @@
+[
+  {
+    "name": "chop",
+    "source": "chop.wav",
+    "sourceSha256": "ac995f527e35bf24728096fe24de3e894144b7f021ba9227a5c02c5297fa6044",
+    "start": 1.76,
+    "seconds": 0.32,
+    "loop": false,
+    "bytes": 15404
+  },
+  {
+    "name": "chop-alt",
+    "source": "chop.wav",
+    "sourceSha256": "ac995f527e35bf24728096fe24de3e894144b7f021ba9227a5c02c5297fa6044",
+    "start": 2.26,
+    "seconds": 0.32,
+    "loop": false,
+    "bytes": 15404
+  },
+  {
+    "name": "simmer",
+    "source": "boil.wav",
+    "sourceSha256": "665f10f8091e7c9fbdebd19d9ca72dffdfa20435b5026473f192e64c32e4f71b",
+    "start": 12,
+    "seconds": 3.9,
+    "loop": true,
+    "bytes": 187244
+  },
+  {
+    "name": "ignite",
+    "source": "ignite.wav",
+    "sourceSha256": "d60549890b1510edd2296228008f844e4e2e0e7d0eb82ca21c13d806d432ceeb",
+    "start": 2.2,
+    "seconds": 0.8,
+    "loop": false,
+    "bytes": 38444
+  },
+  {
+    "name": "fire",
+    "source": "fire.wav",
+    "sourceSha256": "26702de8a195bcbafeae72034861d875a1b7917168a25106f4e1957ecdddf7e5",
+    "start": 0.25,
+    "seconds": 1.9,
+    "loop": true,
+    "bytes": 91244
+  },
+  {
+    "name": "dish",
+    "source": "dishes_02.ogg",
+    "sourceSha256": "e78a817166e589e437b4a0e43d1fe382f290e1dafe8893921192bb8423f58346",
+    "start": 0,
+    "seconds": 0.6,
+    "loop": false,
+    "bytes": 28844
+  },
+  {
+    "name": "wash",
+    "source": "splash_01.ogg",
+    "sourceSha256": "8d48e8da680fbdfd3c885aa2f69d8e83ad16717bae43d178861d7af08d142849",
+    "start": 0,
+    "seconds": 0.7,
+    "loop": false,
+    "bytes": 33644
+  },
+  {
+    "name": "deliver",
+    "source": "bell_01.ogg",
+    "sourceSha256": "b29cf8f3885eb2a266a16455227288dd3e004ea0414d2823b1a8677915f862d1",
+    "start": 0,
+    "seconds": 1.3,
+    "loop": false,
+    "bytes": 62424
+  },
+  {
+    "name": "ready",
+    "source": "bell_02.ogg",
+    "sourceSha256": "ea47ae29d3fe87c82414881084cf5dfa4a0a43c6def7437fcafbc21ffbf3ec72",
+    "start": 0,
+    "seconds": 0.53,
+    "loop": false,
+    "bytes": 25484
+  },
+  {
+    "name": "warning",
+    "source": "bell_03.ogg",
+    "sourceSha256": "9440896c5ffbc85d045b88953057d12019ddbf052f3694615216d83161a9e2d9",
+    "start": 0,
+    "seconds": 1.6,
+    "loop": false,
+    "bytes": 76844
+  },
+  {
+    "name": "end",
+    "source": "gong_02.ogg",
+    "sourceSha256": "eb53bd74d92ed2422568ed5770615b177b0a4d281f55959e6aa263d756412524",
+    "start": 0,
+    "seconds": 1.19,
+    "loop": false,
+    "bytes": 57164
+  }
+]

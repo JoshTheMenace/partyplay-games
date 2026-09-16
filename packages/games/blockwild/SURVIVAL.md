@@ -1,30 +1,17 @@
 # Survival sandbox
 
-Survival is the default. It starts with empty pockets in a seeded landscape of forest, hills, desert, rivers, shoreline and caves. There are no quests, required routes, region unlocks, score targets or automatic ending. The host decides when to save or finish. Creative is a separate optional mode.
+New version 5 worlds start empty-handed in natural forests, hills, rivers, shoreline and caves. Gather logs and dirt, craft planks and sticks, place a crafting table, and work from wooden through stone and iron to diamond pickaxes. Ore is distributed through the finite world. There are no quests, required routes or automatic finish conditions.
 
-Players choose how to live in the world:
+The active hotbar slot selects the mining tool or weapon. A suitable pickaxe is required to mine stone and ore. Stone drops cobblestone; coal ore drops coal; iron ore drops raw iron; diamond ore drops diamonds. Glass breaks without a drop. Leaves sometimes drop saplings or apples, and breaking short grass sometimes provides wheat seeds. New-world recipes omit Sunwells, copper picks, cooked berries and invented decorative conversions.
 
-- Gather earth, timber and leaves by hand. Leaves supply building foliage, berries and seeds. Ore occurs throughout the map; a named mine or landmark is never required.
-- Craft basic supplies wherever you are. A placed workbench supports advanced tools. Copper and iron offer different tool recipes; equipment is automatically used for mining and combat.
-- Place a furnace near your base. Smelting consumes ingredients and coal or timber once, takes time, and leaves its output in the furnace until someone collects it. Furnaces process ore, glass and cooked berries. Stocked furnaces cannot be mined accidentally.
-- Plant seeds on grass or earth. Crops grow in three minutes, or90 seconds beside water. Harvest grain and reusable seeds; make bread or expand the farm. Trees remain renewable through Grow tree.
-- Place shared chests and transfer supplies in batches of up to64. Each chest holds16 item types with999 per stack. Empty it before moving it. Chest contents are shown only to an explorer aiming at it within reach.
-- Place a bed to set home. At night, all connected players may rest to bring morning. Moving wakes you. A removed or blocked bed falls back to a safe world spawn.
-- Manage hunger, health and air. Sprinting and work consume food faster than idling; a full food meter gradually heals. Starvation stops at one health, while falls, brambles and drowning can kill. New Survival deaths leave all inventory, including equipment, in a persistent recovery crate. Repeated deaths merge unrecovered supplies rather than erasing them.
-- Build walls, lanterns and campfires for protection. Nighttime brambles appear around explorers throughout the world. A day/night cycle lasts20 minutes. The Sunwell is a decorative craftable landmark.
+A nearby furnace processes sand, raw iron, clay balls, clay blocks, cobblestone and logs. Each smelt takes10 seconds. Coal and charcoal burn for80 seconds; logs and planks for15. Inputs are consumed when a job starts, remaining fuel continues burning, and output stays in the furnace until collected. Finished output and remaining burn time survive saves. Stocked stations cannot be mined accidentally.
 
-Every recipe is visible and searchable from the beginning. Material and workstation requirements are physical crafting mechanics, not objective completion gates.
+Use a crafted hoe to till clear grass or dirt, then plant wheat seeds, carrots or potatoes on farmland. Crops mature in three minutes near water or six minutes otherwise, with open space and suitable light. Harvest and replant to maintain the farm. Roaming cows, sheep, pigs and chickens follow their food and can breed; see [farming details](FARMING.md). Plant an oak sapling on grass or dirt with room for the canopy; growth happens probabilistically at30-second intervals. Saplings persist as world blocks. Beds establish a safe respawn location; all connected explorers resting at night advance the world to morning.
 
-## World and save boundaries
+Chests hold16 item types. Each inventory/chest item type holds64, or one tool. Transfers move up to64 at a time. Death leaves inventory in a private recovery crate; repeated deaths merge earlier unrecovered items. Full inventories leave excess supplies in the crate. Health, hunger, gradual healing, falling and air provide survival pressure.
 
-The current finite world is128×48×128 blocks, with16,384 changed cells. It is freely explorable and destructible, but does not generate infinite chunks. A world supports128 crops,32 stocked chests and32 active furnace jobs. The shared runtime supports2–10 players and preserves validated autosaves and manual downloads. Furnace jobs, farms, storage and bed homes survive save/load. The maximum accepted homestead plus edited terrain is tested against the256KiB save envelope.
+Night brings zombies that strike nearby players, skeletons that shoot arrows, climbing spiders, and creepers that charge an explosive fuse. Walls stop attacks and projectiles. Placed torches and campfires prevent nearby spawning. Daylight burns exposed zombies/skeletons; spiders are neutral during daytime until attacked. These rules and navigation are intentionally simpler than Bedrock's complete simulation.
 
-New worlds use terrain generation3. Existing generation1/2 saves retain their original terrain and legacy timing/resource behavior; they are not silently reshaped. New home systems remain available when placed. Existing worlds and new worlds use the same shared room and recovery runtime. No separate server or music was added.
+World bounds:128×128×48,16,384 edited cells,128 crops,32 stocked chests,32 furnace jobs and32 fuel records. One room supports1–10 players. Version4 is the new default; versions1–3 keep their earlier terrain, recipes,999 capacities and legacy enemies. Shared save/load/recovery behavior is unchanged. See [the Bedrock comparison](BEDROCK-REFERENCE.md) for primary references and remaining parity gaps.
 
-The implementation draws on Minecraft's [Survival description](https://www.minecraft.net/en-us/article/creative-vs-survival-mode) and [first-night guide](https://www.minecraft.net/en-us/article/how-survive-your-first-night-minecraft). This is an original, smaller game with its own art and recipes. It does not implement Minecraft's complete creature roster, automation, enchantments, dimensions or infinite terrain.
-
-## Controls and presentation refinement
-
-Desktop shortcuts:1–9 selects the matching hotbar slot, E uses the aimed station, C opens crafting, M opens the atlas and R eats available food. Settings → Surprise me chooses a different seed; it does not change an existing saved world. The seed is also shown in the display and world journal.
-
-Crafting search shows matching recipes first; the pack is collapsible and chest storage separates your pack from shared contents. Balanced graphics adds up to four nearby lantern/campfire/beacon/furnace lights; low graphics omits these local lights. The overview slowly orbits, with a fixed camera under reduced motion. Diagnostics are available with `?metrics`.
+Farm tools now connect iron, bones, water and animal care: see [FARMING.md](FARMING.md#farm-toolkit) for buckets, shears, bone meal, light requirements and food values.

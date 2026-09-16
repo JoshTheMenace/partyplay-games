@@ -1,0 +1,84 @@
+{
+  "music": [
+    {
+      "title": "smashlobby",
+      "file": "lobby.mp3",
+      "role": "lobby",
+      "bytes": 11627804,
+      "sha256": "67ef7ce3ac34ce2104fbb5c8e9534c14c4d3148b30318c8af60e495e2b6f4f50",
+      "durationSeconds": 480.0,
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ]
+    },
+    {
+      "title": "Adventure Forward",
+      "file": "adventure-forward.mp3",
+      "role": "battle",
+      "bytes": 6837836,
+      "sha256": "7d0b3dbd378f58745762b6af4460ce3d918e7fbfd3f92552814a7111e8fe407e",
+      "durationSeconds": 299.36,
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ]
+    },
+    {
+      "title": "Adventure's Final Frontier",
+      "file": "adventures-final-frontier.mp3",
+      "role": "battle",
+      "bytes": 11833724,
+      "sha256": "91e83e7be1dcddb17ca3d5679c77380217e3e9b889cb6a163c37da9283e23716",
+      "durationSeconds": 480.0,
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ]
+    },
+    {
+      "title": "冒険の序曲",
+      "file": "bouken-no-jokyoku.mp3",
+      "role": "battle",
+      "bytes": 4515164,
+      "sha256": "9b7bef56c41bc3ddb8af0f7fce13344554d49b96ebb83104f9690591b7759845",
+      "durationSeconds": 199.632,
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ]
+    },
+    {
+      "title": "Triumph of the Brave (Remastered)",
+      "file": "triumph-of-the-brave.mp3",
+      "role": "battle",
+      "bytes": 11508428,
+      "sha256": "2393a8a3c2e0abb5feb812e3529f70b2a711b1436b3b412158be0a1e88c56090",
+      "durationSeconds": 480.0,
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ]
+    }
+  ],
+  "effects": {
+    "impact-hit-0.wav": "Kenney Impact Sounds, CC0",
+    "swish.wav": "Kenney RPG Audio, CC0"
+  },
+  "note": "Music supplied by the user. Audio streams preserved; embedded artwork and metadata stripped. JPEG cover art is not required for playback."
+}

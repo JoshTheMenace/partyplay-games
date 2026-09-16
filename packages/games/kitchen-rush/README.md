@@ -8,7 +8,7 @@ Select Kitchen Rush in the shared launcher. Phones join and ready through the no
 
 Follow the ticket exactly. Chopped lettuce + chopped tomato makes salad. Chopped tomato and onion each need stove cooking for soup. Burgers need cooked patty, chopped lettuce and a bun. Pizza is assembled as raw dough + chopped tomato + cheese on a plate, then the whole plate goes into an oven. Green means cooked; collect before burning. All recipes need a clean plate. Served plates return dirty after five seconds; take one to the sink and hold Use to wash it. The food bin clears mistakes while preserving plates. Empty-handed Use extinguishes fire.
 
-Earn one star to unlock the next stage. Best scores and stars save in the display browser under `party.kitchen-rush.campaign.v1`; they are local to that browser, not an account or server save. Play again returns to the lobby, where Settings opens the campaign map. Practice opens every stage and removes expiry, burning and disruptive hazards without adding campaign stars. Corrupted or unavailable storage does not stop play.
+All ten stages are playable from the start, in any order. Best scores and stars save in the display browser under `party.kitchen-rush.campaign.v1`; they are local to that browser, not an account or server save. Play again returns to the lobby, where Settings opens the campaign map. Practice removes expiry, burning and disruptive hazards without adding campaign stars. Corrupted or unavailable storage does not stop play.
 
 Stations use visible props instead of floating name labels: produce-filled wooden crates, a butcher block and cleaver, a dark cooktop, a brick pizza oven, a deep sink and faucet, clean plate racks, blue dirty-dish tubs, a pedal bin and a striped serving pass with a bell. Your phone still names the nearby station and action. When 80 items fill the floor, crates pause new ingredients until someone picks up or bins dropped food; existing held food and plates remain safe during disconnects.
 
@@ -44,3 +44,13 @@ The manager owns immutable integration builds. See [current status](../../../out
 Opening orders introduce the enabled menu in order; later orders vary by round seed and avoid a third simultaneous copy when another dish is available. Fresh Start remains salad-only and replaces unused cookers with extra prep boards. The display shows streak bonuses, progress to the next star and service celebrations; results compare the host's score with its previous best.
 
 Phones show the first ticket's recipe and patience, with Use beneath Dash. Cooker feedback distinguishes cooking, ready, near-burning, burnt and power-paused food, using the same timing for phone and scene indicators. Campaign saves and the ten-stage order are unchanged. Scene diagnostics require `?metrics`.
+
+## Authored Blender models
+
+The current source uses an original52-asset Blender kit for chefs, workstations, ingredients and finished dishes. [Asset source and rebuilding](art/README.md) documents the editable `.blend`, exported GLB, budgets and rigid animation pivots. `src/models.ts` owns abortable model loading and shared-resource cleanup; `src/scene.tsx` instances equipment and drives chef walk/carry/work poses from public gameplay state. No gameplay rules changed. The September11 art pass passed43 Kitchen tests, TypeScript, scoped lint, an isolated build and a real ten-controller service with five delivered dishes, plus replay/reload/reduced-motion/loading-failure recovery. Exact local evidence and limits: `output/kitchen-rush/blender/QA.md` in the platform checkout. The existing user runtime was preserved.
+
+## Sound effects
+
+Recorded chopping, cooking, ignition, fire, washing, dish handling, ready/warning bells, delivery and service start/end cues now play on the shared display or solo host. Use the platform's **Sound on/off** button. Phone controllers do not play the room's sound effects. No music is included; the soundtrack can be added separately.
+
+The [audio guide](audio/README.md) explains triggers, source licenses, volume limits and rebuilding. The in-game instructions link to `/games/kitchen-rush/audio/index.html` for individual clip previews and credits. Current focused QA is recorded in `output/kitchen-rush/audio/QA.md` in the consumer workspace.

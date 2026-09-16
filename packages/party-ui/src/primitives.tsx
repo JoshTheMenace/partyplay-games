@@ -9,7 +9,7 @@ export function StatusNotice({ children, tone = 'info' }: { children: ReactNode;
 export function ToggleRow({ label, checked, onChange, disabled }: { label: string; checked: boolean; onChange(value: boolean): void; disabled?: boolean }) { return <label className="kp-toggle"><span>{label}</span><button className="kp-switch" role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)}>{checked ? 'On' : 'Off'}</button></label>; }
 export function Modal({ title, onClose, children, wide }: { title: string; onClose(): void; children: ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => { const previous = document.activeElement as HTMLElement | null; const dialog = ref.current!; dialog.showModal(); return () => { dialog.close(); if (previous?.isConnected) previous.focus(); }; }, []);
+  useEffect(() => { const previous = document.activeElement as HTMLElement | null; const dialog = ref.current!; dialog.showModal(); dialog.focus({ preventScroll: true }); dialog.scrollTop = 0; return () => { dialog.close(); if (previous?.isConnected) previous.focus(); }; }, []);
   return <dialog ref={ref} className={`kp-dialog ${wide ? 'kp-dialog-wide' : ''}`} aria-label={title} tabIndex={-1} onKeyDown={event => {
     if (event.key !== 'Tab') return;
     const dialog = event.currentTarget;

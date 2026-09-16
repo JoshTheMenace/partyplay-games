@@ -1,0 +1,65 @@
+# Island Settlers
+
+An in-progress Catan-inspired game for 3–10 people. The laptop/TV shows the board; each player joins with a phone for private cards, trading, and placement. Claude Fable authors the frontend and animations; Codex owns rules, integration, and verification.
+
+## Implemented rules
+
+- Snake-order setup, seeded terrain and number placement, five finite resource supplies, dice production, ports, roads, settlements, cities, and piece limits.
+- Robber/discards/theft; Knight, Road Building, Year of Plenty, Monopoly, and hidden victory-point development cards; purchase-turn restrictions; Longest Route and Largest Army.
+- Public offers and counteroffers, explicit acceptance, proposer confirmation, bank trades, and atomic exchanges. A spent hand invalidates unaffordable offers/acceptances.
+- **Standard:** one main turn, then a paired action turn for five or more players. The paired player is halfway around the roster and cannot trade with players. Games finish when the active player reaches the chosen target.
+- **Connect-style:** shared automatic production, simultaneous trading/building, 60/90/120-second action rounds, and a three-second minimum before advancing when everyone is done. Confirmed placements claim contested spots. Victory is checked at round end; equal highest qualifying scores share victory.
+- **Seafarers / Open Seas:** a generated home island and six smaller islands, ships and ship movement, pirate, gold production choices, mixed road/ship routes, and two points for the player's first settlement on each new island.
+- **Cities & Knights:** commodities, three improvement tracks, metropolises, walls, knight actions, barbarian defense and private progress cards.
+- **Traders & Barbarians:** independently selectable fishing, rivers/bridges/gold, merchant-train bidding, coastal barbarian attacks, and wagon deliveries. Friendly Robber and Harbormaster are optional variants.
+- **Explorers & Pirates:** hidden exploration, movable cargo ships, harbor settlements, settlers and crews, pirate-lair capture, fish delivery and spice-trade missions. Select the missions individually.
+- Phone disconnects pause actions and the Connect clock until every seated player returns. Reload uses the existing room credentials; seats and accepted actions persist for the life of the room.
+
+The default is Standard + Seafarers, 12 points. Every supported map/expansion combination can use either turn style. Cities & Knights works with Base, Seafarers, or Explorers & Pirates. All five Traders & Barbarians scenarios can be stacked on Base or Seafarers; only fishing accompanies Explorers & Pirates. Settings explain incompatible choices. See [EXPANSIONS.md](EXPANSIONS.md) for rules sources and adaptations. The hour target is not established by automated testing. Standard play, larger rosters, and learning games can take longer.
+
+## Deliberate adaptations and current limits
+
+This is not a complete reproduction of all CATAN editions or scenarios. The 3–4-player base uses the familiar 19 land hexes; 5–6 uses 30, and 7–10 uses a custom 37-hex island with increased supplies. The larger paired-turn rule is an adaptation. Open Seas is our generated scenario using Seafarers mechanics, not the complete published scenario campaign.
+
+Connect-style preserves private hands, the shared contested board, classic cards/robber, and a configurable victory target. Suggested targets reflect the selected modules. Official Connect instead has different region, active-side, resource-visibility, robber, and scoring rules. Odd rosters are supported by our adaptation. Do not describe it as exact official Connect.
+
+All bank/card transfers and placements are server-authoritative. Selection previews stay local until confirmed. The server sends explicit public/private projections; the frontend never imports server state or RNG. Actions carry a phase/turn ID and reliable transport IDs. Transactions operate on a copy so rejection cannot partially spend cards or change random state.
+
+Save/resume across server restarts is deferred. Closing the room or losing the host beyond its shared two-minute grace ends the room. AI opponents, music, the published scenario campaigns, Event Cards and the two-player variant are not implemented. All expansion maps are generated adaptations, including the combined coastal/warehouse layout and river paths. Human balance and physical-device acceptance remain unfinished; automated completion is not a production certification.
+
+## Code map
+
+- `model.ts`: browser-safe geometry, piece, action, public/private-view types and costs.
+- `board.ts`: generated maps, unique vertices/edges, resource distribution, nonadjacent red numbers, ports.
+- `server.ts`, `state.ts`, `core.ts`: authoritative turns, legal targets, transactions, scoring, and projections.
+- `expansion-settings.ts`, `expansion-model.ts`: shared configuration and browser-safe action/view types.
+- `expansions.ts`: module initialization, private commands and mandatory-choice continuation.
+- `cities-knights.ts`, `traders-barbarians.ts`, `barbarian-scenarios.ts`, `explorers-pirates.ts`: each family’s rules; `expansion-score.ts` composes its scoring.
+- `expansion-state.ts`: server-only decks, unrevealed terrain, and per-turn bookkeeping.
+- Frontend files: Fable's host scene/HUD, phone map and controls, presentation helpers, and styles.
+- `tests/rules.test.ts`, `tests/expansions.test.ts`: deterministic rules, privacy, conservation, combination overrides, clocks, and completed ten-player simulations.
+- `tests/bot.ts`: QA choices based only on phone-visible information; no production bot or hidden-state access.
+
+Game content lives in the games submodule. The parent integrates the two registries, discovery metadata, and a trusted registration setting for 4,096 actions/player with 1 KiB maximum action payloads. Other games keep their existing 256-action allowance. The product of count and size is bounded below the original worst-case retained-payload limit, and old acknowledgements remain available for deduplication.
+
+## Validation
+
+Base/Seafarers acceptance and expansion-batch evidence are recorded separately in [QA.md](QA.md). It lists build fingerprints, actual UI actions/results/replay, maximum-roster layouts and remaining release work.
+
+Run from the parent PartyPlay repository:
+
+```sh
+node --import tsx --test packages/games/island-settlers/tests/*.test.ts
+node --import tsx --test tests/registry-contract.test.ts
+npm run typecheck
+npm run lint
+npm test
+npm run build:isolated -- settlers-unique-run
+npm run serve:isolated -- settlers-unique-run 4387
+```
+
+No Prettier. Browser acceptance status and remaining limits belong in `QA.md`; automated rules completion alone is not visual or human pacing evidence. Do not publish as production-ready until that report supports it.
+
+## Research and provenance
+
+Rules researched from the official [base rules and almanac](https://www.catan.com/sites/default/files/2021-06/catan_base_rules_2020_200707.pdf), [FAQ](https://www.catan.com/faq/basegame), [Seafarers rulebook](https://www.catan.com/sites/default/files/2025-03/CN3083%20CATAN%E2%80%93Seafarers%20Rulebook%202025%20secured%20reduced.pdf), [5–6-player rules](https://www.catan.com/sites/default/files/2025-03/CN3082%20CATAN%20%E2%80%93%205-6%20Rulebook%202025%20reduced.pdf), and [Connect event rules](https://www.catan.com/sites/default/files/2025-06/CAT_Connect_Manual_Event_RZ%20ENG%20250514s.pdf). Rulebook downloads are local research material under the parent's ignored output directory, not game assets. Game artwork is procedural and original; shared font licenses remain with PartyPlay. No official artwork, logos, or rulebook text are distributed in the game.

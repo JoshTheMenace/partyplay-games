@@ -1,0 +1,4 @@
+{
+  "extends": "../../../../tsconfig.json",
+  "include": ["fidelity", "lab", "tests/fidelity*.test.ts"]
+}
