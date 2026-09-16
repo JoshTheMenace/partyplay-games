@@ -1,3 +1,4 @@
+import { loadKitchenAssets } from './assets';
 import { useEffect, useRef, useState } from 'react';
 import { Scene, Color, OrthographicCamera, HemisphereLight, DirectionalLight, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry, TorusGeometry, MeshStandardMaterial, CanvasTexture, SpriteMaterial, Sprite, Group, InstancedMesh, Object3D } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -16,7 +17,8 @@ export default function Kitchen(props: SceneViewProps<Settings, View>) {
     const scope = new ResourceScope(props.signal), scene = new Scene(), size = dimensions(props.players.length), kitchen = props.settings.kitchen ?? 0, level = KITCHENS[kitchen];
     scope.defer(() => { scene.clear(); buffer.current.clear(); });
     async function build() {
-    const model = await loadKitchenModels(scope);
+    const animals = props.players.some(player => !['chef', 'chef_f'].includes((player.lobbyChoice as { character?: string } | undefined)?.character ?? 'chef'));
+    const [model, characters] = await Promise.all([loadKitchenModels(scope), animals ? loadKitchenAssets(scope) : null]);
     if (scope.signal.aborted) return;
     scene.background = new Color(level.theme === 3 ? '#d8d3e8' : '#c6e2d6');
     const camera = new OrthographicCamera(-16, 16, 10, -10, .1, 100); camera.position.set(0, 22, 31); camera.lookAt(0, 0, 0);
@@ -104,8 +106,15 @@ export default function Kitchen(props: SceneViewProps<Settings, View>) {
     const chefs = props.players.map((player, index) => {
       const root = new Group(), body = new Group(); root.add(body); scene.add(root);
       const shadow = tube(root, 0, .05, 0, .48, .02, player.color); shadow.scale.z = .8;
-      const character = model(`chef${index % 4}`, player.color); body.add(character);
-      const joints = chefJoints(character);
+      const selected = (player.lobbyChoice as { character?: string } | undefined)?.character ?? 'chef';
+      const character = model(`chef${selected === 'chef_f' ? 1 : [0, 2, 3][index % 3]}`, player.color); body.add(character);
+      let joints = chefJoints(character);
+      if (characters && !['chef', 'chef_f'].includes(selected)) {
+        body.remove(character);
+        const head = new Group(); head.add(characters.create(`${selected}_body`), characters.create(`${selected}_color`, player.color)); body.add(head);
+        const pivot = (name: string) => { const mesh = characters.create(name), group = new Group(); group.position.copy(mesh.position); mesh.position.set(0,0,0); group.add(mesh); body.add(group); return group; };
+        joints = { head, arms: [pivot(`${selected}_left_hand`), pivot(`${selected}_right_hand`)], legs: [pivot('chef_left_foot'), pivot('chef_right_foot')] };
+      }
       const badge = label(root, String(index + 1), 0, 2.1, 0, .9, player.color, '#18362d'); badge.scale.set(.63, .63, 1);
       root.position.set(-size.halfX + 2 + index * (2 * size.halfX - 4) / Math.max(1, props.players.length - 1), 0, size.halfZ - 3);
       return { id: player.id, root, body, joints, item: null as Group | null, signature: '', x: root.position.x, z: root.position.z };

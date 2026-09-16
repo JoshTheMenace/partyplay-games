@@ -81,3 +81,9 @@ Course definitions live in `src/engine/courses/`. `course-routes.ts` maps each f
 `engine/garage.ts` defines the modest vehicle multipliers. `server.ts` owns selection and readiness; `garage-view.tsx` shows accepted choices. `kart.ts` swaps a vehicle chassis and wheel pivots while retaining the character’s steering, head and arm animation. The Blender source and all 30 character/vehicle combinations are checked by the asset tests.
 
 Current validation: [ROUTES-GARAGE-QA.md](ROUTES-GARAGE-QA.md). No cups, ghosts, battle mode or track editor were added.
+
+## Contributor feature integration
+
+The shared-room game retains the current garage, selectable karts, courses, view routing and contact physics. It adds item roulette, rendered item icons, race statistics and up to six party awards. Hits attribute their attacker and shields count blocked attacks. Wheel rotation stays bounded across long sessions.
+
+The scene uses bounded adaptive presentation delay and a two-tier quality governor. Add `metrics` to the URL query to inspect frame timing, quality tier and presentation delay. Controls-only phones still skip the scene and its models.

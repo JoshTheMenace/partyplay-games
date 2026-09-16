@@ -13,9 +13,9 @@ export function resolveKartContact(race:Race,a:Racer,b:Racer){
   const velocity=(r:Racer)=>({x:Math.sin(r.heading)*r.speed+Math.cos(r.heading)*r.lateral,z:Math.cos(r.heading)*r.speed-Math.sin(r.heading)*r.lateral});
   const av=velocity(a),bv=velocity(b),closing=(av.x-bv.x)*nx+(av.z-bv.z)*nz;
   if(closing>0){
-    recordContact(race,a,closing);recordContact(race,b,closing);
+    recordContact(race,a,closing,'kart');recordContact(race,b,closing,'kart');
     const impulse=closing*.6;
     for(const [r,sign] of [[a,-1],[b,1]] as const){r.speed=Math.max(0,r.speed+sign*impulse*(nx*Math.sin(r.heading)+nz*Math.cos(r.heading)));r.lateral+=sign*impulse*(nx*Math.cos(r.heading)-nz*Math.sin(r.heading));}
   }
-  if(a.star>0)hit(race,b);if(b.star>0)hit(race,a);
+  if(a.star>0)hit(race,b,'stun',a.id);if(b.star>0)hit(race,a,'stun',b.id);
 }

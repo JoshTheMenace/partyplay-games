@@ -64,3 +64,15 @@ void test('an obstacle impact emits feedback through the authoritative simulatio
   race.phase='racing';race.racers=[r];Object.assign(r,p,{x:p.x-Math.sin(p.heading)*2,z:p.z-Math.cos(p.heading)*2,s:.8-2/track.length,speed:25});
   stepRace(race,{h:{...NEUTRAL,throttle:true}});assert.ok(race.events.some(event=>event.type==='bump'&&event.racer==='h'));assert.equal(r.stun,0);
 });
+
+void test('Bumper Buddy counts kart contact but not course obstacles', () => {
+  const race = createRace({ track: 'coast', players: [] }), racer = race.racers[0];
+  recordContact(race, racer, 12);
+  assert.equal(racer.stats?.collisions ?? 0, 0);
+  assert.equal(race.events.at(-1)?.type, 'bump');
+  race.time += .3;
+  recordContact(race, racer, 12, 'kart');
+  assert.equal(racer.stats?.collisions, 1);
+  recordContact(race, racer, 12, 'kart');
+  assert.equal(racer.stats?.collisions, 1);
+});

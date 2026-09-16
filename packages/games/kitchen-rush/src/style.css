@@ -139,3 +139,8 @@
 .kp-landscape-controller .kr-solo .kr-score { white-space:nowrap; }
 .kp-landscape-controller .kr-solo .kr-score-stack { width:auto; }
 .kp-landscape-controller .kp-scene-stage:has(.kr-solo) { height:100%; min-height:0; }
+
+.kr-food-icons { display: flex; flex-wrap: wrap; align-items: center; gap: .1rem; min-width: 0; }
+.kr-held .kr-food-icons { flex: 0 1 42%; }
+.kr-ticket > div > b .kr-art-icon { width: 1.4em; height: 1.4em; }
+.kr-chef-strip .kr-art-icon { width: 1.5em; height: 1.5em; }

@@ -1,10 +1,11 @@
 import { Group, Mesh, MeshStandardMaterial, type Object3D } from 'three';
+import { assetUrl } from './asset-url';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { ResourceScope } from '../../../party-runtime/src/index';
 
 /** One round owns one kit. Clones share GPU resources; chef team colors are per player. */
 export async function loadKitchenModels(scope: ResourceScope) {
-  const response = await fetch('/games/kitchen-rush/models/kitchen-kit.glb', { signal: scope.signal });
+  const response = await fetch(assetUrl('models/kitchen-kit.glb'), { signal: scope.signal });
   if (!response.ok) throw new Error(`Kitchen models could not load (${response.status})`);
   const gltf = await new GLTFLoader().parseAsync(await response.arrayBuffer(), '');
   const resources = new Set<{ dispose(): void }>();

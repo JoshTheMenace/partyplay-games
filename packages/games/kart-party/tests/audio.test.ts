@@ -63,3 +63,12 @@ void test('bump sound plays once for the followed kart and ignores stale contact
   audio.update(race,'a',false);audio.update(race,'a',false);assert.equal(context.oscillators.length,initial+1);assert.equal(context.oscillators.at(-1)?.frequency.value,110);
   race.events.push({id:3,type:'bump',racer:'a',time:0,strength:1});audio.update(race,'a',false);assert.equal(context.oscillators.length,initial+1);await Promise.resolve();
 }));
+
+void test('a shield block has a different tone from an unblocked hit', () => withAudio(async audio => {
+  const race = createRace({track:'coast',players:[{id:'a',name:'A',driver:0}]});
+  race.phase = 'racing'; audio.start('coast'); audio.update(race, 'a', false);
+  race.events.push({id:1,type:'hit',racer:'a',time:0,effect:'shield'}); audio.update(race,'a',false);
+  assert.equal(Context.instances[0].oscillators.at(-1)?.type, 'sine');
+  race.events.push({id:2,type:'hit',racer:'a',time:0}); audio.update(race,'a',false);
+  assert.equal(Context.instances[0].oscillators.at(-1)?.type, 'square');
+}));

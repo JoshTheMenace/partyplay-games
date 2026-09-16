@@ -1,7 +1,8 @@
 import { angleDelta, clamp, magneticAt, mod, nearest, roadHeight, surfaceFrame, TRACKS, type Track } from './tracks';
-import type { Hazard, Item, Race, Racer } from './types';
+import type { Hazard, HitEffect, Item, Race, Racer } from './types';
 import { COURSE_DESIGNS } from './course-designs';
 import { routeNearest, routeSample } from './course-routes';
+import { statsFor } from './race-stats';
 
 export const ITEMS = {
   boost: { name: 'Comet Kick', description: 'A 2.3-second burst of straight-line speed.', color: '#ff9848', icon: 'flame' },
@@ -31,17 +32,17 @@ export function selectItem(race: Race, rank: number): Item {
   for(let i=0;i<ITEM_IDS.length;i++) {draw-=weights[i];if(draw<0) return ITEM_IDS[i];}
   return ITEM_IDS[ITEM_IDS.length-1];
 }
-function emit(race: Race, type: Race['events'][number]['type'], racer: Racer) {
-  race.events.push({id:++race.serial,type,racer:racer.id,time:race.time});
+function emit(race: Race, type: Race['events'][number]['type'], racer: Racer, detail: {item?:Item;effect?:HitEffect;source?:string}={}) {
+  race.events.push({id:++race.serial,type,racer:racer.id,time:race.time,...detail});
   if(race.events.length>24) race.events.shift();
 }
-export function hit(race: Race, racer: Racer, effect: 'stun'|'frost'|'oil'|'decoy'='stun') {
+export function hit(race: Race, racer: Racer, effect: Exclude<HitEffect,'shield'>='stun', source?:string) {
   if(racer.finishTime!==null||racer.star>0||racer.stun>0) return;
-  if(racer.shield>0) {racer.shield=0;return;}
+  if(racer.shield>0) {racer.shield=0;statsFor(racer).shieldsBlocked++;emit(race,'hit',racer,{effect:'shield',source});return;}
   if(effect==='frost') {racer.frost=4;racer.speed*=.6;}
   else if(effect==='oil') racer.oil=3;
   else {racer.stun=1.2;racer.speed*=.35;racer.coins=Math.max(0,racer.coins-2);if(effect==='decoy') racer.item=null;}
-  racer.drift=0;racer.driftSide=0;emit(race,'hit',racer);
+  racer.drift=0;racer.driftSide=0;statsFor(racer).hitsTaken++;const attacker=source&&race.racers.find(candidate=>candidate.id===source);if(attacker)statsFor(attacker).hitsDealt++;emit(race,'hit',racer,{effect,source});
 }
 const routeDistance=(track:Track,a:number,b:number)=>Math.abs(angleDelta(a*Math.PI*2,b*Math.PI*2))/(Math.PI*2)*track.length;
 function routeNear(track:Track,a:number,b:number,radius:number){return !(magneticAt(track,a)||magneticAt(track,b))||routeDistance(track,a,b)<radius;}
@@ -57,13 +58,13 @@ function placeHazard(track:Track,hazard:Hazard){
 export function activateItem(race: Race, racer: Racer) {
   const item=racer.item,track=TRACKS[race.track];
   if(!item||racer.finishTime!==null||racer.stun>0||racer.itemCooldown>0) return;
-  racer.item=null;emit(race,item==='boost'?'boost':'item',racer);
+  racer.item=null;statsFor(racer).itemsUsed++;emit(race,'use',racer,{item});
   if(item==='boost') racer.boost=Math.max(racer.boost,2.3);
   else if(item==='shield') racer.shield=7;
   else if(item==='magnet') racer.magnet=8;
   else if(item==='star') {racer.star=6;racer.frost=0;racer.oil=0;racer.stun=0;}
   else if(item==='pulse') {
-    for(const other of race.racers) if(other!==racer&&Math.hypot(other.x-racer.x,other.y-racer.y,other.z-racer.z)<32&&routeNear(track,racer.s,other.s,36)) hit(race,other);
+    for(const other of race.racers) if(other!==racer&&Math.hypot(other.x-racer.x,other.y-racer.y,other.z-racer.z)<32&&routeNear(track,racer.s,other.s,36)) hit(race,other,'stun',racer.id);
   } else {
     const kind=item==='triple'?'shell':item,stationary=kind==='banana'||kind==='oil'||kind==='decoy';
     const targets=race.racers.filter(r=>r!==racer&&r.finishTime===null).sort((a,b)=>Math.hypot(a.x-racer.x,a.z-racer.z)-Math.hypot(b.x-racer.x,b.z-racer.z)||a.id.localeCompare(b.id));
@@ -112,13 +113,13 @@ export function updateHazards(race: Race, dt: number) {
     const radius=hazard.kind==='oil'?5:2.7;
     const collisions=targets.filter(r=>routeNear(track,endS,r.s,radius+speed*dt+2)&&distanceToSegment(r,before,after)<radius);
     if(hazard.kind==='rocket'&&(collisions.length||hazard.life<=0)) {
-      for(const racer of targets) if(collisions.includes(racer)||(routeNear(track,endS,racer.s,16)&&Math.hypot(racer.x-after.x,racer.y-after.y,racer.z-after.z)<12)) hit(race,racer);
+      for(const racer of targets) if(collisions.includes(racer)||(routeNear(track,endS,racer.s,16)&&Math.hypot(racer.x-after.x,racer.y-after.y,racer.z-after.z)<12)) hit(race,racer,'stun',hazard.owner);
       hazard.life=0;
     } else for(const racer of collisions) {
       if(hazard.kind==='oil') {
         hazard.affected??=[];
-        if(!hazard.affected.includes(racer.id)) {hazard.affected.push(racer.id);hit(race,racer,'oil');}
-      } else {hit(race,racer,hazard.kind==='frost'?'frost':hazard.kind==='decoy'?'decoy':'stun');hazard.life=0;break;}
+        if(!hazard.affected.includes(racer.id)) {hazard.affected.push(racer.id);hit(race,racer,'oil',hazard.owner);}
+      } else {hit(race,racer,hazard.kind==='frost'?'frost':hazard.kind==='decoy'?'decoy':'stun',hazard.owner);hazard.life=0;break;}
     }
     if(speed&&hazard.s!==undefined&&!magneticAt(track,hazard.s)){delete hazard.s;delete hazard.offset;}
   }

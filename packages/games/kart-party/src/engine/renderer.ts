@@ -79,7 +79,7 @@ export function createRenderer(container:HTMLElement,onError:(message:string)=>v
     kart.body.rotation.x=recoil*.18;
     kart.body.rotation.z=-r.driftSide*.1+(motion.matches?0:Math.sin(raceTime*15+r.driver)*r.speed*.0005)+recoil*.12;
     kart.body.rotation.y=-r.driftSide*.15+(r.stun>0?Math.sin(raceTime*18)*.65:0);
-    for(const wheel of kart.wheels)wheel.rotation.x+=r.speed*dt*2;
+    for(const wheel of kart.wheels)wheel.rotation.x=(wheel.rotation.x+r.speed*dt*2)%(Math.PI*2);
     updateRacerEffects(kart.effects,r,raceTime);kart.shadow.visible=!r.airborne;
     kart.shield.visible=r.shield>0;kart.shield.rotation.y+=dt;kart.flame.visible=r.boost>0;animateKart(kart,r,dt,raceTime);
     if((r.drift>.2||r.boost>0)&&frameCount%2===0) {
@@ -105,9 +105,10 @@ export function createRenderer(container:HTMLElement,onError:(message:string)=>v
     lastRaceTime=race?.time??0;
     for(const event of race?.events??[])if(event.id>lastEvent){
       lastEvent=event.id;const r=racers.find(r=>r.id===event.racer);if(!r||raceTime-event.time>.4)continue;
-      const count=event.type==='finish'?48:event.type==='hit'?18:event.type==='bump'?4+Math.round((event.strength??0)*8):10;
+      const blocked=event.type==='hit'&&event.effect==='shield';
+      const count=blocked?8:event.type==='finish'?48:event.type==='hit'?18:event.type==='bump'?4+Math.round((event.strength??0)*8):10;
       const bump=event.type==='bump';
-      for(let j=0;j<count;j++){const i=particleCursor++%240,a=j*2.39996,eventColor=new T.Color(event.type==='coin'||event.type==='bump'?'#ffd24a':event.type==='hit'?'#ff5748':'#71efff');if(event.type==='finish')eventColor.setHSL(j/count,.9,.65);
+      for(let j=0;j<count;j++){const i=particleCursor++%240,a=j*2.39996,eventColor=new T.Color(event.type==='coin'||event.type==='bump'?'#ffd24a':event.type==='hit'&&!blocked?'#ff5748':'#71efff');if(event.type==='finish')eventColor.setHSL(j/count,.9,.65);
         particlePositions.set([r.x+(bump?Math.cos(a)*2:0),(r.y??sample(world!.track,r.s).y)+(bump?.6:1.5),r.z+(bump?Math.sin(a)*2:0)],i*3);particleColors.set([eventColor.r,eventColor.g,eventColor.b],i*3);particleVelocities.set([Math.cos(a)*3,2+j%4,Math.sin(a)*3],i*3);particleLives[i]=event.type==='finish'?1.4:bump?.45:.7;
       }
     }

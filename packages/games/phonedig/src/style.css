@@ -1,0 +1,187 @@
+/* Scoped under pd- so nothing here can reach another game's chrome.
+ * The scene is the full-bleed layer; the HUD and controls ride on top of it. */
+
+.pd-canvas { display: block; width: 100%; height: 100%; background: var(--kp-ink, #05071a); }
+
+/* The shell insets the overlay and leaves its height to the content, which is
+ * right for a few floating chips and wrong for anything that fills the stage.
+ * Every full-height layer this game has must be listed here — a missing one
+ * does not error, it collapses to a few pixels in the corner with all of its
+ * text present and none of it visible. */
+.kp-scene-stage:has(.pd-controller) > .kp-scene-overlay,
+.kp-scene-stage:has(.pd-kitup) > .kp-scene-overlay,
+.kp-scene-stage:has(.pd-hud) > .kp-scene-overlay { inset: 0; }
+
+.pd-hud {
+  display: flex; flex-direction: column; gap: .4rem;
+  padding: .25rem; pointer-events: none;
+}
+.pd-hud-row { display: flex; flex-wrap: wrap; gap: .35rem; }
+.pd-chip {
+  background: rgba(5, 7, 26, .78); color: var(--kp-cream, #fff6e5);
+  border-radius: 999px; padding: .2rem .6rem;
+  font-size: .95rem; line-height: 1.3; white-space: nowrap;
+}
+.pd-chip-hp { color: var(--kp-coral, #ff5748); }
+
+.pd-meters { display: flex; flex-direction: column; gap: .25rem; max-width: 22rem; }
+.pd-meter {
+  height: .5rem; border-radius: 999px; overflow: hidden;
+  background: rgba(5, 7, 26, .78);
+}
+.pd-meter > i { display: block; height: 100%; }
+.pd-meter-air { background: var(--kp-sky, #28c6e7); }
+.pd-meter-load { background: var(--kp-sun, #ffd24a); }
+.pd-meter-full { background: var(--kp-coral, #ff5748); }
+
+.pd-controller {
+  position: absolute; inset: auto 0 0 0;
+  display: flex; flex-direction: column; gap: .5rem;
+  padding: .5rem calc(.5rem + env(safe-area-inset-right))
+           calc(.5rem + env(safe-area-inset-bottom))
+           calc(.5rem + env(safe-area-inset-left));
+  pointer-events: none;
+}
+.pd-controller-status { pointer-events: none; }
+.pd-controller-status p { margin: 0; color: var(--kp-cream, #fff6e5); }
+
+/* Movement on the left, the repeated action under the resting right thumb. */
+.pd-controller-pads {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem;
+}
+.pd-controller-pads > * { pointer-events: auto; }
+.pd-pump {
+  width: 7rem; height: 7rem; padding: 0; border: 0; border-radius: 50%; background: none;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.pd-pump img { display: block; width: 100%; height: 100%; pointer-events: none; }
+.pd-pump:active:not(:disabled) img { translate: 0 4%; filter: brightness(1.08); }
+.pd-pump:disabled img { filter: saturate(.35) brightness(.75); opacity: .8; }
+.pd-pump:focus-visible { outline: 3px solid var(--kp-sun); outline-offset: 3px; }
+
+.pd-settings-value { margin: .25rem 0 0; font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pd-meter > i { transition: none; }
+}
+
+.pd-results { display: flex; flex-direction: column; gap: .75rem; }
+.pd-results-lead { margin: 0; font-size: 1.15rem; }
+.pd-results-lead strong { font-size: 1.6rem; }
+
+/* The crew rail: one row per digger, colour-coded to the room's own palette.
+   HP is dots rather than a number so it reads at TV distance. */
+.pd-crew { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .2rem; max-width: 26rem; }
+.pd-crew-row {
+  display: flex; align-items: center; gap: .4rem;
+  background: rgba(5, 7, 26, .78); border-radius: 999px;
+  padding: .15rem .55rem; font-size: .9rem;
+}
+.pd-crew-me { outline: 2px solid var(--kp-cream, #fff6e5); outline-offset: -2px; }
+.pd-crew-dot { width: .7rem; height: .7rem; border-radius: 50%; flex: none; }
+.pd-crew-name {
+  flex: 1 1 auto; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; color: var(--kp-cream, #fff6e5);
+}
+.pd-crew-hp { flex: none; letter-spacing: .05em; color: var(--kp-coral, #ff5748); }
+.pd-crew-hp i { opacity: .45; font-style: normal; }
+.pd-meter-slim { width: 3.5rem; height: .35rem; flex: none; }
+
+.pd-chip-lives { letter-spacing: .08em; color: var(--kp-sun, #ffd24a); }
+.pd-chip-lives i { opacity: .4; font-style: normal; }
+.pd-crew-down { outline: 2px solid var(--kp-coral, #ff5748); outline-offset: -2px; }
+.pd-crew-downed {
+  flex: none; color: var(--kp-coral, #ff5748);
+  font-weight: 700; letter-spacing: .04em; white-space: nowrap;
+}
+.pd-results-lives { font-size: .9rem; opacity: .85; }
+
+.pd-crew-pull { font-style: normal; color: var(--kp-sun, #ffd24a); }
+
+/* A teammate down is the only thing worth interrupting a phone player for. */
+.pd-alert {
+  display: flex; align-items: center; gap: .4rem;
+  background: rgba(5, 7, 26, .92); color: var(--kp-cream, #fff6e5);
+  border-left: 4px solid var(--kp-coral, #ff5748);
+  border-radius: .4rem; padding: .4rem .6rem;
+  pointer-events: none;
+}
+
+/* ── kit up ───────────────────────────────────────────────────────────────
+   The picker owns the phone while it runs: the shaft is holding still behind
+   it, so there is nothing to see past it and no reason to crowd the chips. */
+.pd-kitup {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; gap: .5rem;
+  padding: .6rem calc(.6rem + env(safe-area-inset-right))
+           calc(.6rem + env(safe-area-inset-bottom))
+           calc(.6rem + env(safe-area-inset-left));
+  background: rgba(5, 7, 26, .92);
+  pointer-events: auto; overflow-y: auto;
+}
+.pd-kitup-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem; }
+.pd-kitup-head h2 { margin: 0; font-size: 1.15rem; }
+.pd-kitup-clock {
+  margin: 0 0 0 auto; font-variant-numeric: tabular-nums;
+  color: var(--kp-sun, #ffd24a); font-weight: 700;
+}
+.pd-suits {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: .4rem;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+}
+.pd-suit {
+  display: grid; grid-template-columns: auto 1fr; gap: .1rem .5rem;
+  align-items: center; width: 100%; min-height: 48px;
+  padding: .45rem .6rem; text-align: left;
+  background: rgba(255, 246, 229, .06); color: var(--kp-cream, #fff6e5);
+  border: 2px solid transparent; border-radius: .5rem;
+  font: inherit; cursor: pointer;
+}
+.pd-suit:focus-visible { outline: 3px solid var(--kp-sky, #28c6e7); outline-offset: 2px; }
+.pd-suit-on { border-color: var(--kp-cream, #fff6e5); background: rgba(255, 246, 229, .16); }
+/* The sprite sits on the dark of the shaft rather than on the panel, so a pale
+   suit reads as a figure in a tunnel instead of a cut-out. image-rendering is
+   belt and braces: the canvas is already drawn unsmoothed, but a browser that
+   scales the ELEMENT would undo that. */
+.pd-suit-chip {
+  grid-row: 1 / span 2; width: 2rem; height: 2rem;
+  border-radius: .3rem; border: 1px solid rgba(5, 7, 26, .5);
+  background: rgba(5, 7, 26, .55);
+  image-rendering: pixelated;
+}
+.pd-suit-name { font-weight: 700; text-transform: capitalize; font-size: 1rem; }
+.pd-suit-note { font-size: .78rem; opacity: .75; line-height: 1.25; }
+.pd-suit-taken {
+  grid-column: 2; font-size: .72rem;
+  color: var(--kp-sun, #ffd24a);
+}
+.pd-crew-suit { flex: none; text-transform: capitalize; opacity: .9; }
+.pd-crew-waiting { flex: none; opacity: .55; font-style: italic; }
+
+/* The keyboard hint is for laptops, not phones. A coarse pointer means the
+   player has a thumb on the pad and does not need to be told about WASD. */
+.pd-keyhint { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .pd-keyhint {
+    display: block; margin: .1rem 0 0; text-align: center;
+    font-size: .8rem; letter-spacing: .06em; opacity: .6;
+    color: var(--kp-cream, #fff6e5); pointer-events: none;
+  }
+}
+
+/* Keep the world visible between two thumbs, including short landscape phones. */
+@media (orientation: landscape) {
+  .pd-controller { inset: 0; justify-content: flex-end; padding: 12px max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left)); }
+  .pd-controller-status { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); text-align: center; padding: 4px 14px; border-radius: 20px; background: #05071acc; }
+  .pd-controller-pads .kp-steer-pad { width: clamp(96px, 26dvh, 144px); height: clamp(96px, 26dvh, 144px); }
+  .pd-pump { width: clamp(80px, 24dvh, 128px); height: clamp(80px, 24dvh, 128px); }
+  .pd-alert { max-width: 48%; margin: 0 auto; font-size: 12px; }
+  .pd-keyhint { display: none; }
+}
+.pd-hud { padding: 12px; gap: 8px; }
+.pd-hud > .pd-crew { flex-direction: row; flex-wrap: wrap; max-width: none; }
+.pd-hud > .pd-crew .pd-crew-row { flex: 0 1 260px; border: 1px solid #ffffff26; padding: 6px 10px; }
+
+@media (orientation: landscape) { .kp-scene-stage:has(.pd-hud) .pd-controller-status { top: auto; bottom: 12px; } }

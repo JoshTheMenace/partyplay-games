@@ -115,3 +115,16 @@ test('disconnect cancels an active dash before the chef returns', () => {
   rules.onPresenceChange(state, chef.id, false, state.now); rules.onPresenceChange(state, chef.id, true, state.now);
   tick(state, {}, .4); assert.equal(chef.x, x); assert.equal(chef.dashUntil, 0);
 });
+
+
+test('cook choices are validated and survive round creation without delaying service', () => {
+  for (const character of ['chef', 'chef_f', 'cat', 'dog', 'iguana', 'axolotl']) {
+    const lobbyChoice = rules.parseLobbyChoice!({ character }, false);
+    const state = rules.create({ roomId: 'kitchen', roundId: 'round', seed: 42, nowMs: 1000, players: [{ id: 'p0', name: 'Cook', color: '#abcdef', lobbyChoice }] }, { kitchen: 0, seconds: 180, practice: false });
+    assert.equal(state.players[0].character, character);
+    assert.equal(state.endsAt - state.startedAt, 180000);
+    assertSerializable(rules.publicView(state, { phase: 'playing', nowMs: 1000 }));
+  }
+  for (const invalid of [{ character: 'unknown' }, { character: 'cat', speed: 99 }, [], 'cat']) assert.throws(() => rules.parseLobbyChoice!(invalid, false));
+  assert.equal(create().players[0].character, 'chef');
+});

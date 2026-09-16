@@ -58,8 +58,9 @@ export class GameAudio {
     for(const event of race.events)if(event.id>this.lastEvent){this.lastEvent=event.id;if(event.racer!==racer?.id)continue;
       if(event.type==='coin')this.tone(1320,.12,.09);
       if(event.type==='item')this.tone(660,.23,.13);
+      if(event.type==='use'){if(event.item==='boost')this.tone(330,.4,.12,'sawtooth');else this.tone(440,.23,.1);}
       if(event.type==='boost')this.tone(330,.4,.12,'sawtooth');
-      if(event.type==='hit')this.tone(85,.35,.18,'square');
+      if(event.type==='hit'){if(event.effect==='shield')this.tone(1320,.12,.1,'sine');else this.tone(85,.35,.18,'square');}
       if(event.type==='bump'&&race.time-event.time<.4)this.tone(110,.1,.04+.1*(event.strength??0),'triangle');
       if(event.type==='finish'){this.tone(523,.5,.2);this.delayedTone(659,.5,140);this.delayedTone(784,.8,280);}
     }

@@ -20,6 +20,7 @@ export const DRIVERS = [
   { name: 'Jade', color: '#1ca993', accent: '#c8f5d5', animal: 'rabbit' },
 ] as const;
 export type Racer = {
+  stats?: RaceStats;
   kart?:KartId; routeId?:string;
   impact?:{time:number;strength:number};
   loopDistance?:number; loopOffset?:number;
@@ -31,8 +32,10 @@ export type Racer = {
   item: Item | null; itemCooldown: number; finishTime: number | null;
   lastUse: boolean; offroad: boolean; connected: boolean; distance: number; wallTime: number; coinsTaken: number[];
 };
+export type RaceStats={startRank:number;maxSpeed:number;itemsUsed:number;hitsDealt:number;hitsTaken:number;shieldsBlocked:number;coinsCollected:number;driftBoosts:number;collisions:number;airtime:number};
+export type HitEffect = 'stun' | 'frost' | 'oil' | 'decoy' | 'shield';
 export type Hazard = { routeId?:string; s?:number; offset?:number; id: number; kind: 'shell' | 'banana' | 'oil' | 'frost' | 'rocket' | 'decoy'; owner: string; x: number; z: number; heading: number; life: number; target?: string; affected?: string[] };
-export type RaceEvent = { id: number; type: 'boost' | 'hit' | 'bump' | 'item' | 'coin' | 'finish' | 'lap'; racer: string; time: number; lap?: number; strength?:number };
+export type RaceEvent = { id: number; type: 'boost' | 'hit' | 'bump' | 'use' | 'item' | 'coin' | 'finish' | 'lap'; racer: string; time: number; lap?: number; strength?:number; item?:Item; effect?:HitEffect; source?:string };
 export type Race = {
   garage?:{deadline:number;remaining:number;readyIds:string[]};
   viewMode?: 'tv' | 'personal';

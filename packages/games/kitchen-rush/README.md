@@ -4,7 +4,7 @@ A cooperative 3D kitchen campaign for 1–10 players. Play solo on one device or
 
 ## Play
 
-Select Kitchen Rush in the shared launcher. Phones join and ready through the normal room flow. Drag the movement pad, then tap Use to take/place an ingredient or plate; hold Use to chop, wash or extinguish. Drop puts an item at your feet. Toss passes ingredients in your last movement direction; plates are carried safely. Tap Dash for a short burst in your movement direction, or your facing direction when standing still; releasing the controls does not cancel the burst. Dash recharges after 1.6 seconds. Keyboard: focus the pad for WASD/arrows, E to use, Q to drop, F to toss, Shift to dash.
+Select Kitchen Rush in the shared launcher. Phones join, choose one of six cooks, and ready through the normal room flow. Appearance does not change movement or service time. The four animal cooks use the contributor’s character meshes with articulated hands and feet; human cooks and stations retain the existing kitchen kit. Food tickets use matching rendered icons. Drag the movement pad, then tap Use to take/place an ingredient or plate; hold Use to chop, wash or extinguish. Drop puts an item at your feet. Toss passes ingredients in your last movement direction; plates are carried safely. Tap Dash for a short burst in your movement direction, or your facing direction when standing still; releasing the controls does not cancel the burst. Dash recharges after 1.6 seconds. Keyboard: focus the pad for WASD/arrows, E to use, Q to drop, F to toss, Shift to dash.
 
 Follow the ticket exactly. Chopped lettuce + chopped tomato makes salad. Chopped tomato and onion each need stove cooking for soup. Burgers need cooked patty, chopped lettuce and a bun. Pizza is assembled as raw dough + chopped tomato + cheese on a plate, then the whole plate goes into an oven. Green means cooked; collect before burning. All recipes need a clean plate. Served plates return dirty after five seconds; take one to the sink and hold Use to wash it. The food bin clears mistakes while preserving plates. Empty-handed Use extinguishes fire.
 
@@ -54,3 +54,8 @@ The current source uses an original52-asset Blender kit for chefs, workstations,
 Recorded chopping, cooking, ignition, fire, washing, dish handling, ready/warning bells, delivery and service start/end cues now play on the shared display or solo host. Use the platform's **Sound on/off** button. Phone controllers do not play the room's sound effects. No music is included; the soundtrack can be added separately.
 
 The [audio guide](audio/README.md) explains triggers, source licenses, volume limits and rebuilding. The in-game instructions link to `/games/kitchen-rush/audio/index.html` for individual clip previews and credits. Current focused QA is recorded in `output/kitchen-rush/audio/QA.md` in the consumer workspace.
+
+
+## Contributor character and icon integration
+
+Six lobby choices combine the existing human chefs with Aaron Hendricks’ cat, dog, iguana and axolotl meshes. The main workstation kit, animation, sound effects, dash and campaign remain intact. The 1.11 MB animal-only GLB loads alongside the main kit only when needed; phone controllers load PNG icons only. `art/extract_characters.py` reproducibly trims the contributor’s original GLB to the 18 required meshes. Asset tests check mesh names, bounds, colors, icons, cancellation and disposal.

@@ -1,0 +1,14 @@
+.kr-picker h2 { margin: 0; }
+.kr-picker > p { margin: .5rem 0; }
+.kr-characters { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .6rem; margin-bottom: 1rem; }
+.kr-characters button { display: grid; justify-items: center; min-height: 64px; padding: .5rem; color: var(--kp-cream); background: var(--kp-ink); border: 3px solid transparent; border-radius: 16px; font: inherit; cursor: pointer; }
+.kr-characters button[aria-pressed=true] { border-color: var(--kp-sun); background: #393446; }
+.kr-characters button:focus-visible { outline: 3px solid var(--kp-sky); outline-offset: 3px; }
+.kr-characters img { width: min(100%,100px); aspect-ratio: 1; object-fit: contain; }
+.kr-cook-roster { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 12px; }
+.kr-cook-roster > div { display: grid; justify-items: center; padding: 8px; border-radius: 12px; background: var(--kp-ink); }
+.kr-cook-roster img { width: 72px; }
+.kr-art-icon { width: 1.25em; height: 1.25em; object-fit: contain; vertical-align: middle; }
+@media (orientation: landscape) and (max-height: 600px) { .kr-characters { grid-template-columns: repeat(6,minmax(0,1fr)); } .kr-characters img { max-width: 64px; } }
+
+.kr-characters button:disabled { cursor: default; opacity: .6; }
