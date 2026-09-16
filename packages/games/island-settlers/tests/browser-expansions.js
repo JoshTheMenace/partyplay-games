@@ -20,20 +20,22 @@ export default async function (page) {
   if (!qa.host) {
     qa.host = observe(page); await page.setViewportSize({ width: 1280, height: 720 });
     await page.getByRole('button', { name: 'Play on this screen', exact: true }).click();
+    if (!config.cpuSolo) await page.getByRole('button', { name: 'Watch only', exact: true }).click();
+    if (config.cpuSolo) qa.phones.push({ page, data: qa.host });
     await page.locator('.kp-code').waitFor(); const code = await page.locator('.kp-code').textContent(); qa.code = code;
-    for (let i = 0; i < (config.count ?? 10); i++) {
+    for (let i = 0; i < (config.cpuSolo ? 0 : config.count ?? 10); i++) {
       const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
       const phone = await context.newPage(), data = observe(phone); qa.phones.push({ page: phone, data });
       await phone.goto(`${base}/?join=${code}`); await phone.getByRole('textbox', { name: 'Your name' }).fill(`NavigatorName0${String(i + 1).padStart(2, '0')}`); await phone.getByRole('button', { name: 'Join the room' }).click();
     }
-    await page.getByRole('button', { name: 'Settings', exact: true }).click(); await page.locator('#is-points').fill('10'); await page.locator('#is-mode').selectOption(config.mode); await page.locator(`input[name="is-expansion"][value="${config.expansion}"]`).check(); if (config.citiesKnights !== false) await page.getByRole('switch', { name: /^Cities & Knights/ }).click(); const names = { fishing: 'Fishing on Catan', rivers: 'Rivers of Catan', caravans: 'Merchant Trains', 'barbarian-attack': 'Barbarian Attack', traders: 'Traders & Barbarians: deliveries' }; for (const key of config.scenarios) await page.getByRole('switch', { name: names[key], exact: true }).click(); await page.getByRole('button', { name: 'Apply settings', exact: true }).click();
-    for (const phone of qa.phones) await phone.page.getByRole('button', { name: 'Ready to play', exact: true }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click(); await page.locator('#is-points').fill('10'); if (config.tableSize) await page.locator('#is-table-size').selectOption(String(config.tableSize)); await page.locator('#is-mode').selectOption(config.mode); await page.locator(`input[name="is-expansion"][value="${config.expansion}"]`).check(); if (config.citiesKnights !== false) await page.getByRole('switch', { name: /^Cities & Knights/ }).click(); const names = { fishing: 'Fishing on Catan', rivers: 'Rivers of Catan', caravans: 'Merchant Trains', 'barbarian-attack': 'Barbarian Attack', traders: 'Traders & Barbarians: deliveries' }; for (const key of config.scenarios) await page.getByRole('switch', { name: names[key], exact: true }).click(); await page.getByRole('button', { name: 'Apply settings', exact: true }).click();
+    for (const phone of qa.phones.filter(p => p.page !== page)) await phone.page.getByRole('button', { name: 'Ready to play', exact: true }).click();
     await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await wait(() => qa.phones.every(p => p.data.current?.publicView.phase === 'setup'), 'ten phones ready');
     qa.round = qa.host.current.roundId;
     await page.screenshot({ path: `output/playwright/island-settlers/${config.prefix}-host-setup-1280.png` });
-    await qa.phones[0].page.setViewportSize({ width: 320, height: 568 }); await qa.phones[0].page.screenshot({ path: `output/playwright/island-settlers/${config.prefix}-phone-setup-320.png`, fullPage: true });
-    qa.reports.push({ layout: `${qa.phones.length}-player setup`, phones: qa.phones.length, phoneCanvas: await qa.phones[0].page.locator('canvas').count(), hostCanvas: await page.locator('canvas').count() });
+    if (!config.cpuSolo) await qa.phones[0].page.setViewportSize({ width: 320, height: 568 }); await qa.phones[0].page.screenshot({ path: `output/playwright/island-settlers/${config.prefix}-phone-setup-320.png`, fullPage: true });
+    qa.reports.push({ layout: `${qa.host.current.publicView.players.length}-seat setup`, humans: qa.phones.length, cpus: qa.host.current.publicView.players.filter(p => p.cpu).length, phoneCanvas: await qa.phones[0].page.locator('canvas').count(), hostCanvas: await page.locator('canvas').count() });
   }
   const labels = { wood: 'Wood', brick: 'Brick', wool: 'Wool', grain: 'Grain', ore: 'Ore', paper: 'Paper', cloth: 'Cloth', coin: 'Coin' };
   const execute = async (phone, a) => {
@@ -64,10 +66,11 @@ export default async function (page) {
       }
       if (c.cards) await resources(a.cards);
       await target.getByRole('button', { name: 'Confirm ' + label.toLowerCase(), exact: true }).click();
-    } else throw new Error(`UI action not handled: ${a.type}`);
+    } else if (a.type === 'accept-offer') await target.locator('.is-offer-phone').filter({ has: target.getByText(pub.players.find(p => p.id === pub.offers.find(o => o.id === a.offerId).playerId).name, { exact: true }) }).getByRole('button', { name: 'Accept', exact: true }).click();
+    else throw new Error(`UI action not handled: ${a.type}`);
   };
   qa.execute = execute; qa.choose = chooseAction;
-  for (let i = 0; i < 40 && !qa.complete; i++) {
+  for (let i = 0; i < (config.batchSize ?? 40) && !qa.complete; i++) {
     const current = qa.host.current;
     if (current?.publicView.phase === 'ended') { qa.complete = true; break; }
     let choice;
@@ -84,7 +87,7 @@ export default async function (page) {
     await page.locator('.is-results').waitFor(); await page.screenshot({ path: `output/playwright/island-settlers/${config.prefix}-results-1280.png`, fullPage: true });
     qa.outcome = qa.host.current.outcome; await page.reload(); await page.locator('.is-results').waitFor();
     await page.getByRole('button', { name: 'Play again', exact: true }).click();
-    for (const p of qa.phones) await p.page.getByRole('button', { name: 'Ready to play', exact: true }).click(); await page.getByRole('button', { name: 'Start game', exact: true }).click();
+    for (const p of qa.phones.filter(p => p.page !== page)) await p.page.getByRole('button', { name: 'Ready to play', exact: true }).click(); await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await wait(() => qa.host.current.roundId !== qa.round && qa.host.current.publicView.phase === 'setup', 'fresh replay');
     if (qa.host.current.publicView.buildings.length || qa.host.current.publicView.routes.length) throw new Error('Replay retained board pieces'); qa.replayed = true;
   }

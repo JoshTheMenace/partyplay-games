@@ -5,6 +5,8 @@ import { MISSIONS, SCENARIOS, VARIANTS, type Mission, type Scenario, type Varian
 import { DEFAULT_SETTINGS, SCENARIO_NAMES, VARIANT_NAMES, expansionRestrictions, maximumTargetPoints, suggestedPoints } from './expansion-settings';
 import { Display } from './display';
 import { Controller } from './controller';
+import { PersonalView } from './personal';
+import { AudioView } from './audio';
 import { MISSION_META, describeSettings, expansionPlayer, playerOf, withDefaults } from './presentation';
 import './style.css';
 
@@ -18,6 +20,7 @@ function IslandSettings({ settings: raw, onChange, disabled }: SettingsViewProps
   const set = (part: Partial<Settings>) => { const next = { ...settings, ...part }, blocked = expansionRestrictions(next), gone = [...(next.scenarios ?? []), ...(next.variants ?? [])].filter(key => blocked[key]), cleaned = { ...next, scenarios: (next.scenarios ?? []).filter(key => !blocked[key]), variants: (next.variants ?? []).filter(key => !blocked[key]) }, cap = maximumTargetPoints(cleaned), notes = gone.map(key => `${(SCENARIO_NAMES as Record<string, string>)[key] ?? (VARIANT_NAMES as Record<string, string>)[key]} turned off: ${blocked[key]}`); if (cleaned.targetPoints > cap) { notes.push(`Victory target lowered to ${cap}, the maximum for this setup.`); cleaned.targetPoints = cap; } setDropped(notes.length ? notes.join(' ') : null); onChange(cleaned); };
   const toggle = <T extends string>(list: T[] | undefined, key: T, on: boolean) => on ? [...(list ?? []).filter(item => item !== key), key] : (list ?? []).filter(item => item !== key);
   return <div className="is-settings">
+    <div className="is-setting"><label htmlFor="is-table-size">Fill the table with CPUs</label><select id="is-table-size" value={settings.tableSize ?? 3} disabled={disabled} onChange={event => set({ tableSize: Number(event.target.value) })}>{Array.from({ length: 8 }, (_, i) => i + 3).map(n => <option key={n} value={n}>{n} total players</option>)}</select><p>CPUs fill any empty seats up to this size when the round starts. Friends take priority, up to ten total. With three or more friends, choose three to play without CPUs.</p></div>
     {dropped && <div className="is-settings-dropped"><StatusNotice tone="info">{dropped}</StatusNotice></div>}
     <div className="is-setting"><label htmlFor="is-mode">Turn structure</label><select id="is-mode" value={settings.mode} disabled={disabled} onChange={event => set({ mode: event.target.value as Settings['mode'] })}><option value="standard">Standard · one player at a time</option><option value="connect">Connect-style · simultaneous rounds</option></select><p>{settings.mode === 'standard' ? 'Classic turns: roll, collect, trade, build. With five or more players, turns run in pairs; the second player builds and bank-trades without player trades.' : 'Our adaptation of large-group play: one shared roll, then everyone trades and builds at once against a round timer. Confirmed placements win contested spots; victory is checked at the end of each round.'}</p></div>
     <fieldset className="is-setting is-radio-set"><legend>Map and sea system</legend>{([['base', 'Base island', 'One island, classic trading ports. Above four players the board grows into a larger custom layout.'], ['seafarers', 'Seafarers', 'Islands linked by sea lanes. Ships form routes, gold fields pay any resource, a pirate roams. Our archipelago scenario.'], ['explorers', 'Explorers & Pirates', 'Expedition ships carry settlers, crews, fish and spices into unexplored fog. Harbour settlements replace ports. Cannot combine with Seafarers routes.']] as const).map(([value, label, blurb]) => <label key={value} className="is-radio" data-on={settings.expansion === value || undefined}><input type="radio" name="is-expansion" value={value} checked={settings.expansion === value} disabled={disabled} onChange={() => set({ expansion: value })}/><span><strong>{label}</strong><small>{blurb}</small></span></label>)}</fieldset>
@@ -35,6 +38,7 @@ function IslandSettings({ settings: raw, onChange, disabled }: SettingsViewProps
 function Instructions({ role }: InstructionsViewProps) {
   return <div className="is-instructions">
     <h2>Settle the island.</h2>
+    <p>Play alone or with friends. CPUs fill the table to the size chosen in Settings (three by default). On the host, choose Play on this device for your own hand, or Watch only and join with your phone. CPU turns are automatic; they can accept useful, fair trades you offer.</p>
     <p>Settlements on hex corners collect resources when the dice match a number. Spend wood, brick, wool, grain and ore on roads, ships, settlements, cities and development cards. First to the target score wins.</p>
     {role === 'display' ? <p>The shared screen shows the island, the dice, open offers and everyone’s public totals. Card counts are public; the cards themselves stay on phones.</p> : <p>Your phone holds your hand. When it is your move, the map lights up the legal spots: tap one, check the details, then confirm. Trade by talking, then post the offer; the other side accepts on their phone and you pick who to trade with. Expansion actions appear under More as labelled choices supplied by the game.</p>}
     <p><strong>Standard</strong> plays classic turns. With five or more players, turns run in pairs and the second player skips player trades.</p>
@@ -53,9 +57,10 @@ function Results({ outcome, publicView: view, playerId }: ResultsViewProps<Publi
   </div>;
 }
 export const client: GameClientModule<null, Action, Settings, PublicView, PrivateView> = {
+  AudioView,
   settingsWide: true,
   SceneView: props => <Suspense fallback={null}><IslandScene {...props}/></Suspense>,
-  DisplayView: Display, ControllerView: Controller,
+  DisplayView: Display, ControllerView: Controller, PersonalView,
   SettingsView: IslandSettings, InstructionsView: Instructions, ResultsView: Results,
   prepare() {}, dispose() {},
 };
