@@ -1,12 +1,13 @@
 import { useEffect, useRef } from 'react';
 import type { ClientProps, PublicView } from '../contracts';
+import { FleetBlueprints } from './fleet';
 import { FleetScene } from '../render/fleet-scene';
 import { enemyLabel } from '../render/formation';
 import { hullPath } from '../render/hulls';
 import { useAudio } from './controller';
 import { RouteMap, beaconKind, beaconOptions } from './phases';
 import { BETWEEN_BATTLES, OBJECTIVE_LABEL, beaconCode, phaseContext } from './nav';
-/** Canvas host. Snapshots feed the scene through a ref so React never redraws the battle; assetsReady fires once from the mount effect. */
+/** SVG deck plans share geometry with the foreground canvas weapon effects. */
 export function FleetCanvas({ view, serverNowMs, onReady, compact = false }: { view: PublicView; serverNowMs(): number; onReady?(): void; compact?: boolean }) {
   const canvas = useRef<HTMLCanvasElement>(null), scene = useRef<FleetScene | null>(null), ready = useRef(onReady); ready.current = onReady;
   useEffect(() => {
@@ -16,7 +17,7 @@ export function FleetCanvas({ view, serverNowMs, onReady, compact = false }: { v
     return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); fleet.dispose(); scene.current = null; };
   }, []);
   useEffect(() => { scene.current?.setView(view, serverNowMs()); }, [view, serverNowMs]);
-  return <canvas ref={canvas} className={`ss-canvas ${compact ? 'ss-canvas-compact' : ''}`} role="img" aria-label={`Fleet overview: ${view.ships.filter(s => s.faction === 'allied').length} allied ships, ${view.ships.filter(s => s.faction === 'enemy').length} enemy ships`}/>;
+  return <div className="ss-fleet-stage"><canvas ref={canvas} className={`ss-canvas ${compact ? 'ss-canvas-compact' : ''}`} role="img" aria-label={`Fleet overview: ${view.ships.filter(s => s.faction === 'allied').length} allied ships, ${view.ships.filter(s => s.faction === 'enemy').length} enemy ships`}/><FleetBlueprints view={view}/></div>;
 }
 export function Display(props: ClientProps) {
   const pub = props.publicView; useAudio(pub, null);
@@ -31,9 +32,9 @@ export function Display(props: ClientProps) {
 }
 function TopStrip({ view }: { view: PublicView }) {
   const beacon = view.beacons.find(b => b.id === view.currentBeaconId);
-  return <header className="ss-top"><span className="ss-top-sector" style={{ ['--chip' as string]: view.sector.color }}><b className="kp-display">Starship Scramble</b><span>{view.sector.name} · sector {view.sector.index}/{view.sector.count}{beacon ? ` · ${beacon.label}` : ''}</span></span>
-    <span className="ss-top-phase"><b className="kp-display">{view.phase === 'combat' ? view.objective?.kind === 'escape' && view.objective.deadlineMs !== null ? `Retreat · hold ${Math.max(0, Math.ceil((view.objective.deadlineMs - view.timeMs) / 1000))}s` : view.objective ? OBJECTIVE_LABEL[view.objective.kind] : 'Battle' : view.phase === 'rewards' ? 'Salvage' : view.phase === 'store' ? 'Station' : view.phase === 'route' ? 'Choose a beacon' : view.phase === 'event' ? view.event?.title ?? 'Event' : view.phase === 'hangar' ? 'Hangar' : view.phase === 'assignment' ? 'Crew assignment' : 'Results'}</b>{view.phase === 'combat' && view.objective && <small>{view.objective.description}</small>}</span>
-    <span className="ss-top-threat" aria-label={`Pursuit threat ${Math.round(view.threat)}`}><small>Pursuit</small><i style={{ ['--fill' as string]: `${Math.min(100, view.threat)}%` }}/></span></header>;
+  return <header className="ss-top"><span className="ss-top-sector" style={{ ['--chip' as string]: view.sector.color }}><span>{view.sector.name} · {view.sector.index}/{view.sector.count}{view.phase !== 'combat' && beacon ? ` · ${beacon.label}` : ''}</span></span>
+    <span className="ss-top-phase"><b className="kp-display">{view.phase === 'combat' ? view.objective?.kind === 'escape' && view.objective.deadlineMs !== null ? `Retreat · hold ${Math.max(0, Math.ceil((view.objective.deadlineMs - view.timeMs) / 1000))}s` : view.objective ? OBJECTIVE_LABEL[view.objective.kind] : 'Battle' : view.phase === 'rewards' ? 'Salvage' : view.phase === 'store' ? 'Station' : view.phase === 'route' ? 'Choose a beacon' : view.phase === 'event' ? view.event?.title ?? 'Event' : view.phase === 'hangar' ? 'Hangar' : view.phase === 'assignment' ? 'Crew assignment' : 'Results'}</b></span>
+    {(view.phase !== 'combat' || view.threat > 0) && <span className="ss-top-threat" aria-label={`Pursuit threat ${Math.round(view.threat)}`}><small>Pursuit</small><i style={{ ['--fill' as string]: `${Math.min(100, view.threat)}%` }}/></span>}</header>;
 }
 /** Compact banner under the top strip: the fleet stays readable while captains plan. */
 function PauseOverlay({ view }: { view: PublicView }) {
@@ -45,6 +46,7 @@ export function EmergencyRow({ view }: { view: PublicView }) {
   const allies = view.ships.filter(s => s.faction === 'allied');
   const chips = allies.flatMap(ship => { const owner = view.captains.find(c => c.id === ship.ownerCaptainId); const alerts = ship.status !== 'active' ? [ship.status === 'destroyed' ? 'Destroyed' : ship.status] : ship.alerts; return alerts.length ? [{ id: ship.id, owner: owner?.name ?? ship.name, color: owner?.color ?? ship.color, text: alerts[0] + (alerts.length > 1 ? ` +${alerts.length - 1}` : '') }] : []; });
   const away = view.captains.filter(c => !c.connected && c.status !== 'spectator');
+  if (view.phase === 'combat' && !chips.length && !away.length) return null;
   return <footer className="ss-emergency" aria-live="polite">{chips.map(chip => <span key={chip.id} className="ss-emergency-chip" style={{ ['--chip' as string]: chip.color }}><b>{chip.owner}</b>{chip.text}</span>)}{away.map(c => <span key={c.id} className="ss-emergency-chip ss-emergency-away"><b>{c.name}</b>reconnecting</span>)}{!chips.length && !away.length && <span className="ss-emergency-quiet">{phaseContext(view).hint}</span>}</footer>;
 }
 const HULL_NAMES: Record<string, string> = { wayfarer: 'Wayfarer', bulwark: 'Bulwark', longbow: 'Longbow', moth: 'Moth', hearth: 'Hearth', kite: 'Kite', magpie: 'Magpie', cuttlefish: 'Cuttlefish' };

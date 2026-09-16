@@ -237,6 +237,7 @@
 .ss-roster li{padding:.3rem .5rem;border-radius:8px;border-left:4px solid var(--chip,#a9b3e6);background:var(--kp-ink);display:grid;font-size:.8rem}
 .ss-results p{margin:0}
 /* TV */
+.ss-display[data-phase=combat]{grid-template-rows:36px minmax(0,1fr) auto}
 .ss-display{display:grid;grid-template-rows:56px minmax(0,1fr) 48px;height:max(350px,calc(100dvh - 100px));gap:4px}
 .ss-top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:1rem;padding:0 1rem;background:var(--kp-ink);border-radius:12px;border:1px solid var(--ss-line)}
 .ss-top-sector{display:flex;flex-direction:column;line-height:1.1}
@@ -260,7 +261,7 @@
 .ss-pause-banner li span{overflow:hidden;text-overflow:ellipsis;max-width:190px}
 .ss-pause-banner li b{color:var(--muted-foreground);font-weight:800;font-size:.7rem}
 .ss-pause-banner li.ss-ready b{color:var(--kp-lime)}
-.ss-emergency{display:flex;gap:.5rem;align-items:center;padding:0 .6rem;overflow:hidden;background:var(--kp-ink);border-radius:12px;border:1px solid var(--ss-line)}
+.ss-emergency{min-height:40px;display:flex;gap:.5rem;align-items:center;padding:0 .6rem;overflow:hidden;background:var(--kp-ink);border-radius:12px;border:1px solid var(--ss-line)}
 .ss-emergency-chip{display:inline-flex;align-items:center;gap:.5rem;padding:.3rem .7rem;border-radius:99px;background:color-mix(in srgb,var(--kp-coral) 22%,var(--kp-ink));border:2px solid var(--kp-coral);font-size:.95rem;font-weight:800;white-space:nowrap;max-width:300px;overflow:hidden;text-overflow:ellipsis}
 .ss-emergency-chip b{color:var(--chip,var(--kp-cream))}
 .ss-emergency-away{border-color:var(--muted-foreground);background:var(--kp-navy)}
@@ -347,3 +348,22 @@
 .ss-crew-list .ss-crew-trait{white-space:normal;overflow:visible;text-overflow:clip;font-size:.72rem;line-height:1.35}
 .ss-species-choice{display:grid;grid-template-columns:48px minmax(0,1fr);gap:.3rem .6rem;align-items:center}
 .ss-species-choice>small{grid-column:1/-1;line-height:1.4;color:var(--muted-foreground)}
+
+/* Shared cutaways on the tactical display; authoritative battle effects stay on the canvas. */
+.ss-fleet-stage{position:relative;min-width:0;min-height:0;width:100%;height:100%;background:#05071a}
+.ss-fleet-blueprints{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.ss-fleet-title{font-family:var(--font-display);font-weight:400}
+.ss-fleet-blueprints .ss-room-glyph{font-size:var(--ss-glyph,10px)}
+.ss-fleet-blueprints .ss-room-name{font-size:var(--ss-room-name,8px)}
+
+.ss-ship-thumbnail{display:block;width:100%;height:140px;grid-column:1/-1;grid-row:auto}
+.ss-ship-thumbnail .ss-room-glyph{font-size:var(--ss-glyph,10px)}
+.ss-ship-thumbnail .ss-room-name{display:none}
+.ss-ship-list,.ss-vessel-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;align-content:start}
+.ss-ship-list .ss-chip{display:flex;flex-direction:column;align-items:stretch;height:100%;text-align:left}
+.ss-vessel-grid button{height:100%;min-height:190px}
+.ss-teleport-picker{display:grid;grid-template-columns:minmax(170px,.7fr) minmax(0,2fr);gap:12px}
+.ss-teleport-picker>div{display:grid;align-content:start;gap:8px;min-width:0}
+@media(max-width:480px){.ss-teleport-picker{grid-template-columns:1fr}.ss-vessel-grid,.ss-ship-list{grid-template-columns:1fr}}
+
+.ss-fleet-stage > .ss-canvas{position:relative;z-index:1;pointer-events:none}

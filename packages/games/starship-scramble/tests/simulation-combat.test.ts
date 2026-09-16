@@ -275,3 +275,18 @@ test('each authored hull accommodates 32 friendly crew and eight boarders withou
     assert.equal(state.simulation.crew.length, 40);
   }
 });
+
+test('each volley projectile publishes its actual muzzle slot, target room and flight timing', () => {
+  const { state, defs } = fixture(), ship = state.simulation.ships[0];
+  ship.weapons = [{ itemId: 'missile', definitionId: 'missile', chargeMs: 1000, order: { shipId: 'enemy', roomId: 'r1', hold: false } }];
+  defs.weapons.find(w => w.id === 'missile')!.shots = 3;
+  tickSimulation(state, new Map(), 100, defs);
+  const shots = state.simulation.effects.filter(e => e.kind === 'shot' && e.sourceShipId === ship.id);
+  assert.equal(shots.length, 3);
+  for (const [i, shot] of shots.entries()) {
+    assert.equal(shot.mountIndex, 0); assert.equal(shot.roomId, 'r1'); assert.equal(shot.weaponId, 'missile');
+    assert.equal(shot.flightMs, 1300); assert.equal(shot.delayMs, i * 80);
+    const projectile = state.simulation.projectiles[i];
+    assert.equal(projectile.arriveAtMs, shot.atMs + shot.flightMs! + shot.delayMs!);
+  }
+});

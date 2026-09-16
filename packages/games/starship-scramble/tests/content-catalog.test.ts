@@ -29,8 +29,8 @@ test('five-sector campaign route is seeded, connected, and bounded; training vis
   const route = createExpedition(123, settings, 4, definitions);
   assert.deepEqual(route, createExpedition(123, settings, 4, definitions));
   assert.equal(new Set(route.sectorIds).size, 5);
-  assert.equal(Math.max(...route.beacons.map(beacon => beacon.column)), 5);
-  for (const beacon of route.beacons) if (beacon.kind !== 'exit') assert.ok(beacon.next.every(id => route.beacons.some(next => next.id === id && next.column === beacon.column + 1)));
+  assert.equal(Math.max(...route.beacons.map(beacon => beacon.column)), 6);
+  for (const beacon of route.beacons) if (beacon.kind !== 'exit') assert.ok(beacon.next.every(id => route.beacons.some(next => next.id === id && next.column > beacon.column)));
   assert.equal(createExpedition(1, { ...settings, expedition: 'training' }, 1, definitions).beacons.length, 4);
 });
 test('invalid content fails validation rather than silently becoming a dead option', () => {

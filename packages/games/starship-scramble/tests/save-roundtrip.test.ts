@@ -30,3 +30,14 @@ test('finish suspends campaign without pretending victory, preserving phase for 
   const loaded = rules.loadSave!(context(1), rules.exportSave!(state), state.settings).state;
   assert.equal(loaded.resumePhase, 'combat'); assert.equal(loaded.result, null);
 });
+
+test('weapon visual metadata survives save validation and older effects remain valid', () => {
+  const state = battleFixture(1, 1), ship = state.simulation.ships[0], target = state.simulation.ships[1];
+  const legacy = { id: 'visual-old', kind: 'shot' as const, sourceShipId: ship.id, targetShipId: target.id, text: 'Needle', atMs: 0 };
+  const shot = { ...legacy, id: 'visual-new', weaponId: 'laser-needle', mountIndex: 0, roomId: 'r3', flightMs: 550, delayMs: 80 };
+  state.simulation.effects = [legacy, shot];
+  assert.deepEqual(validateSave(rules.exportSave!(state), defs).simulation.effects, [legacy, shot]);
+  const invalid = rules.exportSave!(state) as typeof state;
+  invalid.simulation.effects[1].flightMs = -1;
+  assert.throws(() => validateSave(invalid, defs));
+});

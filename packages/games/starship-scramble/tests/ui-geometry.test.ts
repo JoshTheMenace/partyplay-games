@@ -65,3 +65,15 @@ void test('crew labels: one crew shows the full name; several share left-to-righ
 void test('every hull decoration, including fins, dishes, claws and glow-free engine blocks, stays inside the 568 aiming frame with its stroke', () => {
   for (const hull of hulls) { const fit = fitCutaway(hull.rooms, { w: 430, h: 198 }, hull.id); assert.ok(fit.extent.y >= 0 && fit.extent.y + fit.extent.h <= 198 && fit.extent.x >= 0 && fit.extent.x + fit.extent.w <= 430, `${hull.id} extent ${JSON.stringify(fit.extent)}`); assert.ok(fit.parts.length >= 6, `${hull.id} carries individual detailing (${fit.parts.length} parts)`); }
 });
+
+void test('installed weapon hardpoints fit every hull without covering any room target', async () => {
+  const { weaponMount } = await import('../src/render/weapons');
+  for (const hull of hulls) for (const stage of Object.values(STAGES)) for (const faction of ['allied', 'enemy'] as const) {
+    const fit = fitCutaway(hull.rooms, stage, hull.id);
+    for (let i = 0; i < hull.maxWeapons; i++) {
+      const m = weaponMount(fit, i, faction), x = Math.min(m.x - 13 * m.scale * m.direction, m.muzzle.x), y = m.y - 6.7 * m.scale, w = 41 * m.scale, h = 13.4 * m.scale;
+      assert.ok(x >= 0 && y >= 0 && x + w <= stage.w && y + h <= stage.h, `${hull.id} mount ${i} fits`);
+      assert.ok(fit.rooms.every(r => x + w <= r.x || x >= r.x + r.w || y + h <= r.y || y >= r.y + r.h), `${hull.id} mount ${i} leaves rooms clear`);
+    }
+  }
+});

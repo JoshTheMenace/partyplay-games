@@ -25,7 +25,7 @@ test('all 300 roots and 30 followups have an ordinary route with no scrap, ammun
   }
 });
 
-test('seeded routes finish 30 connected beacons without repeating roots across roster and difficulty', () => {
+test('seeded routes reach the finale through connected beacons without repeating roots across roster and difficulty', () => {
   const seen = new Set<string>();
   for (const count of [1, 2, 3, 4]) for (const difficulty of ['relaxed', 'standard'] as const) for (let seed = 1; seed <= 64; seed++) {
     const state = fixture(count, seed);
@@ -33,7 +33,7 @@ test('seeded routes finish 30 connected beacons without repeating roots across r
     state.expedition = createExpedition(seed, state.settings, count, defs);
     assert.equal(state.expedition.sectorIds[0], 'lantern-reach');
     assert.equal(state.expedition.sectorIds[4], 'relay-crown');
-    for (let visit = 0; visit < 30; visit++) {
+    for (let visit = 0; visit < 35; visit++) {
       const current = state.expedition.beacons.find(beacon => beacon.id === state.expedition.currentBeaconId);
       const options = state.expedition.beacons.filter(beacon => current ? current.next.includes(beacon.id) : beacon.column === 0);
       const beacon = options[(seed + visit) % options.length]!;
@@ -48,9 +48,9 @@ test('seeded routes finish 30 connected beacons without repeating roots across r
           if (effect.kind === 'reputation') state.expedition.reputation[effect.faction] = (state.expedition.reputation[effect.faction] ?? 0) + effect.amount;
         }
       }
-      if (beacon.kind === 'exit' && visit < 29) advanceSector(state, defs);
+      if (beacon.kind === 'exit') { if (state.expedition.sectorIndex === 4) break; advanceSector(state, defs); }
     }
-    assert.equal(state.expedition.completedBeacons, 30);
+    assert.ok(state.expedition.completedBeacons >= 25 && state.expedition.completedBeacons <= 35);
     assert.equal(state.expedition.event!.definitionId, 'last-mirror');
     assert.equal(new Set(state.expedition.seenRoots).size, state.expedition.seenRoots.length);
     for (const id of state.expedition.seenRoots) seen.add(id);

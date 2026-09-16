@@ -6,6 +6,7 @@ import { systems as SYSTEM_DEFS } from '../definitions/presentation/index';
 import { CrewPortrait, SpeciesSelect } from './crew';
 import { speciesFor } from '../definitions/presentation/species';
 import { StarshipAudio } from '../render/audio';
+import { ShipThumbnail } from './fleet';
 import { hullPath } from '../render/hulls';
 import { Interior, SYSTEM_GLYPH, crewSummary, effectiveTier, roomStatus, roomTitle } from './interior';
 import { BASIC_SYSTEMS, HOSTILE_DRONES, HOSTILE_SYSTEMS, SELF_SYSTEMS, BETWEEN_BATTLES, bareName, carriedDrones, crewLocation, crewShips, defaultShip, initial, legalTargets, nextRequestId, ownShipId, present, reconcile, reduce, seconds, shipLabel, SIM_PHASES, transporterFor, uncrewedAllies, upgradeCost, type Command, type Local, type Nav, type Step, type Tool, type World } from './nav';
@@ -84,11 +85,11 @@ export function CaptainScreen({ props }: { props: ControllerProps }) {
       {local.notice && <div className={`ss-toast ss-toast-${local.notice.tone}`} role={local.notice.tone === 'error' ? 'alert' : 'status'}>{local.notice.text}</div>}
     </section>
     {nav.kind === 'control' ? <DirectControl screen={screen}/> : aiming ? <AimDock screen={screen} interior={interior}/> : <Dock screen={screen} spectator={spectator}/>}
-    {drawer === 'ships' && <Drawer title="Ships" onClose={() => setMenu('none')}><ShipList screen={screen} onPicked={() => setMenu('none')}/></Drawer>}
+    {drawer === 'ships' && <Drawer title="Ships" size="full" onClose={() => setMenu('none')}><ShipList screen={screen} onPicked={() => setMenu('none')}/></Drawer>}
     {drawer === 'room' && interior && nav.kind === 'room' && <Drawer title={roomTitle(interior.rooms.find(r => r.id === nav.roomId) ?? { name: 'Room' })} onClose={closeDrawer}><RoomPanel screen={screen} interior={interior} roomId={nav.roomId}/></Drawer>}
-    {drawer === 'weapons' && <Drawer title={nav.kind === 'targets' ? 'Choose a vessel' : 'Weapons and systems'} onClose={closeDrawer}>{nav.kind === 'targets' ? <TargetsPanel screen={screen} tool={nav.tool}/> : <WeaponsPanel screen={screen}/>}</Drawer>}
+    {drawer === 'weapons' && <Drawer title={nav.kind === 'targets' ? 'Choose a vessel' : 'Weapons and systems'} size={nav.kind === 'targets' ? 'full' : 'normal'} onClose={closeDrawer}>{nav.kind === 'targets' ? <TargetsPanel screen={screen} tool={nav.tool}/> : <WeaponsPanel screen={screen}/>}</Drawer>}
     {drawer === 'crew' && <Drawer title="Your crew" onClose={() => setMenu('none')}><CrewList screen={screen}/></Drawer>}
-    {drawer === 'teleport' && nav.kind === 'teleport' && <Drawer title="Teleporter" onClose={closeDrawer}><TeleportPanel screen={screen} nav={nav}/></Drawer>}
+    {drawer === 'teleport' && nav.kind === 'teleport' && <Drawer title="Teleporter" size="full" onClose={closeDrawer}><TeleportPanel screen={screen} nav={nav}/></Drawer>}
     {drawer === 'phase' && <Drawer title={phaseTitle(phase)} onClose={() => setMenu('none')} size={phase === 'route' ? 'full' : 'wide'}><PhaseDrawer screen={screen} spectator={spectator}/></Drawer>}
     {drawer === 'main' && <Drawer title="Captain’s menu" onClose={() => setMenu('none')}><MainMenu screen={screen} interior={interior} spectator={spectator}/></Drawer>}
   </div>;
@@ -138,11 +139,11 @@ function Hud({ screen, interior, spectator }: { screen: Screen; interior: Interi
   </header>;
 }
 function Dock({ screen, spectator }: { screen: Screen; spectator: boolean }) {
-  const { world, dispatch, openMenu, props, own } = screen, crew = world.privateView.crew.filter(c => c.status === 'alive');
+  const { world, dispatch, openMenu, own } = screen, crew = world.privateView.crew.filter(c => c.status === 'alive');
   return <nav className="ss-dock" aria-label="Captain controls">
     {!spectator && own && <button type="button" className="ss-dock-button" onClick={() => dispatch({ type: 'open', nav: { kind: 'weapons' } })} aria-label="Weapons and systems"><b>⌖</b><small>Arms</small></button>}
     {!spectator && crew.length > 0 && <button type="button" className="ss-dock-button" onClick={() => openMenu('crew')} aria-label={`Your crew, ${crew.length} alive`}><b>{crew.length}</b><small>Crew</small></button>}
-    {props.fleet && <button type="button" className="ss-dock-button" onClick={() => { openMenu('none'); props.fleet?.(); }} aria-label="Fleet overview"><b>◎</b><small>Fleet</small></button>}
+    <button type="button" className="ss-dock-button" onClick={() => openMenu('ships')} aria-label="Fleet overview"><b>◎</b><small>Fleet</small></button>
   </nav>;
 }
 function Scanning({ ship, world }: { ship: ShipSummary; world: World }) {
@@ -152,9 +153,9 @@ function Scanning({ ship, world }: { ship: ShipSummary; world: World }) {
 function ShipList({ screen, onPicked }: { screen: Screen; onPicked(): void }) {
   const { world, local, dispatch, own, setAim } = screen, ships = world.publicView.ships, ordered = [...ships.filter(s => s.id === own), ...ships.filter(s => s.faction === 'allied' && s.id !== own).sort((a, b) => a.formation - b.formation), ...ships.filter(s => s.faction === 'enemy').sort((a, b) => a.formation - b.formation)];
   const mine = (id: string) => world.privateView.crew.filter(c => c.status === 'alive' && c.currentShipId === id).length;
-  const targets = local.nav.kind === 'targets' ? new Set(legalTargets(local.nav.tool, world).map(s => s.id)) : null;
+  const targets = (local.nav.kind === 'targets' || local.nav.kind === 'systems') ? new Set(legalTargets(local.nav.tool, world).map(s => s.id)) : null;
   const pick = (ship: ShipSummary) => {
-    if (local.nav.kind === 'targets' && targets?.has(ship.id)) dispatch({ type: 'open', nav: { kind: 'systems', tool: local.nav.tool, targetShipId: ship.id } });
+    if ((local.nav.kind === 'targets' || local.nav.kind === 'systems') && targets?.has(ship.id)) dispatch({ type: 'open', nav: { kind: 'systems', tool: local.nav.tool, targetShipId: ship.id } });
     else if (local.nav.kind === 'teleport') { dispatch({ type: 'view', shipId: ship.id }); dispatch({ type: 'open', nav: { ...local.nav, targetShipId: ship.id } }); setAim(true); }
     else dispatch({ type: 'view', shipId: ship.id });
     onPicked();
@@ -165,7 +166,7 @@ function ShipList({ screen, onPicked }: { screen: Screen; onPicked(): void }) {
     {ordered.map(ship => { const label = shipLabel(ship, ships), gone = !present(ship), count = mine(ship.id), isOwn = ship.id === own, legal = targets ? targets.has(ship.id) : true;
       return <li key={ship.id}><button type="button" className={`ss-chip ${isOwn ? 'ss-chip-own' : ship.faction === 'enemy' ? 'ss-chip-enemy' : 'ss-chip-ally'} ${local.viewedShipId === ship.id ? 'ss-chip-active' : ''} ${gone ? 'ss-chip-gone' : ''}`} disabled={gone || !legal} onClick={() => pick(ship)} style={{ ['--chip' as string]: ship.faction === 'enemy' ? '#ff5748' : ship.color }}
         aria-label={`${isOwn ? 'Own ship ' : ''}${label}${ship.faction === 'enemy' ? ` ${bareName(ship)}` : ''}. Hull ${Math.round(ship.hull)} of ${ship.maxHull}. ${count ? `${count} of your crew aboard. ` : ''}${ship.alerts.join(', ')}${gone ? `. ${ship.status}` : ''}`}>
-        <svg viewBox="0 0 100 60" className="ss-chip-hull" aria-hidden="true"><path d={hullPath(ship.hullId)} fill={gone ? '#3a3f5a' : ship.faction === 'enemy' ? '#b2542f' : ship.color} stroke="#05071a" strokeWidth={4} fillRule="evenodd" transform={ship.faction === 'enemy' ? 'translate(100 0) scale(-1 1)' : undefined}/></svg>
+        <ShipThumbnail ship={ship}/>
         <strong>{isOwn ? 'Own ship' : label}</strong><small>{ship.faction === 'enemy' ? bareName(ship) : ship.name} · hull {Math.round(ship.hull)}/{ship.maxHull}{count ? ` · ${count} of yours aboard` : ''}{gone ? ` · ${ship.status}` : ship.alerts.length ? ` · ${ship.alerts.join(', ')}` : ''}</small>
         {!gone && <i className="ss-chip-hull-bar" style={{ ['--fill' as string]: `${Math.max(0, ship.hull / ship.maxHull) * 100}%` }}/>}
       </button></li>; })}
@@ -247,7 +248,7 @@ function WeaponsPanel({ screen }: { screen: Screen }) {
 function TargetsPanel({ screen, tool }: { screen: Screen; tool: Tool }) {
   const { world, dispatch } = screen, targets = legalTargets(tool, world), ships = world.publicView.ships;
   return <div className="ss-drawer-stack"><Back dispatch={dispatch}/><span className="kp-eyebrow">{toolName(tool, world)}</span>
-    <ul className="ss-targets">{targets.map(ship => <li key={ship.id}><button type="button" onClick={() => dispatch({ type: 'open', nav: { kind: 'systems', tool, targetShipId: ship.id } })}><b style={{ ['--chip' as string]: ship.faction === 'enemy' ? '#ff5748' : ship.color }}>{shipLabel(ship, ships)}</b><span>{bareName(ship)}</span><small>Hull {Math.round(ship.hull)}/{ship.maxHull} · Shields {Math.floor(ship.shield)}</small></button></li>)}{!targets.length && <li><StatusNotice>No legal target right now.</StatusNotice></li>}</ul>
+    <ul className="ss-targets ss-vessel-grid">{targets.map(ship => <li key={ship.id}><button type="button" onClick={() => dispatch({ type: 'open', nav: { kind: 'systems', tool, targetShipId: ship.id } })}><ShipThumbnail ship={ship}/><b style={{ ['--chip' as string]: ship.faction === 'enemy' ? '#ff5748' : ship.color }}>{shipLabel(ship, ships)}</b><span>{bareName(ship)}</span><small>Hull {Math.round(ship.hull)}/{ship.maxHull} · Shields {Math.floor(ship.shield)}</small></button></li>)}{!targets.length && <li><StatusNotice>No legal target right now.</StatusNotice></li>}</ul>
     <small className="ss-muted">Then tap the room to hit. Nothing fires until the server accepts the order.</small></div>;
 }
 function RoomPanel({ screen, interior, roomId }: { screen: Screen; interior: InteriorView; roomId: string }) {
@@ -280,15 +281,14 @@ function CrewList({ screen }: { screen: Screen }) {
   </div>;
 }
 function TeleportPanel({ screen, nav }: { screen: Screen; nav: Extract<Nav, { kind: 'teleport' }> }) {
-  const { world, dispatch, own, setAim } = screen, crew = world.privateView.crew.filter(c => c.status === 'alive'), pub = world.publicView, transporter = transporterFor(nav.crewIds, world, own, nav.targetShipId), transporterShip = transporter ? pub.ships.find(s => s.id === transporter) : null;
-  const destinations = pub.ships.filter(s => present(s) && (s.faction === 'allied' || s.status === 'surrendered' || nav.crewIds.length > 0)), dest = pub.ships.find(s => s.id === nav.targetShipId);
+  const { world, dispatch, own, setAim } = screen, crew = world.privateView.crew.filter(c => c.status === 'alive'), pub = world.publicView;
+  const destinations = pub.ships.filter(s => present(s) && (s.faction === 'allied' || s.status === 'surrendered' || nav.crewIds.length > 0));
   const toggle = (id: string) => dispatch({ type: 'open', nav: { ...nav, crewIds: nav.crewIds.includes(id) ? nav.crewIds.filter(c => c !== id) : [...nav.crewIds, id] } });
-  return <div className="ss-drawer-stack"><span className="kp-eyebrow">1 · Choose crew</span>
+  return <div className="ss-teleport-picker"><div><span className="kp-eyebrow">1 · Choose crew</span>
     <ul className="ss-check-list">{crew.map(c => <li key={c.id}><label><input type="checkbox" checked={nav.crewIds.includes(c.id)} onChange={() => toggle(c.id)}/><span><strong>{c.name}</strong><small>{crewLocation(c, world)}</small></span></label></li>)}</ul>
-    <span className="kp-eyebrow">2 · Destination</span>
-    <div className="ss-inline">{destinations.map(s => <ArcadeButton key={s.id} tone={nav.targetShipId === s.id ? 'lime' : 'ghost'} size="sm" aria-pressed={nav.targetShipId === s.id} onClick={() => dispatch({ type: 'open', nav: { ...nav, targetShipId: s.id } })}>{shipLabel(s, pub.ships)}</ArcadeButton>)}</div>
-    <small className="ss-muted">{transporterShip ? `Using ${shipLabel(transporterShip, pub.ships)}’s teleporter.` : nav.crewIds.length ? 'No teleporter at their ship: pick an allied destination that has a working teleporter.' : 'Select crew, then a destination.'}</small>
-    <ArcadeButton tone="sun" disabled={!nav.crewIds.length || !dest || !transporter} onClick={() => { if (dest) dispatch({ type: 'view', shipId: dest.id }); setAim(true); }}>3 · Tap a room on {dest ? shipLabel(dest, pub.ships) : 'the destination'}</ArcadeButton>
+    </div><div><span className="kp-eyebrow">2 · Choose a ship, then tap its destination room</span>
+    <ul className="ss-targets ss-vessel-grid">{destinations.map(s => <li key={s.id}><button type="button" aria-label={shipLabel(s, pub.ships)} disabled={!nav.crewIds.length || !transporterFor(nav.crewIds, world, own, s.id)} onClick={() => { dispatch({ type: 'view', shipId: s.id }); dispatch({ type: 'open', nav: { ...nav, targetShipId: s.id } }); setAim(true); }}><ShipThumbnail ship={s}/><b>{shipLabel(s, pub.ships)}</b><small>{s.faction === 'enemy' ? 'Enemy' : 'Ally'} · hull {Math.round(s.hull)}/{s.maxHull} · shields {Math.floor(s.shield)}</small></button></li>)}</ul>
+    <small className="ss-muted">Choose crew first. Ship selection opens the deck; teleporting happens only after you tap a room.</small></div>
   </div>;
 }
 /** Direct control bar: movement left, context actions right. Every neutral state and every exit releases the held input. */

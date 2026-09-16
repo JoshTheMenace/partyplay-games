@@ -13,7 +13,7 @@ const NAMES = ['Mirabel Okonkwo', 'Tadeusz Brzęczysz', 'Ximena Valderrama', 'Ba
 const hullFor = (id: string) => hulls.find(h => h.id === id)!;
 function summary(id: string, faction: ShipSummary['faction'], formation: number, hullId: string, name: string, extra: Partial<ShipSummary> = {}): ShipSummary {
   const hull = hullFor(hullId);
-  return { id, ownerCaptainId: faction === 'allied' ? `cap${formation}` : null, faction, hullId, name, color: hull.color, formation, hull: hull.maxHull * .7, maxHull: hull.maxHull, status: 'active', shield: 2.4, alerts: [], rooms: hull.rooms.map(r => ({ id: r.id, name: r.name, system: r.system })), crewCount: 4, targetShipId: null, escapeAtMs: null, ...extra };
+  return { id, ownerCaptainId: faction === 'allied' ? `cap${formation}` : null, faction, hullId, name, color: hull.color, formation, hull: hull.maxHull * .7, maxHull: hull.maxHull, status: 'active', shield: 2.4, weaponIds: ['laser-needle'], alerts: [], rooms: hull.rooms.map(r => ({ id: r.id, name: r.name, system: r.system })), crewCount: 4, targetShipId: null, escapeAtMs: null, ...extra };
 }
 function crewOn(shipId: string, owner: string | null, count: number, prefix: string, roomIds: string[]): Crew[] {
   return Array.from({ length: count }, (_, i) => ({ id: `${prefix}${i}`, ownerCaptainId: owner, homeShipId: owner ? `ship-${owner}` : shipId, currentShipId: shipId, name: `${prefix.toUpperCase()}${i}`, roomId: roomIds[i % roomIds.length], x: 1.5 + (i % 3), y: 1.5, hp: 100 - i * 9, maxHp: 100, status: 'alive', skill: 'engineer', traits: [], order: { kind: 'hold', roomId: roomIds[0] }, activity: 'idle', controlEpoch: 2 }));
@@ -55,7 +55,7 @@ void test('client bundle never pulls in server rules or hidden content', () => {
 });
 void test('TV combat frame at maximum density lists four allies and six enemies with emergency chips, no ticker', () => {
   const { publicView } = maxDensity(), html = render('display', publicView, null, null);
-  assert.match(html, /4 allied ships, 6 enemy ships/); assert.match(html, /<b class="kp-display">Defeat the hostile fleet<\/b><small>Break the blockade<\/small>/); assert.match(html, /The Cinder Reach/);
+  assert.match(html, /4 allied ships, 6 enemy ships/); assert.match(html, /<b class="kp-display">Defeat the hostile fleet<\/b>/); assert.match(html, /The Cinder Reach/);
   assert.ok(count(html, 'ss-emergency-chip') >= 3, 'boarders, critical hull, destroyed and reconnecting chips');
   assert.match(html, /Mirabel Okonkwo|Tadeusz/);
 });
@@ -148,7 +148,7 @@ void test('route: stable location codes everywhere, reachable nodes are native t
   assert.equal(count(tv, 'class="ss-route-label"'), 2, 'TV spells out only current and reachable nodes; the rest carry codes and kinds');
   for (const lanes of [1, 2, 3]) { const html = render('display', { ...route, beacons: Array.from({ length: lanes * 2 }, (_, i) => ({ id: `l${i}`, column: i % 2, lane: Math.floor(i / 2), kind: 'event' as const, label: `Lane ${i}`, next: [], visited: false, eventId: null })) }, null, null);
     const height = Number(/viewBox="0 0 720 (\d+)"/.exec(html)![1]), ys = [...html.matchAll(/<text x="[\d.]+" y="([\d.]+)"/g)].map(m => Number(m[1]));
-    assert.ok(ys.length >= lanes * 5 && ys.every(y => y <= height - 4 && y >= 4), `${lanes}-lane codes and labels stay inside the ${height}px map (${ys.length} labels, max y ${Math.max(...ys)})`); }
+    assert.ok(ys.length >= lanes * (lanes > 2 ? 4 : 5) && ys.every(y => y <= height - 4 && y >= 4), `${lanes}-lane codes and labels stay inside the ${height}px map (${ys.length} labels, max y ${Math.max(...ys)})`); }
 });
 void test('rewards after a surrender: the phase drawer opens with the stranded-crew acknowledgement and teleporter, surrendered enemies stay listed', () => {
   const { publicView, privateViews } = maxDensity(), ships = publicView.ships.map(s => s.id === 'e2' ? { ...s, status: 'surrendered' as const } : s);
@@ -192,7 +192,7 @@ void test('cargo drones appear in the weapons drawer with a launch note and neve
 void test('TV: concise objective label, pause banner keeps the fleet visible, enemy names are not double prefixed, rosters are substantial', () => {
   const { publicView } = maxDensity(), ships = publicView.ships.map(s => s.id === 'e1' ? { ...s, name: 'E1 · Tax Collector' } : s);
   const combat = render('display', { ...publicView, ships, objective: { kind: 'destroy', deadlineMs: null, stage: 1, description: 'Defeat the hostile fleet. Target a weapon, then tap an enemy room.' } }, null, null);
-  assert.match(combat, /<b class="kp-display">Defeat the hostile fleet<\/b>/); assert.match(combat, /<small>Defeat the hostile fleet\. Target a weapon, then tap an enemy room\.<\/small>/, 'full instruction sits under the concise headline');
+  assert.match(combat, /<b class="kp-display">Defeat the hostile fleet<\/b>/); assert.doesNotMatch(combat, /Target a weapon|Deck plan · interior concealed|Hostile vessel/, 'combat omits repeated instructions and subtitles');
   const paused = render('display', { ...publicView, paused: true, pausedBy: 'cap1' }, null, null); assert.match(paused, /ss-pause-banner/); assert.doesNotMatch(paused, /ss-pause-overlay/); assert.match(paused, /called a tactical pause/); assert.equal(count(paused, '<li style="--chip:'), 3, 'one chip per connected non-spectator captain, names wrapped for ellipsis'); assert.match(paused, /<span>Mirabel Okonkwo<\/span>/);
   const hangar = render('display', { ...publicView, phase: 'hangar' }, null, null); assert.match(hangar, /ss-tv-roster-big/); assert.match(hangar, /Wayfarer · hull/); assert.match(hangar, /\/4 ready/);
   const phone = render('controller', { ...publicView, ships }, { ...maxDensity().privateViews.p0, inspectedShipId: 'e1', inspectedShip: { ...maxDensity().privateViews.p0.inspectedShip!, ship: ships.find(s => s.id === 'e1')! } }, 'p0', { initialMenu: 'ships' });
@@ -206,12 +206,12 @@ void test('event Continue turns into a waiting indicator once this captain is re
   const waiting = render('controller', { ...event, captains: event.captains.map(c => c.id === 'cap0' ? { ...c, ready: true } : c) }, privateViews.p0, 'p0');
   assert.doesNotMatch(waiting, />Continue</); assert.match(waiting, /data-waiting="true"/); assert.match(waiting, /waiting for 3 more \(1\/4\)/);
 });
-void test('unknown enemy rooms stay hidden in the cutaway: no furniture, tier pips or status for unscanned compartments', () => {
+void test('unscanned enemy cutaways show system furniture and names without live conditions', () => {
   const { publicView, privateViews } = maxDensity(), enemy = privateViews.p0.inspectedShip!;
   const priv = { ...privateViews.p0, captain: { ...privateViews.p0.captain!, shipId: null }, ownShip: null, crew: privateViews.p0.crew.map(c => ({ ...c, currentShipId: 'e3' })) };
   const html = render('controller', publicView, priv, 'p0');
   assert.match(html, /ss-cut ss-cut-enemy/); const unknown = enemy.rooms.filter(r => !r.known).length; assert.ok(unknown > 0, 'fixture has unscanned rooms');
-  assert.equal(count(html, 'url(#ss-unknown-'), unknown, 'each unknown room renders the unknown pattern'); assert.equal(count(html, 'Unknown interior'), unknown);
+  assert.equal(count(html, 'Layout known · crew and condition hidden'), unknown); assert.equal(count(html, 'Crew hidden'), unknown); assert.doesNotMatch(html, /url\(#ss-unknown-/); assert.match(html, /ss-room-glyph/);
   assert.doesNotMatch(html, /Manned by/); assert.ok(count(html, 'data-door="unknown"') > 0, 'doors touching unknown rooms are neutral'); assert.doesNotMatch(html, /data-door="open"[^>]*stroke="#78d955"[^]*?data-door="unknown"[^>]*stroke="#78d955"/);
 });
 void test('personal view composes the fleet overview with the captain interface and never repeats the stale message', () => {

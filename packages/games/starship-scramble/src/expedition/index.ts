@@ -7,12 +7,27 @@ export function random(expedition: Pick<Expedition, 'rng'>): number {
   return expedition.rng / 4294967296;
 }
 function route(expedition: Expedition, training: boolean) {
-  const columns = training ? 4 : 6;
-  expedition.beacons = Array.from({ length: columns }, (_, column) => Array.from({ length: column === columns - 1 || training ? 1 : 2 }, (_, lane) => {
-    const kind = column === columns - 1 ? 'exit' : training ? column === 0 ? 'store' : column === 2 ? 'combat' : 'event' : column === 2 && lane === 0 ? 'store' : column === 3 && lane === 1 ? 'combat' : 'event';
-    return { id: `s${expedition.sectorIndex}-b${column}-${lane}`, column, lane, kind, label: kind === 'exit' ? 'Sector relay' : kind === 'store' ? 'Repair market' : kind === 'combat' ? 'Hostile signal' : ['Uncharted signal', 'Quiet crossing'][lane]!, next: [], visited: false, eventId: null } as Expedition['beacons'][number];
-  })).flat();
-  for (const beacon of expedition.beacons) beacon.next = expedition.beacons.filter(next => next.column === beacon.column + 1).map(next => next.id);
+  const columns = training ? 4 : 7;
+  const labels = { event: ['Derelict observatory', 'Distress echo', 'Nebula crossing', 'Silent convoy'], store: ['Repair market', 'Orbital bazaar', 'Salvage outpost'], combat: ['Pirate patrol', 'Blockade picket', 'Hostile signal'], exit: ['Sector relay'] };
+  expedition.beacons = Array.from({ length: columns }, (_, column) => {
+    const omit = training ? 0 : Math.floor(random(expedition) * 4);
+    const lanes = training || column === columns - 1 ? [training ? 0 : 1] : column === 0 ? [0, 1, 3] : [0, 1, 2, 3].filter((_, i) => i !== omit);
+    return lanes.map((lane, i) => {
+      const roll = training ? 0 : random(expedition);
+      const kind = column === columns - 1 ? 'exit' : training ? column === 0 ? 'store' : column === 2 ? 'combat' : 'event' : column === 0 ? i === 0 ? 'event' : i === 1 ? 'combat' : 'store' : column === columns - 2 ? 'event' : column === 2 && i === 0 ? 'store' : roll < .24 ? 'store' : roll < .57 ? 'combat' : 'event';
+      return { id: `s${expedition.sectorIndex}-b${column}-${lane}`, column, lane, kind, label: training ? kind === 'event' ? 'Uncharted signal' : kind === 'combat' ? 'Hostile signal' : labels[kind][0]! : labels[kind][Math.floor(random(expedition) * labels[kind].length)]!, next: [], visited: false, eventId: null } as Expedition['beacons'][number];
+    });
+  }).flat();
+  for (let column = 0; column < columns - 1; column++) {
+    const here = expedition.beacons.filter(b => b.column === column), ahead = expedition.beacons.filter(b => b.column === column + 1);
+    const connect = (from: typeof here[number], to: typeof here[number]) => { if (!from.next.includes(to.id)) from.next.push(to.id); };
+    const nearest = (lane: number, choices: typeof here) => [...choices].sort((a, b) => Math.abs(a.lane - lane) - Math.abs(b.lane - lane));
+    // Every node has an exit and an entrance, but branches do not all reconnect at the next jump.
+    for (const from of here) { const options = nearest(from.lane, ahead); connect(from, options[0]!); if (!training && options[1] && random(expedition) < .55) connect(from, options[1]); }
+    for (const to of ahead) if (!here.some(from => from.next.includes(to.id))) connect(nearest(to.lane, here)[0]!, to);
+    // A few long jumps trade encounters and salvage opportunities for less pursuit pressure.
+    if (!training && (column === 1 || column === 3)) { const from = here[Math.floor(random(expedition) * here.length)]!, far = expedition.beacons.filter(b => b.column === column + 2); connect(from, nearest(from.lane, far)[0]!); }
+  }
   expedition.currentBeaconId = '';
   expedition.event = null;
 }

@@ -56,7 +56,7 @@ export function partsExtent(body: Point[], parts: Part[], stroke = 3): Rect {
 }
 /** One geometry for art and hit targets: the room grid plus the exterior margins must fit the stage together. */
 export function fitCutaway(rooms: CutawayRoom[], stage: { w: number; h: number }, hullId: string, pad = 6): CutawayFit {
-  const exterior = exteriorFor(hullId), m = exterior.margins;
+  const exterior = exteriorFor(hullId), m = { ...exterior.margins, t: Math.max(1.15, exterior.margins.t), b: Math.max(1.15, exterior.margins.b) };
   const grid = { w: Math.max(1, ...rooms.map(r => r.x + r.w)), h: Math.max(1, ...rooms.map(r => r.y + r.h)) };
   const tile = Math.max(1, Math.floor(Math.min((stage.w - pad * 2) / (grid.w + m.l + m.r), (stage.h - pad * 2) / (grid.h + m.t + m.b))));
   const ox = Math.round((stage.w - (grid.w + m.l + m.r) * tile) / 2 + m.l * tile), oy = Math.round((stage.h - (grid.h + m.t + m.b) * tile) / 2 + m.t * tile);

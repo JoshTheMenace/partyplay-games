@@ -82,8 +82,8 @@ export function createShip(defs: Definitions, spec: ShipSpec): { ship: Ship; cre
   }
   return { ship, crew };
 }
-export function effect(state: State, kind: State['simulation']['effects'][number]['kind'], sourceShipId: string, targetShipId: string, text: string) {
-  state.simulation.effects.push({ id: `effect-${state.simulation.nextId++}`, kind, sourceShipId, targetShipId, text, atMs: state.simulation.timeMs });
+export function effect(state: State, kind: State['simulation']['effects'][number]['kind'], sourceShipId: string, targetShipId: string, text: string, visual: Partial<Pick<State['simulation']['effects'][number], 'weaponId' | 'roomId' | 'mountIndex' | 'flightMs' | 'delayMs'>> = {}) {
+  state.simulation.effects.push({ id: `effect-${state.simulation.nextId++}`, kind, sourceShipId, targetShipId, text, atMs: state.simulation.timeMs, ...visual });
   if (state.simulation.effects.length > 64) state.simulation.effects.shift();
 }
 export function random(state: State) {

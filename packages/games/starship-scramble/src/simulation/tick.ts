@@ -185,37 +185,39 @@ function weaponStep(state: State, ship: Ship, seconds: number, defs: Definitions
     if (cloak) cloak.activeUntilMs = 0;
     for (let shot = 0; shot < definition.shots; shot++) {
       const roomId = definition.family === 'flak' ? target.rooms[Math.floor(random(state) * target.rooms.length)].id : order.roomId;
-      state.simulation.projectiles.push({ id: `shot-${state.simulation.nextId++}`, sourceShipId: ship.id, targetShipId: target.id, roomId, weaponId: definition.id, arriveAtMs: state.simulation.timeMs + (definition.family === 'beam' ? 0 : definition.family === 'missile' || definition.family === 'boarding' ? 1300 : 550) + shot * 80, damage: definition.damage, shieldDamage: definition.shieldDamage, pierce: definition.pierce, roomDamage: definition.roomDamage, crewDamage: definition.crewDamage, fire: definition.fire, breach: definition.breach, ionMs: definition.ionMs, family: definition.family });
+      const flightMs = definition.family === 'beam' ? 0 : definition.family === 'missile' || definition.family === 'boarding' ? 1300 : 550;
+      state.simulation.projectiles.push({ id: `shot-${state.simulation.nextId++}`, sourceShipId: ship.id, targetShipId: target.id, roomId, weaponId: definition.id, arriveAtMs: state.simulation.timeMs + flightMs + shot * 80, damage: definition.damage, shieldDamage: definition.shieldDamage, pierce: definition.pierce, roomDamage: definition.roomDamage, crewDamage: definition.crewDamage, fire: definition.fire, breach: definition.breach, ionMs: definition.ionMs, family: definition.family });
+      effect(state, 'shot', ship.id, target.id, definition.name, { weaponId: definition.id, roomId, mountIndex: slot, flightMs, delayMs: shot * 80 });
     }
-    effect(state, 'shot', ship.id, target.id, definition.name);
   }
 }
 function impact(state: State, projectile: Projectile, defs: Definitions) {
   const target = shipById(state, projectile.targetShipId);
   if (!target) return;
   const source = state.simulation.ships.find(ship => ship.id === projectile.sourceShipId);
+  const visual = { weaponId: projectile.weaponId, roomId: projectile.roomId };
   const room = target.rooms.find(room => room.id === projectile.roomId);
   if (!room) return;
   if (projectile.family === 'support') {
     if (source) healHull(state, source, target, Math.abs(projectile.damage));
     target.shield = Math.min(8, target.shield + Math.abs(projectile.shieldDamage)); room.damage = Math.max(0, room.damage - Math.abs(projectile.roomDamage));
     for (const crew of onboard(state, target.id).filter(crew => crew.roomId === room.id && crewFriendly(crew, target))) crew.hp = Math.min(crew.maxHp, crew.hp + Math.abs(projectile.crewDamage));
-    effect(state, 'repair', projectile.sourceShipId, target.id, 'Support delivered'); return;
+    effect(state, 'repair', projectile.sourceShipId, target.id, 'Support delivered', visual); return;
   }
   const interceptable = ['missile', 'boarding', 'flak'].includes(projectile.family);
   const interceptor = state.simulation.drones.find(drone => drone.targetShipId === target.id && drone.hp > 0 && systemTier(state, shipById(state, drone.sourceShipId) ?? target, 'drone-bay') > 0 && defs.drones.find(def => def.id === drone.definitionId)?.behavior === 'intercept');
   if (interceptable && (activeSystem(state, target, 'point-defense') || interceptor)) {
     const defense = target.systems.find(system => system.id === 'point-defense');
-    if (interceptor || (defense && defense.activeUntilMs - state.simulation.timeMs > 400)) { if (interceptor) interceptor.hp -= Math.max(1, projectile.damage / 2); else if (defense) defense.activeUntilMs = Math.max(state.simulation.timeMs, defense.activeUntilMs - 1000); effect(state, 'shield', target.id, target.id, 'Projectile intercepted'); return; }
+    if (interceptor || (defense && defense.activeUntilMs - state.simulation.timeMs > 400)) { if (interceptor) interceptor.hp -= Math.max(1, projectile.damage / 2); else if (defense) defense.activeUntilMs = Math.max(state.simulation.timeMs, defense.activeUntilMs - 1000); effect(state, 'shield', target.id, target.id, 'Projectile intercepted', visual); return; }
   }
   if (activeSystem(state, target, 'decoy') && source?.ai !== 'hunter' && random(state) < .6) return;
   const pilot = roomFor(target, 'piloting');
   const cloaked = activeSystem(state, target, 'cloak') && !(source && activeSystem(state, source, 'scanner'));
   const evasion = Math.min(cloaked ? .9 : .55, systemTier(state, target, 'engines') * .04 + (pilot && roomManning(state, target.id, pilot.id, defs) ? .08 : 0) + augment(target, 'evasion', defs) + (cloaked ? .7 : 0));
-  if (projectile.family !== 'beam' && random(state) < evasion) { effect(state, 'shield', target.id, target.id, 'Evaded'); return; }
+  if (projectile.family !== 'beam' && random(state) < evasion) { effect(state, 'shield', target.id, target.id, 'Evaded', visual); return; }
   const blocked = target.shield > projectile.pierce;
   target.shield = Math.max(0, target.shield - projectile.shieldDamage);
-  if (blocked && projectile.family !== 'ion') { effect(state, 'shield', projectile.sourceShipId, target.id, 'Shields absorbed the hit'); return; }
+  if (blocked && projectile.family !== 'ion') { effect(state, 'shield', projectile.sourceShipId, target.id, 'Shields absorbed the hit', visual); return; }
   if (projectile.ionMs > 0) { room.disruptedUntilMs = Math.max(room.disruptedUntilMs, state.simulation.timeMs + projectile.ionMs); if (blocked) return; }
   const beamScale = projectile.family === 'beam' && target.shield > 0 ? .5 : 1;
   const amount = projectile.damage * beamScale / (1 + augment(target, 'hull', defs));
@@ -227,7 +229,7 @@ function impact(state: State, projectile: Projectile, defs: Definitions) {
     const captain = state.captains.find(captain => captain.id === source.ownerCaptainId);
     if (captain) captain.stats.damage += amount;
   }
-  effect(state, 'impact', projectile.sourceShipId, target.id, `${Math.round(amount)} hull damage`);
+  effect(state, 'impact', projectile.sourceShipId, target.id, `${Math.round(amount)} hull damage`, visual);
 }
 function dronesStep(state: State, defs: Definitions) {
   for (const drone of state.simulation.drones) {

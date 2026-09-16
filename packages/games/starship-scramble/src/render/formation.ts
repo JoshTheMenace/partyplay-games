@@ -8,15 +8,12 @@ export const enemyLabel = (ship: ShipSummary, ships: ShipSummary[]) => `E${rank(
 export function formation(ships: ShipSummary[]): Slot[] {
   const allies = rank(ships.filter(s => s.faction === 'allied')), enemies = rank(ships.filter(s => s.faction === 'enemy'));
   const field = STAGE.h - STAGE.top - STAGE.bottom, slots: Slot[] = [];
-  const allyH = 116, allyGap = 12, allyTop = STAGE.top + (field - (allies.length * allyH + (allies.length - 1) * allyGap)) / 2;
-  allies.forEach((ship, i) => slots.push({ shipId: ship.id, faction: 'allied', x: 40, y: allyTop + i * (allyH + allyGap), w: 360, h: allyH, label: ship.name, flagship: false }));
-  const columns = enemies.length > 3 ? 2 : 1, rows = Math.ceil(enemies.length / columns), h = 150, gap = 12, w = 250, colGap = 20;
-  const top = STAGE.top + (field - (rows * h + (rows - 1) * gap)) / 2, left = 1240 - (columns * w + (columns - 1) * colGap);
-  const flagshipIndex = enemies.reduce((best, ship, i) => ship.maxHull > (enemies[best]?.maxHull ?? 0) ? i : best, -1);
-  enemies.forEach((ship, i) => {
-    const column = columns === 1 ? 0 : i % 2, row = columns === 1 ? i : Math.floor(i / 2);
-    slots.push({ shipId: ship.id, faction: 'enemy', x: left + column * (w + colGap), y: top + row * (h + gap), w, h, label: `E${i + 1}`, flagship: enemies.length > 1 && i === flagshipIndex });
-  });
+  const flagship = enemies.reduce<ShipSummary | null>((best, ship) => !best || ship.maxHull > best.maxHull ? ship : best, null);
+  for (const [side, fleet] of [allies, enemies].entries()) {
+    const columns = fleet.length > 3 ? 2 : 1, rows = Math.max(1, Math.ceil(fleet.length / columns)), gap = 14;
+    const w = (540 - gap * (columns - 1)) / columns, h = (field - gap * (rows - 1)) / rows;
+    fleet.forEach((ship, i) => slots.push({ shipId: ship.id, faction: ship.faction, x: (side ? 716 : 24) + i % columns * (w + gap), y: STAGE.top + Math.floor(i / columns) * (h + gap), w, h, label: side ? `E${i + 1}` : ship.name, flagship: !!side && fleet.length > 1 && ship === flagship }));
+  }
   return slots;
 }
 export const overlaps = (a: Slot, b: Slot) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
