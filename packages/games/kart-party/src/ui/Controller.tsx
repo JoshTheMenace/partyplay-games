@@ -82,7 +82,7 @@ function useKartInput(props: Props, me: RacerView | undefined) {
     };
   }, []);
   useEffect(() => { if (props.connected === false) cancel(); }, [props.connected]);
-  return { composer, honk, cancel };
+  return { composer, cancel };
 }
 
 /** Floating steering zone: wherever the thumb lands is centre; horizontal travel steers. If the thumb
@@ -115,7 +115,7 @@ function SteerZone({ composer, cancel }: { composer: InputComposer; cancel(prefi
     onPointerUp={e => end(e.pointerId, false)} onPointerCancel={e => end(e.pointerId, true)} onLostPointerCapture={e => end(e.pointerId, true)}>
     {t ? <span className="kp2-stick" style={{ left: t.ox, top: t.oy, '--r': `${t.r}px` } as CSSProperties}>
       <span className="kp2-stick-track"/><span className="kp2-stick-knob" style={{ transform: `translate(calc(-50% + ${t.dx}px), -50%)`, '--lean': steer } as CSSProperties}/>
-    </span> : <span className="kp2-stick kp2-stick-idle" aria-hidden="true"><span className="kp2-stick-track"/><span className="kp2-stick-knob"/><span className="kp2-stick-hint">◀ steer ▶</span></span>}
+    </span> : <span className="kp2-stick kp2-stick-idle" aria-hidden="true"><span className="kp2-stick-track"/><span className="kp2-stick-knob"/></span>}
   </div>;
 }
 
@@ -175,7 +175,7 @@ export function Controller(props: Props) {
   const { publicView: race, playerId, isHost } = props;
   const me = race.racers.find(r => r.id === playerId);
   const mode = screenMode(race.viewMode, playerId, isHost), coarse = useCoarsePointer();
-  const { composer, honk, cancel } = useKartInput(props, me);
+  const { composer, cancel } = useKartInput(props, me);
   // Haptics and the bumper flash for this racer's own moments.
   const seen = useRef<number | null>(null);
   const [bump, setBump] = useState(0);   // id of the bumper knock currently flashing
@@ -196,7 +196,6 @@ export function Controller(props: Props) {
   if (!touch) return <div className="kp2-ctl kp2-ctl-keys" data-mode={mode}/>;
   const trailing = me.trailing, holdable = !!me.item && me.rollT <= 0 && HOLDABLE.includes(me.item);
   const tier = me.drift !== 0 ? me.driftTier : -1, finished = me.finishTime !== null;
-  const itemCaption = trailing ? 'let go to drop' : me.rollT > 0 ? '' : holdable ? 'tap · hold to trail' : me.item ? 'tap to use' : 'grab a box';
   return <div className={`kp2-ctl kp2-ctl-${mode === 'controls' ? 'full' : 'overlay'}`} data-mode={mode} style={{ '--me': me.color } as CSSProperties}>
     <SteerZone composer={composer} cancel={cancel}/>
     {mode === 'controls' && <Status race={race} me={me}/>}
@@ -210,12 +209,9 @@ export function Controller(props: Props) {
       <PadButton kind="drift" composer={composer} cancel={cancel} label="Drift and hop (hold)" className={`kp2-drift ${tier >= 0 ? `is-drifting tier-${tier}` : ''} ${me.boostT > 0 ? 'is-boost' : ''}`}><DriftFace me={me}/></PadButton>
       <PadButton kind="item" composer={composer} cancel={cancel} onHeld={setHoldingItem} label={me.item ? `Use ${ITEM_NAMES[me.item]}${holdable ? ' (hold to trail behind)' : ''}` : 'Item (empty)'}
         className={`kp2-item ${me.item || me.rollT > 0 ? '' : 'is-empty'} ${trailing || (holdingItem && holdable) ? 'is-trailing' : ''} ${me.rollT > 0 ? 'is-rolling' : ''}`}>
-        <span className="kp2-item-face">{me.item || me.rollT > 0 ? <ItemFace racer={me}/> : <span className="kp2-pad-label">Item</span>}</span>{itemCaption && <small>{itemCaption}</small>}
+        <span className="kp2-item-face">{me.item || me.rollT > 0 ? <ItemFace racer={me}/> : <span className="kp2-pad-label">Item</span>}</span>
       </PadButton>
       <PadButton kind="brake" composer={composer} cancel={cancel} label="Brake and reverse (hold)" className="kp2-brake"><span className="kp2-pad-label">Brake</span></PadButton>
-      <PadButton composer={composer} cancel={cancel} onTap={honk} label="Honk" className="kp2-honk">
-        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 13h5l9-6v18l-9-6H4z" fill="currentColor"/><path d="M22 11q4 5 0 10M25 8q7 8 0 16" stroke="currentColor" strokeWidth="2.6" fill="none" strokeLinecap="round"/></svg>
-      </PadButton>
     </div>
   </div>;
 }

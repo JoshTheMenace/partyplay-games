@@ -85,7 +85,7 @@ test('steering, keys and gamepad mapping', () => {
   assert.equal(readPad({ axes: [0], buttons: b(14) }).steer, -1);
 });
 
-test('phone controller (TV mode): steer zone, drift/item/brake/honk and a status strip', () => {
+test('phone controller (TV mode): steer zone, drift/item/brake, no text captions, and a status strip', () => {
   const race = makeRace(2), me = race.racers.find(r => r.id === 'p1')!;
   me.item = 'triple-nitro'; me.itemCount = 3; me.drift = 1; me.driftTier = 2; me.driftCharge = 3;
   const html = renderToStaticMarkup(<Controller {...ctlProps(view(race), 'p1')}/>);
@@ -94,7 +94,7 @@ test('phone controller (TV mode): steer zone, drift/item/brake/honk and a status
   assert.match(html, /aria-label="Drift and hop \(hold\)"/);
   assert.match(html, /kp2-drift is-drifting tier-2/);
   assert.match(html, /Use Triple Nitro/); assert.match(html, /×3/);
-  assert.match(html, /Brake and reverse/); assert.match(html, /aria-label="Honk"/);
+  assert.match(html, /Brake and reverse/); assert.doesNotMatch(html, /aria-label="Honk"|kp2-stick-hint|grab a box|tap to use/);
   assert.match(html, /kp2-status/); assert.match(html, /Alexandria Quinn/); assert.match(html, /\/10/);
   assert.match(html, /Ready/);                                              // countdown on the phone
   me.driftCharge = 2.3;                                                     // halfway from orange (1.6) to purple (3)
@@ -113,7 +113,7 @@ test('controller item states: roulette, holdable trailing, empty slot', () => {
   assert.match(renderToStaticMarkup(<Controller {...ctlProps(view(race), 'p1')}/>), /Rolling an item/);
   me.rollT = 0; me.item = 'peel'; me.trailing = true;
   const trailing = renderToStaticMarkup(<Controller {...ctlProps(view(race), 'p1')}/>);
-  assert.match(trailing, /is-trailing/); assert.match(trailing, /let go to drop/); assert.match(trailing, /hold to trail behind/);
+  assert.match(trailing, /is-trailing/); assert.match(trailing, /hold to trail behind/);
   me.item = null; me.trailing = false;
   assert.match(renderToStaticMarkup(<Controller {...ctlProps(view(race), 'p1')}/>), /kp2-item is-empty/);
 });

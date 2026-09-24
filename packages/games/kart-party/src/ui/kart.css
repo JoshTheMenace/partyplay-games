@@ -43,11 +43,9 @@
 .kp2-stick-track::after { content: '▶'; left: auto; right: 14px; }
 .kp2-stick-knob { position: absolute; left: 0; top: 0; width: 60px; height: 60px; transform: translate(-50%, -50%); border-radius: 50%;
   background: radial-gradient(circle at 38% 30%, #fff8 0 14%, var(--me, var(--kp-sky)) 46%); border: 4px solid var(--kp-cream); box-shadow: 0 0 0 3px var(--kp-ink), 0 6px 14px #0008; }
-.kp2-stick-hint { position: absolute; left: 0; top: 42px; transform: translateX(-50%); white-space: nowrap; font: 900 13px var(--font-body); letter-spacing: .12em; text-transform: uppercase; text-shadow: 0 2px var(--kp-ink); }
-.kp2-ctl-overlay .kp2-stick-idle > :not(.kp2-stick-hint) { opacity: .32; }
+.kp2-ctl-overlay .kp2-stick-idle > * { opacity: .32; }
 .kp2-ctl-overlay .kp2-stick-idle { opacity: 1; }
 /* Over the 3D scene captions sit on a dark pill, and the ITEM button stands in for the HUD item slot. */
-.kp2-ctl-overlay :is(.kp2-stick-hint, .kp2-item > small) { max-width: none; white-space: nowrap; padding: 3px 9px; border-radius: 99px; background: #05071acc; opacity: 1; text-shadow: none; }
 .kp-scene-stage:has(.kp2-ctl-overlay) .kp2-hud-slot { display: none; }
 
 .kp2-cluster { --d: clamp(96px, 40cqh, 150px); --i: clamp(70px, 27cqh, 104px); --b: clamp(54px, 19cqh, 74px); --h: clamp(46px, 15cqh, 58px);
@@ -74,10 +72,7 @@
 .kp2-item.is-empty .kp2-pad-label { opacity: .6; }
 .kp2-item.is-trailing { box-shadow: 0 6px 0 var(--kp-ink), 0 0 0 4px var(--kp-lime), 0 0 26px 4px #78d95599; }
 .kp2-item.is-rolling { background: radial-gradient(circle at 40% 30%, #5a4ab8, #1e1a54 70%); }
-.kp2-item > small { position: absolute; right: calc(100% + 8px); top: 50%; transform: translateY(-50%); width: max-content; max-width: 9em; text-align: right; color: var(--kp-cream); opacity: .85; text-shadow: 0 2px var(--kp-ink), 0 0 8px var(--kp-ink); }
 .kp2-brake { right: calc(var(--d) + 16px); bottom: 0; width: var(--b); height: var(--b); font-size: calc(var(--b) * .22); background: radial-gradient(circle at 40% 30%, #ff8d80, var(--kp-coral) 60%, #c7302a); }
-.kp2-honk { right: 4px; bottom: calc(var(--d) + 20px); width: var(--h); height: var(--h); background: radial-gradient(circle at 40% 30%, #d9c2ff, var(--kp-grape) 60%, #7d52d8); }
-.kp2-honk svg { width: 56%; height: 56%; }
 .kp2-ctl-overlay .kp2-pad { opacity: .92; }
 .kp2-ctl-overlay .kp2-item.is-empty { background: #05071ab3; }
 .kp2-ctl-overlay .kp2-item.is-empty .kp2-pad-label { opacity: .85; }
