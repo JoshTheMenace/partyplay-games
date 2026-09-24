@@ -1,7 +1,5 @@
-# Kart Party source import
+# Kart Party provenance
 
-Imported from the user-owned Kart Party checkout on2026-09-08. The original checkout and its running sessions remain untouched.
+The original Kart Party was imported on 2026-09-08 from the user-owned checkout at /Users/joshthemenace/Documents/Codex/2026-09-06/i-want-you-to-explore-building/outputs/kart-party.
 
-Source: /Users/joshthemenace/Documents/Codex/2026-09-06/i-want-you-to-explore-building/outputs/kart-party
-
-The racing game, UI, network rules, assets and focused tests are preserved here. The unrelated Sites/Vinext scaffold, unused generic component library and standalone packaging toolchain are not imported. Packaging-specific tests are omitted; original game/server tests are retained. Collection integration mounts this app at /kart-party/ and serves shared static assets under /games/kart-party/. See README.md for current commands; REFERENCE.md describes the original standalone checkout.
+On 2026-09-23 the game was rewritten from scratch. The code, courses and Blender models are new original work. Only the music recordings (`public/music`, supplied by the project owner) and the SIL OFL fonts (`public/fonts`) were kept from the original.

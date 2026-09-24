@@ -1,49 +1,47 @@
 import type { GameRules } from '../../../party-contract/src/index';
-import { createRace, sanitizeInput, stepRace } from './engine/simulation';
-import { activateItem } from './engine/items';
-import { isKartId, type KartId } from './engine/garage';
-import { TRACKS } from './engine/tracks';
-import { isSpeedClass } from './engine/speed';
-import { DRIVERS, NEUTRAL, type Input, type Race, type RaceOptions } from './engine/types';
-import { resolveViewMode, type ViewMode } from './views';
-export type Action = { type:'use' } | { type:'choose'; driver:number; kart:KartId } | { type:'ready' };
-export type Settings = Required<Pick<RaceOptions, 'track' | 'laps' | 'speedClass' | 'difficulty'>> & { views: ViewMode };
-export const rules: GameRules<Race, Input, Action, Settings, Race, null> = {
+import { createRace, honk, NEUTRAL_INPUT, racerOutcome, stepRace } from './sim/race';
+import { toRaceView } from './sim/view';
+import { encodeRaceView, type RaceWire } from './net/wire';
+import { isKartBody, isSpeedClass, CHARACTERS } from './sim/stats';
+import { isTrackId } from './tracks/index';
+import { resolveViewMode } from './views';
+import type { Action, Input, LobbyChoice, Race, Settings } from './sim/types';
+export type { Action, Settings } from './sim/types';
+
+const DEFAULTS: Settings = { track: 'palm-bay', laps: 3, speedClass: 100, difficulty: 'normal', gridSize: 8, items: 'normal', views: 'auto' };
+const counter = (n: unknown) => Number.isInteger(n) ? ((n as number) % 256 + 256) % 256 : 0;
+export const rules: GameRules<Race, Input, Action, Settings, RaceWire, null> = {
   validateSettings(raw) {
-    const value = (raw ?? {}) as Partial<Settings>;
-    const settings = { track: value.track ?? 'coast', laps: value.laps ?? 3, speedClass: value.speedClass ?? 100, difficulty: value.difficulty ?? 'normal', views: value.views ?? 'auto' };
-    if (!['auto', 'tv', 'personal'].includes(settings.views)) throw Error('Choose Auto, TV views or personal views.');
-    if (!Object.hasOwn(TRACKS, settings.track) || !Number.isInteger(settings.laps) || settings.laps < 1 || settings.laps > 5 || !isSpeedClass(settings.speedClass) || !['easy','normal','hard'].includes(settings.difficulty)) throw Error('Choose a course, 1–5 laps, speed class and difficulty.');
-    return settings;
+    const s = { ...DEFAULTS, ...(raw && typeof raw === 'object' ? raw as Partial<Settings> : {}) };
+    if (!isTrackId(s.track)) throw Error('Choose a course.');
+    if (!Number.isInteger(s.laps) || s.laps < 1 || s.laps > 5) throw Error('Choose 1–5 laps.');
+    if (!isSpeedClass(s.speedClass)) throw Error('Choose 50, 100, 150 or 200cc.');
+    if (!['easy', 'normal', 'hard'].includes(s.difficulty)) throw Error('Choose a CPU difficulty.');
+    if (!Number.isInteger(s.gridSize) || s.gridSize < 1 || s.gridSize > 10) throw Error('Choose a grid of 1–10 racers.');
+    if (!['normal', 'frantic', 'off'].includes(s.items)) throw Error('Choose an item mode.');
+    if (!['auto', 'tv', 'personal'].includes(s.views)) throw Error('Choose Auto, TV or personal views.');
+    return { track: s.track, laps: s.laps, speedClass: s.speedClass, difficulty: s.difficulty, gridSize: s.gridSize, items: s.items, views: s.views };
   },
-  create(ctx, settings) { return { ...createRace({ ...settings, seed: ctx.seed, players: ctx.players.map((player, driver) => ({ ...player, driver })) }), viewMode: resolveViewMode(settings.views, ctx.players.length), startId: ctx.roundId, startAt: null, garage:{deadline:ctx.nowMs+45000,remaining:45,readyIds:[]} }; },
-  parseInput: sanitizeInput, neutralInput: () => ({ ...NEUTRAL }),
-  parseAction(raw) {
-    const action=raw as Partial<Action>|null;
-    if(action?.type==='use'||action?.type==='ready')return {type:action.type};
-    if(action?.type==='choose'&&Number.isInteger(action.driver)&&action.driver!>=0&&action.driver!<DRIVERS.length&&isKartId(action.kart))return {type:'choose',driver:action.driver!,kart:action.kart};
-    throw Error('Choose a valid driver and kart.');
+  parseLobbyChoice(raw, ready) {
+    // Ready without a pick means "surprise me": the race assigns a free character and the Zoomer.
+    void ready; if (raw === undefined || raw === null) return null;
+    const c = raw as Partial<LobbyChoice>;
+    if (!Number.isInteger(c.character) || c.character! < 0 || c.character! >= CHARACTERS.length || !isKartBody(c.kart)) throw Error('Choose a racer and a kart.');
+    return { character: c.character, kart: c.kart };
   },
-  applyAction(state,id,action) {
-    const racer=state.racers.find(player=>player.id===id);if(!racer||racer.bot)return;
-    if(action.type==='use'){if(state.phase==='racing')activateItem(state,racer);return;}
-    if(!state.garage)throw Error('The race has started. Change your kart before the next race.');
-    if(action.type==='choose'){racer.driver=action.driver;racer.kart=action.kart;state.garage.readyIds=state.garage.readyIds.filter(player=>player!==id);}
-    else if(!state.garage.readyIds.includes(id))state.garage.readyIds.push(id);
+  create(ctx, settings) { return createRace(settings, ctx.players, ctx.seed, resolveViewMode(settings.views, ctx.players.length)); },
+  neutralInput: () => ({ ...NEUTRAL_INPUT }),
+  parseInput(raw) {
+    const v = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof Input, unknown>>;
+    const steer = typeof v.steer === 'number' && Number.isFinite(v.steer) ? Math.max(-1, Math.min(1, v.steer)) : 0;
+    return { steer, drift: v.drift === true, brake: v.brake === true, item: v.item === true, hop: counter(v.hop), fire: counter(v.fire), seq: Number.isInteger(v.seq) && (v.seq as number) >= 0 ? v.seq as number : 0 };
   },
-  tick(state, inputs, _dt, now) {
-    if(state.garage){
-      state.garage.remaining=Math.max(0,(state.garage.deadline-now)/1000);
-      const players=state.racers.filter(racer=>!racer.bot&&racer.connected);
-      if(state.garage.remaining===0||players.length>0&&players.every(racer=>state.garage!.readyIds.includes(racer.id))){delete state.garage;state.startAt=now+3500;}
-      return;
-    }
-    if (state.phase === 'countdown') { state.countdown = Math.max(0, (state.startAt! - now) / 1000); if (!state.countdown) state.phase = 'racing'; return; }
-    stepRace(state, Object.fromEntries(inputs));
-  },
-  onPresenceChange(state, id, connected) { const racer = state.racers.find(player => player.id === id); if (racer) racer.connected = connected; },
-  // The legacy engine sometimes clears optional pose fields with undefined.
-  publicView: state => JSON.parse(JSON.stringify(state)), playerView: () => null,
-  outcome: state => ({ complete: state.phase === 'results', winners: state.racers.filter(player => !player.bot && player.rank === 1).map(player => player.id), rows: state.racers.filter(player => !player.bot).sort((a,b) => a.rank-b.rank).map(player => ({ playerId: player.id, rank: player.rank, label: player.finishTime === null ? 'Did not finish' : `${player.finishTime.toFixed(1)}s` })) }),
+  parseAction(raw) { if ((raw as Action | null)?.type === 'honk') return { type: 'honk' }; throw Error('Unknown action.'); },
+  applyAction(state, playerId, action) { if (action.type === 'honk') honk(state, playerId); },
+  tick(state, inputs, dt) { stepRace(state, inputs, dt); },
+  onPresenceChange(state, playerId, connected) { const racer = state.racers.find(r => r.id === playerId); if (racer) racer.connected = connected; },
+  publicView: state => encodeRaceView(toRaceView(state)), playerView: () => null,
+  outcome: state => racerOutcome(state),
   dispose() {},
 };
+export default rules;

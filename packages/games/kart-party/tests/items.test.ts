@@ -1,127 +1,212 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activateItem, hit, ITEM_IDS, ITEMS, selectItem, tickStatuses, updateHazards } from '../src/engine/items';
-import { createRace, stepRace } from '../src/engine/simulation';
-import { nearest, roadHeight, sample, TRACKS } from '../src/engine/tracks';
-import { NEUTRAL, type Item, type Racer } from '../src/engine/types';
+import { collectBoxes, handleItemInput, itemWeights, ITEM_IDS, ITEMS, MAX_PEELS, rollItem, rollWeights, ROULETTE_SECONDS, stepItems, strike } from '../src/sim/items';
+import { createRace, NEUTRAL_INPUT } from '../src/sim/race';
+import { collideKarts } from '../src/sim/physics';
+import { pointAt, queryTrack, type Track } from '../src/sim/track';
+import { getTrack } from '../src/tracks/index';
+import type { Entity, Input, ItemId, Race, Racer } from '../src/sim/types';
 
-function place(racer:Racer,x:number,z:number,extra:Partial<Racer>={}){
-  const location=nearest(TRACKS.coast,x,z);Object.assign(racer,{x,z,s:location.s,y:roadHeight(TRACKS.coast,location.s,location.offset),...extra});
+const DT = 1 / 60;
+function setup(n = 3) {
+  const players = Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}`, color: '#fff' }));
+  const race = createRace({ track: 'palm-bay', laps: 3, speedClass: 100, difficulty: 'normal', gridSize: n, items: 'normal', views: 'tv' }, players, 42, 'tv');
+  race.phase = 'racing'; race.time = 10;
+  const track = getTrack('palm-bay');
+  return { race, track, r: race.racers, d0: straight(track) };
 }
-function setup(item?: Item) {
-  const race=createRace({track:'coast',players:[{id:'a',name:'A',driver:0},{id:'b',name:'B',driver:1},{id:'c',name:'C',driver:2}],seed:42});
-  race.phase='racing';race.racers=race.racers.slice(0,3);
-  race.racers.forEach((r,i)=>{const p=sample(TRACKS.coast,.2+i*.02);Object.assign(r,{x:p.x,y:p.y,z:p.z,s:p.s,heading:p.heading,speed:0,bot:false});});
-  const [a,b,c]=race.racers;if(item) a.item=item;
-  return {race,a,b,c};
+/** Start of the longest near-straight stretch, so shots in tests fly true. */
+function straight(track: Track) {
+  const S = track.samples, n = S.length; let best = 0, bestRun = 0;
+  for (let i = 0; i < n; i++) { let run = 0; while (run < n && Math.abs(S[(i + run) % n].curvature) < .004) run++; if (run > bestRun) { bestRun = run; best = i; } }
+  return S[best].d + 4;
 }
-void test('all twelve items have complete metadata and deterministic placement-weighted drops',()=>{
-  assert.equal(ITEM_IDS.length,12);
-  for(const item of ITEM_IDS) for(const value of Object.values(ITEMS[item])) assert.ok(value.length>0);
-  const {race:a}=setup(),{race:b}=setup(),{race:rear}=setup();const seen=new Set<Item>();let frontPower=0,rearPower=0;
-  for(let i=0;i<5000;i++) {
-    const item=selectItem(a,1);assert.equal(item,selectItem(b,1));seen.add(item);
-    if(['star','triple','pulse','rocket'].includes(item)) frontPower++;
-    if(['star','triple','pulse','rocket'].includes(selectItem(rear,3))) rearPower++;
+function place(track: Track, k: Racer, d: number, lateral = 0, speed = 0, rank?: number) {
+  const p = pointAt(track, d, lateral), q = queryTrack(track, p.x, p.z, -1, p.y);
+  Object.assign(k, { x: p.x, y: p.y, z: p.z, heading: p.heading, vx: Math.sin(p.heading) * speed, vy: 0, vz: Math.cos(p.heading) * speed, hint: q.index, d: q.d, lateral: q.lateral, invulnT: 0 });
+  if (rank) k.rank = rank;
+}
+const give = (k: Racer, item: ItemId) => { k.item = item; k.itemCount = ITEMS[item].uses; k.rollT = 0; };
+const tap = (race: Race, k: Racer, track: Track, held = false): Input => { const i = { ...NEUTRAL_INPUT, fire: (k.prevFire + 1) & 255, item: held, hop: k.prevHop }; handleItemInput(race, k, i, track); return i; };
+const release = (race: Race, k: Racer, track: Track) => handleItemInput(race, k, { ...NEUTRAL_INPUT, fire: k.prevFire, item: false }, track);
+const run = (race: Race, track: Track, seconds: number, until?: () => boolean) => { for (let t = 0; t < seconds; t += DT) { stepItems(race, track, DT); if (until?.()) return true; } return false; };
+const events = (race: Race, type: string) => race.events.filter(e => e.type === type);
+
+void test('every item has metadata and the roulette skews by position', () => {
+  assert.equal(ITEM_IDS.length, 11);
+  for (const id of ITEM_IDS) { assert.ok(ITEMS[id].name && ITEMS[id].blurb); assert.ok(ITEMS[id].uses >= 1); }
+  const front = itemWeights(0, 'normal'), back = itemWeights(1, 'normal'), mid = itemWeights(.5, 'normal');
+  const power = (w: Record<ItemId, number>) => (['super', 'thunder', 'comet', 'triple-nitro'] as ItemId[]).reduce((s, id) => s + w[id], 0);
+  for (const id of ['super', 'thunder', 'comet', 'nitro', 'triple-nitro'] as ItemId[]) assert.equal(front[id], 0, `${id} never goes to the leader`);
+  assert.ok(front.peel > back.peel && front.shield > back.shield);
+  assert.ok(back.super > mid.super && mid.super > front.super);
+  assert.equal(mid.thunder, 0, 'thunder is far-back only');
+  assert.ok(power(itemWeights(0, 'frantic')) > power(front), 'frantic shifts the leader toward the back-of-pack table');
+});
+
+void test('item rolls are deterministic and rank-weighted; global cooldowns and one-at-a-time rules apply', () => {
+  const a = setup(8), b = setup(8), counts = { lead: 0, last: 0 };
+  a.r.forEach((k, i) => k.rank = i + 1); b.r.forEach((k, i) => k.rank = i + 1);
+  for (let i = 0; i < 400; i++) {
+    const x = rollItem(a.race, a.r[i % 2 ? 7 : 0]); assert.equal(x, rollItem(b.race, b.r[i % 2 ? 7 : 0]));
+    if (['super', 'thunder', 'comet', 'triple-nitro'].includes(x)) counts[i % 2 ? 'last' : 'lead']++;
   }
-  assert.equal(seen.size,12);assert.ok(rearPower>frontPower*2);
+  assert.equal(counts.lead, 0); assert.ok(counts.last > 80, `back of the pack rolls power items (${counts.last}/200)`);
+  const last = a.r[7];
+  assert.ok(rollWeights(a.race, last).thunder > 0 && rollWeights(a.race, last).comet > 0);
+  a.race.cooldowns.thunder = 5; assert.equal(rollWeights(a.race, last).thunder, 0);
+  a.r[3].item = 'comet'; assert.equal(rollWeights(a.race, last).comet, 0);
+  a.r[2].inkT = 2; assert.equal(rollWeights(a.race, last).ink, 0);
+  const small = setup(3); small.r[2].rank = 3; assert.equal(rollWeights(small.race, small.r[2]).comet, 0, 'comet needs 4+ racers');
 });
-void test('Comet Kick grants a bounded boost and Bubble Guard blocks exactly one attack',()=>{
-  const {race,a}=setup('boost');activateItem(race,a);assert.equal(a.boost,2.3);assert.equal(a.item,null);
-  a.item='shield';activateItem(race,a);assert.equal(a.shield,7);a.coins=5;hit(race,a);assert.equal(a.shield,0);assert.equal(a.stun,0);assert.equal(a.coins,5);
-  hit(race,a);assert.equal(a.stun,1.2);assert.equal(a.coins,3);
+
+void test('boxes break on contact, roll an item with a roulette, and reappear after 2.5 s', () => {
+  const { race, track, r } = setup(2), box = track.boxes[0];
+  assert.ok(box, 'track has item boxes');
+  place(track, r[0], box.d, box.lateral);
+  collectBoxes(race, track, DT);
+  assert.equal(race.boxes[0], 2.5); assert.ok(r[0].item); assert.equal(r[0].rollT, ROULETTE_SECONDS);
+  assert.equal(events(race, 'pickup')[0].value, 0);
+  const rolled = r[0].item;
+  tap(race, r[0], track); assert.equal(r[0].item, rolled, 'unusable while the roulette spins');
+  r[0].x += 50;
+  for (let t = 0; t < 2.4; t += DT) collectBoxes(race, track, DT);
+  assert.ok(race.boxes[0] > 0, 'still broken');
+  place(track, r[1], box.d, box.lateral); collectBoxes(race, track, DT); assert.equal(r[1].item, null, 'a broken box gives nothing');
+  r[1].x += 50;
+  for (let t = 0; t < .2; t += DT) collectBoxes(race, track, DT);
+  assert.equal(race.boxes[0], 0, 'box is back');
+  // Holding an item: the box still breaks but the slot is unchanged.
+  r[0].x -= 50; r[0].rollT = 0; collectBoxes(race, track, DT); assert.equal(r[0].item, rolled); assert.equal(race.boxes[0], 2.5);
+  race.items = 'off'; race.boxes[0] = 0; r[0].item = null; collectBoxes(race, track, DT); assert.equal(r[0].item, null, 'items off: no pickups');
 });
-void test('Seeker Beetle homes toward a rival and excludes finishers as targets',()=>{
-  const {race,a,b,c}=setup('shell');place(a,0,0,{heading:0});place(b,20,30);place(c,-4,10,{finishTime:0});
-  activateItem(race,a);const shell=race.hazards[0];updateHazards(race,.05);
-  assert.equal(shell.kind,'shell');assert.ok(shell.heading>0);assert.ok(shell.z>4);assert.equal(shell.owner,a.id);
+
+void test('nitro boosts, triple nitro has three uses, bubble and star protect', () => {
+  const { race, track, r, d0 } = setup(3); place(track, r[0], d0);
+  give(r[0], 'nitro'); tap(race, r[0], track);
+  assert.equal(r[0].item, null); assert.equal(r[0].boostT, 1.4); assert.equal(r[0].boostPower, .4); assert.equal(r[0].stats.itemsUsed, 1);
+  assert.equal(events(race, 'item')[0].value, ITEM_IDS.indexOf('nitro'));
+  give(r[0], 'triple-nitro');
+  for (let i = 3; i > 0; i--) { assert.equal(r[0].itemCount, i); tap(race, r[0], track); }
+  assert.equal(r[0].item, null);
+  give(r[1], 'shield'); tap(race, r[1], track); assert.equal(r[1].shieldT, 12);
+  assert.equal(strike(race, r[1], 'spin', r[0].id), 'blocked'); assert.equal(r[1].spinT, 0); assert.equal(r[1].shieldT, 0);
+  assert.equal(events(race, 'shield-pop').length, 1);
+  assert.equal(strike(race, r[1], 'spin', r[0].id), 'hit'); assert.ok(r[1].spinT > 0);
+  assert.equal(r[1].stats.hitsTaken, 1); assert.equal(r[0].stats.hitsDealt, 1);
+  give(r[2], 'super'); tap(race, r[2], track); assert.equal(r[2].starT, 7.5);
+  assert.equal(strike(race, r[2], 'tumble', r[0].id), 'blocked'); assert.equal(r[2].tumbleT, 0);
+  r[2].starT = 0; r[2].respawnT = 1; assert.equal(strike(race, r[2], 'tumble', r[0].id), 'immune');
+  r[2].respawnT = 0; r[2].invulnT = .5; assert.equal(strike(race, r[2], 'tumble', r[0].id), 'blocked');
 });
-void test('Peel Out stays behind its owner and spins out one rival',()=>{
-  const {race,a,b}=setup('banana');a.heading=0;a.coins=4;activateItem(race,a);const trap=race.hazards[0];
-  assert.equal(trap.z,a.z-4);updateHazards(race,.05);assert.equal(trap.z,a.z-4);assert.equal(a.stun,0);
-  place(b,trap.x,trap.z,{coins:4});updateHazards(race,.05);assert.equal(b.stun,1.2);assert.equal(b.coins,2);assert.equal(race.hazards.length,0);
+
+void test('peels drop behind, spin the next kart through, and are capped at 12', () => {
+  const { race, track, r, d0 } = setup(2); place(track, r[0], d0 + 20, 0, 20);
+  give(r[0], 'peel'); tap(race, r[0], track); release(race, r[0], track);
+  const peel = race.entities[0];
+  assert.equal(peel.kind, 'peel'); assert.ok(peel.d < r[0].d, 'dropped behind');
+  run(race, track, .5); assert.ok(Math.abs(peel.y - queryTrack(track, peel.x, peel.z).ground!) < .01, 'settles on the road');
+  place(track, r[1], peel.d, queryTrack(track, peel.x, peel.z).lateral, 20);
+  stepItems(race, track, DT);
+  assert.ok(r[1].spinT > 0); assert.equal(race.entities.length, 0);
+  assert.equal(events(race, 'hit').at(-1)!.racer, r[1].id); assert.equal(r[0].stats.hitsDealt, 1);
+  for (let i = 0; i < MAX_PEELS + 3; i++) { give(r[0], 'peel'); r[0].prevItem = false; tap(race, r[0], track); r[0].x += 3; }
+  assert.equal(race.entities.filter(e => e.kind === 'peel').length, MAX_PEELS);
 });
-void test('Thunderclap hits only nearby rivals and respects a shield',()=>{
-  const {race,a,b,c}=setup('pulse');place(b,a.x+10,a.z,{shield:2});place(c,a.x+33,a.z);activateItem(race,a);
-  assert.equal(b.shield,0);assert.equal(b.stun,0);assert.equal(c.stun,0);assert.equal(a.stun,0);
-  b.shield=0;a.item='pulse';activateItem(race,a);assert.equal(b.stun,1.2);
+
+void test('bouncers fly fast, ricochet off walls inside the course, and spin who they hit', () => {
+  const { race, track, r, d0 } = setup(2); place(track, r[0], d0); place(track, r[1], d0 + 150, 50);
+  give(r[0], 'bouncer'); r[0].heading += .5;   // aim at the wall
+  tap(race, r[0], track); release(race, r[0], track);
+  const shell = race.entities[0];
+  assert.equal(shell.kind, 'bouncer'); assert.ok(Math.hypot(shell.vx, shell.vz) >= 45);
+  run(race, track, 1.2);
+  assert.ok(shell.bounces >= 1, 'ricocheted'); assert.equal(queryTrack(track, shell.x, shell.z, shell.hint).beyond, 0, 'still inside the course');
+  assert.equal(r[0].spinT, 0, 'owner immune right after firing');
+  race.entities = []; place(track, r[1], d0 + 30); place(track, r[0], d0);
+  give(r[0], 'bouncer'); tap(race, r[0], track); release(race, r[0], track);
+  assert.ok(run(race, track, 2, () => r[1].spinT > 0), 'spun the kart ahead'); assert.equal(race.entities.length, 0);
 });
-void test('Beetle Brigade fires three spread seekers and assigns different available rivals',()=>{
-  const {race,a,b,c}=setup('triple');activateItem(race,a);
-  assert.equal(race.hazards.length,3);assert.ok(race.hazards.every(h=>h.kind==='shell'));
-  assert.equal(new Set(race.hazards.map(h=>h.heading)).size,3);
-  assert.deepEqual(new Set(race.hazards.map(h=>h.target)),new Set([b.id,c.id]));
+
+void test('a trailed item blocks one shell from behind but not from the front', () => {
+  const { race, track, r, d0 } = setup(2); place(track, r[0], d0); place(track, r[1], d0 + 30);
+  give(r[1], 'peel'); tap(race, r[1], track, true); assert.equal(r[1].trailing, true);
+  give(r[0], 'bouncer'); tap(race, r[0], track); release(race, r[0], track);
+  assert.ok(run(race, track, 2, () => race.entities.length === 0));
+  assert.equal(r[1].spinT, 0); assert.equal(r[1].item, null); assert.equal(r[1].trailing, false);
+  assert.equal(events(race, 'shield-pop').at(-1)!.value, 1);
+  // From the front the trailed peel does nothing.
+  give(r[1], 'peel'); r[1].prevItem = false; tap(race, r[1], track, true); r[1].heading += Math.PI;
+  give(r[0], 'bouncer'); tap(race, r[0], track); release(race, r[0], track);
+  assert.ok(run(race, track, 2, () => r[1].spinT > 0)); assert.equal(r[1].trailing, false, 'hit drops the trailed item');
+  // Releasing the item button deploys a trailed peel behind the kart.
+  r[1].spinT = 0; place(track, r[1], d0 + 30); give(r[1], 'peel'); r[1].prevItem = false; tap(race, r[1], track, true); release(race, r[1], track);
+  assert.equal(race.entities.at(-1)!.kind, 'peel');
 });
-void test('Jelly Slick persists, affects multiple rivals once each, and cannot bypass a shield next frame',()=>{
-  const {race,a,b,c}=setup('oil');activateItem(race,a);const slick=race.hazards[0];
-  place(b,slick.x,slick.z,{shield:2});place(c,slick.x+1,slick.z);
-  updateHazards(race,.05);assert.equal(b.shield,0);assert.equal(b.oil,0);assert.equal(c.oil,3);assert.equal(race.hazards.length,1);
-  tickStatuses(c,.5);updateHazards(race,.05);assert.equal(c.oil,2.5);assert.equal(b.oil,0);assert.equal(c.stun,0);
+
+void test('a seeker follows the course to the racer ahead and tumbles them', () => {
+  const { race, track, r } = setup(3);
+  place(track, r[0], 10, 0, 0, 3); place(track, r[1], 110, 5, 0, 1); place(track, r[2], 60, -4, 0, 2);
+  give(r[0], 'seeker'); tap(race, r[0], track); release(race, r[0], track);
+  const seeker = race.entities[0]; assert.equal(seeker.target, r[2].id, 'targets the racer ranked directly ahead');
+  assert.ok(run(race, track, 6, () => r[2].tumbleT > 0), 'reached its target'); assert.equal(r[1].tumbleT, 0);
 });
-void test('Snowball Express travels straight and slows without a spinout or coin loss',()=>{
-  const {race,a,b}=setup('frost');place(a,0,0,{heading:0});activateItem(race,a);place(b,0,7,{speed:30,coins:5});
-  updateHazards(race,.05);assert.equal(b.frost,4);assert.equal(b.speed,18);assert.equal(b.stun,0);assert.equal(b.coins,5);assert.equal(race.hazards.length,0);
+
+void test('bombs arc ahead, land, and blast everyone within 7 m after the fuse', () => {
+  const { race, track, r, d0 } = setup(3); place(track, r[0], d0, 0, 25);
+  give(r[0], 'bomb'); tap(race, r[0], track);
+  const bomb = race.entities[0]; assert.equal(bomb.kind, 'bomb'); assert.ok(bomb.vy > 0);
+  assert.ok(run(race, track, 1.5, () => bomb.bounces === 1), 'landed');
+  const land = queryTrack(track, bomb.x, bomb.z); assert.ok(land.d - r[0].d > 15, `lands well ahead (${(land.d - r[0].d).toFixed(1)} m)`);
+  place(track, r[1], land.d + 4, land.lateral + 3); place(track, r[2], land.d + 20, land.lateral);
+  run(race, track, 1.3);
+  assert.ok(r[1].tumbleT > 0, 'inside the blast'); assert.equal(r[2].tumbleT, 0, 'outside the blast');
+  assert.ok(race.entities.some(e => e.kind === 'blast'));
 });
-void test('Coin Comet attracts nearby off-lane coins once per lap',()=>{
-  const {race,a}=setup('magnet');race.racers=[a];const track=TRACKS.coast,coin=track.coins[0],p=sample(track,coin.s-5/track.length,coin.offset+5);
-  Object.assign(a,{x:p.x,y:p.y,z:p.z,s:p.s,heading:p.heading});stepRace(race,{});assert.equal(a.coins,0);
-  activateItem(race,a);assert.equal(a.magnet,8);stepRace(race,{});assert.ok(a.coins>0);const collected=a.coins;
-  stepRace(race,{});assert.equal(a.coins,collected);assert.equal(a.coinsTaken.length,collected);
+
+void test('thunder shocks everyone ahead and starts a global cooldown; ink splats everyone ahead through bubbles', () => {
+  const { race, track, r, d0 } = setup(4);
+  r.forEach((k, i) => place(track, k, d0 + 60 - i * 20, 0, 0, i + 1));
+  r[1].shieldT = 5; give(r[3], 'thunder'); tap(race, r[3], track);
+  assert.ok(r[0].shockT > 0 && r[2].shockT > 0); assert.equal(r[1].shockT, 0); assert.equal(r[1].shieldT, 0);
+  assert.equal(r[3].shockT, 0); assert.equal(race.cooldowns.thunder, 20); assert.equal(events(race, 'thunder').length, 1); assert.equal(r[3].stats.hitsDealt, 1, 'one zap = one hit landed');
+  assert.equal(rollWeights(race, r[3]).thunder, 0); run(race, track, 20.1); assert.ok(rollWeights(race, r[3]).thunder > 0);
+  r[0].shieldT = 5; r[2].spinT = 0; give(r[2], 'ink'); tap(race, r[2], track);
+  assert.ok(r[0].inkT > 0 && r[1].inkT > 0 && r[0].shieldT > 0); assert.equal(r[3].inkT, 0);
 });
-void test('Solar Crown clears slow and slip, protects its shield, and attacks on contact',()=>{
-  const {race,a,b}=setup('star');a.frost=3;a.oil=2;a.shield=4;activateItem(race,a);
-  assert.equal(a.star,6);assert.equal(a.frost,0);assert.equal(a.oil,0);hit(race,a);assert.equal(a.shield,4);assert.equal(a.stun,0);
-  place(b,a.x+1,a.z,{heading:a.heading});stepRace(race,{});assert.ok(b.stun>0);assert.equal(a.stun,0);
+
+void test('the comet flies to the leader and blasts them (radius 8), with a 25 s cooldown', () => {
+  const { race, track, r } = setup(5);
+  place(track, r[4], 20, 0, 0, 5); place(track, r[0], 320, 3, 0, 1); place(track, r[1], 323, -4, 0, 2); place(track, r[2], 150, 0, 0, 3); place(track, r[3], 100, 0, 0, 4);
+  give(r[4], 'comet'); tap(race, r[4], track);
+  assert.equal(race.cooldowns.comet, 25); assert.equal(events(race, 'comet')[0].other, r[0].id);
+  assert.ok(run(race, track, 12, () => r[0].tumbleT > 0), 'hit the leader');
+  assert.ok(r[1].tumbleT > 0, 'splash damage nearby'); assert.equal(r[2].tumbleT, 0, 'passed over the pack');
+  assert.equal(events(race, 'explode').at(-1)!.value, 8);
 });
-void test('Pop Rocket uses fast straight travel and bursts across nearby rivals',()=>{
-  const {race,a,b,c}=setup('rocket'),p=sample(TRACKS.coast,.02);place(a,p.x,p.z,{heading:0});activateItem(race,a);
-  place(b,p.x,p.z+7);place(c,p.x+9,p.z+8);updateHazards(race,.05);
-  assert.equal(b.stun,1.2);assert.equal(c.stun,1.2);assert.equal(a.stun,0);assert.equal(race.hazards.length,0);
-});
-void test('Pop Rocket bursts when its fuse expires even without direct contact',()=>{
-  const {race,a,b}=setup('rocket'),p=sample(TRACKS.coast,.02);place(a,p.x,p.z,{heading:0});activateItem(race,a);race.hazards[0].life=.01;place(b,p.x+9,p.z+8);
-  updateHazards(race,.05);assert.equal(b.stun,1.2);assert.equal(race.hazards.length,0);
-});
-void test('Surprise Parcel removes the victim item while ordinary traps preserve it',()=>{
-  const {race,a,b}=setup('decoy');activateItem(race,a);const trap=race.hazards[0];place(b,trap.x,trap.z,{item:'star'});
-  updateHazards(race,.05);assert.equal(b.stun,1.2);assert.equal(b.item,null);
-  b.stun=0;b.item='boost';hit(race,b);assert.equal(b.item,'boost');
-});
-void test('all harmful effects respect invincibility and finishers without consuming shields or items',()=>{
-  for(const effect of ['stun','frost','oil','decoy'] as const) for(const immune of ['star','finished'] as const) {
-    const {race,a}=setup('boost');a.shield=3;if(immune==='star') a.star=2;else a.finishTime=0;
-    hit(race,a,effect);assert.equal(a.shield,3);assert.equal(a.item,'boost');assert.equal(a.stun+a.frost+a.oil,0);
+
+void test('entities are fully defined, finite and JSON-safe', () => {
+  const { race, track, r, d0 } = setup(3); place(track, r[0], d0, 0, 20);
+  (['peel', 'bouncer', 'seeker', 'bomb'] as ItemId[]).forEach((id, i) => { place(track, r[0], d0 + i * 8, i - 2, 20); give(r[0], id); tap(race, r[0], track); release(race, r[0], track); });
+  run(race, track, .9);
+  const keys: (keyof Entity)[] = ['id', 'kind', 'owner', 'x', 'y', 'z', 'vx', 'vy', 'vz', 't', 'hint', 'd', 'target', 'bounces', 'fuse'];
+  assert.ok(race.entities.length >= 3);
+  for (const e of race.entities) for (const k of keys) {
+    assert.notEqual(e[k], undefined, `${e.kind}.${k}`);
+    if (typeof e[k] === 'number') assert.ok(Number.isFinite(e[k]), `${e.kind}.${k} finite`);
   }
+  assert.deepEqual(JSON.parse(JSON.stringify(race.entities)), race.entities);
 });
-void test('finishers cannot activate any item or consume any hazard',()=>{
-  for(const item of ITEM_IDS) {
-    const {race,a,b}=setup(item);a.finishTime=0;activateItem(race,a);assert.equal(a.item,item);assert.equal(race.hazards.length,0);
-    b.item=item;activateItem(race,b);
-    for(const h of race.hazards) {Object.assign(h,{x:a.x,z:a.z,heading:0});}
-    const count=race.hazards.length;updateHazards(race,.01);assert.equal(race.hazards.length,count);
-  }
-});
-void test('timed effects expire, item pickup cooldown prevents activation, and released buttons can fire later',()=>{
-  const {race,a}=setup('boost');a.itemCooldown=1;activateItem(race,a);assert.equal(a.item,'boost');assert.equal(a.boost,0);
-  Object.assign(a,{boost:2,shield:2,stun:2,frost:2,oil:2,magnet:2,star:2});tickStatuses(a,10);
-  for(const field of ['boost','shield','stun','frost','oil','magnet','star','itemCooldown'] as const) assert.equal(a[field],0);
-  stepRace(race,{a:{...NEUTRAL,use:true}});assert.equal(a.item,null);assert.ok(a.boost>0);
-});
-void test('frost limits speed and oil produces lateral slip through the movement simulation',()=>{
-  const normal=setup(),frozen=setup(),slick=setup();
-  for(const state of [normal,frozen,slick]) {state.race.racers=[state.a];state.a.speed=25;}
-  frozen.a.frost=4;slick.a.oil=3;
-  const input={a:{...NEUTRAL,throttle:true,steer:.8}};
-  stepRace(normal.race,input);stepRace(frozen.race,input);stepRace(slick.race,input);
-  assert.ok(frozen.a.speed<=18);assert.ok(frozen.a.speed<normal.a.speed);assert.ok(slick.a.lateral<0);assert.equal(normal.a.lateral,0);
-});
-void test('jumping above a ground trap avoids it until the racer lands',()=>{
-  const {race,a,b}=setup('banana');activateItem(race,a);const trap=race.hazards[0];
-  place(b,trap.x,trap.z,{y:1000,airborne:true});updateHazards(race,.05);
-  assert.equal(b.stun,0);assert.equal(race.hazards.length,1);
-  place(b,trap.x,trap.z,{airborne:false});updateHazards(race,.05);assert.equal(b.stun,1.2);assert.equal(race.hazards.length,0);
-});
-void test('Thunderclap measures vertical distance as well as distance across the road',()=>{
-  const {race,a,b}=setup('pulse');Object.assign(b,{x:a.x,z:a.z,y:a.y+33,airborne:true});activateItem(race,a);
-  assert.equal(b.stun,0);a.item='pulse';b.y=a.y+20;activateItem(race,a);assert.equal(b.stun,1.2);
+
+void test('a star kart ramming a rival is credited as a hit; the star shrugs off shells', () => {
+  const { race, track, r, d0 } = setup(3); place(track, r[0], d0, 0, 25); place(track, r[1], d0 + 2, 0, 10);
+  const ram = () => collideKarts(race.racers, race.racers.map(() => ({ topSpeed: 29, accel: 1, handling: 1, weight: 1, traction: 1 })), (v, s) => strike(race, race.racers[v], 'tumble', race.racers[s].id));
+  r[0].starT = 5; place(track, r[2], d0 + 60); ram();
+  assert.ok(r[1].tumbleT > 0); assert.equal(r[0].stats.hitsDealt, 1); assert.equal(events(race, 'hit').at(-1)!.other, r[0].id);
+  // Finished karts are immune; a bubble pops with its event instead of vanishing silently.
+  place(track, r[0], d0 + 100, 0, 25); place(track, r[2], d0 + 102, 0, 10); r[2].finishTime = 30; ram();
+  assert.equal(r[2].tumbleT, 0, 'finished kart untouched'); r[2].finishTime = null; r[2].shieldT = 5; ram();
+  assert.equal(r[2].tumbleT, 0); assert.equal(r[2].shieldT, 0); assert.equal(events(race, 'shield-pop').at(-1)!.racer, r[2].id);
+  place(track, r[0], d0 + 30); place(track, r[1], d0); give(r[1], 'bouncer'); r[1].tumbleT = 0; tap(race, r[1], track); release(race, r[1], track);
+  assert.ok(run(race, track, 2, () => race.entities.length === 0), 'shell destroyed on the star'); assert.equal(r[0].spinT, 0);
 });

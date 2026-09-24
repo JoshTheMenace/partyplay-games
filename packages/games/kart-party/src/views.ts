@@ -1,21 +1,11 @@
-import type { Race } from './engine/types';
-
-export type ViewMode = 'auto' | 'tv' | 'personal';
-export const resolveViewMode = (mode: ViewMode = 'auto', players: number) => mode === 'auto' ? players > 4 ? 'personal' : 'tv' : mode;
-export function screenMode(mode: ViewMode, players: number, playerId: string | null, isHost = false) {
-  if (resolveViewMode(mode, players) === 'personal') return playerId ? 'personal' : 'spectator';
-  return isHost || !playerId ? 'split' : 'controls';
-}
-
-/** Hold a shot for six seconds; leave a finished/disconnected racer immediately. */
-export function createRaceDirector() {
-  let id = '', since = -Infinity;
-  return (race: Race) => {
-    const active = race.racers.filter(racer => racer.finishTime === null && (racer.bot || racer.connected));
-    const leader = [...(active.length ? active : race.racers)].sort((a, b) => a.rank - b.rank)[0];
-    if (leader && (race.time < since || !active.some(racer => racer.id === id) || race.time - since >= 6)) {
-      id = leader.id; since = race.time;
-    }
-    return id;
-  };
+/* Where races are drawn. Auto: up to 4 humans share the TV split screen; 5–10 race on their own devices. */
+import type { ViewMode } from './sim/types';
+export type ScreenMode = 'split' | 'personal' | 'spectator' | 'controls';
+export const resolveViewMode = (mode: ViewMode, humans: number): 'tv' | 'personal' => mode === 'personal' || (mode === 'auto' && humans > 4) ? 'personal' : 'tv';
+/** What this device draws. A watching host follows the race; a playing host sees its own kart
+ * (plus the other TV racers in TV mode); TV-mode phones show controls only. */
+export function screenMode(mode: 'tv' | 'personal', playerId: string | null, isHost: boolean): ScreenMode {
+  if (!playerId) return mode === 'tv' ? 'split' : 'spectator';
+  if (isHost) return mode === 'tv' ? 'split' : 'personal';
+  return mode === 'tv' ? 'controls' : 'personal';
 }
