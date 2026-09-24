@@ -1,56 +1,358 @@
-.ichi { color: var(--kp-cream); --ichi-line: #ffffff28; }
-.ichi h1,.ichi h2,.ichi p { margin: 0; }
-.ichi-display { padding: 20px 28px; border: 1px solid var(--ichi-line); border-radius: 28px; background: radial-gradient(ellipse at 35% 40%,#254c48 0,#122e31 42%,#0b1727 85%); }
-.ichi-header { display: flex; align-items: center; justify-content: space-between; }
-.ichi-header h1 { font-size: 68px; line-height: 1; letter-spacing: -4px; }
-.ichi-header h1 span { color: var(--kp-coral); }
-.ichi-timer { display: grid; text-align: center; }
-.ichi-timer small { font-size: 12px; }
-.ichi-display-body { display: grid; grid-template-columns: 1.2fr 1fr; align-items: center; gap: 28px; }
-.ichi-table { min-height: 280px; display: flex; flex-wrap: wrap; gap: 30px; align-items: center; justify-content: center; position: relative; }
-.ichi-table::before { content: ''; position: absolute; inset: 12px; border: 2px solid #fff6e51a; border-radius: 50%; pointer-events: none; }
-.ichi-card { display: flex; flex-direction: column; justify-content: space-between; width: 114px; height: 160px; border: 6px solid var(--kp-cream); border-radius: 15px; padding: 6px; color: var(--kp-ink); background: var(--ichi-card-color,var(--kp-grape)); box-shadow: 0 6px 0 #05071a80; position: relative; }
-.ichi [data-color=coral] { --ichi-card-color: var(--kp-coral); }.ichi [data-color=sky] { --ichi-card-color: var(--kp-sky); }.ichi [data-color=lime] { --ichi-card-color: var(--kp-lime); }.ichi [data-color=sun] { --ichi-card-color: var(--kp-sun); }
-.ichi-card[data-color=wild] { background: conic-gradient(from 40deg,var(--kp-sun),var(--kp-lime),var(--kp-sky),var(--kp-coral),var(--kp-sun)); }
-.ichi-card b { font-family: 'Lilita One',sans-serif; font-size: 60px; text-align: center; line-height: 1; background: #fff6e5b8; border-radius: 50%; }
-.ichi-card-corner,.ichi-card-name { font-size: 12px; font-weight: 900; text-align: left; }
-.ichi-card-name { text-align: right; }
-.ichi-deck { width: 114px; height: 160px; background: repeating-linear-gradient(135deg,#123637 0 8px,#204548 8px 10px); border: 6px solid var(--kp-cream); border-radius: 15px; box-shadow: -4px 4px 0 #637376,-8px 8px 0 #fff6e5; display: grid; place-items: center; transform: rotate(-10deg); }
-.ichi-deck span { font-size: 60px; color: var(--kp-sun); }
-.ichi-discard { transform: rotate(8deg); animation: ichi-deal .24s ease-out; }
-.ichi-table-caption { position: relative; width: 100%; text-align: center; padding-bottom: 12px; }
-.ichi-table-caption h2 { font-size: 24px; margin-top: 8px; overflow-wrap: anywhere; }
-.ichi-color-tag { background: var(--ichi-card-color); color: var(--kp-ink); border-radius: 20px; padding: 4px 14px; font-weight: 900; text-transform: capitalize; }
-.ichi-players { display: grid; gap: 7px; padding: 0; list-style: none; margin: 12px 0; }
-.ichi-players li { display: flex; align-items: center; gap: 10px; background: #05071a66; border: 1px solid var(--ichi-line); border-radius: 12px; padding: 8px 12px; min-width: 0; }
-.ichi-players li[data-active=true] { background: #ffd24a15; border-color: var(--kp-sun); }
-.ichi-players li>div { flex: 1; min-width: 0; }.ichi-players strong { display: block; overflow-wrap: anywhere; font-size: 15px; }.ichi-players small { display: block; font-size: 11px; color: #fff6e5bb; }.ichi-players b { font-size: 25px; }.ichi-seat { color: #fff6e588; font-size: 12px; }
+/* Ichi: a late-night card parlor. Indigo felt, lacquered wood, lantern glow, gold leaf. */
+.ichi{--ichi-gold:#e9bb5c;--ichi-gold-deep:#a8742a;--ichi-lantern:#ffb35c;--ichi-paper:#fbf1dc;--ichi-wood:#2a1610;--ichi-muted:#d9c9a8}
+.ichi [data-color="coral"]{--f1:#ff8466;--f2:#ee4638;--f3:#9f2017;--c:var(--kp-coral)}
+.ichi [data-color="sky"]{--f1:#6bdcf4;--f2:#1ca4d3;--f3:#0a5f8c;--c:var(--kp-sky)}
+.ichi [data-color="lime"]{--f1:#a5e878;--f2:#56b638;--f3:#28711a;--c:var(--kp-lime)}
+.ichi [data-color="sun"]{--f1:#ffe487;--f2:#f6b42a;--f3:#ad6c06;--c:var(--kp-sun)}
+.ichi [data-color="wild"]{--f1:#3b4060;--f2:#171a2a;--f3:#05071a;--c:var(--ichi-gold)}
 
-.ichi-log { padding: 10px 0; min-height: 100px; }.ichi-log p { font-size: 13px; line-height: 1.5; color: #fff6e5aa; }.ichi-log p:first-child { font-size: 16px; color: var(--kp-cream); font-weight: 800; }
-.ichi-packs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; font-size: 11px; }.ichi-packs span { padding: 4px 9px; border: 1px solid var(--ichi-line); border-radius: 20px; }.ichi-packs strong { padding: 4px; color: var(--kp-sun); }
-.ichi-phone { max-width: 700px; margin: auto; padding: 4px 0 16px; }.ichi-phone-top { display: flex; gap: 10px; align-items: center; justify-content: space-between; font-size: 14px; }
-.ichi-turn-banner { margin: 14px 0; padding: 12px; border-radius: 12px; border: 1px solid var(--ichi-line); }.ichi-turn-banner[data-active=true] { border-color: var(--kp-sun); background: #ffd24a14; }.ichi-turn-banner strong,.ichi-turn-banner span { display: block; }.ichi-turn-banner span { font-size: 13px; margin-top: 4px; color: #fff6e5bb; }
-.ichi-hand-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 14px 0; }.ichi-hand-heading h2 { font-size: 18px; }.ichi-hand-heading h2 span { color: var(--kp-sun); }
-.ichi-hand { display: grid; grid-template-columns: repeat(auto-fill,minmax(82px,1fr)); gap: 12px 8px; }.ichi-card-button { border: 0; background: none; padding: 0; color: inherit; width: 100%; position: relative; cursor: pointer; border-radius: 12px; }.ichi-card-button .ichi-card { width: 100%; height: 126px; border-width: 4px; padding: 5px; }.ichi-card-button .ichi-card b { font-size: 42px; }.ichi-card-button .ichi-card-corner,.ichi-card-button .ichi-card-name { font-size: 11px; }.ichi-card-button:disabled { cursor: default; filter: saturate(.65); opacity: .58; }.ichi-hand[data-preview=true] .ichi-card-button:disabled { filter: none; opacity: 1; }.ichi-card-button[data-playable=true] { outline: 2px solid var(--kp-sun); outline-offset: 2px; }.ichi-card-button:focus-visible { outline: 3px solid var(--kp-sky); outline-offset: 3px; }.ichi-card-note { font-size: 12px; display: block; margin-top: 7px; text-align: center; }.ichi-hint { font-size: 12px; color: #fff6e5bb; padding: 12px 0; }.ichi-actions { position: sticky; bottom: 0; padding: 12px 0 max(10px,env(safe-area-inset-bottom)); background: #0b1030f5; margin-top: 10px; }.ichi-actions button { width: 100%; }.ichi-phone-details { margin-top: 14px; font-size: 13px; }.ichi-phone-details>summary { min-height: 44px; padding: 10px; cursor: pointer; }.ichi-phone-details p { margin: 8px 0; }
-.ichi-color-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }.ichi-target { display: grid; gap: 8px; margin-bottom: 16px; }.ichi select,.ichi-target select { min-height: 48px; color: var(--kp-cream); background: var(--kp-navy); border: 1px solid #fff6e566; border-radius: 8px; padding: 8px; font: inherit; font-size: 16px; }.ichi select:focus-visible { outline: 3px solid var(--kp-sky); }.ichi-presets { display: flex; gap: 8px; margin: 14px 0; flex-wrap: wrap; }.ichi-settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }.ichi-settings-grid p { font-size: 13px; line-height: 1.5; margin-top: 6px; }.ichi-config { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }.ichi-config label { display: grid; gap: 6px; font-size: 13px; flex: 1; }.ichi-results h2 { font-size: clamp(28px,5vw,54px); margin: 12px 0; overflow-wrap: anywhere; }.ichi-results ol { padding: 0; list-style: none; }.ichi-results li { display: flex; gap: 15px; padding: 12px; border-bottom: 1px solid var(--ichi-line); }.ichi-results li strong { flex: 1; overflow-wrap: anywhere; }.ichi-results li>span { white-space: nowrap; }.ichi>p+p { margin-top: 12px; }
-@keyframes ichi-deal { from { transform: translateY(-20px) rotate(-8deg); } to { transform: rotate(8deg); } }
-@media (min-width:1000px) { .ichi-display .ichi-players:has(li:nth-child(7)) { grid-template-columns: 1fr 1fr; }.ichi-display .ichi-players:has(li:nth-child(7)) li { padding: 10px 8px; }.ichi-display .ichi-players:has(li:nth-child(7)) .ichi-seat { display: none; } }
-@media (max-width:700px) { .ichi-display-body { grid-template-columns: 1fr; }.ichi-settings-grid { grid-template-columns: 1fr; }.ichi-header h1 { font-size: 48px; } }
-.ichi-exposed { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 4px; }.ichi-exposed span { background: var(--ichi-card-color,var(--kp-grape)); color: var(--kp-ink); min-width: 20px; padding: 1px 2px; border-radius: 3px; font-size: 10px; font-weight: 900; line-height: 14px; }
-.ichi-card { transition: background-color .3s; }.ichi-hand { animation: ichi-hand-in .25s ease-out; }.ichi-players li { animation: ichi-seat-in .25s ease-out; }
-.ichi-choice { border: 2px solid var(--kp-sun); border-radius: 14px; padding: 12px; margin: 12px 0; }.ichi-choice h3 { margin: 0 0 12px; }.ichi-choice>button { margin: 4px; }
-@keyframes ichi-hand-in { from { transform: translateX(12px); } to { transform: translateX(0); } }
-@keyframes ichi-seat-in { from { transform: rotateX(35deg); } to { transform: rotateX(0); } }
-@media (prefers-reduced-motion:reduce) { .ichi * { animation: none !important; transition: none !important; } }
-@media (min-width:1000px) {
- .ichi-display[data-dense-reveals=true] .ichi-display-body { grid-template-columns: 1fr 2.2fr; gap: 18px; }
- .ichi-display[data-dense-reveals=true] .ichi-players:has(li:nth-child(7)) { grid-template-columns: repeat(3,minmax(0,1fr)); }
- .ichi-display[data-dense-reveals=true] .ichi-players li { position: relative; display: block; padding: 8px; }
- .ichi-display[data-dense-reveals=true] .ichi-players strong { padding-right: 30px; }
- .ichi-display[data-dense-reveals=true] .ichi-players b { position: absolute; right: 8px; top: 8px; font-size: 20px; }
- .ichi-display[data-dense-reveals=true] .ichi-header h1 { font-size: 48px; }
- .ichi-display[data-dense-reveals=true] .ichi-table { gap: 18px; }
+/* Cards: all internals are em-based, so font-size alone sets the size (5em x 7em). */
+.ichi-card{position:relative;display:inline-block;flex:none;width:5em;height:7em;border-radius:.52em;background:linear-gradient(160deg,#fffaf0,#efe0bf);box-shadow:inset 0 .05em #fff,0 0 0 .035em #0004,0 .16em .36em #0007;color:var(--ichi-paper);line-height:1}
+.ichi-card-field{position:absolute;inset:.26em;overflow:hidden;border-radius:.34em;background:radial-gradient(120% 90% at 28% 12%,var(--f1),var(--f2) 52%,var(--f3))}
+.ichi-card-field::after{content:'';position:absolute;inset:0;background:linear-gradient(118deg,#fff4 0,#fff0 34%),repeating-radial-gradient(circle at 50% 120%,#fff0 0 .34em,#ffffff0d .36em .4em);pointer-events:none}
+.ichi [data-color="wild"] .ichi-card-field{box-shadow:inset 0 0 0 .07em var(--ichi-gold-deep)}
+.ichi-card-center{position:absolute;inset:0;display:grid;place-items:center}
+.ichi-card-center>*{grid-area:1/1;position:relative}
+.ichi-card-center{--ring:var(--ichi-paper)}
+/* A round family crest (kamon): paper disc inside a gold and paper double ring. */
+.ichi-card-center::before{content:'';position:absolute;left:50%;top:50%;width:4em;height:4em;margin:-2em;border-radius:50%;background:radial-gradient(circle at 42% 34%,#fffdf7,#f1dfb9 82%);box-shadow:inset 0 0 0 .1em var(--ichi-gold-deep),inset 0 0 0 .17em var(--ring),inset 0 0 0 .22em var(--ichi-gold),0 0 0 .09em var(--ring),0 0 0 .15em var(--f3),0 .1em .3em .1em #0006}
+.ichi [data-color="wild"] .ichi-card-center{--ring:#0b0d18}
+.ichi [data-color="wild"] .ichi-card-center::before{background:radial-gradient(circle at 42% 34%,#2c3150,#0b0d18 80%);box-shadow:inset 0 0 0 .1em var(--ichi-gold),inset 0 0 0 .17em var(--ring),inset 0 0 0 .22em var(--ichi-gold-deep),0 0 0 .09em var(--ichi-gold),0 .1em .3em .1em #0008}
+.ichi-card-center>.ichi-emblem{width:4.4em;height:4.4em;color:var(--f2);opacity:.3}
+.ichi-marks{width:3.6em;height:3.6em}
+.ichi-marks .ichi-emblem{position:absolute;width:2.1em;height:2.1em;color:var(--f2);opacity:.38}
+.ichi-marks .ichi-emblem:nth-child(1){left:0;top:0}.ichi-marks .ichi-emblem:nth-child(2){right:0;bottom:0}.ichi-marks .ichi-emblem:nth-child(3){right:0;top:0}.ichi-marks .ichi-emblem:nth-child(4){left:0;bottom:0}
+.ichi [data-value="wild4"] .ichi-marks .ichi-emblem{opacity:.85;width:1.8em;height:1.8em}
+.ichi-marks .ichi-emblem:nth-child(1){--mc:var(--kp-coral)}.ichi-marks .ichi-emblem:nth-child(2){--mc:var(--kp-sun)}.ichi-marks .ichi-emblem:nth-child(3){--mc:var(--kp-sky)}.ichi-marks .ichi-emblem:nth-child(4){--mc:var(--kp-lime)}
+.ichi [data-value="wild4"] .ichi-marks .ichi-emblem{color:var(--mc)}
+.ichi-card-numeral{font-family:var(--font-display);font-weight:400;font-size:3.5em;color:var(--f2);-webkit-text-stroke:.05em var(--kp-ink);paint-order:stroke fill;text-shadow:.03em .06em 0 var(--kp-ink);transform:skewX(-5deg)}
+.ichi-card-numeral[data-under="true"]{text-decoration:underline;text-decoration-thickness:.05em;text-underline-offset:.02em}
+.ichi-card-plus{font-size:2.35em}
+.ichi [data-color="wild"] .ichi-card-plus{color:var(--ichi-paper)}
+.ichi-card-index{position:absolute;top:.2em;left:.26em;display:flex;flex-direction:column;align-items:center;gap:.06em;min-width:1em}
+.ichi-card-index>b{font-family:var(--font-display);font-weight:400;font-size:1.05em;color:#fff;-webkit-text-stroke:.07em var(--kp-ink);paint-order:stroke fill;text-shadow:0 .06em 0 var(--kp-ink)}
+.ichi-card-index>b .ichi-icon,.ichi-card-index>b .ichi-emblem{width:1em;height:1em;display:block}
+.ichi-card-index>.ichi-emblem{width:1em;height:1em;color:#fff9ec;filter:drop-shadow(0 .05em 0 var(--kp-ink))}
+.ichi-emblem{fill:currentColor;overflow:visible}
+.ichi-emblem .core{fill:var(--f2,var(--kp-ink))}
+.ichi-emblem .core-line{fill:none;stroke:var(--f2,var(--kp-ink));stroke-width:1.6;stroke-linecap:round}
+.ichi-emblem .q-coral,.ichi-wild-disc .q-coral{fill:var(--kp-coral)}.ichi-emblem .q-sky,.ichi-wild-disc .q-sky{fill:var(--kp-sky)}.ichi-emblem .q-lime,.ichi-wild-disc .q-lime{fill:var(--kp-lime)}.ichi-emblem .q-sun,.ichi-wild-disc .q-sun{fill:var(--kp-sun)}
+.ichi-icon{width:3.2em;height:3.2em;overflow:visible}
+.ichi-icon path{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.ichi-icon .ink{stroke:var(--kp-ink);stroke-width:5}
+.ichi-icon .fill{stroke:var(--f2);stroke-width:2.9}
+.ichi-card-index .ichi-icon .ink{stroke-width:6.5}.ichi-card-index .ichi-icon .fill{stroke:#fff;stroke-width:3.4}
+.ichi-wild-disc{width:3.9em;height:3.9em;filter:drop-shadow(0 .08em .12em #000a)}
+.ichi-wild-disc .ring{fill:var(--ichi-paper)}
+.ichi-wild-disc .ring-in{fill:var(--kp-ink);stroke:var(--ichi-paper);stroke-width:.9}
+
+/* Card back: Blender art when loaded, lacquer and a single gold brush stroke (一) otherwise. */
+.ichi-back{position:relative;display:inline-block;flex:none;width:5em;height:7em;border-radius:.52em;background:repeating-linear-gradient(45deg,#fff0 0 .3em,#e9bb5c12 .3em .34em),repeating-linear-gradient(-45deg,#fff0 0 .3em,#e9bb5c12 .3em .34em),radial-gradient(120% 90% at 40% 25%,#26327a,#0c1236 72%);box-shadow:inset 0 0 0 .22em var(--ichi-paper),inset 0 0 0 .3em #0c1236,inset 0 0 0 .36em var(--ichi-gold),0 .12em .3em #0008}
+.ichi-back::after{content:'';position:absolute;left:24%;right:22%;top:46%;height:.5em;border-radius:.35em .6em .5em .25em;background:linear-gradient(180deg,#ffe3a0,var(--ichi-gold) 45%,var(--ichi-gold-deep));transform:rotate(-5deg);box-shadow:0 .05em .1em #0008}
+/* The art has its own transparent rounded corners, so no clip or square box-shadow. */
+.ichi-back[data-art="true"]{background:url('/games/ichi/card-back.webp') center/100% 100%;border-radius:0;box-shadow:none;filter:drop-shadow(0 .12em .2em #0008)}
+.ichi-back[data-art="true"]::after{display:none}
+.ichi-chip{display:inline-flex;align-items:center;gap:.3em;padding:.18em .7em .18em .32em;border-radius:1em;background:var(--c);color:var(--kp-ink);font-weight:900;border:.1em solid var(--kp-ink);white-space:nowrap}
+.ichi-chip .ichi-emblem{width:1.2em;height:1.2em;color:var(--kp-ink)}
+.ichi-chip .ichi-emblem .core{fill:var(--c)}.ichi-chip .ichi-emblem .core-line{stroke:var(--c)}
+
+/* TV table */
+.ichi-display{position:relative;height:max(470px,calc(100dvh - 96px));container-type:size;overflow:hidden;border-radius:1.4rem;background:radial-gradient(ellipse 40% 36% at 50% 50%,#1d6d74 0,#135560 45%,#0d3d4c 86%,#082a39 99%,#0000 100%),radial-gradient(ellipse 45% 42% at 50% 50%,#8d4828 0,#6c311a 82%,#3a160b 97%,#0000 100%),radial-gradient(120% 100% at 50% 0%,#1c2462,#0b1030 55%,var(--kp-ink));box-shadow:inset 0 0 0 2px #e9bb5c26}
+.ichi-display[data-art="true"]{background:var(--table) center/cover,var(--kp-ink)}
+.ichi-stage{position:absolute;inset:0;font-size:min(2.4cqh,1.25cqw)}
+.ichi-stage::before{content:'';position:absolute;inset:0;background:radial-gradient(34% 26% at 50% -4%,#ffb35c3d,#0000),radial-gradient(90% 90% at 50% 50%,#0000 60%,#05071a99);pointer-events:none}
+.ichi-wash{position:absolute;inset:20% 22%;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--c) 26%,#0000),#0000);pointer-events:none;animation:ichi-fade .6s both}
+.ichi-orbit{position:absolute;left:25%;right:25%;top:22%;bottom:24%;border-radius:50%;border:.1em dashed #e9bb5c38}
+.ichi-orbit span{position:absolute;left:0;top:0;width:1em;height:1em;background:var(--ichi-gold);clip-path:polygon(0 0,100% 50%,0 100%,32% 50%);offset-path:ellipse(50% 50% at 50% 50%);offset-rotate:auto;offset-distance:calc(var(--k) * 25%);opacity:.75;animation:ichi-orbit 14s linear infinite}
+.ichi-orbit[data-dir="-1"] span{offset-rotate:reverse;animation-direction:reverse}
+@supports not (offset-path:ellipse(50% 50% at 50% 50%)){.ichi-orbit span{display:none}}
+@keyframes ichi-orbit{to{offset-distance:calc(var(--k) * 25% + 100%)}}
+.ichi-hud{position:absolute;left:1.1em;top:.9em;display:grid;justify-items:start;gap:.15em;max-width:17em;font-size:.9em;color:var(--ichi-muted)}
+.ichi-hud strong{font-size:1.7em;color:var(--ichi-gold)}
+.ichi-dir{font-weight:900;color:var(--ichi-paper)}
+.ichi-rules{display:flex;flex-wrap:wrap;gap:.25em;margin-top:.2em}
+.ichi-rules em{font-style:normal;font-size:.85em;padding:.1em .55em;border-radius:1em;background:#05071a99;border:1px solid #e9bb5c40}
+.ichi-seats{list-style:none;margin:0;padding:0}
+.ichi-seat{position:absolute;z-index:2;display:flex;align-items:center;gap:.55em;min-width:11.5em;max-width:17em;padding:.4em .9em .45em .45em;border-radius:1em;transform:translate(-50%,-50%);background:linear-gradient(170deg,#2e1a12f2,#140a07f2);border:.1em solid #e9bb5c4d;box-shadow:0 .4em 1em #0009,inset 0 .07em #fff2;transition:transform .3s,box-shadow .3s,opacity .3s}
+.ichi-seat::before{content:'';position:absolute;left:1em;right:1em;bottom:-.14em;height:.24em;border-radius:1em;background:var(--seat)}
+.ichi-seat[data-current="true"]{z-index:3;border-color:var(--ichi-gold);transform:translate(-50%,-50%) scale(1.08);box-shadow:0 0 0 .16em var(--ichi-gold),0 0 1.8em .35em #ffb35c8c,0 .4em 1em #0009;animation:ichi-glow 1.6s ease-in-out infinite alternate}
+.ichi-seat[data-next="true"]{border-color:#fff6e580}
+.ichi-seat[data-offline="true"]{opacity:.62;filter:saturate(.3)}
+.ichi-seat[data-exposed="true"]{border-color:var(--kp-coral);box-shadow:0 0 0 .16em var(--kp-coral),0 0 1.6em .3em #ff574888}
+.ichi-seat-fan{position:relative;flex:none;width:3.9em;height:3.1em}
+.ichi-seat-fan .ichi-back{position:absolute;left:.5em;top:.25em;font-size:.3em;transform-origin:50% 130%;transform:rotate(var(--r))}
+/* Cards left is the number that matters: it dominates the plate. */
+.ichi-seat-fan b{position:absolute;right:-.15em;top:50%;min-width:1.25em;padding:0 .18em;border-radius:.6em;background:var(--ichi-paper);color:var(--kp-ink);font-size:1.8em;line-height:1.3;text-align:center;transform:translateY(-50%);box-shadow:0 .06em 0 var(--kp-ink)}
+.ichi-seat-text{display:flex;flex-direction:column;gap:.1em;min-width:0}
+.ichi-seat-text strong{font-family:var(--font-display);font-weight:400;font-size:1.3em;line-height:1.05;overflow-wrap:anywhere;color:var(--ichi-paper)}
+.ichi-seat-text span{font-size:.85em;color:var(--ichi-muted)}
+.ichi-seat-text span b{color:var(--ichi-paper);font-size:1.1em}
+.ichi-seat-text i{font-style:normal;color:var(--ichi-gold);margin-left:.45em;letter-spacing:.1em;font-size:.8em}
+.ichi-seat-tag{position:absolute;top:-.85em;left:50%;transform:translateX(-50%);padding:.12em .65em;border-radius:1em;background:var(--ichi-gold);color:var(--kp-ink);font-size:.72em;font-weight:900;white-space:nowrap}
+.ichi-seat[data-next="true"] .ichi-seat-tag{background:var(--ichi-paper)}
+.ichi-seat[data-offline="true"] .ichi-seat-tag{background:#8e96b8}
+.ichi-seat[data-incoming="true"] .ichi-seat-tag{background:#c8281e;color:#fff4e0;font-size:.9em;border:.08em solid var(--kp-ink)}
+.ichi-hanko{position:absolute;top:-.9em;right:-.8em;padding:.12em .42em;border-radius:.3em;background:#c8281e;color:#fff4e0;border:.12em solid #ffd9c4;font-family:var(--font-display);font-size:1em;transform:rotate(10deg);box-shadow:0 .15em .4em #0009}
+.ichi-hanko[data-exposed="true"]{animation:ichi-flash .45s ease-in-out infinite alternate}
+.ichi-deck,.ichi-pile{position:absolute;z-index:3;width:5em;height:7em;font-size:1.6em;transform:translate(-50%,-50%)}
+.ichi-deck .ichi-back{position:absolute;left:0;top:0}
+.ichi-deck .ichi-back:nth-child(1){transform:translate(.16em,.2em) rotate(3deg)}.ichi-deck .ichi-back:nth-child(2){transform:translate(.08em,.1em) rotate(-2deg)}
+.ichi-deck>.kp-numeral{position:absolute;left:50%;top:100%;margin-top:.55em;transform:translateX(-50%);font-size:.55em;padding:.1em .7em;border-radius:1em;background:#05071acc;color:var(--ichi-muted);white-space:nowrap}
+.ichi-deck>.kp-numeral::after{content:' left'}
+.ichi-halo{position:absolute;left:50%;top:50%;width:8.6em;height:8.6em;margin:-4.3em;border-radius:50%;border:.14em solid var(--c);background:radial-gradient(circle,color-mix(in srgb,var(--c) 38%,#0000) 0,#0000 70%);box-shadow:0 0 1.2em .2em color-mix(in srgb,var(--c) 70%,#0000),inset 0 0 1em color-mix(in srgb,var(--c) 60%,#0000);transition:border-color .4s,box-shadow .4s;animation:ichi-halo 2.4s ease-in-out infinite alternate}
+.ichi-under,.ichi-top{position:absolute;inset:0;transform:rotate(var(--r))}
+.ichi-under .ichi-card{filter:brightness(.8)}
+.ichi-top[data-fly="true"]{animation:ichi-fly .55s cubic-bezier(.2,.85,.3,1)}
+.ichi-stack{position:absolute;z-index:2;right:-2em;top:-.6em;padding:.12em .42em;border-radius:.5em;background:radial-gradient(circle at 40% 30%,#ff7a62,#c8281e);color:#fff4e0;border:.1em solid var(--kp-ink);font-family:var(--font-display);font-size:calc(1.25em + min(var(--n),12) * .08em);transform:rotate(9deg);box-shadow:0 .12em 0 var(--kp-ink),0 0 1em #ff574899;animation:ichi-stamp .45s cubic-bezier(.2,1.8,.4,1)}
+.ichi-pile .ichi-chip{position:absolute;left:50%;top:100%;margin-top:.5em;transform:translateX(-50%);font-size:.8em}
+.ichi-turn{position:absolute;z-index:1;left:67.5%;top:47%;display:grid;justify-items:center;gap:.25em;width:13em;text-align:center;transform:translate(-50%,-50%)}
+.ichi-turn .ichi-timer{font-size:2.2em;margin-bottom:.1em}
+.ichi-turn strong{font-family:var(--font-display);font-weight:400;font-size:1.55em;line-height:1.05;color:var(--ichi-paper);padding-bottom:.12em;border-bottom:.14em solid var(--seat);white-space:nowrap}
+.ichi-turn>span{font-size:.95em;color:var(--ichi-muted)}
+.ichi-timer{position:relative;display:inline-grid;place-items:center;flex:none;width:2.6em;height:2.6em}
+.ichi-timer svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.ichi-timer circle{fill:none;stroke-width:3.6}
+.ichi-timer .track{stroke:#fff6e524;fill:#05071a99}
+.ichi-timer .drain{stroke:var(--ichi-gold);stroke-linecap:round;transition:stroke-dashoffset .25s linear,stroke .3s}
+.ichi-timer[data-low="true"] .drain{stroke:var(--kp-coral)}
+.ichi-timer output{position:relative;font-size:.95em;line-height:1}
+.ichi-fx{position:absolute;inset:0;z-index:4;pointer-events:none}
+.ichi-fly-back{position:absolute;font-size:.5em;margin:-3.5em 0 0 -2.5em;animation:ichi-deal .6s var(--d) cubic-bezier(.3,.7,.3,1) both}
+.ichi-bubble{position:absolute;padding:.05em .6em;border-radius:1em;background:var(--t);color:var(--kp-ink);border:.08em solid var(--kp-ink);font-family:var(--font-display);font-size:1.5em;white-space:nowrap;transform:translate(-50%,calc(-100% - 2.1em));box-shadow:0 .1em 0 var(--kp-ink);animation:ichi-bubble 1.3s ease-out forwards}
+.ichi-bubble[data-below="true"]{transform:translate(-50%,1.6em)}
+.ichi-burst{position:absolute;width:8em;height:8em;margin:-4em;border-radius:50%;border:.35em solid var(--c);animation:ichi-burst .9s ease-out forwards}
+[data-tone="coral"]{--t:var(--kp-coral)}[data-tone="sky"]{--t:var(--kp-sky)}[data-tone="lime"]{--t:var(--kp-lime)}[data-tone="sun"]{--t:var(--kp-sun)}[data-tone="grape"]{--t:var(--kp-grape)}
+.ichi-splash{position:absolute;z-index:5;left:50%;top:74.5%;display:grid;justify-items:center;gap:.25em;max-width:30em;text-align:center;transform:translate(-50%,-50%);pointer-events:none;animation:ichi-pop .5s cubic-bezier(.2,1.6,.4,1)}
+.ichi-splash strong{font-size:3.2em;padding:.05em .6em;border-radius:.3em;background:linear-gradient(170deg,#2e1a12f2,#140a07f2);border:.08em solid var(--ichi-gold);color:var(--t);-webkit-text-stroke:.06em var(--kp-ink);paint-order:stroke fill;text-shadow:0 .08em 0 var(--kp-ink),0 0 .6em color-mix(in srgb,var(--t) 60%,#0000);white-space:nowrap}
+.ichi-splash[data-tone="grape"]{--t:#cfa8ff}
+/* From 9 seats the lower corner plates sit beside the splash; the ticker already carries its detail line. */
+.ichi-stage:has(.ichi-seat:nth-child(9)) .ichi-splash span{display:none}
+.ichi-splash span{font-size:.95em;padding:.2em .8em;border-radius:1em;background:#05071ad9;color:var(--ichi-paper)}
+.ichi-window{position:absolute;z-index:5;left:50%;top:25%;width:min(22em,27%);padding:.35em 1em .6em;overflow:hidden;border-radius:.8em;text-align:center;transform:translate(-50%,-50%);background:linear-gradient(#cf2c20,#8b170f);border:.13em solid var(--ichi-gold);box-shadow:0 0 2em #ff574880,0 .3em 0 #3a0905;animation:ichi-shake .5s}
+.ichi-window strong{display:block;font-size:1.75em;color:#fff4e0;text-shadow:0 .07em 0 #3a0905}
+.ichi-window span{font-size:.85em;color:#ffe3cf}
+.ichi-window i{position:absolute;left:0;bottom:0;height:.35em;background:var(--ichi-gold);transition:width .25s linear}
+.ichi-ticker{position:absolute;z-index:1;right:1.1em;bottom:.9em;width:17em;display:flex;flex-direction:column;align-items:flex-end;gap:.3em;margin:0;padding:0;list-style:none;font-size:.82em}
+.ichi-ticker li{padding:.25em .65em;border-radius:.7em;background:#05071ab8;color:var(--ichi-muted);text-align:right;border:1px solid #fff6e514}
+.ichi-ticker li:last-child{color:var(--ichi-paper);border-color:#e9bb5c55}
+.ichi-overlay{position:absolute;inset:0;z-index:6;display:grid;place-items:center;background:radial-gradient(#05071a8c,#05071ae0);backdrop-filter:blur(3px)}
+.ichi-overlay-late{animation:ichi-fade .35s 1.5s both}
+.ichi-tally{width:min(64em,94%);max-height:95%;padding:1em 1.4em;border-radius:1.2em;background:linear-gradient(170deg,#222a63f7,#0b1030f7);border:.12em solid #e9bb5c66;box-shadow:0 1.5em 3em #000a;animation:ichi-pop .45s ease-out}
+.ichi-tally header{display:flex;align-items:center;gap:.9em;margin-bottom:.6em}
+.ichi-tally header>.ichi-emblem,.ichi-final>.ichi-emblem{width:2.8em;height:2.8em;flex:none}
+.ichi-tally h2{margin:0;font-size:2em;color:var(--ichi-gold)}
+.ichi-tally header p{margin:.15em 0 0;color:var(--ichi-muted)}
+.ichi-tally header p b{color:var(--ichi-paper);font-size:1.2em}
+.ichi-next{margin-left:auto;display:grid;justify-items:center;line-height:1}
+.ichi-next span{font-size:2.4em;color:var(--ichi-gold)}
+.ichi-next small{font-size:.8em;color:var(--ichi-muted);margin-top:.2em}
+.ichi-tally ol{display:grid;grid-template-columns:1.5em max-content minmax(0,1fr) 3em 9em 3em;column-gap:.8em;row-gap:.3em;margin:0;padding:0;list-style:none}
+.ichi-tally li{grid-column:1/-1;display:grid;grid-template-columns:subgrid;align-items:center;gap:.8em;padding:.25em .7em;border-radius:.6em;background:#fff6e50a;border-left:.25em solid var(--seat)}
+.ichi-tally li[data-winner="true"] .ichi-leftover-points{color:var(--ichi-gold)}
+.ichi-tally li[data-winner="true"]{background:#e9bb5c24;box-shadow:inset 0 0 0 .08em #e9bb5c80}
+.ichi-tally li strong{font-family:var(--font-display);font-weight:400;font-size:1.1em;white-space:nowrap}
+.ichi-tally li>b{font-size:1.25em;text-align:right;color:var(--ichi-paper)}
+.ichi-ready{display:grid;place-items:center;width:1.4em;height:1.4em;border-radius:50%;border:.1em solid #fff6e540;font-size:.9em;font-weight:900}
+.ichi-ready[data-ready="true"]{background:var(--kp-lime);color:var(--kp-ink);border-color:var(--kp-lime)}
+.ichi-leftover{container-type:inline-size;display:flex;align-items:center;min-width:0;height:2.5em}
+.ichi-leftover em{font-style:normal;color:var(--ichi-gold);font-weight:900}
+.ichi-leftover .ichi-card{font-size:.34em;margin-left:min(.15em,(100cqw - 5em * var(--n)) / max(var(--n) - 1,1));transition:opacity .25s,transform .25s}
+.ichi-leftover .ichi-card:first-child{margin-left:0}
+/* Up to six players there is room for leftovers you can read from the couch. */
+.ichi-tally ol:not(:has(>li:nth-child(7))) .ichi-leftover{height:3.9em}
+.ichi-tally ol:not(:has(>li:nth-child(7))) .ichi-leftover .ichi-card{font-size:.55em}
+.ichi-leftover .ichi-card:not(.is-in){opacity:.3;transform:translateY(-.6em)}
+.ichi-leftover-points{text-align:right;color:var(--kp-coral);font-size:1.1em}
+.ichi-bar{display:block;height:.55em;border-radius:1em;background:#fff6e51a;overflow:hidden}
+.ichi-bar i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--seat,var(--ichi-gold)),var(--ichi-gold));transition:width 1s ease-out}
+.ichi-tally-foot{margin:.6em 0 0;font-size:.85em;color:var(--ichi-muted);text-align:center}
+.ichi-final{display:grid;justify-items:center;gap:.4em;text-align:center;width:min(40em,90%)}
+.ichi-final h2{font-size:2.6em}
+
+/* Phone */
+.ichi-phone{--card:min(7.2vw,3.3dvh);display:flex;flex-direction:column;gap:.5rem;min-height:calc(100dvh - 96px)}
+.ichi-phone[data-art="true"]{padding:.4rem .5rem 0;border-radius:1.2rem;background:#05071a url('/games/ichi/table-portrait.webp') center/cover}
+.ichi-strip{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:.6rem;padding:.4rem .6rem;border-radius:1rem;background:linear-gradient(160deg,#222a63,#0e1438);border:2px solid #fff6e51f;transition:border-color .3s,box-shadow .3s}
+.ichi-strip[data-mine="true"]{border-color:var(--ichi-gold);box-shadow:0 0 1.2rem #ffb35c55}
+.ichi-strip-top .ichi-card{font-size:9px;display:block}
+.ichi-strip-info{display:grid;justify-items:start;gap:.3rem;min-width:0}
+.ichi-strip-info>span{display:flex;align-items:center;gap:.4rem}
+.ichi-strip-info .ichi-chip{font-size:.8rem}
+.ichi-strip-info strong{font-family:var(--font-display);font-weight:400;font-size:1.1rem;line-height:1.05;overflow-wrap:break-word}
+.ichi-strip[data-mine="true"] strong{color:var(--kp-sun);font-size:1.45rem}
+.ichi-strip-penalty{padding:0 .4rem;border-radius:.5rem;background:#c8281e;color:#fff4e0;border:2px solid var(--kp-ink);font-family:var(--font-display);font-size:1.1rem;line-height:1.3;transform:rotate(-4deg)}
+.ichi-strip .ichi-timer{font-size:1.05rem}
+.ichi-rivals{display:flex;gap:.35rem;margin:0;padding:0 0 .15rem;overflow-x:auto;list-style:none;scrollbar-width:none}
+.ichi-rivals li{flex:none;display:flex;align-items:center;gap:.35rem;min-height:30px;padding:.1rem .5rem;border-radius:1rem;background:#fff6e50f;border:2px solid #0000;font-size:.82rem}
+.ichi-rivals li::before{content:'';width:.55rem;height:.55rem;border-radius:50%;background:var(--seat)}
+.ichi-rivals li[data-current="true"]{border-color:var(--ichi-gold);background:#e9bb5c26}
+.ichi-rivals li[data-offline="true"]{opacity:.55}
+.ichi-rivals b{font-size:.95rem}
+.ichi-rivals em{font-style:normal;padding:0 .3rem;border-radius:.3rem;background:#c8281e;color:#fff4e0;font-weight:900;font-size:.72rem}
+.ichi-sheet{position:relative;flex:1;display:flex;flex-direction:column;justify-content:center;gap:.5rem;min-height:0}
+.ichi-prompt{display:grid;gap:.25rem;text-align:center}
+.ichi-peek{position:relative;display:none;width:5em;height:7em;margin:.4rem auto 1.3rem;font-size:14px}
+.ichi-peek .ichi-card{position:relative;transform:rotate(-4deg)}
+.ichi-peek .ichi-halo{width:9em;height:9em;margin:-4.5em;animation:none}
+@media (orientation:portrait) and (min-height:700px){.ichi-peek{display:block}.ichi-strip-top{display:none}.ichi-strip{grid-template-columns:minmax(0,1fr) auto}
+  /* A shout button needs the room: the top card moves back into the strip. */
+  .ichi-phone:has(.ichi-shout) .ichi-peek{display:none}.ichi-phone:has(.ichi-shout) .ichi-strip-top{display:block}.ichi-phone:has(.ichi-shout) .ichi-strip{grid-template-columns:auto minmax(0,1fr) auto}}
+@media (orientation:portrait) and (max-height:640px){.ichi-rivals{display:none}.ichi-prompt strong{font-size:1.2rem}.ichi-shout.ichi-catch,.ichi-shout[data-urgent="true"]{min-height:64px;font-size:2.2rem}
+  /* During a shout the sort header gives its row back so a two-row hand still fits. */
+  .ichi-phone:has(.ichi-shout) .ichi-hand-head{display:none}}
+.ichi-prompt strong{font-family:var(--font-display);font-weight:400;font-size:1.45rem;line-height:1.1}
+.ichi-prompt[data-mine="true"] strong{color:var(--kp-sun)}
+.ichi-prompt span,.ichi-hint{color:var(--muted-foreground);font-size:.95rem}
+.ichi-hint{margin:0;text-align:center}
+.ichi-colors,.ichi-targets{display:grid;grid-template-columns:1fr 1fr;gap:.5rem .6rem}
+.ichi-colors p,.ichi-targets p{grid-column:1/-1;margin:0;text-align:center;font-weight:900}
+.ichi-colors .kp-btn,.ichi-targets .kp-btn{margin:0;min-height:60px;font-size:1.2rem}
+.ichi-colors .kp-btn>span,.ichi-targets .kp-btn>span{display:flex;align-items:center;justify-content:center;gap:.45rem}
+.ichi-card-tag{position:absolute;top:-.55em;left:.15em;z-index:1;padding:.05em .35em;border-radius:.3em;background:#c8281e;color:#fff4e0;font:normal .62em/1.3 var(--font-display);pointer-events:none;transform:rotate(-6deg)}.ichi-card-button[aria-pressed="true"] .ichi-card-tag{top:.25em;left:auto;right:.25em}
+.ichi-colors .ichi-emblem{width:1.7em;height:1.7em;color:var(--kp-ink)}
+.ichi-colors .ichi-emblem .core{fill:var(--tone)}.ichi-colors .ichi-emblem .core-line{stroke:var(--tone)}
+.ichi-targets{grid-template-columns:1fr;max-height:30dvh;overflow:auto;padding:.2rem}
+.ichi-targets .kp-btn{min-height:48px;font-size:1rem;border-left:.4rem solid var(--seat)}
+.ichi-targets .kp-btn>span{justify-content:space-between}
+@media (orientation:portrait) and (max-height:640px){.ichi-phone{gap:.35rem}.ichi-colors p,.ichi-targets p{display:none}.ichi-colors{grid-template-columns:repeat(4,1fr);gap:.4rem}.ichi-colors .kp-btn{min-height:52px;padding:.4rem .2rem;font-size:.95rem}.ichi-colors .ichi-emblem{display:none}.ichi-targets{max-height:24dvh}}
+.ichi-hand{container-type:inline-size;flex:none}
+.ichi-hand-head{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+.ichi-hand-head strong{font-size:.95rem}
+.ichi-sort{display:inline-flex;padding:2px;border-radius:.8rem;background:#fff6e514}
+.ichi-sort button{min-width:56px;min-height:44px;border:0;border-radius:.7rem;background:#0000;color:var(--kp-cream);font-weight:900}
+.ichi-sort button[aria-pressed="true"]{background:var(--ichi-paper);color:var(--kp-ink)}
+/* Cards shrink with the row's column count until a 1.6em strip (corner index still visible) fits the width. */
+.ichi-hand-row{display:flex;font-size:max(13px,min(var(--card),(100cqw - 1rem) / (3.4 + 1.6 * var(--cols))));padding:1.3em .5rem .7rem;margin:0 -.25rem;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scroll-padding-inline:.5rem}
+/* The second row covers the lower half of the first; its padding stays click-through so the top strips remain tappable. */
+.ichi-hand-row+.ichi-hand-row{margin-top:calc(-4.9em - .7rem);pointer-events:none}
+.ichi-hand-row+.ichi-hand-row>*{pointer-events:auto}
+.ichi-card-button{position:relative;flex:none;padding:0;border:0;border-radius:.52em;background:none;font-size:inherit;width:clamp(1.6em,(100cqw - 1rem - 5em) / max(var(--cols) - 1,1),5.3em);height:7em;text-align:left;transition:transform .18s cubic-bezier(.3,1.4,.5,1),filter .2s;-webkit-tap-highlight-color:transparent}
+/* Each button is only as wide as its visible strip, so taps and automation hit the card you see. */
+.ichi-card-button:first-child{margin-left:auto}.ichi-card-button:last-child{width:5em;margin-right:auto}
+.ichi-card-button .ichi-card{display:block;transition:box-shadow .2s,filter .2s}
+.ichi-card-button[data-playable="true"],.ichi-card-button[data-jumpable="true"]{transform:translateY(-.55em)}
+.ichi-card-button[data-playable="true"] .ichi-card{box-shadow:0 0 0 .09em var(--kp-sun),0 0 .7em .12em #ffd24a99,0 .16em .36em #0007}
+.ichi-card-button[aria-disabled="true"] .ichi-card{filter:brightness(.78) saturate(.75)}
+.ichi-card-button[data-arrive="true"] .ichi-card{animation:ichi-arrive .45s cubic-bezier(.2,1.3,.4,1) both}
+.ichi-land{animation:ichi-land .4s cubic-bezier(.2,1.4,.4,1)}
+.ichi-card-button[data-jumpable="true"] .ichi-card{animation:ichi-jump .8s ease-in-out infinite alternate}
+.ichi-card-button[aria-pressed="true"]{z-index:2;transform:translateY(-1.1em) scale(1.05)}
+.ichi-card-button[aria-pressed="true"] .ichi-card{box-shadow:0 0 0 .1em #fff,0 0 0 .2em var(--kp-sun),0 .5em 1em #000a}
+.ichi-card-button[data-new="true"]::after{content:'New';position:absolute;z-index:1;top:-.35em;left:.3em;padding:.1em .4em;border-radius:.4em;background:var(--kp-sky);color:var(--kp-ink);border:2px solid var(--kp-ink);font-size:.55em;font-weight:900}
+.ichi-card-button:focus-visible{outline:none}.ichi-card-button:focus-visible .ichi-card{outline:3px solid var(--kp-sky);outline-offset:3px}
+.ichi-actions{position:sticky;bottom:0;z-index:3;display:flex;flex-wrap:wrap;gap:.5rem;padding:.5rem 0 max(.25rem,var(--safe-bottom));background:linear-gradient(#05071a00,var(--kp-ink) 35%)}
+.ichi-actions .kp-btn{flex:1 1 8rem;min-height:56px;margin:0 0 .35rem}
+.ichi-actions .ichi-play{flex-grow:2}
+.ichi-shout{position:relative;overflow:hidden;flex:1 1 100%;min-height:64px;margin-bottom:.35rem;border:3px solid var(--kp-ink);border-radius:1.1rem;background:radial-gradient(circle at 50% 25%,#ffe68a,#ffb81c);color:var(--kp-ink);font-family:var(--font-display);font-size:2.1rem;transform:skewX(-6deg);box-shadow:0 .3rem 0 var(--kp-ink),0 0 1.4rem #ffd24a77}
+.ichi-shout[data-urgent="true"]{min-height:96px;font-size:3rem;animation:ichi-pulse .6s ease-in-out infinite alternate}
+.ichi-shout.ichi-catch{min-height:88px;font-size:2.7rem;background:radial-gradient(circle at 50% 25%,#ff8a70,#d42a1d);color:#fff4e0;animation:ichi-flash .45s ease-in-out infinite alternate}
+.ichi-shout:active:not(:disabled){transform:skewX(-6deg) translateY(.2rem);box-shadow:0 .08rem 0 var(--kp-ink)}
+.ichi-shout:disabled{filter:saturate(.4) brightness(.75)}
+/* The catch window drains across the bottom of Ichi! and Catch! (--left is set once per window). */
+.ichi-shout[style*="--left"]::after{content:'';position:absolute;left:0;right:0;bottom:0;height:6px;background:var(--kp-coral);transform-origin:left;animation:ichi-drain var(--left) linear forwards}
+.ichi-catch[style*="--left"]::after{background:var(--kp-sun)}
+.ichi-toast{position:absolute;z-index:4;top:.25rem;left:0;right:0;pointer-events:none}
+.ichi-toast .kp-notice{margin:0;box-shadow:0 .4rem 1rem #000a}
+.ichi-ouch{justify-self:center;padding:0 .8rem;font-weight:400;border-radius:1rem;background:#c8281e;color:#fff4e0;border:2px solid var(--kp-ink);font-family:var(--font-display);font-size:1.2rem;box-shadow:0 .15rem 0 var(--kp-ink);animation:ichi-ouch .4s cubic-bezier(.2,1.6,.4,1)}
+.ichi-shout:focus-visible,.ichi-preset:focus-visible,.ichi-sort button:focus-visible{outline:3px solid var(--kp-sky);outline-offset:3px}
+.ichi-break{display:grid;justify-items:center;gap:.6rem;padding:1rem .25rem;text-align:center}
+.ichi-break>.ichi-emblem{width:3.2rem;height:3.2rem}
+.ichi-break h2{margin:0;color:var(--ichi-gold)}
+.ichi-break p{margin:0;color:var(--muted-foreground)}
+.ichi-break .kp-btn{position:sticky;bottom:max(.5rem,var(--safe-bottom));width:100%;margin:.3rem 0}
+.ichi-break .kp-btn:disabled{opacity:1}
+.ichi-break-scores{display:grid;grid-template-columns:minmax(0,max-content) minmax(3rem,1fr) 2.6rem;gap:.35rem .6rem;width:100%;margin:0;padding:0;list-style:none}
+.ichi-break-scores li{grid-column:1/-1;display:grid;grid-template-columns:subgrid;align-items:center;padding:.35rem .6rem;border-radius:.7rem;background:#fff6e50d;border-left:.3rem solid var(--seat);text-align:left}
+.ichi-break-scores li[data-me="true"]{background:#e9bb5c22}
+.ichi-break-scores b{text-align:right}
+@media (orientation:landscape) and (max-height:500px){
+  .ichi-phone{--card:min(5.3dvh,3.3vw)}
+  .ichi-phone[data-phase="playing"]{display:grid;grid-template-columns:minmax(0,1fr) minmax(200px,31%);grid-template-rows:auto minmax(0,1fr) auto;grid-template-areas:"strip strip" "hand sheet" "hand actions";gap:.4rem .7rem;height:max(260px,calc(100dvh - 92px));min-height:0}
+  .ichi-strip{grid-area:strip;padding:.25rem .6rem}
+  .ichi-strip-top .ichi-card{font-size:7px}
+  .ichi-strip-info{grid-auto-flow:column;align-items:center;justify-content:start}
+  .ichi-rivals{display:none}
+  .ichi-sheet{grid-area:sheet;justify-content:flex-start;overflow:auto}
+  .ichi-prompt strong{font-size:1.1rem}.ichi-prompt span{font-size:.85rem}
+  .ichi-colors .kp-btn{min-height:50px;font-size:1rem}
+  .ichi-targets{max-height:none}
+  .ichi-hand{grid-area:hand;align-self:end}
+  /* Also bound by height: 210px is the shell chrome, the strip and the hand header. */
+  .ichi-hand-row{font-size:max(13px,min(var(--card),(100cqw - 1rem) / (3.4 + 1.6 * var(--cols)),(100dvh - 210px) / (8.3 + 3.4 * (var(--rows) - 1))))}
+  .ichi-actions{grid-area:actions;position:static;padding:0;background:none;align-content:end}
+  .ichi-actions .kp-btn{min-height:48px;font-size:1.05rem;padding:.55rem .8rem}
+  .ichi-shout{min-height:52px;font-size:1.7rem}.ichi-shout[data-urgent="true"],.ichi-shout.ichi-catch{min-height:68px;font-size:2.2rem}
+  .ichi-break>.ichi-emblem{display:none}
+  .ichi-break{gap:.4rem;padding:.2rem 0}
+  .ichi-break .kp-btn{font-size:1.2rem;padding:.6rem 1rem}
+  .ichi-break-scores{grid-template-columns:repeat(2,minmax(0,max-content) minmax(2rem,1fr) 2.6rem)}
+  .ichi-break-scores li{grid-column:span 3}
 }
-.ichi-timer output { font-size: 36px; }.ichi-phone-top output { font-size: 24px; }.ichi-card-corner { text-transform: capitalize; }.ichi-players { perspective: 600px; }.ichi-card-button { transition: transform .15s,opacity .15s; }.ichi-card-button[data-playable=true]:not(:disabled) { transform: translateY(-3px); box-shadow: 0 3px 12px #ffd24a50; }
-@media (hover:hover) { .ichi-card-button:not(:disabled):hover { transform: translateY(-6px); } }
-@media (prefers-reduced-motion:reduce) { .ichi * { animation: none !important; transition: none !important; } }
+
+/* Settings, instructions, results */
+.ichi-settings{display:grid;gap:1rem}
+.ichi-presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));gap:.6rem}
+.ichi-preset{display:grid;gap:.2rem;min-height:64px;padding:.7rem 1rem;border-radius:1rem;border:2px solid #fff6e533;background:#fff6e50d;color:var(--kp-cream);text-align:left}
+.ichi-preset strong{font-size:1.3rem;color:var(--ichi-gold)}
+.ichi-preset span{font-size:.9rem;color:var(--muted-foreground)}
+.ichi-preset[aria-pressed="true"]{border-color:var(--ichi-gold);background:#e9bb5c24;box-shadow:0 0 0 2px #e9bb5c44}
+.ichi-rule-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:.6rem}
+.ichi-rule{padding:.7rem 1rem;border-radius:1rem;background:#fff6e50a;border:1px solid var(--border)}
+.ichi-rule .kp-toggle>span{font-weight:900}
+.ichi-rule .kp-switch{min-height:44px}
+.ichi-rule .kp-switch[aria-checked="true"]{background:var(--kp-lime);color:var(--kp-ink);border-color:var(--kp-lime)}
+.ichi-rule p{margin:.35rem 0 0;font-size:.9rem;color:var(--muted-foreground)}
+.ichi-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));gap:.6rem}
+.ichi-options label{display:grid;gap:.3rem;font-weight:900}
+.ichi-options select{min-height:48px;padding:0 .7rem;border-radius:.7rem;border:2px solid var(--input);background:var(--secondary);color:var(--kp-cream);font-size:1rem}
+.ichi-howto-cards{display:flex;justify-content:center;padding:.4rem 0 .6rem}
+.ichi-howto-cards .ichi-card{font-size:11px;margin:0 -.6em}
+.ichi-howto-cards .ichi-card:nth-child(1){transform:rotate(-10deg) translateY(.3em)}.ichi-howto-cards .ichi-card:nth-child(3){transform:rotate(10deg) translateY(.3em)}
+.ichi-howto ul{display:grid;gap:.45rem;margin:0;padding-left:1.1rem}
+.ichi-howto li::marker{color:var(--ichi-gold)}
+.ichi-howto p{color:var(--muted-foreground)}
+.ichi-results{display:grid;justify-items:center;gap:.6em;text-align:center}
+/* On the TV the results scale with the screen, bounded by height for the row count; phones keep the 16px base. */
+.ichi-results[data-display="true"]{font-size:clamp(1rem,min(1.5vw,(100vh - 270px) / (11 + 3.2 * var(--rows))),1.7rem)}
+.ichi-podium{display:flex;flex-wrap:wrap;justify-content:center;gap:1em}
+.ichi-podium>div{display:grid;justify-items:center;gap:.25em;min-width:9em;padding:.9em 1.2em 1em;border-radius:1.1em 1.1em .4em .4em;background:linear-gradient(#e9bb5c33,#e9bb5c0a);border:.12em solid var(--ichi-gold);border-bottom:.4em solid var(--seat)}
+.ichi-podium .ichi-emblem{width:2.6em;height:2.6em}
+.ichi-podium strong{font-size:1.5em}
+.ichi-results h2{margin:.2em 0 0;color:var(--ichi-gold);font-size:1.6em}
+.ichi-results>p{margin:0;color:var(--muted-foreground)}
+.ichi-standings{display:grid;gap:.3em;width:min(100%,34em);margin:0;padding:0;list-style:none}
+.ichi-standings:has(>li:nth-child(7)){grid-template-columns:repeat(auto-fit,minmax(min(100%,22em),1fr));width:min(100%,48em)}
+.ichi-standings li{display:grid;grid-template-columns:2.2em minmax(0,max-content) minmax(3em,1fr) 2.6em;align-items:center;gap:.6em;padding:.4em .7em;border-radius:.7em;background:#fff6e50d;text-align:left}
+.ichi-standings li[data-winner="true"]{background:#e9bb5c26}
+.ichi-standings li[data-me="true"]{box-shadow:inset 0 0 0 2px #fff6e555}
+.ichi-standings strong{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.ichi-standings li>span:nth-child(3){color:var(--muted-foreground);font-size:.9em}
+.ichi-standings .ichi-leftover{height:2.2em}
+.ichi-standings b{text-align:right;font-size:1.2em}
+.ichi-last-hand{width:min(100%,34em);text-align:left}
+.ichi-last-hand summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-weight:900}
+.ichi-last-hand ul{display:grid;gap:.3em;margin:0;padding:0;list-style:none}
+.ichi-last-hand li{display:grid;grid-template-columns:minmax(0,8em) minmax(0,1fr) 2.6em;gap:.5em;font-size:.9em}
+.ichi-last-hand li span{color:var(--muted-foreground)}
+.ichi-last-hand b{text-align:right}
+
+@keyframes ichi-glow{to{box-shadow:0 0 0 .16em var(--ichi-gold),0 0 2.4em .6em #ffb35caa,0 .4em 1em #0009}}
+@keyframes ichi-halo{to{transform:scale(1.04);filter:brightness(1.15)}}
+@keyframes ichi-fly{from{transform:translate(calc(var(--dx) * 1cqw),calc(var(--dy) * 1cqh)) rotate(calc(var(--r) - 50deg)) scale(.5)}}
+@keyframes ichi-deal{from{transform:translate(calc(var(--dx) * 1cqw),calc(var(--dy) * 1cqh)) rotate(-25deg);opacity:1}80%{opacity:1}to{transform:scale(.7);opacity:0}}
+@keyframes ichi-bubble{0%{opacity:0;scale:.5}15%{opacity:1;scale:1.12}25%{scale:1}80%{opacity:1}100%{opacity:0}}
+@keyframes ichi-burst{from{transform:scale(.4);opacity:1}to{transform:scale(1.7);opacity:0}}
+@keyframes ichi-pop{from{opacity:0;transform:translate(-50%,-50%) scale(.6)}}
+@keyframes ichi-stamp{from{transform:rotate(9deg) scale(2);opacity:0}}
+@keyframes ichi-shake{0%,100%{transform:translate(-50%,-50%)}20%{transform:translate(-52%,-50%) rotate(-2deg)}40%{transform:translate(-48%,-50%) rotate(2deg)}60%{transform:translate(-51%,-50%)}}
+@keyframes ichi-pulse{to{transform:skewX(-6deg) scale(1.04);box-shadow:0 .3rem 0 var(--kp-ink),0 0 2.4rem #ffd24acc}}
+@keyframes ichi-flash{to{filter:brightness(1.3)}}
+@keyframes ichi-drain{to{transform:scaleX(0)}}
+@keyframes ichi-arrive{from{transform:translateY(2.2em) scale(.9);opacity:0}}
+@keyframes ichi-land{from{transform:scale(1.25) rotate(9deg);opacity:.5}}
+@keyframes ichi-ouch{from{opacity:0;transform:scale(.5)}}
+@keyframes ichi-fade{from{opacity:0}}
+@keyframes ichi-jump{to{box-shadow:0 0 0 .1em var(--kp-sky),0 0 1em .25em #28c6e7bb,0 .16em .36em #0007}}
+.ichi-tally{animation-name:ichi-rise}
+@keyframes ichi-rise{from{opacity:0;transform:translateY(1em)}}
+@media (prefers-reduced-motion:reduce){.ichi-bubble,.ichi-splash,.ichi-window,.ichi-stack,.ichi-land,.ichi-ouch,.ichi-wash,.ichi-overlay-late,.ichi-card-button[data-arrive="true"] .ichi-card{animation:none}.ichi-orbit span{animation:none}}
