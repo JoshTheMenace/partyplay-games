@@ -1,0 +1,62 @@
+[
+ {
+  "name": "Default",
+  "colors": {
+   "primary": "#e0282e",
+   "secondary": "#2f5fd0",
+   "accent": "#ffd23a",
+   "light": "#f7f5f0",
+   "skin": "#f6c49a",
+   "hair": "#4a2a18",
+   "trim": "#7a4a26",
+   "dark": "#231a1c",
+   "eye": "#2f6fd8",
+   "eye-white": "#ffffff"
+  }
+ },
+ {
+  "name": "Wario Yellow",
+  "colors": {
+   "primary": "#f2c81c",
+   "secondary": "#7b3fb0",
+   "accent": "#39c26b",
+   "light": "#f7f5f0",
+   "skin": "#f6c49a",
+   "hair": "#4a2a18",
+   "trim": "#7a4a26",
+   "dark": "#231a1c",
+   "eye": "#2f6fd8",
+   "eye-white": "#ffffff"
+  }
+ },
+ {
+  "name": "Black",
+  "colors": {
+   "primary": "#2c2a33",
+   "secondary": "#c7342f",
+   "accent": "#e6e6e6",
+   "light": "#f7f5f0",
+   "skin": "#f6c49a",
+   "hair": "#4a2a18",
+   "trim": "#7a4a26",
+   "dark": "#231a1c",
+   "eye": "#2f6fd8",
+   "eye-white": "#ffffff"
+  }
+ },
+ {
+  "name": "Blue",
+  "colors": {
+   "primary": "#3aa0ff",
+   "secondary": "#e8e1d0",
+   "accent": "#ffd23a",
+   "light": "#f7f5f0",
+   "skin": "#f6c49a",
+   "hair": "#4a2a18",
+   "trim": "#5b3b22",
+   "dark": "#231a1c",
+   "eye": "#2f6fd8",
+   "eye-white": "#ffffff"
+  }
+ }
+]

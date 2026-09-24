@@ -1,0 +1,277 @@
+{
+ "kind": "zelda",
+ "name": "Zelda",
+ "generator": "tools/blender/fighters/zelda.py",
+ "height": 1.95,
+ "headTop": 1.95,
+ "tris": 19744,
+ "vertices": 10187,
+ "bytes": 583564,
+ "size": [
+  1.7977,
+  1.9611,
+  0.8459
+ ],
+ "bounds": {
+  "min": [
+   -0.8989,
+   -0.0111,
+   -0.4348
+  ],
+  "max": [
+   0.8988,
+   1.95,
+   0.4111
+  ]
+ },
+ "materials": [
+  "skin",
+  "trim",
+  "eye-white",
+  "eye",
+  "dark",
+  "hair",
+  "metal",
+  "accent",
+  "light",
+  "primary",
+  "secondary"
+ ],
+ "bones": [
+  "root",
+  "hips",
+  "spine",
+  "chest",
+  "neck",
+  "head",
+  "shoulder_L",
+  "upperarm_L",
+  "forearm_L",
+  "hand_L",
+  "shoulder_R",
+  "upperarm_R",
+  "forearm_R",
+  "hand_R",
+  "thigh_L",
+  "shin_L",
+  "foot_L",
+  "thigh_R",
+  "shin_R",
+  "foot_R",
+  "prop",
+  "extra_tressL_0",
+  "extra_tressL_1",
+  "extra_tressL_2",
+  "extra_tressR_0",
+  "extra_tressR_1",
+  "extra_tressR_2",
+  "extra_hair_0",
+  "extra_hair_1",
+  "extra_hair_2"
+ ],
+ "parents": {
+  "root": null,
+  "hips": "root",
+  "spine": "hips",
+  "chest": "spine",
+  "neck": "chest",
+  "head": "neck",
+  "shoulder_L": "chest",
+  "upperarm_L": "shoulder_L",
+  "forearm_L": "upperarm_L",
+  "hand_L": "forearm_L",
+  "shoulder_R": "chest",
+  "upperarm_R": "shoulder_R",
+  "forearm_R": "upperarm_R",
+  "hand_R": "forearm_R",
+  "thigh_L": "hips",
+  "shin_L": "thigh_L",
+  "foot_L": "shin_L",
+  "thigh_R": "hips",
+  "shin_R": "thigh_R",
+  "foot_R": "shin_R",
+  "prop": "hand_R",
+  "extra_tressL_0": "head",
+  "extra_tressL_1": "extra_tressL_0",
+  "extra_tressL_2": "extra_tressL_1",
+  "extra_tressR_0": "head",
+  "extra_tressR_1": "extra_tressR_0",
+  "extra_tressR_2": "extra_tressR_1",
+  "extra_hair_0": "head",
+  "extra_hair_1": "extra_hair_0",
+  "extra_hair_2": "extra_hair_1"
+ },
+ "joints": {
+  "root": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "hips": [
+   0.0,
+   1.0517,
+   0.0
+  ],
+  "spine": [
+   0.0,
+   1.1624,
+   0.0
+  ],
+  "chest": [
+   0.0,
+   1.2953,
+   0.0
+  ],
+  "neck": [
+   0.0,
+   1.4835,
+   0.0
+  ],
+  "head": [
+   0.0,
+   1.5942,
+   0.0
+  ],
+  "shoulder_L": [
+   0.0664,
+   1.4392,
+   0.0
+  ],
+  "upperarm_L": [
+   0.1661,
+   1.4502,
+   0.0
+  ],
+  "forearm_L": [
+   0.4539,
+   1.4502,
+   0.0
+  ],
+  "hand_L": [
+   0.6974,
+   1.4502,
+   0.0
+  ],
+  "shoulder_R": [
+   -0.0664,
+   1.4392,
+   0.0
+  ],
+  "upperarm_R": [
+   -0.1661,
+   1.4502,
+   0.0
+  ],
+  "forearm_R": [
+   -0.4539,
+   1.4502,
+   0.0
+  ],
+  "hand_R": [
+   -0.6974,
+   1.4502,
+   0.0
+  ],
+  "thigh_L": [
+   0.083,
+   0.9964,
+   0.0
+  ],
+  "shin_L": [
+   0.083,
+   0.5535,
+   0.0
+  ],
+  "foot_L": [
+   0.083,
+   0.0886,
+   0.0
+  ],
+  "thigh_R": [
+   -0.083,
+   0.9964,
+   0.0
+  ],
+  "shin_R": [
+   -0.083,
+   0.5535,
+   0.0
+  ],
+  "foot_R": [
+   -0.083,
+   0.0886,
+   0.0
+  ],
+  "prop": [
+   -0.807,
+   1.4502,
+   0.0
+  ],
+  "extra_tressL_0": [
+   0.1328,
+   1.7325,
+   0.0554
+  ],
+  "extra_tressL_1": [
+   0.1384,
+   1.5665,
+   0.0886
+  ],
+  "extra_tressL_2": [
+   0.1107,
+   1.4281,
+   0.1605
+  ],
+  "extra_tressR_0": [
+   -0.1328,
+   1.7325,
+   0.0554
+  ],
+  "extra_tressR_1": [
+   -0.1384,
+   1.5665,
+   0.0886
+  ],
+  "extra_tressR_2": [
+   -0.1107,
+   1.4281,
+   0.1605
+  ],
+  "extra_hair_0": [
+   0.0,
+   1.7104,
+   -0.1107
+  ],
+  "extra_hair_1": [
+   0.0,
+   1.5056,
+   -0.2103
+  ],
+  "extra_hair_2": [
+   0.0,
+   1.2842,
+   -0.2214
+  ]
+ },
+ "extras": {
+  "tressL": [
+   "extra_tressL_0",
+   "extra_tressL_1",
+   "extra_tressL_2"
+  ],
+  "tressR": [
+   "extra_tressR_0",
+   "extra_tressR_1",
+   "extra_tressR_2"
+  ],
+  "hair": [
+   "extra_hair_0",
+   "extra_hair_1",
+   "extra_hair_2"
+  ]
+ },
+ "prop": {
+  "parent": "hand_R",
+  "visible": "none"
+ }
+}

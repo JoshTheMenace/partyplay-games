@@ -2,9 +2,7 @@
 
 ## Current scope
 
-The user's latest instruction authorizes building a playable game from the best accessible research and reconstructing missing behavior instead of blocking. Original character tuning remains the priority. The earlier requirement to stop until exact parity can be established is superseded. Sky Clash is now registered as an in-progress, playable 33-fighter adaptation. New Blender models are explicitly authorized; Fable implements frontend and presentation animations.
-
-The implementation preserves available scalar tuning and normal attack scripts for all 27 regular fighter forms while documenting approximate collision, common constants and special behavior. It does not claim a complete game rewrite or original balance. [README.md](README.md) describes the implemented controls and omissions.
+Sky Clash v2 (2026-09-24) rebuilds the game around the Melee content: all 33 fighter kinds, the 27 regular fighters' imported attributes and attack command streams, and 30 stages. The user asked to keep that content and rebuild everything else. The engine, CPUs, specials, Blender models, animation, effects, stage art and UI are new. Where Melee behaviour could not be recovered, the code reconstructs it and says so in a comment. Nothing here claims frame parity. [README.md](README.md) covers play and limits.
 
 ## Verified source boundary
 
@@ -18,15 +16,13 @@ Inspected [doldecomp/melee](https://github.com/doldecomp/melee) at commit `d5042
 
 ## Architecture and fidelity boundary
 
-PartyPlay owns rooms, seats, readiness, input transport and replay. The new TypeScript rules own a 60 Hz fight with a 2D collision plane and a Three.js display. The original GameCube runtime is not included. Running the original executable or a complete animation evaluator would still be necessary to establish frame parity; neither is available here.
+PartyPlay owns rooms, seats, readiness, input transport and replay. `src/server.ts` and `src/sim/` run a 60 Hz fight on a 2D collision plane, and the display draws it with three.js. The original GameCube runtime is not included, and no original executable or animation evaluator was available to compare against.
 
-The held-input channel sends at 20 Hz and the fixed-step scheduler may discard excess catch-up steps. Press counters preserve short taps, but do not preserve their original intra-frame timing. The build has no rollback. Published attack commands run on a fixed simulation-frame timeline; visual Fable poses do not decide collisions. Missing bone transforms use explicit move anchors, so matchups and reach can differ despite retained damage and radii.
-
-The earlier Bolt/Atlas experiment was replaced. Its old QA is historical and cannot establish parity or acceptance of the new Fox/Falco implementation.
+Phones send held input at 20 Hz. Monotonic press counters keep short taps, but not their timing inside a frame, so the engine buffers every press for 8 frames. There is no rollback. Move windows run on the simulation frame timeline, and the animation reaches toward the published live hitboxes. Poses never decide collisions. Hitboxes on non-root bones use an authored anchor model (see `src/moveset.ts`), so reach can differ from Melee even though damage, angles, knockback and radii are the imported values.
 
 ## Blender fallback and published data audit
 
-On 2026-09-12 the user authorized new models made in Blender if original models remain unavailable, while retaining the original stats and mechanics. The local Blender CLI was verified as 5.2.1 LTS. A replacement Fox pilot is now authored, rigged, exported and reimport-checked. See [the foundation README](fidelity/README.md).
+On 2026-09-12 the user authorized new models made in Blender if original models remain unavailable, while keeping the original stats and mechanics. All 33 fighters now come from the v2 Blender 5.2 pipeline in `tools/blender/` (see its README). `validate.py` checks each GLB against the rig contract in `src/model.ts`, and the models are new work, not extracted geometry.
 
 The author of [meleeDat2Json](https://github.com/pfirsich/meleeDat2Json) publishes [character JSON dumps](https://melee.theshoemaker.de/?dir=dat-dumps). Downloaded and parsed [Fox.json](https://melee.theshoemaker.de/dat-dumps/Fox.json) into the consumer's ignored `output/melee-fidelity/Fox.json` for research. SHA-256: `4533034a5db1b2d7949763b196f5a9cb2361b567da8ba6f8ad7c5a898a55e98f`.
 
@@ -37,15 +33,15 @@ This dump is useful evidence of accessible original tuning and attack scripts. I
 
 ## Implemented foundation
 
-The replacement Fox model and source-based helper layer are documented in [fidelity/README.md](fidelity/README.md). The importer preserves source command bytes, including 63 subroutines, and verifies the dump and decompilation header hashes. One concrete discrepancy was found: the published Fox jab radius is approximately 3.341176, while applying the decompiled `ftAction_8007121C` scale literal to its raw bytes gives approximately 3.327912. The implementation follows the pinned source calculation, not the published decoded float. Original executable comparison remains required.
+The source-based helper layer is documented in [fidelity/README.md](fidelity/README.md). The importer preserves source command bytes, including 63 subroutines, and verifies the dump and decompilation header hashes. One concrete discrepancy was found: the published Fox jab radius is approximately 3.341176, while applying the decompiled `ftAction_8007121C` scale literal to its raw bytes gives approximately 3.327912. The implementation follows the pinned source calculation, not the published decoded float.
 
 ## Playable roster import
 
 [Falco.json](https://melee.theshoemaker.de/dat-dumps/Falco.json) identifies `PlFc.dat` / `ftDataFalco`. SHA-256: `5db4392df8e9fe288bb31eaea1d8f2191df1d893b7812b9b50b171934ce43e79`. `tools/import_roster.py` rejects changed dump/header hashes before writing either output. It maps the 47-field common prefix plus six landing-lag values by the decompiled offsets, and retains the 331 selected raw normal-attack scripts and their reachable subroutines in `fidelity/scripts.ts`. No original model archives have been downloaded.
 
-The move compiler supports the waits, loops, calls, clears, charge markers, interruptibility and autocancel commands used by the selected normal attacks. It rejects unsupported gameplay control opcodes rather than silently interpreting them. Presentation commands and per-bone invulnerability flags are not implemented. Specials are explicitly reconstructed separately; their approximate timing is based on available action metadata, with authored travel/collision behavior.
+v2 extends the import to every combat subaction (`fidelity/actions.ts`, from `tools/import_moves.py`): specials and their air variants, dash attacks, grabs, pummels, throws, ledge and getup attacks, dodges and taunts. `src/moveset.ts` compiles them. It supports waits, loops, calls, gotos, hitbox edits, charge markers, IASA, autocancel, throw data and release, and it rejects unsupported gameplay opcodes instead of guessing. Presentation commands and per-bone invulnerability are not implemented. Special behaviour (projectiles, travel, reflectors and so on) is reconstructed as data in `src/specials/` on top of the real script windows.
 
-The knockback expression follows the source's dependency structure. Common values (including 1.4, 18, .03 velocity conversion, .4 hitstun and .051 decay), hitlag, shield drain/damage, DI and charged-smash scaling are reconstructed and not verified against `PlCo.dat`. There is no original-executable regression oracle. The native-C vector tests verify only the ported scalar helpers.
+The knockback expression follows the source's dependency structure. Common values (including 1.4, 18, .03 velocity conversion, .4 hitstun and .051 decay), hitlag, shield drain and damage, DI and charged-smash scaling are Melee's widely documented values. The pinned decompilation checkout was empty during the v2 rebuild, so they were not re-read from source, and none are verified against `PlCo.dat`. There is no original-executable regression oracle. The native-C vector tests verify only the ported scalar helpers.
 
 ## Full roster expansion (2026-09-12)
 
@@ -55,8 +51,8 @@ All 27 regular public JSON dumps were retrieved from the publisher’s index. Th
 
 The publisher labels opcode 5 as goto and 7 as subroutine. The pinned [lbcommand.c](https://github.com/doldecomp/melee/blob/d504219dba4a5c5350aecd8e2f4969adeacb8b72/src/melee/lb/lbcommand.c) implements 5 as call/return and 7 as goto. The compiler follows the C implementation, with recursion/command budgets, and applies opcode 12/13 damage/radius edits without mutating earlier windows. Per-bone invulnerability remains unimplemented.
 
-The six bonus profiles have no corresponding public parameter dumps in the inspected index. They borrow the regular profile named in roster.json and use authored stock-match bodies/special kits; they do not claim boss-AI or original bonus-entity parity. Regular specials are likewise reconstructed in a separate file rather than presented as sourced normal data. Models and portraits were authored in Blender, not downloaded from the original game.
+The six bonus profiles have no corresponding public parameter dumps in the inspected index. They borrow the regular profile named in roster.json and use authored special kits in `src/specials/bonus.ts`. They do not claim boss AI or original bonus-entity parity. Models, portraits and renders were made in Blender, not downloaded from the original game.
 
 ## Versus stage roster
 
-[STAGES.md](STAGES.md) records all 29 standard versus GrKind entries and their 29 authored counterparts; Cloudbreak remains the 30th choice. Original stage DAT archives and exact collision coordinates were not available. All stage geometry, motion, hazard cycles and scenery are newly authored. The mapping excludes adventure routes, target tests, debug maps, unused kinds and enum sentinels. The shared stage clock drives server collision and Three.js presentation.
+[STAGES.md](STAGES.md) maps the 29 standard versus stages plus Cloudbreak, the original 30th. Original stage DAT archives and exact collision coordinates were not available. v2 rebuilt every layout in Melee units: the six tournament stages use community-documented widths, platform heights and blast zones, and the other 24 are Melee-scale estimates. Motion, hazard cycles and scenery are new work. One stage clock drives both the server collision and the three.js art, and the art kit builds floors and walls from the same blocks.

@@ -1,0 +1,62 @@
+[
+ {
+  "name": "Default",
+  "colors": {
+   "primary": "#2a2630",
+   "secondary": "#3b2a2c",
+   "accent": "#cf9d3e",
+   "trim": "#4a3226",
+   "hair": "#cf3f26",
+   "skin": "#7a6b4c",
+   "light": "#bfe6f2",
+   "dark": "#1a1418",
+   "eye": "#f0b21e",
+   "eye-white": "#fff4d8"
+  }
+ },
+ {
+  "name": "Red",
+  "colors": {
+   "primary": "#6a1c20",
+   "secondary": "#2a1a1c",
+   "accent": "#cf9d3e",
+   "trim": "#4a3226",
+   "hair": "#cf3f26",
+   "skin": "#7a6b4c",
+   "light": "#bfe6f2",
+   "dark": "#1a1418",
+   "eye": "#f0b21e",
+   "eye-white": "#fff4d8"
+  }
+ },
+ {
+  "name": "Blue",
+  "colors": {
+   "primary": "#23305e",
+   "secondary": "#1a2040",
+   "accent": "#d8d0b8",
+   "trim": "#4a3226",
+   "hair": "#cf3f26",
+   "skin": "#7a6b4c",
+   "light": "#bfe6f2",
+   "dark": "#1a1418",
+   "eye": "#f0b21e",
+   "eye-white": "#fff4d8"
+  }
+ },
+ {
+  "name": "Purple",
+  "colors": {
+   "primary": "#4a2a60",
+   "secondary": "#26183a",
+   "accent": "#cf9d3e",
+   "trim": "#4a3226",
+   "hair": "#cf3f26",
+   "skin": "#7a6b4c",
+   "light": "#bfe6f2",
+   "dark": "#1a1418",
+   "eye": "#f0b21e",
+   "eye-white": "#fff4d8"
+  }
+ }
+]

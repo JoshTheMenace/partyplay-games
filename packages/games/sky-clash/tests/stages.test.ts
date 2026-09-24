@@ -1,91 +1,177 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { STAGES, STAGE_IDS, getStage, resolveStage, spawnPoint, stageFrame, type StageId } from '../src/stages';
-import { neutralInput, type Input } from '../src/model';
-import { rules, type State } from '../src/server';
-const ctx = { roomId:'stage-test',roundId:'stage-round',nowMs:1000,seed:27,players:Array.from({length:4},(_,i)=>({id:`p${i}`,name:`Player000000000${i}`,color:'#93d2fa'})) };
-function fight(stage: StageId, hazards=false) { const s=rules.create(ctx,{seconds:60,stocks:5,stage,hazards}); s.phase='fight'; return s; }
-function tick(s: State, frames=1, input: Partial<Input>={}) { for(let i=0;i<frames;i++) rules.tick(s,new Map([['p0',{...neutralInput(),...input}]]),1/60,1000+(s.frame+1)*1000/60); }
+import { STAGES, STAGE_IDS, getStage, resolveStage, stageFrame, type Block, type Zone } from '../src/stages';
+import { UNIT } from '../src/model';
 
-test('29 distinct versus source entries plus Cloudbreak have different layouts and finite bounds',()=>{
-  assert.equal(STAGE_IDS.length,30);
-  const references=STAGE_IDS.map(id=>getStage(id).grKind).filter(id=>id!==null);
-  assert.equal(new Set(references).size,29);
-  assert.deepEqual([...references].sort((a,b)=>a-b),[...Array.from({length:21},(_,i)=>i+2),24,25,27,28,29,30,36,37]);
-  assert.equal(new Set(STAGE_IDS.map(id=>JSON.stringify(getStage(id).platforms))).size,30);
-  for(const id of STAGE_IDS) for(let f=0;f<2400;f+=37) {
-    const stage=getStage(id), current=stageFrame(id,f);
-    assert.ok(current.platforms.length && current.platforms.length<=24);
-    for(const p of current.platforms) assert.ok(p.left<p.right && p.left>-stage.blastX && p.right<stage.blastX && p.y>stage.blastBottom && p.y<stage.blastTop-4,id);
-    for(let seat=0;seat<4;seat++) { const p=spawnPoint(id,seat,4,f); assert.ok(current.platforms.some(s=>s.solid && p.x>s.left && p.x<s.right && p.y===s.y),id); }
+const E = 1e-6, TICKS = 14400; // 4 minutes covers every stage loop (Stadium's full rotation is 7.3 minutes; sampled below)
+const within = (z: Zone, x: number, y: number) => x >= z.left && x <= z.right && y >= z.bottom && y <= z.top;
+const contains = (a: Zone, b: Zone) => b.left >= a.left && b.right <= a.right && b.bottom >= a.bottom && b.top <= a.top;
+const overlap = (a: Block, b: Block) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > E && Math.min(a.top, b.top) - Math.max(a.bottom, b.bottom) > E;
+const inside = (blocks: Block[], x: number, y: number) => blocks.some(b => x > b.left + E && x < b.right - E && y > b.bottom + E && y < b.top - E);
+const samples = (id: string) => Array.from({ length: id === 'stadium' ? 1400 : 700 }, (_, i) => i * (id === 'stadium' ? 19 : 21));
+
+test('thirty stages keep their ids, real Melee names and complete definitions', () => {
+  assert.equal(STAGE_IDS.length, 30);
+  assert.equal(new Set(STAGE_IDS).size, 30);
+  assert.equal(new Set(STAGE_IDS.map(id => getStage(id).name)).size, 30);
+  for (const id of STAGE_IDS) {
+    const s = getStage(id);
+    assert.equal(s.id, id);
+    assert.ok(s.name && s.blurb && s.family && s.source, id);
+    for (const color of Object.values(s.palette)) assert.match(color, /^#[0-9a-f]{6}$/, id);
+    assert.equal(s.spawns.length, 4, id); assert.equal(s.respawns.length, 4, id);
+    assert.ok(contains(s.blast, s.camera), `${id}: blast contains camera`);
+  }
+  assert.equal(getStage('cloudbreak').source, 'Original');
+  assert.equal(getStage('peach-castle').name, "Princess Peach's Castle");
+});
+
+test('tournament stages match Melee dimensions', () => {
+  const width = (id: 'battlefield' | 'final-destination' | 'yoshi-story' | 'dream-land' | 'fountain' | 'stadium') => {
+    const main = stageFrame(id, 0).blocks[0]; return (main.right - main.left) / UNIT;
+  };
+  assert.ok(Math.abs(width('battlefield') - 136.8) < 1e-6);
+  assert.ok(Math.abs(width('final-destination') - 171.14) < .01);
+  assert.ok(Math.abs(width('yoshi-story') - 112) < 1e-6);
+  assert.ok(Math.abs(width('dream-land') - 154.54) < .01);
+  assert.ok(Math.abs(width('fountain') - 126.7) < 1e-6);
+  assert.ok(Math.abs(width('stadium') - 175.5) < 1e-6);
+  const bf = stageFrame('battlefield', 0);
+  assert.deepEqual(bf.platforms.map(p => +(p.y / UNIT).toFixed(2)), [27.2, 27.2, 54.4]);
+  assert.deepEqual(STAGES.battlefield.blast, { left: -224 * UNIT, right: 224 * UNIT, bottom: -108.8 * UNIT, top: 200 * UNIT });
+  assert.equal(stageFrame('final-destination', 0).platforms.length, 0);
+  assert.equal(stageFrame('final-destination', 0).hazard, null);
+});
+
+test('every stage frame is finite, non-overlapping and inside its blast zone', () => {
+  for (const id of STAGE_IDS) {
+    const { blast } = getStage(id);
+    for (const t of samples(id)) {
+      const f = stageFrame(id, t);
+      assert.ok(f.blocks.length > 0, `${id}@${t}: has ground`);
+      assert.equal(new Set(f.blocks.map(b => b.id)).size, f.blocks.length);
+      assert.equal(new Set(f.platforms.map(p => p.id)).size, f.platforms.length);
+      for (const b of f.blocks) {
+        assert.ok([b.left, b.right, b.top, b.bottom, b.dx ?? 0, b.dy ?? 0].every(Number.isFinite) && b.left < b.right && b.bottom < b.top, `${id}@${t}: ${b.id} finite`);
+        if (!b.moving) assert.ok(b.top < blast.top, `${id}: ${b.id} below the top blast line`);
+      }
+      for (let i = 0; i < f.blocks.length; i++) for (let j = i + 1; j < f.blocks.length; j++)
+        assert.ok(!overlap(f.blocks[i], f.blocks[j]), `${id}@${t}: ${f.blocks[i].id} overlaps ${f.blocks[j].id}`);
+      for (const p of f.platforms) {
+        assert.ok([p.left, p.right, p.y, p.dx, p.dy].every(Number.isFinite) && p.left < p.right, `${id}@${t}: ${p.id} finite`);
+        assert.ok(!f.blocks.some(b => Math.min(p.right, b.right) - Math.max(p.left, b.left) > E && p.y > b.bottom + E && p.y < b.top - E), `${id}@${t}: ${p.id} inside a block`);
+      }
+    }
   }
 });
 
-test('settings validate maps and hazards, preserve old defaults, and resolve seeded random once',()=>{
-  for(const stage of [...STAGE_IDS,'random']) assert.equal(rules.validateSettings({stage}).stage,stage);
-  for(const value of [{stage:'__proto__'},{stage:1},{stage:null},{hazards:1},{hazards:'false'}]) assert.throws(()=>rules.validateSettings(value));
-  assert.deepEqual(rules.validateSettings({}),{seconds:900,stocks:3});
-  assert.equal(resolveStage('random',27),resolveStage('random',27));
-  assert.equal(new Set(Array.from({length:30},(_,seed)=>resolveStage('random',seed))).size,30);
-  const s=rules.create(ctx,{seconds:60,stocks:3,stage:'random',hazards:false});
-  assert.equal(s.stageId,resolveStage('random',ctx.seed)); tick(s,120); assert.equal(s.stageTick,0);
-  const view=rules.publicView(s,{nowMs:3000,phase:'playing'}); assert.equal(view.stageId,s.stageId); assert.equal(view.hazards,false);
-});
-
-test('moving ledges carry idle and frozen riders, then detach on jump or deliberate drop',()=>{
-  const s=fight('fountain'),p=s.players[0], surface=stageFrame(s.stageId,0).platforms[1]; p.x=(surface.left+surface.right)/2;p.y=surface.y;p.grounded=true;
-  tick(s,180); assert.ok(p.grounded); assert.equal(p.y,stageFrame(s.stageId,s.stageTick).platforms[1].y);
-  p.hitstop=20;tick(s,10); assert.equal(p.y,stageFrame(s.stageId,s.stageTick).platforms[1].y);
-  p.hitstop=0;tick(s,1,{y:1});assert.equal(p.grounded,false);
-  tick(s,120);assert.equal(p.y,0);assert.equal(p.grounded,true);
-  const mobile=fight('poke-floats'),q=mobile.players[0];q.x=0;q.y=stageFrame('poke-floats',0).platforms[0].y;tick(mobile,120);assert.equal(q.y,stageFrame(mobile.stageId,mobile.stageTick).platforms[0].y);
-  tick(mobile,1,{y:1});assert.equal(q.grounded,true,'solid moving floors cannot be dropped through');
-  tick(mobile,4,{jump:true,presses:{jump:1,attack:0,special:0,smash:0}});assert.equal(q.grounded,false);
-});
-
-test('rising ledges catch descending fighters and walking past a moving edge begins a fall',()=>{
-  const s=fight('fountain'); s.stageTick=400; const p=s.players[0],surface=stageFrame(s.stageId,400).platforms[1];
-  Object.assign(p,{x:(surface.left+surface.right)/2,y:surface.y+.15,vy:-2,grounded:false});
-  tick(s,5);assert.equal(p.grounded,true);assert.equal(p.y,stageFrame(s.stageId,s.stageTick).platforms[1].y);
-  tick(s,35,{x:-1});assert.ok(!p.grounded||p.y===0);
-});
-
-test('hazards telegraph, respect the toggle and invulnerability, and cannot deal damage every frame',()=>{
-  const s=fight('brinstar',true),p=s.players[0];s.stageTick=470;
-  assert.equal(stageFrame('brinstar',500).hazard?.warning,true); assert.equal(stageFrame('brinstar',500).hazard?.active,false);
-  tick(s,30);assert.equal(p.damage,0);
-  s.stageTick=700;p.x=0;p.y=0;tick(s);assert.equal(p.damage,14);assert.equal(p.mode,'hurt');
-  Object.assign(p,{y:0,grounded:true,hitstop:0,stun:0});tick(s);assert.equal(p.damage,14);
-  const off=fight('brinstar');off.stageTick=700;tick(off);assert.equal(off.players[0].damage,0);assert.equal(stageFrame('brinstar',710,false).hazard,null);
-  const protectedState=fight('brinstar',true);protectedState.stageTick=700;protectedState.players[0].invuln=100;tick(protectedState);assert.equal(protectedState.players[0].damage,0);
-  const wind=fight('dream-land',true);wind.stageTick=700;wind.players[0].x=0;wind.players[0].y=0;tick(wind);assert.ok(wind.players[0].vx>0);assert.equal(wind.players[0].damage,0);
-});
-
-test('projectile bounces use the chosen map and stage-specific blast zones govern stocks',()=>{
-  const s=fight('temple'),p=s.players[0];
-  s.projectiles.push({id:1,owner:p.id,x:0,y:4.14,vx:0,vy:-5,gravity:1,bounce:true,color:'#fff',life:100,damage:1,flinch:false});
-  tick(s);assert.ok(s.projectiles[0].vy>0); assert.equal(s.projectiles[0].y,4.1);
-  p.x=15;p.y=1;p.vx=p.vy=0;tick(s);assert.equal(p.stocks,5,'wide stage extends past Cloudbreak blast zone');
-  p.x=getStage('temple').blastX+1;tick(s);assert.equal(p.stocks,4);assert.equal(p.mode,'respawn');
-  const point=spawnPoint('temple',0,4,s.stageTick);assert.equal(p.x,point.x);assert.equal(p.y,point.y+6.5);
-});
-
-for(const id of STAGE_IDS) test(`${STAGES[id].name}: four safe seats, finite sustained play, timeout and clean replay`,()=>{
-  const safe=fight(id);tick(safe,120);
-  assert.ok(safe.players.every(p=>p.stocks===5 && p.grounded),`${id}: idle seats must stay safe`);
-  const s=fight(id,true);s.endsAt=61000;
-  for(let frame=0;frame<=3601&&s.phase!=='complete';frame++) {
-    const inputs=new Map(s.players.map(p=>[p.id,{...neutralInput(),x:Math.sign(-p.x),y:frame%160<80?-.8:.8,attack:true,jump:frame%70<15,presses:{jump:Math.floor(frame/70),attack:0,special:Math.floor(frame/250),smash:0}}]));
-    rules.tick(s,inputs,1/60,1000+frame*1000/60);
-    for(const p of s.players) assert.ok([p.x,p.y,p.vx,p.vy,p.damage,p.shield].every(Number.isFinite)&&p.stocks>=0&&p.stocks<=5,id);
+test('spawns stand on floors, respawns hover above the stage inside the camera', () => {
+  for (const id of STAGE_IDS) {
+    const s = getStage(id), f = stageFrame(id, 0);
+    for (const [x, y] of s.spawns) {
+      assert.ok([...f.blocks.map(b => [b.left, b.right, b.top]), ...f.platforms.map(p => [p.left, p.right, p.y])].some(([l, r, top]) => x > l + .3 && x < r - .3 && Math.abs(y - top) < E), `${id}: spawn ${x},${y} on a floor`);
+      assert.ok(!inside(f.blocks, x, y + .5) && within(s.camera, x, y), `${id}: spawn clear and framed`);
+    }
+    assert.equal(new Set(s.spawns.map(([x]) => x.toFixed(3))).size, 4, `${id}: spawns spread out`);
+    for (const [x, y] of s.respawns) {
+      assert.ok(within(s.camera, x, y), `${id}: respawn ${x},${y} in camera`);
+      const below = [...f.blocks.map(b => [b.left, b.right, b.top]), ...f.platforms.map(p => [p.left, p.right, p.y])].filter(([l, r, top]) => x > l - 1 && x < r + 1 && top < y);
+      assert.ok(below.length && y - Math.max(...below.map(([, , top]) => top)) > 1.5, `${id}: respawn hovers over the stage`);
+      assert.ok(!inside(f.blocks, x, y) && !inside(f.blocks, x, y - 1), `${id}: respawn clear of blocks`);
+    }
   }
-  assert.equal(s.phase,'complete'); assert.ok(rules.outcome(s).rows.length===4);
-  assert.doesNotThrow(()=>JSON.parse(JSON.stringify(rules.publicView(s,{nowMs:62000,phase:'results'}))));
-  const replay=fight(id); assert.equal(replay.stageTick,0); assert.ok(replay.players.every(p=>!p.chosen&&!p.damage&&p.stocks===5));
 });
 
-test('expanded arenas have distinct large routes, safe moving bounds and a vertical summit',()=>{
-  for(const id of STAGE_IDS){const s=getStage(id),span=Math.max(...s.platforms.map(p=>p.right))-Math.min(...s.platforms.map(p=>p.left));assert.ok(span>=34,`${id}: expanded width`);if(id!=='final-destination')assert.ok(s.platforms.length>=12,`${id}: multiple routes`);}
-  assert.equal(getStage('final-destination').platforms.length,1,'the open dueling map keeps its identity');
-  assert.ok(getStage('temple').platforms.some(p=>p.motion?.y===6));assert.ok(getStage('icicle-mountain').platforms.some(p=>p.y===15));
+test('ledges exist exactly at exposed top corners', () => {
+  for (const id of STAGE_IDS) for (const t of samples(id).filter((_, i) => i % 5 === 0)) {
+    const f = stageFrame(id, t), e = 1e-3;
+    for (const l of f.ledges) {
+      const b = f.blocks.find(q => q.id === l.block);
+      assert.ok(b && b.ledges && l.x === (l.side < 0 ? b.left : b.right) && l.y === b.top, `${id}: ${l.id} sits on its block corner`);
+      assert.ok(!inside(f.blocks, l.x + l.side * e, l.y - e) && !inside(f.blocks, l.x - l.side * e, l.y + e), `${id}@${t}: ${l.id} exposed`);
+    }
+    assert.equal(new Set(f.ledges.map(l => l.id)).size, f.ledges.length);
+    for (const b of f.blocks.filter(q => !q.ledges)) assert.ok(!f.ledges.some(l => l.block === b.id), `${id}: ${b.id} has no ledges`);
+  }
+  for (const id of ['battlefield', 'final-destination', 'dream-land', 'yoshi-story', 'fountain', 'stadium', 'cloudbreak'] as const) {
+    const f = stageFrame(id, 0);
+    assert.deepEqual(f.ledges.map(l => [l.block, l.side]), [['main', -1], ['main', 1]], `${id}: only the two main ledges; under-stage steps are covered`);
+  }
+});
+
+test('moving pieces are deterministic and their dx/dy match the previous tick', () => {
+  for (const id of STAGE_IDS) {
+    const late = stageFrame(id, 9001), early = stageFrame(id, 17);
+    assert.deepEqual(stageFrame(id, 17), early); assert.deepEqual(stageFrame(id, 9001), late);
+    for (const t of samples(id).filter((_, i) => i % 3 === 0)) {
+      const now = stageFrame(id, t), prev = stageFrame(id, t - 1);
+      for (const p of now.platforms) {
+        const q = prev.platforms.find(o => o.id === p.id);
+        if (q && Math.abs(p.left - q.left) < 1 && Math.abs(p.y - q.y) < 1) assert.ok(Math.abs(p.dx - (p.left - q.left)) < E && Math.abs(p.dy - (p.y - q.y)) < E, `${id}@${t}: ${p.id} dx/dy`);
+        assert.ok(Math.abs(p.dx) < .5 && Math.abs(p.dy) < .5, `${id}@${t}: ${p.id} rides smoothly`);
+      }
+      for (const b of now.blocks) {
+        const q = prev.blocks.find(o => o.id === b.id);
+        if (!b.moving) { assert.ok(q && q.left === b.left && q.top === b.top, `${id}: static ${b.id} stays put`); continue; }
+        if (q && Math.abs(b.left - q.left) < 1 && Math.abs(b.top - q.top) < 1) assert.ok(Math.abs((b.dx ?? 0) - (b.left - q.left)) < E && Math.abs((b.dy ?? 0) - (b.top - q.top)) < E, `${id}@${t}: ${b.id} dx/dy`);
+        assert.ok(Math.abs(b.dx ?? 0) < .5 && Math.abs(b.dy ?? 0) < .5, `${id}@${t}: ${b.id} rides smoothly`);
+      }
+    }
+  }
+});
+
+test('signature stage behaviors run on the stage clock', () => {
+  const ys = (t: number) => stageFrame('fountain', t).platforms.slice(0, 2).map(p => p.y);
+  assert.ok(new Set(Array.from({ length: 40 }, (_, i) => ys(i * 600).join()).values()).size > 5, 'Fountain platforms change height');
+  const randall = Array.from({ length: 1260 }, (_, t) => stageFrame('yoshi-story', t).platforms.find(p => p.id === 'randall'));
+  assert.ok(randall.some(p => p && p.left < -56 * UNIT) && randall.some(p => p && p.left > 56 * UNIT) && randall.some(p => !p), 'Randall circles both sides');
+  const kinds = new Set(Array.from({ length: 30 }, (_, i) => stageFrame('stadium', i * 1000).blocks.map(b => b.art).filter(Boolean).join()));
+  for (const k of ['fire', 'grass', 'rock', 'water']) assert.ok([...kinds].some(s => s.includes(k)), `Stadium becomes ${k}`);
+  assert.ok(stageFrame('stadium', 0).platforms.length === 2 && stageFrame('stadium', 4000).platforms.every(p => !['left', 'right'].includes(p.id)), 'Stadium platforms leave for transformations');
+  assert.deepEqual([0, 3100, 4000, 11000, 30000].map(t => stageFrame('stadium', t).hazard?.label), ['Transformation', 'Fire', 'Fire', 'Grass', 'Fire']);
+  assert.ok(Array.from({ length: 60 }, (_, i) => stageFrame('great-bay', i * 60).blocks.some(b => b.id === 'turtle')).includes(false), 'the turtle dives');
+  const deck = (t: number) => stageFrame('rainbow-cruise', t).blocks.find(b => b.id === 'deck');
+  assert.equal(deck(1200)?.left, deck(0)?.left, 'Rainbow Cruise dwells on the ship');
+  assert.ok((deck(2000)?.left ?? -99) < (deck(0)?.left ?? 0) - 5, 'then the course scrolls left');
+  const base = (t: number) => stageFrame('icicle-mountain', t).blocks.find(b => b.id === 'base')?.top ?? -99;
+  assert.ok(base(0) === 0 && base(700) < 0, 'Icicle Mountain climbs');
+  assert.ok(stageFrame('mute-city', 1500).blocks.some(b => b.id === 'track') && !stageFrame('mute-city', 100).blocks.some(b => b.id === 'track'), 'Mute City track comes and goes');
+  assert.ok(stageFrame('brinstar-depths', 2400 + 200).platforms.find(p => p.id === 'left')!.y > stageFrame('brinstar-depths', 0).platforms.find(p => p.id === 'left')!.y, 'Kraid turns the stage');
+  const floats = new Set(Array.from({ length: 80 }, (_, i) => stageFrame('poke-floats', i * 150).blocks.filter(b => b.left < 0 && b.right > 0).map(b => b.art).join()));
+  assert.ok(floats.size >= 4, 'Poké Floats parade passes the center');
+});
+
+test('hazards warn before they strike, and hazards off stops them but keeps terrain moving', () => {
+  const withHazard = STAGE_IDS.filter(id => getStage(id).hazardLabel);
+  assert.ok(withHazard.length >= 14);
+  for (const id of STAGE_IDS) {
+    let warned = false, struck = false;
+    for (let t = 0; t < TICKS; t += 4) {
+      const on = stageFrame(id, t), off = stageFrame(id, t, false);
+      assert.equal(off.hazard, null, id);
+      assert.deepEqual(off.blocks, on.blocks, `${id}@${t}: terrain ignores hazards`); assert.deepEqual(off.platforms, on.platforms);
+      const h = on.hazard;
+      if (!h) { assert.ok(!getStage(id).hazardLabel, id); continue; }
+      assert.ok([h.damage, h.angle, h.kbBase, h.kbGrowth, h.push, h.cycle].every(Number.isFinite) && h.label, id);
+      assert.ok(!(h.warning && h.active), id);
+      if (h.warning) warned = true;
+      if (h.active) { struck = true; assert.ok(h.kind === 'transform' || h.zones.length > 0, `${id}: active zones`); }
+      if (h.active && h.kind !== 'track') assert.ok(warned, `${id}@${t}: warned first`);
+      for (const z of h.zones) assert.ok(z.left < z.right && z.bottom < z.top && [z.left, z.right, z.bottom, z.top].every(Number.isFinite), id);
+      if (!h.active) assert.equal(h.push, 0, id);
+    }
+    if (getStage(id).hazardLabel) assert.ok(struck, `${id}: hazard fires within ${TICKS} ticks`);
+  }
+  const wind = [...Array(5600).keys()].map(t => stageFrame('dream-land', t).hazard!).filter(h => h.active);
+  assert.ok(wind.some(h => h.push > 0) && wind.some(h => h.push < 0) && wind.every(h => h.damage === 0), 'Whispy blows both ways');
+  const acid = [...Array(2600).keys()].map(t => stageFrame('brinstar', t).hazard!).filter(h => h.active);
+  assert.ok(acid.some(h => h.zones[0].top > 0) && acid.every(h => h.damage > 0 && h.rehit), 'Brinstar acid reaches the stage');
+});
+
+test('resolveStage picks seeded random stages and falls back safely', () => {
+  assert.equal(resolveStage('random', 27), resolveStage('random', 27));
+  assert.equal(new Set(Array.from({ length: 30 }, (_, seed) => resolveStage('random', seed))).size, 30);
+  assert.equal(resolveStage('onett', 1), 'onett');
+  assert.equal(resolveStage(undefined, 1), 'battlefield');
+  assert.equal(resolveStage('__proto__' as never, 1), 'battlefield');
 });

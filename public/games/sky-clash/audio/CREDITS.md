@@ -12,4 +12,4 @@ The four battle tracks rotate between rounds and continue to the next track when
 
 `impact-hit-0.wav` comes from Kenney Impact Sounds; `swish.wav` comes from Kenney RPG Audio. Both are CC0, with original license files included alongside them. These samples are also used in this repository's Blockwild sound bank.
 
-The other ten short WAV cues were authored for Sky Clash by `packages/games/sky-clash/tools/build_audio.py`: jump, laser, shield block/break, KO, countdown, start, result, selection and hazard warning. Landing reuses the impact sample at lower gain and pitch.
+The other nineteen short WAV cues were authored for Sky Clash by `packages/games/sky-clash/tools/build_audio.py`: jump, laser, shield block/break, KO, countdown, start, result, selection and hazard warning, plus parry, clash, heavy impact, GO, results fanfare, coin, electric zap, fire crackle and star twinkle. Landing reuses the impact sample at lower gain and pitch.

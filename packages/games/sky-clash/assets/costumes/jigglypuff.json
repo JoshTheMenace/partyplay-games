@@ -1,0 +1,42 @@
+[
+ {
+  "name": "Default",
+  "colors": {
+   "primary": "#ffb4d0",
+   "secondary": "#f59ac0",
+   "dark": "#221a2c",
+   "eye": "#1f9dc6",
+   "eye-white": "#ffffff"
+  }
+ },
+ {
+  "name": "Blue Bow",
+  "colors": {
+   "primary": "#bcc8ff",
+   "secondary": "#9fb0f4",
+   "dark": "#221a2c",
+   "eye": "#3a5fd8",
+   "eye-white": "#ffffff"
+  }
+ },
+ {
+  "name": "Green Headband",
+  "colors": {
+   "primary": "#bdeec4",
+   "secondary": "#9ddca8",
+   "dark": "#221a2c",
+   "eye": "#28995a",
+   "eye-white": "#ffffff"
+  }
+ },
+ {
+  "name": "Crown",
+  "colors": {
+   "primary": "#ffe29a",
+   "secondary": "#f6cc72",
+   "dark": "#221a2c",
+   "eye": "#c9761c",
+   "eye-white": "#ffffff"
+  }
+ }
+]

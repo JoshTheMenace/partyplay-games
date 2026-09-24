@@ -1,0 +1,230 @@
+{
+ "kind": "yoshi",
+ "name": "Yoshi",
+ "generator": "tools/blender/fighters/yoshi.py",
+ "height": 1.7,
+ "headTop": 1.7,
+ "tris": 17348,
+ "vertices": 8954,
+ "bytes": 513788,
+ "size": [
+  1.5795,
+  1.71,
+  1.413
+ ],
+ "bounds": {
+  "min": [
+   -0.7897,
+   -0.01,
+   -0.9192
+  ],
+  "max": [
+   0.7897,
+   1.7,
+   0.4938
+  ]
+ },
+ "materials": [
+  "primary",
+  "light",
+  "dark",
+  "eye-white",
+  "hair",
+  "secondary",
+  "accent",
+  "trim"
+ ],
+ "bones": [
+  "root",
+  "hips",
+  "spine",
+  "chest",
+  "neck",
+  "head",
+  "shoulder_L",
+  "upperarm_L",
+  "forearm_L",
+  "hand_L",
+  "shoulder_R",
+  "upperarm_R",
+  "forearm_R",
+  "hand_R",
+  "thigh_L",
+  "shin_L",
+  "foot_L",
+  "thigh_R",
+  "shin_R",
+  "foot_R",
+  "prop",
+  "extra_tail_0",
+  "extra_tail_1",
+  "extra_tail_2",
+  "extra_tail_3"
+ ],
+ "parents": {
+  "root": null,
+  "hips": "root",
+  "spine": "hips",
+  "chest": "spine",
+  "neck": "chest",
+  "head": "neck",
+  "shoulder_L": "chest",
+  "upperarm_L": "shoulder_L",
+  "forearm_L": "upperarm_L",
+  "hand_L": "forearm_L",
+  "shoulder_R": "chest",
+  "upperarm_R": "shoulder_R",
+  "forearm_R": "upperarm_R",
+  "hand_R": "forearm_R",
+  "thigh_L": "hips",
+  "shin_L": "thigh_L",
+  "foot_L": "shin_L",
+  "thigh_R": "hips",
+  "shin_R": "thigh_R",
+  "foot_R": "shin_R",
+  "prop": "hand_R",
+  "extra_tail_0": "hips",
+  "extra_tail_1": "extra_tail_0",
+  "extra_tail_2": "extra_tail_1",
+  "extra_tail_3": "extra_tail_2"
+ },
+ "joints": {
+  "root": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "hips": [
+   0.0,
+   0.5644,
+   0.0
+  ],
+  "spine": [
+   0.0,
+   0.7055,
+   0.0
+  ],
+  "chest": [
+   0.0,
+   0.8869,
+   0.0
+  ],
+  "neck": [
+   0.0,
+   1.0482,
+   0.0
+  ],
+  "head": [
+   0.0,
+   1.1691,
+   0.0
+  ],
+  "shoulder_L": [
+   0.1008,
+   0.9373,
+   0.0
+  ],
+  "upperarm_L": [
+   0.2419,
+   0.9474,
+   0.0
+  ],
+  "forearm_L": [
+   0.3931,
+   0.9474,
+   0.0
+  ],
+  "hand_L": [
+   0.5342,
+   0.9474,
+   0.0
+  ],
+  "shoulder_R": [
+   -0.1008,
+   0.9373,
+   0.0
+  ],
+  "upperarm_R": [
+   -0.2419,
+   0.9474,
+   0.0
+  ],
+  "forearm_R": [
+   -0.3931,
+   0.9474,
+   0.0
+  ],
+  "hand_R": [
+   -0.5342,
+   0.9474,
+   0.0
+  ],
+  "thigh_L": [
+   0.1512,
+   0.5241,
+   0.0
+  ],
+  "shin_L": [
+   0.1512,
+   0.3024,
+   0.0
+  ],
+  "foot_L": [
+   0.1512,
+   0.1209,
+   0.0
+  ],
+  "thigh_R": [
+   -0.1512,
+   0.5241,
+   0.0
+  ],
+  "shin_R": [
+   -0.1512,
+   0.3024,
+   0.0
+  ],
+  "foot_R": [
+   -0.1512,
+   0.1209,
+   0.0
+  ],
+  "prop": [
+   -0.5977,
+   0.9474,
+   0.0
+  ],
+  "extra_tail_0": [
+   0.0,
+   0.645,
+   -0.2016
+  ],
+  "extra_tail_1": [
+   0.0,
+   0.5241,
+   -0.4233
+  ],
+  "extra_tail_2": [
+   0.0,
+   0.4233,
+   -0.6249
+  ],
+  "extra_tail_3": [
+   0.0,
+   0.383,
+   -0.7861
+  ]
+ },
+ "extras": {
+  "tail": [
+   "extra_tail_0",
+   "extra_tail_1",
+   "extra_tail_2",
+   "extra_tail_3"
+  ]
+ },
+ "prop": {
+  "parent": "hand_R",
+  "visible": "none"
+ }
+}

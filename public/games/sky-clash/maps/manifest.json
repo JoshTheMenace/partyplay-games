@@ -1,158 +1,158 @@
 {
-  "renderer": "tools/map-preview.ts",
+  "renderer": "packages/games/sky-clash/tools/stage-lab/shoot.mjs (view=card)",
   "width": 640,
   "height": 360,
   "frame": 0,
   "maps": [
     {
       "id": "cloudbreak",
-      "bytes": 14048,
-      "sha256": "5fd60e5f668845d298e529861858be59fa2fec0d59aa2e2def6c95dbe2184b95"
+      "bytes": 11034,
+      "sha256": "421db43cc638308e09d33b235ea37624b1d32a3d4712bfa68d46582a0af5b7dc"
     },
     {
       "id": "peach-castle",
-      "bytes": 12606,
-      "sha256": "be9aa8d675cd37bfd5556c21208d0dcc355060bd7cee9b090f8868e253d63d80"
+      "bytes": 12898,
+      "sha256": "ebe9e4043101d1fcae7339307bc075cac06e563f42b6595e0e5b94f5eaa494b7"
     },
     {
       "id": "rainbow-cruise",
-      "bytes": 13496,
-      "sha256": "21ce10cea5e8f018f89cce305f5d03f1d3b6984b310d4606548711b16e124015"
+      "bytes": 20908,
+      "sha256": "96d0f1613abc7ea80a68c7f9e16555bcbaad8283043894d787b16354ccec84aa"
     },
     {
       "id": "kongo-jungle",
-      "bytes": 10478,
-      "sha256": "3e081dfcb9c3509578d90ad43916f04c864f4e9a48a067090060cb9a76a6b326"
+      "bytes": 11904,
+      "sha256": "456acda31c659fad047f1f037cd10539d0a48cfc0603e7e6f754c798f724c195"
     },
     {
       "id": "jungle-japes",
-      "bytes": 9972,
-      "sha256": "13d15ae6307548df43ffaf0accc4c598c2c91704ede0455821fe9aa00e390878"
+      "bytes": 11488,
+      "sha256": "4f390560bb828354b4db2a9c2f3c471d75fb396a0e12f64e9747783ca1d7a103"
     },
     {
       "id": "great-bay",
-      "bytes": 11208,
-      "sha256": "a2dc509c692f2b4fa5ab615adefd0cec3cb54013745bb230a65a6648d8edf24e"
+      "bytes": 14616,
+      "sha256": "0096803b733aa14c554a9fa3b1125c37e6823f10c5f77ebf240363b51694cb4b"
     },
     {
       "id": "temple",
-      "bytes": 11002,
-      "sha256": "1c109338f16893b36d831365ad4d9aa1f40db482bfb28cd999d3645770bbf10c"
+      "bytes": 12988,
+      "sha256": "71cd80a62af68cb80dfbd0784aaecd712823a85d3d2d569597f50455136107a6"
     },
     {
       "id": "brinstar",
-      "bytes": 17374,
-      "sha256": "27cb97600e9f9f7076716582ad8f0cc8ef07188cf916bdd6beda897c4aa45f7e"
+      "bytes": 7652,
+      "sha256": "d86259da26c0a344303286da15403151c0f21130b76e821abd47c0e489fee465"
     },
     {
       "id": "brinstar-depths",
-      "bytes": 16594,
-      "sha256": "68433bad9734ef2f21bc5aa4a2dd6dea1224ee8223a21a8c3d7d0c5312e4bf84"
+      "bytes": 6810,
+      "sha256": "f3d156e64a39963496ef046474fbe5062380d26e576508884c369571d975b9a1"
     },
     {
       "id": "yoshi-story",
-      "bytes": 10662,
-      "sha256": "40b5b37e72dd6c0f8802a444b137714bdee13316f54dfae044ca1f1d3e103559"
+      "bytes": 10432,
+      "sha256": "1eeb5ba0ed7726d487a88ef2064786d1fa5e4c61b2ba7ae31299d6acf27333d3"
     },
     {
       "id": "yoshi-island",
-      "bytes": 12548,
-      "sha256": "4874894c0dadac5ae24b6cb1f3b5c9af28bb2737332fb2d24e1ab4b7a458ffe5"
+      "bytes": 9756,
+      "sha256": "dfeed5e6310a3118854602b6496b558a77600896d2b05eee9e12b6209953ab6d"
     },
     {
       "id": "fountain",
-      "bytes": 11442,
-      "sha256": "38b6ba41ca3acb1133b7c399c03b0821e2c3921950c27a001e0e81d9981e38d4"
+      "bytes": 14752,
+      "sha256": "2ed3a7e1bc7dc60519cf2d0f8082d9cf79b8202ac541042fc1849af6ae6b314c"
     },
     {
       "id": "green-greens",
-      "bytes": 10030,
-      "sha256": "c28530bf105a891e6c1b6fbe3c9ce36693650a814fb2a2e696d528cd6de94e57"
+      "bytes": 12684,
+      "sha256": "5f210ca87c63995754235e9fa4d0288f367f270c2dfad50ed66e87d2efd3e2e5"
     },
     {
       "id": "corneria",
-      "bytes": 6928,
-      "sha256": "5f76808badaea97db98215273c3418ba1881d57c0e66077b8c9b396d1b01da05"
+      "bytes": 10732,
+      "sha256": "62c499c1650ff06706905cec8a4363ab511b5c880a43d31e2c51942776f99e33"
     },
     {
       "id": "venom",
-      "bytes": 10216,
-      "sha256": "84324b15a89f6552ac97ab604da044aca1f547cb01b3eec7dc82b8e2f73e15c2"
+      "bytes": 9958,
+      "sha256": "7f6702695c63984844b79120e8bc009509717247ddcf5fe410a07adbe283b3ff"
     },
     {
       "id": "stadium",
-      "bytes": 12328,
-      "sha256": "0201324fb50d804e7ca7ca0ce629eafe40adc87f8499f8cda9c2aa4b9110ec42"
+      "bytes": 52370,
+      "sha256": "be9b305d8d2a238f8cb985c820d12c1f9ee812e576b74952f6608d3b83bda98c"
     },
     {
       "id": "poke-floats",
-      "bytes": 14208,
-      "sha256": "ec216de10cef875cfd1f3018fef5d6ebcb505d3f5f6b58bba250c109d7b5f361"
+      "bytes": 11396,
+      "sha256": "fbeac62bf16f8b5ad63534476eae15d3e0f2ccbbcbb6d625a6bd06c1c20f6427"
     },
     {
       "id": "mute-city",
-      "bytes": 13680,
-      "sha256": "35b672eb5b3b4ca22a19af50bc09c8da1f418d1e45438b522ff550d94e9d1c67"
+      "bytes": 24096,
+      "sha256": "d45f9c0b8835ad98d8373d99a99c190863f5bbd1cfdec3de4aa8de57bcbc3ce4"
     },
     {
       "id": "big-blue",
-      "bytes": 11966,
-      "sha256": "7df943925953234cd3c831477ad5074f9f249c0c7aa5bd6a3228517ae4a4f886"
+      "bytes": 18310,
+      "sha256": "35999e9f815cc2fbeb126dcddfcad357222abf2d7401fe23f68e93c17da3ddf7"
     },
     {
       "id": "onett",
-      "bytes": 12662,
-      "sha256": "60b32a15a7950deacde3e93fb2e0c3c2103e886b5996255fa60317b45901d5da"
+      "bytes": 13158,
+      "sha256": "f803bdecb810a2582c6603cdbf8c2212ce0fda3e429060ad6867852714106058"
     },
     {
       "id": "fourside",
-      "bytes": 11702,
-      "sha256": "1388f27adc41b5a9f0097b7a34bfa28d195be64fa0cd86953ac7d960fb2bd47a"
+      "bytes": 30458,
+      "sha256": "265fb6274a8edc1513305463c3e532ffc773659725ceef067e3fac60d42ebe6f"
     },
     {
       "id": "icicle-mountain",
-      "bytes": 14846,
-      "sha256": "b85a399f1eb9d6192d9ea651699147d07175d86dc6f66524d056d9552422b66c"
+      "bytes": 10558,
+      "sha256": "eb8e6c9f1bc795ed6f4765c53649bc9903edc801da488090c53f5d528a34a859"
     },
     {
       "id": "mushroom-kingdom",
-      "bytes": 9568,
-      "sha256": "35643738b67aa4a9c05b2159b6f896156e879b93248569e231246d7fc9e6ddad"
+      "bytes": 15078,
+      "sha256": "7640a7c92e31165ee5f5ffa196702f8b7f76e20e7baff49b1375f527def24df9"
     },
     {
       "id": "mushroom-kingdom-ii",
-      "bytes": 7778,
-      "sha256": "62aaefa12f8503db79b2577f9c49cc2a7e19010cf6e92904b0bbbb3b948a3ae6"
+      "bytes": 12742,
+      "sha256": "9d732809be066b946485d3eedf2fb046a0170cae11508e81af0b67a883adc85d"
     },
     {
       "id": "flat-zone",
-      "bytes": 4610,
-      "sha256": "acd57a0c178c1aa99a4e1bab7ab1b1b15c1dcc1ceca53a81b6050ac374e6b7fa"
+      "bytes": 3896,
+      "sha256": "59564cd9ae5016c2dd7d54b730c28977426a03e8e67e1194a0be86f4f3b9c9d6"
     },
     {
       "id": "dream-land",
-      "bytes": 9098,
-      "sha256": "573e8d71851a57cf4ce2b55516d269382997d5d288c1496c302a0840703c3b2c"
+      "bytes": 8586,
+      "sha256": "34fa1697a35700d33be1957ad1030f1779912ba6dcf1cf63eded14730fa96761"
     },
     {
       "id": "yoshi-island-64",
-      "bytes": 10436,
-      "sha256": "63e44999069d0d80fbc55b95bb415796ab706b20dc66a7072eb62ad78160bf05"
+      "bytes": 8704,
+      "sha256": "f0470c2d0a39cb5433ffebcf852c99f9e38891a34032ac3a96452eb2bdea323e"
     },
     {
       "id": "kongo-jungle-64",
-      "bytes": 9318,
-      "sha256": "c38788b1a36c66622c1735c0ab92e1353a35a3a389069bc33b674b3a26d4487a"
+      "bytes": 10144,
+      "sha256": "3f5d397a6237abab319528d9c8d94a718deed8afa8e02f18c3b74869fdae0cf1"
     },
     {
       "id": "battlefield",
-      "bytes": 12294,
-      "sha256": "8d32ab54689fb2a7d94518479a806b5f137c9cdd66b63a7a847e0d9085256a45"
+      "bytes": 11240,
+      "sha256": "8000ef654d2c03594c1ba2f412ba48e51325f6ba7d4b6241b2b8e145ed525386"
     },
     {
       "id": "final-destination",
-      "bytes": 13164,
-      "sha256": "489473fe7b3f86532af8c0922ef56fe4f142f061ab042b61cf8e6fbbee2bf9a7"
+      "bytes": 12360,
+      "sha256": "aa175dddf6198e45654b15324c331c395f94743240971da9804a094fec7f800c"
     }
   ]
 }

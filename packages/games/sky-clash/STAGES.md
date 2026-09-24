@@ -1,50 +1,58 @@
-# Stage reference map
+# Sky Clash stages
 
-Sky Clash has 30 authored arenas: one counterpart for each of Melee's 29 standard versus stages, plus Cloudbreak. The source roster is pinned to doldecomp/melee commit d504219dba4a5c5350aecd8e2f4969adeacb8b72. [GrKind and StKind](https://github.com/doldecomp/melee/blob/d504219dba4a5c5350aecd8e2f4969adeacb8b72/src/melee/gr/forward.h) distinguish regular versus arenas from target tests, adventure routes, debug and unused stages. Neither enum's Max sentinel is a playable-stage count.
+`src/stages.ts` defines all 30 stages in Melee units and converts them with `UNIT` (0.08 m per unit). Collision is axis-aligned:
 
-The checked-out source references external archives such as /GrIz.dat in grizumi.c, /GrZe.dat in grzebes.c and /GrNBa.dat in grbattle.c. Those archives are absent. No original stage models, textures, collision files or music were imported. Names, coordinates, platform motions, hazard values and procedural artwork below are authored adaptations. These are not equivalent original stage state machines or exact layouts. The source IDs document inspiration, not data extraction.
+- **Blocks** are solid. The top is a floor, the sides are walls and the bottom is a ceiling.
+- **Platforms** are one-way.
+- **Ledges** sit at top corners whose floor is open above and whose wall is open just outside.
 
-| Sky Clash arena | Source inspiration | GrKind | Authored layout / mechanic |
-| --- | --- | --- | --- |
-| Cloudbreak | Original Sky Clash arena | — | A 38-unit sky citadel with outer islands, lookout towers and a drifting bridge. Central platforms retain reachable 1.5-unit steps. |
-| Crownkeep | Princess Peach’s Castle | 0x02 | Fight across castle rooftops. A flashing tower warns of a central blast. |
-| Prism Voyage | Rainbow Cruise | 0x03 | A skyship deck and a traveling staircase of rainbow platforms. |
-| Barrel Falls | Kongo Jungle | 0x04 | A timber bridge above rapids. Ride the rescue barrel platform below the ledge. |
-| Canopy Crossing | Jungle Japes | 0x05 | Three separated huts over a river. Low bridges reward careful recoveries. |
-| Turtle Lagoon | Great Bay | 0x06 | A coastal jetty, a lookout, and a broad turtle that ferries fighters across the bay. |
-| Sunken Temple | Hyrule Temple | 0x07 | A sprawling ruin with high terraces and a lower refuge. The largest arena. |
-| Ember Core | Brinstar | 0x08 | A split research cavern. Rising lava periodically swallows the lowest ledges. |
-| Titan’s Orbit | Brinstar Depths | 0x09 | Four orbiting stone ledges circle a central fossil. The ledges remain horizontal. |
-| Patchwork Parade | Yoshi’s Story | 0x0a | A stitched island chain with stepped platforms and a roaming cloud below. |
-| Tilted Garden | Yoshi’s Island | 0x0b | Two grassy shelves and a bobbing central bridge create a changing low route. |
-| Moonlit Fountain | Fountain of Dreams | 0x0c | Two independently rising platforms shimmer above a mirrored fountain. |
-| Orchard Blocks | Green Greens | 0x0d | A great orchard tree divides three islands. A fruit blast threatens its right flank. |
-| Starwing Deck | Corneria | 0x0e | An asymmetric carrier wing with a raised cockpit and a low forward gun deck. |
-| Twin Thrusters | Venom | 0x0f | Four engine fins surround a narrow center. Airborne routes connect both sides. |
-| Element Stadium | Pokémon Stadium | 0x10 | A wide arena with rising side terraces. The stadium cycles through four elements. |
-| Balloon Beasts | Poké Floats | 0x11 | A procession of floating creatures. Their backs bob at different heights. |
-| Neon Circuit | Mute City | 0x12 | A racing lift over a neon highway. A warning stripe precedes each passing racer. |
-| Velocity Fleet | Big Blue | 0x13 | Battle on a convoy of hovering racers. Outer vehicles weave alongside the flagship. |
-| Maple Avenue | Onett | 0x14 | Three neighborhood rooftops above a busy street. Watch for the traffic warning. |
-| Midnight Skyline | Fourside | 0x15 | Leap between tall rooftops. A saucer circles above the central tower. |
-| Glacier Ascent | Icicle Mountain | 0x16 | A fifteen-unit frozen climb with three elevators and staggered resting shelves. |
-| Pixel Pipes | Mushroom Kingdom | 0x18 | Brick islands, twin pipes, and a moving elevator over a central gap. |
-| Desert Doors | Mushroom Kingdom II | 0x19 | A desert gateway with a river gap. A flying carpet bridges its two banks. |
-| Pocket LCD | Flat Zone | 0x1b | A wide monochrome machine with upper routes. A flashing machinery panel becomes electrified. |
-| Breezy Meadow | Dream Land | 0x1c | Three classic platforms beneath a watchful tree. Periodic gusts alter aerial drift. |
-| Cloud Garden | Yoshi’s Island (64) | 0x1d | A broad island and three platforms, with cloud stepping stones beyond both edges. |
-| Sunset Canopy | Kongo Jungle (64) | 0x1e | A timber clearing with orbiting upper ledges and a low rescue barrel. |
-| Astral Battlefield | Battlefield | 0x24 | A central triangular platform arrangement with outer terraces among ancient star rings. |
-| Event Horizon | Final Destination | 0x25 | One uninterrupted platform above a cosmic rift. No platforms overhead or stage hazards. |
+Sloped Melee undersides become stepped `taper` blocks. The steps cover their own corners, so only the real stage edges can be grabbed, and a low recovery hits the steps as walls and ceilings, the way it hits Melee's sloped undersides.
 
-## Expanded arenas
+Motion, transformations and hazards are pure functions of `stageTick`. `stageFrame(id, tick, hazards)` returns the same frame to the server and the renderer. Turning hazards off stops damage and wind, but the terrain keeps moving.
 
-Every arena spans at least 34 world units; Sunken Temple reaches 60. The `routes` table in `src/stages.ts` authors additional surfaces per map while preserving the original central layouts and fighter physics. Sky citadels have outlying islands and bridges, city maps have outer rooftops, fleet maps have additional ships, and Glacier Ascent climbs to y=15. Temple has a central lift with six units of vertical amplitude. Event Horizon intentionally keeps one continuous floor, now forty units wide. Outer landmarks, additional skyline layers and large arches distinguish the wider views.
+**Confidence.** For the six tournament stages, the main width, platform positions and blast zones use community-documented Melee values: Battlefield, Final Destination, Yoshi's Story, Dream Land, Fountain of Dreams and Pokémon Stadium. Every other stage is estimated from the stage's recognizable layout at Melee scale; none of those numbers were measured from the game files. Width is the main block. Blast zones are left/right/top/bottom, in units.
 
-Screenshots in `public/games/sky-clash/maps/` are real renders of these authored arenas. Thumbnail rendering freezes motion at frame zero and excludes fighters so layouts remain visible. They do not depict recovered original stage assets.
+| Id | Name (source) | Main width u (m) | Blast u | Features | Simplifications |
+| --- | --- | --- | --- | --- | --- |
+| battlefield | Battlefield | 136.8 (10.9) | ±224 / 200 / −108.8 | Platforms at 27.2 and 54.4, jagged six-step underside | The lip is modeled as the first 4-unit step |
+| final-destination | Final Destination | 171.1 (13.7) | ±246 / 188 / −140 | No platforms; a deep underside with walls under the ledges | Curved underside is stepped |
+| cloudbreak | Cloudbreak (original) | 128 (10.2) | ±220 / 196 / −110 | Battlefield-like: side platforms at 25 and a crown platform at 50 that sways ±10 u | Bonus stage, no hazard |
+| yoshi-story | Yoshi's Story | 112 (9.0) | −175.7/173.6 / 168 / −91 | Platforms at 23.45 (overhanging the edges) and 42; Randall rises on the left, passes behind, sinks on the right (21 s loop) | Slanted floor ends are flat; Shy Guys omitted |
+| fountain | Fountain of Dreams | 126.7 (10.1) | ±198.75 / 202.5 / −146.25 | Side platforms glide between 5 and 28 u on independent deterministic schedules; top at 42.75; curled underside and pillar | Platforms never sink fully below the floor |
+| stadium | Pokémon Stadium | 175.5 (14.0) | ±230 / 180 / −111 | Platforms at 25; after 50 s neutral, a 6.5 s warning, then Fire → Grass → Rock → Water, about 50 s each. Pieces rise out of the floor over 1.5 s and the side platforms leave | Terrain is blocky; the Water windmill does not spin; no ledges on transformation pieces |
+| dream-land | Dream Land | 154.5 (12.4) | ±255 / 250 / −123 | Platforms at 30.14 and 51.43; Whispy Woods wind (0.35 u/frame) alternates direction every 30 s | Wind only; no damage |
+| peach-castle | Princess Peach's Castle | 250 (20.0) | ±300 / 250 / −170 | Castle roof, solid central tower, two side platforms, bobbing switch platforms outside the edges; Bullet Bill sweeps the roof every 40 s | Switch blocks do not toggle; the bumper is omitted |
+| rainbow-cruise | Rainbow Cruise | ship 200 (16.0) | ±240 / 210 / −140 | 25 s aboard the ship (deck, cabin, sails), then 65 s of scrolling rainbow course (platforms plus three solid chunks) before the ship loops back | Fixed camera treadmill instead of a moving camera; horizontal scroll only |
+| kongo-jungle | Kongo Jungle | 164 (13.1) | ±240 / 220 / −150 | Deck with tapered underside, side platforms, a circling top platform, a barrel platform patrolling below | The barrel is a platform, not a cannon; Klap Trap bites the water on alternating sides |
+| jungle-japes | Jungle Japes | banks 56 (4.5) | ±235 / 200 / −130 | Two banks, the hut floor and roof, high planks; a Klaptrap leaps from the river every 20 s | The river current is not simulated; the low bottom blast zone stands in for it |
+| great-bay | Great Bay | 145 (11.6) | ±270 / 230 / −140 | Pier, lab roof, lookout, Tingle's drifting balloon; the turtle surfaces for 20 s, dives, and resurfaces with a warning and a bump | Tingle never pops; the turtle is a solid block |
+| temple | Temple | West 135 (10.8) | ±420 / 300 / −230 | Raised west courtyard, bridge, lower east court, cave floor beneath the bridge, five platforms | Arches and slopes are boxes |
+| brinstar | Brinstar | 160 (12.8) | ±220 / 200 / −120 | Raised center hump, three flesh platforms; acid rises every 30 s to 14 / −6 / 30 u, hitting every 45 frames | Flesh platforms cannot be destroyed |
+| brinstar-depths | Brinstar Depths | 110 (8.8) | ±240 / 220 / −150 | Every 40 s Kraid rises (hazard below the stage) and "turns" the stage: the side platforms swap heights and the top platform slides across | No rotation; the platforms glide to mirrored positions instead |
+| yoshi-island | Yoshi's Island | 71 per bank | ±230 / 200 / −130 | West bank and a raised east bank; spinning blocks bridge the gap and flip away 4 s of every 20 s; a drifting cloud | Pipe and Fly Guys omitted |
+| green-greens | Green Greens | 200 (16.0) | ±240 / 210 / −120 | Star-block stacks at each side, three platforms; a bomb block falls every 15 s | The stacks are indestructible |
+| corneria | Corneria | 195 (15.6) | −260/280 / 230 / −150 | Great Fox hull, tail fin, lower nose; every 25 s one Arwing strafes the deck low and a second one flies over the fin (both rideable) | Great Fox cannon omitted |
+| venom | Venom | 280 (22.4) | ±260 / 230 / −150 | Long deck, bridge platform, two wing platforms underneath; Arwings sweep above and below the ship | Buildings and the tunnel are omitted |
+| poke-floats | Poké Floats | Squirtle 150 (12.0) | ±260 / 220 / −160 | A looping parade of Squirtle, three-segment Onix, Poliwag, two-block Porygon and Snorlax, each bobbing; the drift speed pulses and briefly pauses | Horizontal treadmill; no vertical sections |
+| mute-city | Mute City | 144 (11.5) | ±240 / 210 / −150 | Hover pad and wing platforms; every 45 s the track slides in underneath for 17 s, racers tear through, then the track races away | The pad does not move; one pair of racers per stop |
+| big-blue | Big Blue | 130 (10.4) | ±250 / 210 / −160 | Bobbing flyer and top platform, two weaving side cars; the track below drags anyone touching it left at 1.4 u/frame | The track is a wind zone, not a floor; with hazards off it is gone |
+| onett | Onett | 350 (28.0) | ±260 / 230 / −120 | Street, drugstore with two awnings, house and roof; a car crosses every 25 s, alternating direction | Awnings do not break |
+| fourside | Fourside | 120 (9.6) | ±270 / 240 / −150 | Central tower between a low west roof and a tall east roof; swinging crane platform; the UFO visits for 20 s of every 40 s | The crane does not grab |
+| icicle-mountain | Icicle Mountain | 160 (12.8) | ±170 / 190 / −110 | Vertical treadmill: climbs 60 u in 4 s, then rests 6 s; ice blocks and ledges repeat every 540 u | Up-scroll only; no Topi, condor or sliding ice |
+| mushroom-kingdom | Mushroom Kingdom | 113 per ground | ±250 / 210 / −130 | Brick grounds, pipes, brick row, ? blocks; balance lifts oscillate opposite each other in the pit | The lifts do not respond to weight; the blocks do not break |
+| mushroom-kingdom-ii | Mushroom Kingdom II | 94 per bank | ±250 / 220 / −140 | Two banks and a log bridge, tree platforms, Pidgit's carpet looping overhead; Birdo's egg crosses every 20 s | No falling logs |
+| flat-zone | Flat Zone | 220 (17.6) | ±200 / 190 / −110 | The screen cycles Fire, Oil Panic and Helmet scenes every 25 s, each with its own platforms; in Helmet, tools fall in three lanes | Scenes swap platforms instantly |
+| yoshi-island-64 | Yoshi's Island 64 | 160 (12.8) | ±220 / 200 / −120 | Three platforms and bobbing side clouds | The clouds do not vanish when stood on |
+| kongo-jungle-64 | Kongo Jungle 64 | 140 (11.2) | ±210 / 200 / −120 | Uneven side platforms (20 / 34), a rising and falling top platform, a patrolling barrel platform | The barrel is a platform |
 
-## Implementation limits
+## Conventions for consumers
 
-All collisions use horizontal one-way surfaces, with a solid-floor flag preventing deliberate down-drop. There are no ceiling or wall collisions, ledge grabs, walkable slopes, destructible blocks, true rotating terrain, automatic camera scrolling or transformation-specific collision sets. Orbiting ledges replace Brinstar Depths' rotation; elevators replace Icicle Mountain's scrolling course; Element Stadium changes terrace heights and presentation rather than swapping full terrain. Other hazard timings, damage and launch speeds are independently authored and should be playtested alongside the reconstructed fighter mechanics.
+- `blocks[0]` at tick 0 is the stage's main floor. Default spawns spread across it, at −55%, 55%, −20% and 20% of its half width. Stages with split floors author their spawns. Default respawns hover 40 u above the highest surface near each spawn.
+- Moving blocks carry `moving: true` and `dx`/`dy`: the top's movement since the previous tick. Treadmill pieces wrap only outside the blast zone, and report `0` on the wrap tick.
+- A Stadium piece grows upward from the floor. The engine lifts any fighter whose feet it overlaps onto its top.
+- `art` names a piece's look ('ship', 'turtle', 'car', 'arwing', 'fire', 'pipe', …). `palette` and `family` set the stage's art direction.
+- `hazard.zones` shows the upcoming strike while `warning` is set, and deals damage only while `active`. A fighter is hit once per `cycle`, or every `rehit` frames while it stays inside. `push` is wind in m/frame. The Stadium hazard (`transform`) is informational: it has zero damage, and its label names the upcoming terrain.
 
-Platform motion uses the authoritative fight clock, which is frozen during character selection, map voting and countdown. The renderer samples the same formulas and interpolated clock. Riders are carried before hitstop, falling fighters sweep against each moving surface's previous and current heights, and respawns choose actual solid surfaces even on split floors. Map voting follows fighter selection in the lobby, before Ready. The host’s Start action locks choices; the highest vote count wins and the round seed resolves ties. The legacy timed-round selection and Random setting remain fallbacks for clients without lobby setup. Reduced motion suppresses decorative rotation and warning animation, never gameplay movement. See QA.md for checks and remaining human playtest limits.
+## Art and map cards
+
+`src/scene/stage/` builds each stage's art from these same blocks and platforms, so floors sit at block tops and walls at block sides. `tests/scene-stage.test.ts` fails if art crosses collision in the fighters' plane at sampled ticks. Every stage has its own backdrop and hazard telegraphs on top of that kit. The 30 map cards in `public/games/sky-clash/maps/` are 640×360 screenshots from the real renderer (`tools/stage-lab/shoot.mjs all card`), and `maps/manifest.json` records their sizes and hashes. None of the art comes from the original game.

@@ -1,0 +1,218 @@
+{
+ "kind": "falco",
+ "name": "Falco",
+ "generator": "tools/blender/fighters/falco.py",
+ "height": 1.92,
+ "headTop": 1.92,
+ "tris": 19393,
+ "vertices": 9914,
+ "bytes": 575328,
+ "size": [
+  2.2121,
+  2.0427,
+  1.0149
+ ],
+ "bounds": {
+  "min": [
+   -1.2307,
+   -0.011,
+   -0.4376
+  ],
+  "max": [
+   0.9814,
+   2.0316,
+   0.5773
+  ]
+ },
+ "materials": [
+  "light",
+  "skin",
+  "trim",
+  "dark",
+  "hair",
+  "eye-white",
+  "eye",
+  "secondary",
+  "primary",
+  "metal",
+  "emissive",
+  "accent"
+ ],
+ "bones": [
+  "root",
+  "hips",
+  "spine",
+  "chest",
+  "neck",
+  "head",
+  "shoulder_L",
+  "upperarm_L",
+  "forearm_L",
+  "hand_L",
+  "shoulder_R",
+  "upperarm_R",
+  "forearm_R",
+  "hand_R",
+  "thigh_L",
+  "shin_L",
+  "foot_L",
+  "thigh_R",
+  "shin_R",
+  "foot_R",
+  "prop",
+  "extra_tail_0",
+  "extra_tail_1"
+ ],
+ "parents": {
+  "root": null,
+  "hips": "root",
+  "spine": "hips",
+  "chest": "spine",
+  "neck": "chest",
+  "head": "neck",
+  "shoulder_L": "chest",
+  "upperarm_L": "shoulder_L",
+  "forearm_L": "upperarm_L",
+  "hand_L": "forearm_L",
+  "shoulder_R": "chest",
+  "upperarm_R": "shoulder_R",
+  "forearm_R": "upperarm_R",
+  "hand_R": "forearm_R",
+  "thigh_L": "hips",
+  "shin_L": "thigh_L",
+  "foot_L": "shin_L",
+  "thigh_R": "hips",
+  "shin_R": "thigh_R",
+  "foot_R": "shin_R",
+  "prop": "hand_R",
+  "extra_tail_0": "hips",
+  "extra_tail_1": "extra_tail_0"
+ },
+ "joints": {
+  "root": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "hips": [
+   0.0,
+   0.9274,
+   0.0
+  ],
+  "spine": [
+   0.0,
+   1.0599,
+   0.0
+  ],
+  "chest": [
+   0.0,
+   1.2035,
+   0.0
+  ],
+  "neck": [
+   0.0,
+   1.4353,
+   0.0
+  ],
+  "head": [
+   0.0,
+   1.5237,
+   0.0
+  ],
+  "shoulder_L": [
+   0.0773,
+   1.336,
+   0.0
+  ],
+  "upperarm_L": [
+   0.2208,
+   1.347,
+   0.0
+  ],
+  "forearm_L": [
+   0.5079,
+   1.347,
+   0.0
+  ],
+  "hand_L": [
+   0.7729,
+   1.347,
+   0.0
+  ],
+  "shoulder_R": [
+   -0.0773,
+   1.336,
+   0.0
+  ],
+  "upperarm_R": [
+   -0.2208,
+   1.347,
+   0.0
+  ],
+  "forearm_R": [
+   -0.5079,
+   1.347,
+   0.0
+  ],
+  "hand_R": [
+   -0.7729,
+   1.347,
+   0.0
+  ],
+  "thigh_L": [
+   0.1104,
+   0.8833,
+   0.0
+  ],
+  "shin_L": [
+   0.1104,
+   0.4968,
+   0.0
+  ],
+  "foot_L": [
+   0.1104,
+   0.1104,
+   0.0
+  ],
+  "thigh_R": [
+   -0.1104,
+   0.8833,
+   0.0
+  ],
+  "shin_R": [
+   -0.1104,
+   0.4968,
+   0.0
+  ],
+  "foot_R": [
+   -0.1104,
+   0.1104,
+   0.0
+  ],
+  "prop": [
+   -0.8921,
+   1.347,
+   0.0
+  ],
+  "extra_tail_0": [
+   0.0,
+   0.9716,
+   -0.1104
+  ],
+  "extra_tail_1": [
+   0.0,
+   0.8833,
+   -0.2429
+  ]
+ },
+ "extras": {
+  "tail": [
+   "extra_tail_0",
+   "extra_tail_1"
+  ]
+ },
+ "prop": {
+  "parent": "hand_R",
+  "visible": "move"
+ }
+}

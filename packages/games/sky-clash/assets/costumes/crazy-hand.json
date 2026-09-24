@@ -1,0 +1,38 @@
+[
+ {
+  "name": "Default",
+  "colors": {
+   "light": "#f6f4f0",
+   "trim": "#d9d4dc",
+   "secondary": "#ebe7ee",
+   "dark": "#2a2430"
+  }
+ },
+ {
+  "name": "Violet",
+  "colors": {
+   "light": "#cdb8f2",
+   "trim": "#a58ad8",
+   "secondary": "#bca4ea",
+   "dark": "#2a2430"
+  }
+ },
+ {
+  "name": "Crimson",
+  "colors": {
+   "light": "#e86a6a",
+   "trim": "#b8424a",
+   "secondary": "#d65a5e",
+   "dark": "#2a2430"
+  }
+ },
+ {
+  "name": "Ink",
+  "colors": {
+   "light": "#3c3a48",
+   "trim": "#26242e",
+   "secondary": "#312f3c",
+   "dark": "#2a2430"
+  }
+ }
+]

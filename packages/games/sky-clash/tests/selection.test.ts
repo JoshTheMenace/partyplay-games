@@ -1,74 +1,50 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import test from 'node:test';
+import { ROSTER_DATA, neutralInput, type Input, type LobbyChoice } from '../src/model';
 import { rules } from '../src/server';
-import { ROSTER, neutralInput, type Input } from '../src/model';
-import { stageFrame } from '../src/stages';
-import { assertSerializable } from '../../../party-contract/src/serializable';
-const ctx = { roomId: 'r', roundId: 'r', seed: 17, nowMs: 1000, players: Array.from({ length: 4 }, (_, i) => ({ id: `p${i}`, name: `Player${i}`, color: '#fff' })) };
-const create = () => rules.create(ctx, { seconds: 60, stocks: 3 });
-function voting() { const s = create(); for (const p of s.players) rules.applyAction(s, p.id, { turnId: 'r', kind: 'mario' }, 1000); rules.tick(s, new Map(), 1/60, 4000); assert.equal(s.phase, 'vote'); return s; }
-test('map voting follows fighters, resolves the plurality early, respawns everyone and starts a fresh match clock', () => {
-  const s = voting(); assert.equal(s.phaseEndsAt, 24000);
-  for (const [i, stage] of ['fountain', 'fountain', 'battlefield', 'cloudbreak'].entries()) rules.applyAction(s, `p${i}`, rules.parseAction({ turnId: 'r', stage }), 4500);
-  rules.tick(s, new Map(), 1/60, 4517); assert.equal(s.phase, 'countdown'); assert.equal(s.stageId, 'fountain'); assert.equal(s.endsAt, 67517); assert.equal(s.stageTick, 0);
-  for (const p of s.players) { assert.equal(p.kind, 'mario'); assert.equal(p.damage, 0); assert.equal(p.jumps, 2); assert.ok(stageFrame('fountain',0).platforms.some(f => f.solid && p.y === f.y && p.x >= f.left && p.x <= f.right)); }
-  const view = rules.publicView(s, { nowMs: 4517, phase: 'playing' }); assertSerializable(view); view.mapVotes.pop(); assert.equal(s.mapVotes.length, 4);
-  rules.tick(s, new Map(), 1/60, 7517); assert.equal(s.phase, 'fight');
-});
-test('one locked vote per active player; malformed, stale, late and wrong-phase votes are rejected', () => {
-  const s = voting();
-  for (const raw of [{turnId:'r',stage:'random'},{turnId:'r',stage:'__proto__'},{turnId:'r',stage:'cloudbreak',kind:'fox'},{turnId:3,stage:'cloudbreak'}]) assert.throws(() => rules.parseAction(raw));
-  assert.throws(() => rules.applyAction(create(), 'p0', { turnId:'r',stage:'cloudbreak' }, 1500));
-  assert.throws(() => rules.applyAction(s, 'p0', { turnId:'old',stage:'cloudbreak' }, 4500));
-  assert.throws(() => rules.applyAction(s, 'outsider', { turnId:'r',stage:'cloudbreak' }, 4500));
-  rules.applyAction(s, 'p0', { turnId:'r',stage:'cloudbreak' }, 4500);
-  assert.throws(() => rules.applyAction(s, 'p0', { turnId:'r',stage:'fountain' }, 4500));
-  assert.throws(() => rules.applyAction(s, 'p1', { turnId:'r',kind:'fox' }, 4500));
-  assert.throws(() => rules.applyAction(s, 'p1', { turnId:'r',stage:'cloudbreak' }, 24000));
-});
-test('partial voting waits twenty seconds; ties draw only from leaders and no votes retain the fallback', () => {
-  const choices = new Set<string>();
-  for (let seed = 0; seed < 12; seed++) {
-    const s = voting(); s.seed = seed;
-    rules.applyAction(s, 'p0', { turnId:'r',stage:'fountain' }, 4500); rules.applyAction(s, 'p1', { turnId:'r',stage:'battlefield' }, 4500);
-    rules.tick(s, new Map(), 1/60, 23999); assert.equal(s.phase, 'vote'); rules.tick(s, new Map(), 1/60, 24000); assert.ok(['fountain','battlefield'].includes(s.stageId)); choices.add(s.stageId);
-  }
-  assert.equal(choices.size, 2);
-  const none = voting(); rules.tick(none, new Map(), 1/60, 24000); assert.equal(none.stageId, 'cloudbreak'); assert.equal(none.phase, 'countdown');
-  assert.deepEqual(create().mapVotes, []);
-});
-test('disconnects do not hold up completed votes; reconnect restores the accepted vote', () => {
-  const s = voting(); rules.onPresenceChange(s, 'p3', false, 4100);
-  for (let i=0;i<3;i++) rules.applyAction(s, `p${i}`, {turnId:'r',stage:'fountain'}, 4200);
-  rules.onPresenceChange(s, 'p0', false, 4300); rules.onPresenceChange(s, 'p0', true, 4400);
-  assert.equal(rules.publicView(s,{nowMs:4400,phase:'playing'}).mapVotes[0].stageId,'fountain');
-  rules.tick(s,new Map(),1/60,4500); assert.equal(s.phase,'countdown'); assert.equal(s.stageId,'fountain');
-});
-test('every fighter can full-jump onto Cloudbreak side platforms, then reach the top without an air jump', () => {
-  for (const kind of ROSTER) for (const upper of [false,true]) {
-    const s=create(); s.phase='fight'; const p=s.players[0];p.kind=kind;p.x=upper?-2.65:-4;p.y=upper?1.5:0;
-    let landed=false;
-    for(let frame=0;frame<180;frame++) {
-      const input:Input={...neutralInput(),x:upper && p.x<-.7?1:0,jump:true,presses:{jump:1,attack:0,special:0,smash:0}};
-      rules.tick(s,new Map([['p0',input]]),1/60,1000+frame*1000/60);
-      if(frame>10 && p.grounded && p.y===(upper?3:1.5)){landed=true;break;}
-    }
-    assert.ok(landed,`${kind}: ${upper?'upper':'side'} platform`);
-  }
-});
+import { STAGE_IDS, getStage } from '../src/stages';
+import { tallyStage } from '../src/sim/match';
 
-test('lobby choices skip repeated selection, resolve the map and preserve all chosen fighters', () => {
-  const players = ctx.players.map((p,i) => ({...p,lobbyChoice:{kind:ROSTER[i],stage:i<3?'temple':'cloudbreak'}}));
-  const s=rules.create({...ctx,players},rules.validateSettings({}));
-  assert.equal(s.phase,'countdown');assert.equal(s.stageId,'temple');assert.equal(s.mapVotes.length,4);assert.equal(s.endsAt,ctx.nowMs+3000+900000);
-  assert.deepEqual(s.players.map(p=>p.kind),ROSTER.slice(0,4));assert.ok(s.players.every(p=>p.chosen));
-  for(const raw of [undefined,{kind:'bad',stage:'temple'},{kind:'mario',stage:null},{kind:'mario',stage:'random'},{kind:'mario',stage:'temple',extra:true}]) assert.throws(()=>rules.parseLobbyChoice!(raw,true));
-  assert.deepEqual(rules.parseLobbyChoice!({kind:'mario',stage:null},false),{kind:'mario',stage:null});
+const seat = (i: number, choice?: Partial<LobbyChoice>) => ({ id: `p${i}`, name: `P${i}`, color: '#28c6e7', ...(choice ? { lobbyChoice: { fighter: null, costume: 0, stage: null, ...choice } } : {}) });
+const make = (players: ReturnType<typeof seat>[], settings: object = {}, seed = 5) => rules.create({ roomId: 'r', roundId: 'round-1', seed, nowMs: 1000, players }, rules.validateSettings(settings));
+
+test('a lone human gets a CPU; CPUs are capped at four fighters and named CPU 1…', () => {
+  const solo = make([seat(0, { fighter: 'fox' })]);
+  assert.deepEqual(solo.fighters.map(f => [f.id, f.name, f.cpu]), [['p0', 'P0', null], ['cpu-1', 'CPU 1', 2]]);
+  const crowd = make([seat(0), seat(1), seat(2)], { cpus: 3, cpuLevel: 3 });
+  assert.deepEqual(crowd.fighters.map(f => f.id), ['p0', 'p1', 'p2', 'cpu-1']); assert.equal(crowd.fighters[3]!.cpu, 3);
+  assert.equal(make([seat(0), seat(1)]).fighters.length, 2);
 });
-test('unlimited rounds have no timer expiration, still finish on stocks, and expose finite JSON', () => {
-  assert.equal(rules.validateSettings({}).seconds,900);assert.equal(rules.validateSettings({seconds:0}).seconds,0);
-  const s=rules.create({...ctx,players:ctx.players.map(p=>({...p,lobbyChoice:{kind:'mario',stage:'cloudbreak'}}))},{seconds:0,stocks:3});
-  rules.tick(s,new Map(),1/60,4000);assert.equal(s.phase,'fight');assert.equal(s.endsAt,0);
-  rules.tick(s,new Map(),1/60,1000+24*3600000);assert.equal(s.phase,'fight');assertSerializable(rules.publicView(s,{nowMs:100000000,phase:'playing'}));
-  s.players.slice(1).forEach(p=>{p.stocks=0;p.mode='out';});rules.tick(s,new Map(),1/60,100000001);assert.equal(s.phase,'complete');assert.deepEqual(rules.outcome(s).winners,['p0']);
+test('chosen fighters and costumes are kept; Random resolves from the seed to a regular fighter; duplicate costumes shift', () => {
+  const s = make([seat(0, { fighter: 'marth', costume: 2 }), seat(1, { fighter: 'marth', costume: 2 }), seat(2, { fighter: 'random' }), seat(3)]);
+  assert.deepEqual(s.fighters.slice(0, 2).map(f => [f.kind, f.costume]), [['marth', 2], ['marth', 3]]);
+  for (const f of s.fighters.slice(2)) assert.equal(ROSTER_DATA[f.kind].bonus, false);
+  const again = make([seat(0, { fighter: 'marth', costume: 2 }), seat(1, { fighter: 'marth', costume: 2 }), seat(2, { fighter: 'random' }), seat(3)]);
+  assert.deepEqual(again.fighters.map(f => f.kind), s.fighters.map(f => f.kind), 'deterministic from the seed');
+});
+test('stage: most votes win, ties break by seed among leaders, Random votes resolve, host override wins', () => {
+  assert.equal(make([seat(0, { stage: 'fountain' }), seat(1, { stage: 'fountain' }), seat(2, { stage: 'battlefield' })]).stageId, 'fountain');
+  const tie = new Set(Array.from({ length: 24 }, (_, k) => make([seat(0, { stage: 'fountain' }), seat(1, { stage: 'yoshi-story' })], {}, k).stageId));
+  assert.deepEqual([...tie].sort(), ['fountain', 'yoshi-story']);
+  assert.ok(STAGE_IDS.includes(make([seat(0, { stage: 'random' }), seat(1, { stage: 'random' })]).stageId));
+  assert.equal(make([seat(0, { stage: 'fountain' }), seat(1, { stage: 'fountain' })], { stage: 'corneria' }).stageId, 'corneria');
+  assert.equal(tallyStage([], Math.random), 'battlefield');
+  assert.ok(STAGE_IDS.includes(make([seat(0), seat(1)], { stage: 'random' }).stageId));
+});
+test('teams alternate by seat order; everyone starts on the stage spawns facing the middle', () => {
+  const s = make([seat(0), seat(1), seat(2), seat(3)], { teams: true, stage: 'battlefield' }), spawns = getStage('battlefield').spawns;
+  assert.deepEqual(s.fighters.map(f => f.team), [0, 1, 0, 1]);
+  s.fighters.forEach((f, i) => { assert.deepEqual([f.x, f.y], [...spawns[i]!]); assert.ok(f.grounded); assert.equal(f.stocks, 4); });
+  assert.ok(s.fighters.some(f => f.facing === 1) && s.fighters.some(f => f.facing === -1));
+  assert.equal(make([seat(0), seat(1)]).fighters[0]!.team, null);
+});
+test('countdown: three seconds, input ignored, and presses made during it never fire at GO', () => {
+  const s = make([seat(0, { fighter: 'fox' }), seat(1, { fighter: 'mario' })]), input: Input = neutralInput();
+  assert.equal(s.phase, 'countdown'); assert.equal(s.phaseEndsAt, 4000); assert.equal(s.endsAt, 4000 + 480_000);
+  input.presses.jump = 3; input.presses.attack = 2;
+  for (let now = 1000; now < 4000; now += 1000 / 60) rules.tick(s, new Map([['p0', input]]), 1 / 60, now);
+  assert.equal(s.phase, 'countdown'); assert.equal(s.fighters[0]!.state, 'idle');
+  rules.tick(s, new Map([['p0', input]]), 1 / 60, 4001); assert.equal(s.phase, 'fight');
+  for (let k = 0; k < 10; k++) rules.tick(s, new Map([['p0', input]]), 1 / 60, 4001 + k * 16);
+  assert.equal(s.fighters[0]!.state, 'idle'); assert.equal(s.fighters[0]!.move, null);
 });

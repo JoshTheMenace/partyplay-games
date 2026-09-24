@@ -1,0 +1,66 @@
+[
+ {
+  "name": "Default",
+  "colors": {
+   "primary": "#f7a1c4",
+   "secondary": "#e2568f",
+   "accent": "#3f7fe6",
+   "trim": "#d8344e",
+   "metal": "#f2c14a",
+   "light": "#fbf8f4",
+   "skin": "#fbd6bd",
+   "hair": "#f6d36a",
+   "dark": "#2a1f2a",
+   "eye": "#3e7fe0",
+   "eye-white": "#ffffff"
+  }
+ },
+ {
+  "name": "Daisy",
+  "colors": {
+   "primary": "#f7cf45",
+   "secondary": "#ee8a2a",
+   "accent": "#3fb86a",
+   "trim": "#d8344e",
+   "metal": "#f2c14a",
+   "light": "#fbf8f4",
+   "skin": "#fbd6bd",
+   "hair": "#e89a4a",
+   "dark": "#2a1f2a",
+   "eye": "#3e7fe0",
+   "eye-white": "#ffffff"
+  }
+ },
+ {
+  "name": "White",
+  "colors": {
+   "primary": "#f6f3ee",
+   "secondary": "#c9d6ef",
+   "accent": "#6fb2ff",
+   "trim": "#d8344e",
+   "metal": "#f2c14a",
+   "light": "#fbf8f4",
+   "skin": "#fbd6bd",
+   "hair": "#f6d36a",
+   "dark": "#2a1f2a",
+   "eye": "#3e7fe0",
+   "eye-white": "#ffffff"
+  }
+ },
+ {
+  "name": "Blue",
+  "colors": {
+   "primary": "#8fb8f2",
+   "secondary": "#3f63c8",
+   "accent": "#f2a0c4",
+   "trim": "#d8344e",
+   "metal": "#f2c14a",
+   "light": "#fbf8f4",
+   "skin": "#fbd6bd",
+   "hair": "#f6d36a",
+   "dark": "#2a1f2a",
+   "eye": "#3e7fe0",
+   "eye-white": "#ffffff"
+  }
+ }
+]

@@ -1,82 +1,95 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ATTRIBUTES } from '../fidelity/attributes';
-import { getMove, neutralInput, VELOCITY, type FighterKind, type Input } from '../src/model';
-import { rules, launchForce } from '../src/server';
-import { assertSerializable } from '../../../party-contract/src/serializable';
-const create = (kind: FighterKind = 'fox') => {
-  const state = rules.create({ roomId: 'r', roundId: 'round', nowMs: 0, seed: 1, players: [{ id: 'a', name: 'A', color: '#fff' }, { id: 'b', name: 'B', color: '#000' }] }, { seconds: 60, stocks: 3 });
-  state.phase = 'fight'; state.players[0].kind = kind; state.players[0].x = -6; state.players[1].x = 6; return state;
-};
-function tick(state: ReturnType<typeof create>, frames: number, a = neutralInput(), b = neutralInput()) {
-  for (let i = 0; i < frames; i++) rules.tick(state, new Map([['a', a], ['b', b]]), 1 / 60, (state.frame + 1) * 1000 / 60);
+import test from 'node:test';
+import type { FighterKind } from '../src/model';
+import { MOVESET } from '../src/moveset';
+import { getStage, stageFrame } from '../src/stages';
+import { setState } from '../src/sim/common';
+import { HANG } from '../src/sim/fighter';
+import { arena, type Arena } from '../src/sim/harness';
+
+const FD = stageFrame('final-destination', 0), MAIN = FD.blocks[0]!, RIGHT = FD.ledges.find(l => l.side === 1)!;
+/** Fighter i falling beside the right ledge (in the generous snap box). */
+function nearLedge(a: Arena, i: number, dx = .35) {
+  const f = a.f(i); Object.assign(f, { x: RIGHT.x + dx, y: RIGHT.y - 1.1, vx: 0, vy: -.02, grounded: false, ground: null, facing: -1 }); setState(f, 'air');
 }
-const press = (button: 'jump' | 'attack' | 'special' | 'smash', extra: Partial<Input> = {}): Input => ({ ...neutralInput(), [button]: true, ...extra, presses: { ...neutralInput().presses, [button]: 1 } });
-
-test('both fighters retain sourced stats; jump startup, short hop and full hop use their own values', () => {
-  assert.equal(ATTRIBUTES.fox.weight, 75); assert.equal(ATTRIBUTES.falco.weight, 80);
-  assert.ok(ATTRIBUTES.falco.jump_v_initial_velocity > ATTRIBUTES.fox.jump_v_initial_velocity);
-  for (const kind of ['fox', 'falco'] as const) for (const held of [true, false]) {
-    const state = create(kind), p = state.players[0], input = press('jump', { jump: held }), a = ATTRIBUTES[kind];
-    tick(state, a.jump_startup_time, input); assert.equal(p.y, 0); assert.equal(p.mode, 'jumpsquat');
-    tick(state, 1, input); assert.equal(p.vy, (held ? a.jump_v_initial_velocity : a.hop_v_initial_velocity) * VELOCITY); assert.equal(p.jumps, 1);
-  }
+function onLedge(kind: FighterKind = 'marth', damage = 0) {
+  const a = arena({ fighters: [kind, 'sandbag'] }); a.place(1, MAIN.left + 2); nearLedge(a, 0); a.f(0).damage = damage;
+  for (let t = 0; t < 10 && a.f(0).state !== 'ledge'; t++) a.tick();
+  assert.equal(a.f(0).state, 'ledge'); a.tick(40); // past the catch and its intangibility
+  return a;
+}
+test('falling beside a ledge snaps to it; the first grab after landing is intangible, a regrab is not', () => {
+  const a = arena({ fighters: ['fox', 'sandbag'] }); a.place(1, 0); nearLedge(a, 0, .55);
+  for (let t = 0; t < 10 && a.f(0).state !== 'ledge'; t++) a.tick();
+  assert.equal(a.f(0).state, 'ledge'); assert.equal(a.f(0).ledgeSide, 1); assert.ok(a.f(0).intangibleNow);
+  assert.ok(a.s.events.some(e => e.kind === 'ledge'));
+  a.tick(20); a.hold(0, { x: 1 }); a.tick(); a.hold(0, { x: 0 }); // drop away
+  assert.equal(a.f(0).state, 'air'); a.tick(40);
+  a.f(0).invincible = 0; nearLedge(a, 0); for (let t = 0; t < 10 && a.f(0).state !== 'ledge'; t++) a.tick();
+  assert.equal(a.f(0).state, 'ledge'); assert.equal(a.f(0).invincible, 0);
 });
-
-test('scripts retain startup, late hits, loops, interruptibility and ground/air masks', () => {
-  assert.deepEqual(getMove('fox', 'jab').windows.map(w => [w.from, w.to]), [[2, 3], [3, 4]]);
-  assert.equal(getMove('fox', 'jab').end, 16);
-  assert.deepEqual(getMove('fox', 'downair').windows.map(w => [w.from, w.to, w.hitboxes[0].damage]), [[5, 7, 3], [8, 10, 3], [11, 13, 3], [14, 16, 3], [17, 19, 3], [20, 22, 3], [23, 25, 3]]);
-  assert.deepEqual(getMove('falco', 'downair').windows.map(w => [w.from, w.to, w.hitboxes[0].damage]), [[5, 15, 12], [15, 25, 9]]);
-  assert.equal(getMove('fox', 'upsmash').windows[0].hitboxes[0].damage, 18);
-  assert.equal(getMove('falco', 'upsmash').windows[0].hitboxes[0].damage, 14);
+test('ledge options: climb, roll, jump, attack (quick below 100%, slow above) and drop', () => {
+  const climb = onLedge(); climb.hold(0, { x: -1 }); climb.tick(); climb.hold(0, { x: 0 }); climb.tick(60);
+  assert.equal(climb.f(0).state, 'idle'); assert.ok(climb.f(0).grounded && climb.f(0).x < RIGHT.x);
+  const roll = onLedge(); roll.press(0, 'shield'); roll.tick(80);
+  assert.ok(roll.f(0).grounded && roll.f(0).x < climb.f(0).x - 1);
+  const jump = onLedge(); jump.press(0, 'jump'); for (let t = 0; t < 60 && jump.f(0).state !== 'air'; t++) jump.tick();
+  assert.equal(jump.f(0).state, 'air'); assert.ok(jump.f(0).vy > 0);
+  const atk = onLedge(); atk.press(0, 'attack'); atk.tick();
+  assert.equal(atk.f(0).move, 'ledgeattack'); assert.equal(atk.f(0).phase, 'climb');
+  const slow = onLedge('marth', 120); slow.press(0, 'attack'); slow.tick();
+  assert.equal(slow.f(0).move, 'ledgeattackSlow');
+  const slowClimb = onLedge('marth', 120); slowClimb.hold(0, { x: -1 }); slowClimb.tick();
+  assert.equal(slowClimb.f(0).phase, 'climbSlow');
 });
-
-test('charging holds the sourced charge frame, releases, and boosts the original move damage', () => {
-  const state = create(), [p, target] = state.players; p.x = -.5; target.x = .5;
-  const held = press('smash'); tick(state, 20, held);
-  assert.equal(p.move, 'smash'); assert.equal(p.moveFrame, getMove('fox', 'smash').chargeFrame); assert.ok(p.charge > 0); assert.equal(target.damage, 0);
-  tick(state, 12, { ...held, smash: false }); assert.ok(target.damage > getMove('fox', 'smash').windows[0].hitboxes[0].damage);
+test('hanging lasts five seconds, then the fighter drops', () => {
+  const a = onLedge(); a.tick(HANG - 40 - 5); assert.equal(a.f(0).state, 'ledge'); a.tick(10); assert.equal(a.f(0).state, 'air');
 });
-
-test('Fox lasers damage without flinching; Falco lasers interrupt and shields block them', () => {
-  for (const kind of ['fox', 'falco'] as const) for (const guard of [false, true]) {
-    const state = create(kind), [p, target] = state.players; p.x = -3; target.x = 0;
-    tick(state, getMove(kind, 'laser').startup + 5, press('special'), { ...neutralInput(), shield: guard });
-    assert.equal(target.damage, guard ? 0 : 3);
-    if (!guard) assert.equal(target.mode === 'hurt', kind === 'falco');
-    else assert.ok(target.shield < 95);
-    assert.equal(state.projectiles.length, 0);
-  }
+test('one fighter per ledge: the arriving grab trumps the hanging one', () => {
+  const a = arena({ fighters: ['fox', 'falco'] }); nearLedge(a, 0);
+  for (let t = 0; t < 10 && a.f(0).state !== 'ledge'; t++) a.tick();
+  a.tick(40); nearLedge(a, 1);
+  for (let t = 0; t < 10 && a.f(1).state !== 'ledge'; t++) a.tick();
+  assert.equal(a.f(1).state, 'ledge'); assert.notEqual(a.f(0).state, 'ledge');
 });
-
-test('reflector reverses projectile ownership, direction and damage without self-hitting', () => {
-  const state = create(), [p, target] = state.players; p.x = -3; target.x = 0;
-  tick(state, 10, press('special'));
-  tick(state, 3, neutralInput(), press('special', { y: 1 }));
-  assert.equal(target.damage, 0); assert.ok(state.projectiles.some(shot => shot.owner === target.id && shot.vx < 0 && shot.damage === 4.5));
-  tick(state, 6); assert.equal(p.damage, 4.5);
+function tumbleOnto(a: Arena, i: number) {
+  const f = a.f(i); Object.assign(f, { x: 0, y: MAIN.top + 1.2, grounded: false, ground: null, ky: -.12, kx: 0, vx: 0, vy: 0, hitstun: 40, tumble: true, launch: .12 }); setState(f, 'tumble');
+}
+test('tech: Shield within 20 frames before landing techs (in place or rolling); otherwise knockdown and getup options', () => {
+  const t = arena({ fighters: ['mario', 'sandbag'] }); t.place(1, 4); tumbleOnto(t, 0); t.tick(2); t.press(0, 'shield');
+  for (let k = 0; k < 30 && !t.f(0).grounded; k++) t.tick();
+  assert.equal(t.f(0).state, 'tech');
+  const r = arena({ fighters: ['mario', 'sandbag'] }); r.place(1, 4); tumbleOnto(r, 0); r.tick(2); r.press(0, 'shield', { x: -1 });
+  for (let k = 0; k < 30 && !r.f(0).grounded; k++) r.tick();
+  assert.equal(r.f(0).phase, 'techB'); r.hold(0, { x: 0 }); r.tick(50); assert.ok(r.f(0).x < -1);
+  const late = arena({ fighters: ['mario', 'sandbag'] }); late.place(1, 4); tumbleOnto(late, 0); late.press(0, 'shield'); late.tick(1);
+  late.f(0).y += 3; for (let k = 0; k < 80 && !late.f(0).grounded; k++) late.tick();
+  assert.equal(late.f(0).state, 'knockdown', 'a press long before landing is not a tech');
+  late.tick(40); late.press(0, 'attack'); late.tick();
+  assert.equal(late.f(0).move, 'getupattack'); assert.equal(late.f(0).state, 'getup');
+  late.tick(MOVESET.mario.getupattack!.total + 2); assert.equal(late.f(0).state, 'idle');
 });
-
-test('recovery charges before moving, uses one airtime resource, and airdodge cannot repeat', () => {
-  const state = create(), p = state.players[0]; p.y = 2; p.grounded = false; p.jumps = 1;
-  tick(state, 42, press('special', { y: -1 })); assert.equal(p.y, 2); assert.equal(p.recoveryUsed, true);
-  tick(state, 1, press('special', { y: -1 })); assert.ok(p.y > 2); assert.ok(p.vy > 0);
-  const dodge = create(), q = dodge.players[0]; q.y = 3; q.grounded = false;
-  tick(dodge, 1, { ...neutralInput(), shield: true, x: 1 }); assert.equal(q.mode, 'dodge'); assert.equal(q.recoveryUsed, true); assert.equal(q.jumps, 0);
-  tick(dodge, 1); tick(dodge, 1, { ...neutralInput(), shield: true }); assert.equal(q.dodge, 46);
+test('wall tech: a tumbling fighter pressing Shield techs off the stage side', () => {
+  const a = arena({ fighters: ['fox', 'sandbag'] }); a.place(1, 0); const f = a.f(0);
+  Object.assign(f, { x: MAIN.right + .7, y: MAIN.top - 1.2, grounded: false, ground: null, kx: -.3, ky: 0, hitstun: 30, tumble: true, launch: .3 }); setState(f, 'tumble');
+  a.press(0, 'shield'); for (let k = 0; k < 10 && f.state !== 'tech'; k++) a.tick();
+  assert.equal(f.state, 'tech'); assert.equal(f.phase, 'techWall');
 });
-
-test('aerial landing lag is sourced and prevents attacks until it expires', () => {
-  const state = create(), p = state.players[0]; p.y = .15; p.grounded = false; p.vy = -1; p.move = 'aerial'; p.moveFrame = 8;
-  tick(state, 10); assert.equal(p.grounded, true); assert.ok(p.lag > 0); const lag = p.lag;
-  tick(state, 1, press('attack')); assert.equal(p.move, null); assert.equal(p.lag, lag - 1);
+test('blast zones: a KO costs a stock, credits the recent attacker, respawns on a halo with invincibility', () => {
+  const a = arena({ fighters: ['fox', 'mario'], settings: { stocks: 3 } }), blast = getStage('final-destination').blast;
+  a.place(0, -2); a.place(1, 2); a.f(1).lastHitBy = 'p0'; a.f(1).lastHitFrame = a.s.frame;
+  Object.assign(a.f(1), { x: blast.right + .5, grounded: false, vx: .3 }); a.tick();
+  assert.equal(a.f(1).state, 'out'); assert.equal(a.f(1).stocks, 2); assert.equal(a.f(1).falls, 1); assert.equal(a.f(0).kos, 1);
+  const ko = a.s.events.find(e => e.kind === 'ko')!; assert.equal(ko.source, 'p0'); assert.equal(ko.target, 'p1'); assert.ok(Number.isFinite(ko.angle));
+  for (let t = 0; t < 200 && a.f(1).state !== 'respawn'; t++) a.tick();
+  assert.equal(a.f(1).state, 'respawn'); assert.equal(a.f(1).damage, 0);
+  a.tick(60); a.hold(1, { x: 1 }); a.tick();
+  assert.equal(a.f(1).state, 'air'); assert.ok(a.f(1).intangibleNow);
 });
-
-test('standard and fixed knockback formulas and actual transport projections stay valid', () => {
-  assert.ok(Math.abs(launchForce(100, 10, 100, 20, 100) - 122) < .001);
-  assert.equal(launchForce(20, 3, 75, 0, 100, 30), launchForce(150, 12, 75, 0, 100, 30));
-  const state = create(); tick(state, 12, press('special'));
-  assertSerializable(rules.publicView(state, { nowMs: 200, phase: 'playing' }));
-  assertSerializable(rules.outcome(state)); assert.equal(rules.playerView(state, 'a', { nowMs: 200, phase: 'playing' }), null);
+test('the top blast zone only KOs launched fighters', () => {
+  const a = arena({ fighters: ['fox', 'mario'] }), top = getStage('final-destination').blast.top;
+  Object.assign(a.f(1), { y: top + .2, grounded: false, vy: .1 }); setState(a.f(1), 'air'); a.tick();
+  assert.notEqual(a.f(1).state, 'out'); assert.equal(a.f(1).stocks, 4);
+  Object.assign(a.f(1), { y: top + .2, ky: .5, launch: .5, hitstun: 30, tumble: true }); setState(a.f(1), 'tumble'); a.tick();
+  assert.equal(a.f(1).state, 'out');
 });

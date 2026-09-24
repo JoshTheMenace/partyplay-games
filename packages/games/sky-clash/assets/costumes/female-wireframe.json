@@ -1,0 +1,30 @@
+[
+ {
+  "name": "Default",
+  "colors": {
+   "emissive": "#ff8fd0",
+   "dark": "#3a1430"
+  }
+ },
+ {
+  "name": "Violet",
+  "colors": {
+   "emissive": "#b98cff",
+   "dark": "#24163e"
+  }
+ },
+ {
+  "name": "Aqua",
+  "colors": {
+   "emissive": "#62f0e0",
+   "dark": "#0f3634"
+  }
+ },
+ {
+  "name": "Amber",
+  "colors": {
+   "emissive": "#ffb24a",
+   "dark": "#3c220c"
+  }
+ }
+]

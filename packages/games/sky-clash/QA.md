@@ -1,185 +1,67 @@
 # Sky Clash verification
 
-## Delivered lobby, phone viewport and expanded arenas
+This file covers the v2 rebuild after the polish pass. Older records are in git history.
 
-2026-09-13 local date: `sky-clash-lobby-0913-d`, built at `2026-09-14T00:53:23.735Z`, normal catalog (`qa: false`). Preview: http://localhost:4399/games/sky-clash. Index SHA-256: `4ae9ba92dd7a1185f929f0e2420ee73f98ff9ac6eb1c85bfff8dde585a9f9007`. The user's 4397 preview remains untouched.
+## Final check, 2026-09-24
 
-Players now choose a fighter, vote for a map and Ready in the shared lobby while others join. The host starts with accepted choices, resolving the highest vote count with seeded ties; there is no second selection phase. Matches default to fifteen minutes; Unlimited removes the clock deadline while retaining stock elimination. Thirty expanded arenas span 34–60 units, with 14–23 surfaces on twenty-nine maps; Event Horizon retains one wide floor. Central jump steps preserve fighter physics. The combat camera follows living fighters and pulls back as they spread. Map cards use actual 640×360 Three.js screenshots.
+Build `sc-final-1` (`npm run build:isolated -- sc-final-1`), served with `npm run serve:isolated -- sc-final-1 4393` and left running for the user. Evidence is in `output/sky-clash-v2/final/`.
 
-| Check | Actual result / evidence |
+### Static checks
+
+| Check | Result |
 | --- | --- |
-| Game and shared runtime | 144 game/registry/catalog tests and 30 relevant shared platform/3D tests pass. New coverage includes strict lobby drafts/readiness, seat ownership, stale lobby IDs, reconnect, settings, replay and game switching; lobby-to-match transfer, default timer, finite serialization and stock completion after an Unlimited clock runs for 24 simulated hours. All 33 central-platform full-jump paths and all 30 expanded map simulations pass. `output/sky-clash-lobby/tests-final.txt`, `platform-tests-final.txt`. |
-| Types / lint / assets | Full-root TypeScript and scoped oxlint pass, including the final dialog change. Thirty unique screenshot WebPs total 346,262 bytes; manifest records dimensions and hashes. Static map renders have 73–395 draw calls and 1,502–18,782 triangles. The authoring fixture is separate from the normal build. `typecheck-d.txt`, `lint-d.txt`, `maps-contact.jpg`. |
-| Lobby and maximum roster | Four synthetic phones with 16-character names join through UI, choose while others join, reload a draft, Ready / Not ready / edit / re-ready, reload accepted choices, then start directly with Mario/Fox/Bowser/Jigglypuff and a 3–1 Cloudbreak vote. Host Settings initially reports 900 seconds. Real map image loads verify width 640. `flow-result.txt`, `flow-final-result.txt`, `flow-c-result.txt`, `flow-d-result.txt`. |
-| Phone sizes and input | Native CDP touch swipes scroll all 33 fighters at 320×568, 390×600, 667×275, 844×290 and 932×330; roster height is 141–338px and the footer stays visible. Fight controls remain at least 44×44 and inside the screen at 667×245, 667×275, 844×290 and 932×330, without horizontal overflow. Mario's held jump lands on the 1.5-unit central platform. `picker-*.png`, `controls-*.png`, `map-phone.png`. |
-| Results and replay | Build A completed a natural 60-second match, then same-room replay selected Link/Samus/Peach/Kirby and unanimous Sunken Temple with Unlimited. Infinity appears on phone/display. Rotation while moving releases input and authoritative vx returns to zero. The later builds retain that game logic; their focused four-phone retests use Unlimited. `replay-result.txt`, `results.png`. |
-| Expanded map / camera | Actual Temple views inspected at 1280×720 and 1920×1080. Final camera code in B follows fighters across Cloudbreak's two outer islands; world separation reaches 27.27 units with no stock loss during the successful route check. The renderer sample reports 600 frames, p95 16.7ms, maximum 16.8ms, zero slow frames, 153 calls and 75,468 triangles. `camera-final-result.txt`, `camera-wide.png`. Camera code is identical in D. |
-| Fullscreen and dialogs | Chromium enters and exits fullscreen after a tap. A synthetic unsupported-capability fixture exercises Screen tips; this is not Safari evidence. Short-landscape inspection exposed native focus scrolling the title offscreen. Final Modal explicitly focuses its container and resets initial scroll, preserving keyboard Tab/Escape and focus restoration. Final frozen-build results are recorded in `dialog-d-result.txt` and `screen-tips-d.png`. |
+| Full-repo `npx tsc --noEmit` | Exit 0 |
+| `npx oxlint packages/games/sky-clash apps tests` | Exit 0, no warnings |
+| `node --import tsx --test packages/games/sky-clash/tests/*.test.ts` | 194/194 pass (`final-gametests.log`) |
+| `npm test` | 1676 pass, 0 fail, 1 skipped (the packaged-app test needs `PARTY_LOCAL_HOST_APP`) (`final/npm-test.log`) |
+| `npm run build:isolated -- sc-final-1` | Exit 0 (`final/build.log`) |
 
-Browser evidence without another prefix is under ignored `output/playwright/sky-clash-lobby/`; static logs are under `output/sky-clash-lobby/`. Build A supplies the complete results/replay evidence, B adds the camera refinement, and D corrects initial modal focus. All thirty real map renders and representative phone/display screenshots were visually inspected. Emulated touch and local Chromium do not establish physical Safari/Android toolbar behavior, Wi-Fi performance, TV viewing distance or human gameplay feel. The larger routes need human balance/playtesting.
+### Browser runs (headless Chromium, Metal GPU, one owner, run one after another)
 
-Retained harness failures: initial assertions read queued pre-choice room packets or assumed old central spawns; corrected predicates/fixtures pass. An outward movement script jumped too early or omitted a jump and ran off the central edge; a subsequent retry ran after its 60-second match ended. The successful Unlimited route trace shows Mario landing on the bridge, then the outer island. The first dialog fix using autoFocus did not prevent native scroll; the final explicit focus/scroll correction does. No fighter movement values were changed to satisfy these checks.
+| Run | Roster and viewports | Result |
+| --- | --- | --- |
+| `a-match` (`tools/ui-lab/smoke.mjs`) | 1280×720 display, two 844×390 touch phones (Marth, Link), 2 Hard CPUs, Battlefield, 1 stock, 2 min | 14/14 assertions, no page or console errors. Played lobby → countdown → fight → GAME! → results → Play again → fighter select. 91 s fight: 95 hits, 3 KOs, 21 grabs, 11 throws. The phones landed 10 and 20 hits and made 4 grabs each with the Grab button. |
+| `b-stages` (`final/check.mjs`) | 1920×1080 display, one 844×390 phone plus 3 Hard CPUs. Popo on Battlefield, Zelda on Rainbow Cruise, Fox on Big Blue. | All three started on the first try, with no page errors and no console warnings. 12 frames per stage. A random CPU Popo also brought a CPU Nana. |
+| `c-hud4` (`playtest/scripts/c-roster.mjs`) | 1280×720 display, four 844×390 phones with 16-character names (Popo, Bowser, Ness, Roy), Onett, 1 stock | 86 s to results with no errors, 3 KOs, and hazard warnings seen. Five fighters were on stage and there were four HUD cards and four results rows. |
+| `payload` (`final/payload.mjs`) | 1280×720 display and one 844×390 phone, Popo plus 3 CPUs | See numbers below. |
 
-Manual simplification reused the shared Modal, one optional lobby hook, shared selection components and authoritative stage definitions. The requested code-golf skill was absent from both installed skill roots. No Prettier, staging, commits, pushes or publishing were performed. Owned synthetic rooms, phone contexts and browser are closed after verification; the final 4399 preview server remains available.
+I looked at the screenshots from every run: HUD frames, GAME!, results on the display and the phones, the replay lobby, and the controller.
 
-## Delivered selection, voting and platform fix
+### Numbers
 
-2026-09-13: `sky-clash-flow-0913-a`, built at `2026-09-13T17:24:36.856Z`, normal catalog (`qa: false`). Preview: http://localhost:4397/games/sky-clash. Index SHA-256: `d37b5d691cbecf3441fef8d23a6666e9bf02e57d4b93628d9b0d1d16ccb8a793`. The user's 4396 model-quality preview remains untouched.
+- **Display frame time** (scene metrics, 600 samples per run): p50 8.1–8.3 ms, p95 8.9–9.1 ms, max 11.1 ms, 0 slow frames across the three stages at 1080p and the 720p payload run. 170k–343k triangles and 33–46 draw calls. This was measured on an Apple GPU in headless Chrome, not on a TV or a low-end laptop.
+- **Transfer after the first fight starts:** the display loaded 5.0 MB in 47 requests. Four GLBs made up 2.2 MB, and three.js was loaded. The phone loaded 1.8 MB in 43 requests, with no three.js and no GLBs. All 33 GLBs total 16 MB, and the display loads only the fighters in the match.
+- **Snapshots:** about 4.5 KB median (p95 5.3 KB) with 4 fighters plus 2 Nanas, and 4.7 KB median (p95 8.5 KB, max 9.5 KB) with 4 phones plus Nana, at 30 Hz. Phones get the same snapshot size as the display.
 
-Character selection has one native touch-scrollable roster and a persistent footer; fighter details use the shared modal. Character and map menus allow portrait, while countdown/fight retain the landscape gate. All 30 maps are voted on after fighter selection: one confirmed vote per player, up to 20 seconds, highest count wins, round-seeded tie breaking. Accepted votes survive reconnect/reload. Cloudbreak's side/top surfaces move from 2.7/4.9 to 1.5/3.0; imported fighter physics are unchanged.
+## Playtest issues: status
 
-| Check | Actual result / evidence |
-| --- | --- |
-| Regression tests | 138 game/registry/catalog tests pass, full-root TypeScript and scoped oxlint pass. Five new selection tests cover phase ordering, early/timeout resolution, tied leaders, no-vote fallback, strict actions, disconnect/reconnect, respawns and the complete match clock. `output/sky-clash-flow/tests-final.txt`, `typecheck-final.txt`, `lint.txt`. |
-| Shared runtime | 29 relevant 3D/platform tests pass. The first sandbox run could not bind a localhost socket; the authorized network-capable rerun passes. `platform-tests-final.txt`. |
-| Jump reach | Rules simulate every one of 33 profiles landing on the side platform, then reaching the upper platform without an air jump (66 paths). Actual touch holds on Mario and Jigglypuff also land at y=1.5 with ground state and replenished jumps. `jump-result.txt`, `jump-platforms.png`. |
-| Mobile picker | Four synthetic players with 16-character names. Real CDP touch swipes at 320×568, 390×844, 667×375, 844×390 and 932×430 moved the 33-fighter grid; no horizontal page overflow, every tile at least 44×44, footer within viewport, no portrait rotation gate. Screenshots `picker-*.png`; Sandbag search/details/modal dismissal and explicit fighter lock-in exercised. Old 667×375 picker gave the roster only 373×122px and consumed 240px for details (`picker-before.png`). |
-| Map vote / match | First round: Mario/Fox/Bowser/Jigglypuff, all four votes close early with Cloudbreak winning 3–1, landscape countdown then combat. All 30 map cards render. Host tally and portrait minimaps inspected (`vote-display.png`, `vote-portrait.png`). |
-| Results / replay / deadline | Natural 60-second results, same-room replay, new empty vote state. Native map touch scroll, then 2 Sunken Temple votes / 1 Cloudbreak / 1 abstention. Reloading an accepted voter's phone retains its locked vote. The deadline advances to Sunken Temple with all fighters on its actual spawn surfaces. `results.png`, `vote-timeout.png`, `replay-result.txt`, `final-check-result.txt`. |
-| Orientation / cleanup | During replay combat, rotate a moving phone to portrait: gate appears and authoritative vx becomes zero; landscape restores controls. Zero reported client/transport errors. Close room removes music decks and closes audio context; all four synthetic phone contexts and owned browser closed. `final-check-result.txt`. |
+The playtest `REPORT.md` was not on disk. This list comes from the three polish notes (`output/sky-clash-v2/polish-*.md`) and was re-checked on `sc-final-1`.
 
-Browser evidence is under ignored `output/playwright/sky-clash-flow/`. Harness mistakes are retained transparently: the initial search locator used textbox instead of searchbox, the combined run read `fighters` instead of `players` after voting, and the replay assertion expected `sunken-temple` instead of the actual `temple` ID. These were QA-script errors; screenshots and subsequent focused checks verify the affected flows. Corrected scripts are kept for reruns. No production changes were needed after build A.
+**Fixed and seen in this build**
 
-Manual simplification review retained existing StagePreview, Modal, input-release and stage-spawn helpers; the duplicated legacy Cloudbreak platform list now reads the shared stage definition. The requested code-golf skill was not found in either installed skill root. No Prettier, staging, commits, pushes or publishing were performed. These are emulated touch/browser checks, not physical iPhone/Android or four-person playtest evidence.
+- Zelda/Sheik crash (blocker): Zelda, a random Zelda CPU and Popo all started on the first try.
+- Camera too far out: fighters read at a good size in bunched play at 720p and 1080p.
+- Ice Climbers pairing: Nana spawns with Popo, for both a phone and a CPU. Both climbers share one tag ("P1" / "CPU 1").
+- **New in this pass:** Nana no longer takes a HUD card, a results row or a place on the phone. `seats()` in `src/ui/standings.ts` drops partner fighters in `hud.tsx`, `results.tsx` and `controller.tsx`, with a test in `ui-lobby.test.ts`. I also updated README's Nana line.
+- Grab button: phones grabbed in the real room.
+- GAME! banner: readable on its first captured frame. KO toasts are bold.
+- HUD places for knocked-out fighters: #4/#3/#2 matched the results screen.
+- CPU labels ("CPU 1/2/3") match the cards. Crowded tags stack instead of overlapping (Battlefield frames).
+- No THREE.Material console warnings.
 
-## Earlier character-quality build
+**Fixed per the polish notes, not re-checked here:** fair/bair direction (engine test), CPU self-destructs on scrolling stages (headless soak), pink-on-pink outlines, G&W/Kirby/Young Link portraits, the 2-column phone stage vote at 320 px, the 720p host lobby, and the time-out results explanation.
 
-2026-09-13: `sky-clash-quality-0913-b`, built at `2026-09-13T16:28:08.079Z`, normal catalog (`qa: false`). Preview: http://localhost:4396/games/sky-clash. Index SHA-256: `5f2053018f96b625dd645c348dc1f21b8018af1fd7d82b8d9d74364f66a8a1ac`. The user's 4395 audio preview and earlier previews are preserved.
+**Remaining**
 
-All 33 replacement GLBs and 512×512 portraits were rebuilt. Changes include smooth normals, curved limb/profile meshes, beveled edges, face and costume details, layered skirts, shell plates/spikes, rounded wire cages and distinct hair/cloth/metal finishes. Unused UV export is disabled; models need no texture assets. All 20 named bones, animation code, source profiles, collision dimensions, combat rules and sound behavior remain unchanged. The final uncompressed GLBs total 19,769,536 bytes (18.85 MiB), versus 9,621,900 bytes previously; the loading-budget assertion now caps them at 20 MiB.
+- The offscreen magnifier bubble can sit under the top-right KO feed. A 16-character name makes the feed long enough to reach it (`c-hud4/hud-3-0.png`). I did not reproduce the "stale bubble on an eliminated fighter" report. Eliminated fighters are `out` and hidden.
+- On phone results at 844×390 the list is visible, but the winner headline sits below the fold and needs a scroll (`a-match/phone2-results-844x390.png`).
+- Phones receive the full 30 Hz public view (about 4–9 KB per snapshot). This is a server/platform projection issue.
+- Platform shell: the room code chip on the phone is clipped by a 16-character name (`c-hud4/phone1-controller.png`).
+- Pichu still reads as a small Pikachu. There is no paired belay, grab or wobbling for Ice Climbers, and Nana's CPU brain is fixed at level 2.
+- The phone bots on Big Blue self-destruct. That is the scripted bot, not the CPUs.
 
-| Check | Evidence / result |
-| --- | --- |
-| Static / exported assets | 133 game/registry tests pass, including every real actor and move in both facings, clone independence and skeleton cleanup. Full-root TypeScript and scoped oxlint pass. `output/character-quality/tests-final.txt`, `typecheck.txt`, `lint.txt`. Blender reimports all 33 GLBs, verifies finite evaluated geometry, fully weighted vertices, twenty bones and expected height ranges: `verify-final.log`, `assets/roster-verification.json`. |
-| Visual inspection | All 33 reimported models in the Blender contact sheet; all 33 production actors under game lighting; eight representative attack poses in both directions. `actor-*.png`, `pose-*.png`, `gallery-final-result.txt`. The temporary actor gallery is an explicitly separate asset fixture, outside the normal game build. Before/after comparison: `output/character-quality/before-after.jpg`. |
-| Four-player real match | Four 16-character names joined through UI; Mario, Link, Samus and Bowser selected and fought through real keyboard movement, jumping, melee and specials. Authoritative damage reached 54/34/82/59 percent. 1280×720 and 1920×1080 inspected. `setup-result.txt`, `play-result.txt`, `combat-*.png`. |
-| Results / replay | Natural 60-second results remove the canvas; same-room replay selected Peach, Kirby, Falco and Giga Bowser with five stocks and zero damage. Low graphics and reduced motion exercised. Roster GLB fetch count remains 33 across replay. `replay-result.txt`, `replay-low.png`, `portraits-phone.png`. |
-| Performance | Local headless Chromium, pixelRatio 1. First match: 600-frame sample p95 16.7 ms, maximum 16.8 ms, 120 draw calls, 82,566 triangles, 68 geometries and 37 textures. Replay: p95 16.7 ms, one 66.7 ms slow frame, 98 calls, 71,470 triangles. Renderer-ready load values of 86–108 ms exclude the preceding asset fetch/parse phase. |
-| Final B | Material/duplicate-geometry refinement only after A's complete flow. Final B repeats four-player selection and combat using Link, Peach, Zelda and Ganondorf. `setup-b-result.txt`, `play-b-result.txt`, `combat-b-*.png`. Final B combat: 600-frame sample, 110 calls, 90,188 triangles, p95 16.8 ms; damage 30/60/54/52 percent. All final assets reimported and actor gallery recaptured. |
-| Ownership / cleanup | Four phones create zero canvases and request zero GLBs. Passing checks have no page or protocol errors. Owned rooms, controller contexts, headless browser and gallery server are closed; final 4396 preview remains available. `cleanup-a-result.txt`, `cleanup-b-result.txt`. |
+## Not verified
 
-Evidence paths without a prefix are under the consumer's ignored `output/playwright/sky-clash-quality/`. The first small render pass exposed tube-like limbs and a skirt-panel intersection; both were repaired before A. Browser close-ups exposed metallic blond hair; B gives hair its own nonmetallic material and removes duplicate nose geometry. The code-golf skill is absent from both installed skill roots; manual simplification retained shared profile/detail helpers and no runtime subdivision or texture system. No Prettier, staging, commits, pushes or publishing.
-
-Limits: these remain stylized authored models with rigidly weighted body parts and existing procedural animation. This pass does not reproduce the original character meshes or cloth deformation. Browser measurements use emulated phones and local Chromium; physical phone loading, Safari autoplay, TV distance, thermal behavior and human gameplay feel remain unverified. The larger model payload increases the display's initial download.
-
-## Delivered music and sound build
-
-2026-09-12 local date: `sky-clash-audio-0912-b`, built at `2026-09-13T01:34:49.138Z`, normal catalog (`qa: false`). Preview: http://localhost:4395/games/sky-clash. Index SHA-256: `53842c770946077206d8802a018700c558ceb1b8d48a10db87c8a9bedd2e35f2`. Earlier user previews, including 4394, remain untouched.
-
-Five user-supplied songs are bundled: `smashlobby` loops through lobby, map settings and character selection; the four battle songs rotate at track endings and between rounds. The supplied Triumph MP3 is included. MP3 audio frames were copied without re-encoding, removing embedded artwork. Twelve short sound files cover thirteen combat/menu cues; credits and source hashes are shipped beside the audio. One host mixer streams songs and decodes only short effects. Controllers and secondary displays never create it.
-
-| Check | Evidence / result |
-| --- | --- |
-| Tests / types / lint | 133 game/registry tests pass, including audio assets, phase routing, event edges, duplicate/stale snapshot suppression, and combat cues. Full-root TypeScript and scoped oxlint pass. `output/melee-fidelity/audio-tests-final.txt`, `audio-typecheck-final.txt`. |
-| All five songs | Actual HTML media playback and positive mixed-signal RMS for the lobby and all four battle tracks, including Triumph. Battle track endings were accelerated by seeking to exercise the full cycle; this is not a full-duration listening session. `playback-result.txt`. |
-| Selection to battle | Four real headless phone joins; map settings and character selection retain the same lobby playback position. Countdown and start cues lead into the battle song. Four phones create zero audio contexts, media decks or decoded effects. Repeated on delivered B: `setup-b-result.txt`. |
-| Combat | Real keyboard actions produced authoritative damage and hit, jump, swing, KO, laser and shield sounds; stage warning sounds also fired. Bounded mixer uses twelve maximum voices, per-cue cooldowns and stereo position. `playback-result.txt`, `replay-result.txt`. |
-| Lifecycle | Natural 60-second results play the ending cue and fade music to silence. Replay returns to lobby music, then starts the next battle song. Mute freezes playback, survives reload, and unmute resumes. Real browser offline mode pauses audio; reconnect recovers. Synthetic visibility changes pause/resume playback. `replay-result.txt`. |
-| Resources / errors | One host context; all twelve unique effects decoded; no page/protocol errors in passing checks. Room closure removes every audio deck and closes its context. `cleanup-a-result.txt`, `cleanup-b-result.txt`. Replay sample: p95 frame time approximately 16.7 ms, 116 draw calls, 27,036 triangles, 45 geometries, 37 textures. |
-| Build handoff | A contains the fully tested production implementation. B adds the final credits file; the Sky Clash bundle is identical after normalizing generated import hashes. Final B repeats four-player selection-to-battle playback and disposal. Only the owned audio QA server was replaced. |
-
-Evidence is under the consumer's ignored `output/playwright/sky-clash-audio/`. Tests used local headless Chromium and emulated phones. Physical-device autoplay, actual background-tab behavior, Wi-Fi conditions and subjective speaker balance remain unverified. No visible UI was rewritten. The requested code-golf skill was unavailable in both installed skill roots; a manual simplification pass retained one optional audio hook and one mixer. No Prettier, staging, commits, pushes or publishing were performed.
-
-## Delivered 30-map build
-
-2026-09-12: `sky-clash-maps-0912-b`, built at `2026-09-12T22:51:58.795Z`, normal catalog build (`qa: false`). Preview: http://localhost:4394/games/sky-clash. Index SHA-256: `7521a214c3661b557683b86f544a0fec965f1b900d9ff723f3d77b6271408c81`. The user's 4393, 4391 and 4386 previews were preserved.
-
-The map roster contains 29 authored counterparts of the standard versus stages, plus Cloudbreak. `STAGES.md` records every source GrKind, reference title, counterpart and adaptation limits. No original stage archive, geometry, texture or music was imported. Fable implemented map selection, previews, stage labels, warnings and scene integration; Codex implemented the shared stage definitions, physics and procedural 3D scenery.
-
-| Check | Evidence / result |
-| --- | --- |
-| Rules and contracts | 128 game/registry tests pass (`output/melee-fidelity/maps-tests-final.txt`). Includes 36 new map tests: all 30 layouts, 29 unique source IDs, invalid settings, deterministic Random, safe four-seat spawns, moving ledge carry during hitstop, drop/jump detachment, rising-platform landing, selected-map projectile bounces, blast bounds, hazard warning/cooldown/toggle/invulnerability, and full four-player simulation/results/replay on every map. |
-| Types / lint / build | Game TypeScript, game oxlint, full-root TypeScript and normal immutable build pass. Initial root TypeScript failed on concurrently edited Starship Scramble carrier fields; final root check passes (`maps-root-typecheck-final.txt`). No unrelated fixes were made. |
-| All 30 maps rendered | Separate, temporary rendering fixture uses the production stage renderer and four real fighter models. All 30 stages plus active lava, traffic, fountain and orbit poses were captured and inspected. `gallery-final-result.txt`, `stage-*.png`, `contact-sheet.jpg`. Fixture is outside the delivered build. Map swaps held textures at32 and geometry at41–45; 70–197draw calls and at most23,580triangles. These counts use the fixture's four models, without the full game HUD/effect pools. |
-| Map selection | Actual host room exposes Random plus all30 stage choices. Every choice updates its named preview. 1280×720 dialog fits; at640×720 the dialog scrolls to its preview and Apply button with no horizontal overflow. `setup-result.txt`, `setup-b-result.txt`, `settings-*.png`. |
-| Real four-phone flow | Four16-character names joined and selected Kirby/Bowser/Marth/Mario. Fountain combat generated authoritative damage through real movement/jump/attack input. Natural60-second results, results reload without a scene, replay to Ember Core with clean stocks/damage, visible warning followed by actual14/28% lava damage, and natural lava results passed. `play-result.txt`, `replay-lava-result.txt`. |
-| Corrected platform visibility | First build exposed a low fountain ledge covering Mario's torso. Soft platform meshes were moved behind the fighting plane while preserving authoritative X/Y. Final build screenshots show the complete torso and all30 maps were re-rendered. `fountain-fixed.png`, `gallery-final-result.txt`. |
-| Final-build play / replay | Corrected fountain combat ran with all four fighters taking damage. Replay visited Sunken Temple, Random resolved to Breezy Meadow and stayed stable, then returned to Moonlit Fountain with fresh stocks and damage. Hazards-off settings persisted. Random results were a timeout tie; the attempted outward inputs arrived too late to provide additional browser KO evidence. Per-map stock/respawn behavior is covered by simulation tests. `play-b-result.txt`, `replay-temple-result.txt`, `random-result.txt`, `return-fountain-result.txt`. |
-| Largest map / phone layout | Temple's split safe spawns and full map fit1280×720 and1920×1080. Its phone map label, roster and lock button fit667×375 and844×390 without horizontal overflow. `temple-*.png`, `phone-map-667.png`. Previous roster orientation/input-cancellation evidence remains applicable to unchanged controls. |
-| Performance / resources | Local headless Chromium,1280×720,pixelRatio1. Fountain combat:600-frame sample,p95≈16.7ms,103calls,13,436triangles. Lava:p95≈16.7ms,152calls,13,528triangles. Low-quality/reduced-motion return to Fountain:p95≈16.7ms,93calls,13,292triangles,54geometries,27textures, stable across the sample. Random replay requested zero GLBs and snapshots measured30.01Hz. One host canvas and zero phone canvases. |
-| Errors / cleanup | No page or protocol errors in passing scenarios. Owned rooms, headless browser contexts and the temporary gallery server were closed after verification. The final4394 server remains available. User rooms/windows/servers were not closed. |
-
-Evidence is under the consumer's ignored `output/playwright/sky-clash-maps/` and `output/melee-fidelity/`. Both Fable passes finished before each source freeze/build. No Prettier or Git write actions were used. The requested code-golf skill was absent from both installed skill roots; a manual simplification pass kept one shared motion/hazard evaluator and small geometry/material helpers, removing unused imports and parameters.
-
-Limits: layouts and timing are approximations. Horizontal one-way surfaces do not implement original walls, ceilings, slopes, ledge grabbing, breakable terrain, full scrolling/rotation or stadium terrain transformations. Reduced motion retains gameplay movement. Browser phones are emulated; physical touch, Wi-Fi contention, thermal behavior, large-TV readability and map balance still need human playtests. The original fighter reconstruction limits below remain unchanged.
-
-## Delivered 33-fighter build
-
-2026-09-12: `sky-clash-roster-0912-g`, built at `2026-09-12T22:20:32.914Z`, normal catalog build (`qa: false`). Preview: http://localhost:4393/games/sky-clash. Index SHA-256: `1c004ebd65cffca7ec85e7934cd47a7cc350e2b5139bcd453b61a8591e8bbb1e`. Earlier user previews on 4391 and 4386 were preserved. Temporary roster QA servers and synthetic rooms were closed after testing; the delivered preview remains running.
-
-The roster contains all 33 actual kinds from the pinned source enum: 27 regular forms and six explicitly adapted bonus entities. The None/Max sentinel is excluded. Every kind has an authored replacement GLB and portrait. `assets/roster-verification.json` records reimported dimensions, vertex counts, 20-bone rigs, and the approximately 9.62 MB total GLB payload; `assets/roster-review.png` is the inspected contact sheet. Both Ice Climber hammers were aligned with their right-hand animation pivots and reverified.
-
-| Check | Evidence / result |
-| --- | --- |
-| Game and registry checks | 92 pass: `output/melee-fidelity/roster-game-tests-final.txt`. Includes every kind’s selectable action, 53 attributes/profile, source/bonus distinction, 12 normal attacks, special slots, six-jump resource behavior, counter/absorption/recoil, sustained four-player simulations, serializable snapshots, and all 33 real actor skins through all moves/facings. |
-| Type and lint | Game-only TypeScript and oxlint pass. Full-root TypeScript also passed after concurrent Starship Scramble files landed (`roster-root-typecheck-final.txt`). |
-| Full build | Standard `npm run build:isolated -- sky-clash-roster-0912-g` passes. Initial full builds were blocked by the unrelated missing Starship client; an ignored consumer snapshot omitted that registration for early QA. Delivered E/F/G builds include the full root platform. |
-| Source interpretation | 27 hash-pinned dumps; 331 selected raw normal streams. Compiler follows C opcode5 call/return and opcode7 goto despite reversed dump labels. Bowser’s repeated down-smash, Kirby’s damage edits and Nana’s shared animation table are exercised. |
-| All 33 choices | Real four-phone joins; all 33 previews clicked, filters return27/6, search findsSandbag, browsing does not lock, explicit choice sends the actual action. `setup-result.txt`, `setup-final-result.txt`. |
-| Phone selection layout | 667×375,844×390,915×412,932×430. Final G verifies names and bonus labels stay inside100px-minimum tiles, detail body ends above lock footer, all stats are reachable by scrolling, and no page horizontal overflow. `delivered-g-result.txt`, `picker-delivered-*.png`. |
-| Four-player gameplay | Kirby/Bowser/Marth/Master Hand caused authoritative damage through actual keyboard inputs. Replay used Crazy Hand/Sandbag/Giga Bowser/Female Wireframe. Long-name match used Mr. Game & Watch/Female Wireframe/Captain Falcon/Giga Bowser. Final G launched Popo/Nana/Samus/Jigglypuff and exercised both climbers. |
-| Results and replay | Natural60-second results, all four rows, host reload with no retained canvas, same-room replay resets five stocks/zero damage/KOs. `results-result.txt`, `finish-final-result.txt`; gameplay unchanged by final tile sizing. |
-| HUD / controls | Four16-character player names, five stocks and long fighter/bonus labels fit1280×720 and1920×1080. Controls fit667×375/844×390;320×568/390×844 show the rotation gate. Blur releases held input; up-special uses negative inputY. `play-result.txt`, `play-final-result.txt`. Earlier maximum999%/20KO fixture remains applicable to unchanged HUD numeric formatting. |
-| Resources / traffic | One host canvas, zero phone canvases and zero phone GLB requests. Display requests33 GLBs once. Bonus replay:109draw calls,18,364triangles,47geometries,16textures; snapshot cadence29.93Hz. Headless Chromium at1280×720,pixelRatio1,reduced motion:600-frame sample p50/p95 approximately16.7/16.8ms. Final long-name match:106calls/18,976triangles,p95 16.7ms. These are local measurements, not physical-phone/TV guarantees. |
-| Errors / cleanup | No unexpected page or protocol errors in passing scenarios. Owned rooms/controllers closed; no user room or browser window was closed. |
-
-Evidence lives in the consumer’s ignored `output/playwright/sky-clash-roster/` and `output/melee-fidelity/`. Earlier failed picker checks remain recorded: hidden headings, overlaying lock footer, and undersized bonus tile rows were corrected and retested. A Blender verification false alarm came from counting its hidden armature-control icosphere; the verifier now measures only evaluated skinned meshes.
-
-The catalog tests observed stale expected counts after the concurrently added Starship Scramble registration (12 vs11 games and an additional save-capable game). Those unrelated expectations were not changed here. No Prettier, staging, commits, pushes or publishing were performed. The requested code-golf skill was unavailable in both installed skill roots; a manual simplification pass kept one roster manifest, shared asset helpers and data-driven special kits.
-
-Limits: original animation/model archives and common/special parameter banks are still unavailable. Bonus profiles, specials, animated collision geometry and missing state machines are adaptations. Popo/Nana are independent players; Zelda/Sheik do not transform. Browser QA uses emulated phones; exact original balance, real touch feel, Wi-Fi contention, thermal behavior and four-person enjoyment still need human testing.
-
-## Earlier two-fighter verification
-
-### Earlier build
-
-2026-09-12: **Fox/Falco playable slice**, registered in PartyPlay for 2–4 players. The current immutable build is `sky-clash-playable-0912-b`, built at `2026-09-12T21:25:50.264Z`, without the development Scene Lab. Client index SHA-256:
-
-`5efb07e256db5854d761db1192b3bf93e094b99c58a4a6d1d09d010428e78769`
-
-Local preview: `http://localhost:4391/games/sky-clash`. The matching isolated server is left running for the user. The earlier reference viewer on port 4386 remains untouched. Build A used port 4390 and its server/room were closed after testing. Browser QA used the owned headless Playwright session `sky-clash-playable-0912`; it and all synthetic rooms/phone contexts are now closed. No user browser windows were closed.
-
-Evidence paths below are relative to the PartyPlay consumer repository, under ignored `output/playwright/sky-clash-playable/`. This report records a reconstructed game, not numerical parity with Melee.
-
-## Static and rules checks
-
-- **33 game/catalog tests pass**: input validation, stale/duplicate choices, readable selection/countdown, short-tap preservation through the real HeldInputChannel, jump resources, startup/one-hit/trades, shields, platforms, KO credit/respawn, disconnect/reconnect/forfeit, ties, clean replay, sustained four-player combat, original-data preservation, 320 native-C scalar helper vectors, signed raw hitbox decoding, per-character jumps, early/late/multihit scripts, smash charge, non-flinching/stunning lasers, reflection, fire recovery, air dodge, landing lag, knockback dependencies and actual serializable transport projections. Production animation tests parse both GLBs, exercise every move in both facings, verify clone independence and skeleton disposal. Evidence: `game-tests-b.txt`.
-- **59 relevant platform/room/3D integration tests pass**, including registry projections and shared lifecycle behavior. Evidence: `platform-tests.txt`.
-- **Root typecheck passes** at final verification (`typecheck-final.txt`). An intermediate concurrent Kart Party boolean typing error is retained in `typecheck-b.txt`; it was not changed by this task and cleared before the final check.
-- Focused game typecheck passes (`typecheck-game.txt`): `node_modules/.bin/tsc -p game-modules/packages/games/sky-clash/tsconfig.playable.json --noEmit`. Use the physical `game-modules` path for this config's consumer-relative `extends`, not the shorter directory symlink.
-- Focused lint passes (`lint-b.txt`). Both repository `git diff --check` checks pass. No Prettier, staging, commits, pushes or publication.
-- Falco GLB reimport verified 20 bones, finite dimensions and weighted limb deformation (`output/melee-fidelity/falco-verify.log`). Fox retains its preceding reimport and regression evidence. Both are authored models.
-- The requested code-golf skill is not installed in the searched skill directories. A manual simplification review retained shared imported attributes, one script compiler, one unit conversion and the existing room lifecycle rather than adding parallel systems.
-
-## Real browser flows
-
-| Check | Result and evidence |
-| --- | --- |
-| Four real UI joins, 16-character names, five stocks | Pass on A and B, alternating Fox/Falco picks. `setup-a2.txt`, `setup-b.txt`. |
-| Four-player active combat | Real keyboard input changed authoritative damage. B totals after the scenario: 36%, 40%, 84%, 48%. No hidden state injection. `play-b.txt`. |
-| Four-player results and replay | Pass on both builds; results reload without a canvas, same-room replay restores zero damage/KOs and five stocks. `results-a.txt`, `results-b.txt`. |
-| Two-player active duel and stock ending | Fox and Falco each dealt laser damage. One player then crossed the blast zone through actual movement; the survivor won and received recent-attacker KO credit. `duel-replay-a.txt`, `results-two.png`. The forced walk-off is not evidence that the final KO was caused by knockback. |
-| A → B → A game switching | Sky Clash → running Quiz Panic → fresh Sky Clash preserved both seat IDs, disposed the arena during Quiz Panic, reset fighter state on return. `switch-a.txt`, `switch-back-a.txt`, `switch-return-a.txt`. |
-| Touch and reconnect | Two CDP touch pointers combined movement and attack; touch cancellation and blur released input; phone reload retained the fighter. `input-a2.txt`. Emulated touch, not physical phones. |
-| Rotation during a hold | Simultaneous movement/attack released when rotated upright. Portrait showed the shared landscape gate and returning sideways produced no phantom input. `rotation-resources-b.txt`, `rotation-held-release.png`. |
-| Charged smash | Real held I input raised the server's charge value; release completed the move. `retry-b.txt`. |
-| Model failure and retry | A synthetic HTTP 503 for Falco returned all players to the lobby with the shared retry notice. Restoring the route and readying again successfully rebuilt a four-player arena. `loading-recovery-b.txt` records an initial harness timeout looking for overly specific wording; the actual generic message and successful retry are in `retry-b.txt`, `model-failure.png`. The expected HTTP error is not an unexplained browser error. |
-
-Normal match, results, replay and switch scenarios recorded no JavaScript or server error messages. Browser selectors were corrected after two harness mistakes: an early visibility check before the detail screen rendered, and an up-special assertion during an already occupied action. An initial two-player melee chase bot missed because it stopped/attacked while drifting past; the subsequent explicit ranged duel proved active damage and results. This is a test-harness history, not a claim that human close-combat feel is validated.
-
-## Layout and rendering
-
-- Displays: **1280×720 and 1920×1080**, four fighters/HUD cards, no horizontal page overflow or offscreen cards. Real gameplay screenshots: `fight-1280x720.png`, `fight-1920x1080.png`, `current-arena.png`.
-- Phone play: **667×375 and 844×390**, six reachable surfaces (move pad plus five actions), all at least 44 px. The smallest action measured 52.5×52.5 px. Screenshots: `controller-667x375.png`, `controller-844x390.png`.
-- **320×568 and 390×844** during play show the landscape gate with controls released. These are orientation fallback checks, not portrait gameplay claims. Portrait/landscape result screenshots are recorded separately.
-- Maximum-content HUD fixture: four 16-character all-wide names, **999%, five stocks and 20 KOs**, at 1280×720. Initial name clipping was repaired by Fable. B shows complete names in two lines with no card overflow. `max-content-b.txt`, `max-content-fixture.png`. This is an explicitly labeled static layout fixture, not a real 999% match.
-- A natural four-way tie with four 16-character names showed all four result rows and both replay/picker actions at 1280×720. The document has five pixels of bottom padding overflow (725 px total); essential content remains visible. `tied-results-b.txt`, `tied-results-four.png`.
-- Reduced motion and low graphics were exercised; gameplay telegraphs remain visible. The retry round runs with `party.sceneQuality=low`. Both models are present before readiness. Phones construct no WebGL world.
-- B four-player metrics: 134 draw calls, 40,942 triangles, 33 geometries, 44 textures; the retained 600-frame sample had p50 about 16.7 ms, p95 about 16.7 ms, maximum about 16.8 ms, with no slow frames in that run. After replay and replacing the default Falco actors with Fox, textures stayed bounded at 46 rather than A's observed 66. `play-b.txt`, `rotation-resources-b.txt`.
-- The observed fight snapshot rate was about **29.99/s**; largest snapshot in that 200-snapshot sample was **2,105 bytes**. It is not a measured worst-case 24-projectile transport maximum.
-
-These are headless Chromium results on the local Mac, device scale factor 1. They do not establish physical touch feel, Wi-Fi contention, thermal performance, TV viewing distance, competitive balance or original-engine parity. The complete original roster, original mesh/animation fidelity, bone-attached collision, advanced Melee systems and rollback remain outside this playable slice; see [README.md](README.md).
-
-## Earlier work
-
-The reference lab remains independently inspectable and its six foundation tests still pass. Its UI/asset checks live under `output/playwright/melee-reference/`. The former Bolt/Atlas experiment and its screenshots under `output/playwright/sky-clash/` are superseded; they are not acceptance evidence for the current fighters.
+- Physical phones, Safari/iOS, a TV at couch distance, audible audio, and screen readers. All phones were emulated in Chromium.
+- No human playtest. Game feel and balance were judged only from scripted bots, CPUs and screenshots.
+- Frame rate on weaker GPUs, and network conditions other than localhost.

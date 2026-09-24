@@ -1,138 +1,134 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rules, launchForce, type State } from '../src/server';
-import { neutralInput, STAGE, type Input } from '../src/model';
-import { HeldInputChannel } from '../../../party-client/src/held-input';
+import test from 'node:test';
+import { UNIT } from '../src/model';
+import { MOVESET, PHYSICS } from '../src/moveset';
+import { applyDI, chargeMultiplier, hitlagFrames, hitstunFrames, knockback, launchAngle, shieldstunFrames, staleness } from '../src/sim/formulas';
+import { arena, type Arena } from '../src/sim/harness';
 
-function create(count = 2, stocks = 3) {
-  return rules.create({ roomId: 'room', roundId: 'round', nowMs: 1000, seed: 17,
-    players: Array.from({ length: count }, (_, i) => ({ id: `p${i}`, name: `Player000000000${i}`, color: '#28c6e7' })) }, { stocks, seconds: 60 });
+// Melee's documented knockback: ((p/10 + p·d/20) · 200/(w+100) · 1.4 + 18) · g/100 + b, set knockback replacing p with 10 and d with the set value.
+test('knockback, hitstun, hitlag and angles follow Melee\'s formulas and constants', () => {
+  assert.ok(Math.abs(knockback(100, 18, 75, 30, 112) - 229.36) < 1e-9);   // hand-computed
+  assert.ok(Math.abs(knockback(0, 5, 100, 20, 50) - 29) < 1e-9);        // (0 + 18)·0.5 + 20
+  assert.ok(Math.abs(knockback(250, 12, 100, 0, 100, 80) - 75.4) < 1e-9); // set knockback ignores percent
+  assert.ok(knockback(80, 10, 60, 10, 100) > knockback(80, 10, 120, 10, 100)); // lighter flies farther
+  assert.equal(knockback(999, 999, 50, 999, 999), 2500);
+  assert.equal(hitstunFrames(229.36), 91);
+  assert.equal(hitlagFrames(18), 9); assert.equal(hitlagFrames(18, true), 13); assert.equal(hitlagFrames(18, false, true), 6); assert.equal(hitlagFrames(90), 20);
+  assert.equal(shieldstunFrames(10), 6);
+  assert.equal(launchAngle(361, 20, true, 1), 0); assert.equal(launchAngle(361, 50, true, 1), 44); assert.equal(launchAngle(361, 50, false, 1), 45);
+  assert.equal(launchAngle(30, 90, false, -1), 150);
+  assert.ok(Math.abs(applyDI(45, -Math.SQRT1_2, Math.SQRT1_2) - 63) < 1e-9); // full perpendicular: +18°
+  assert.ok(Math.abs(applyDI(45, Math.SQRT1_2, Math.SQRT1_2) - 45) < 1e-9);  // along the launch: no change
+  assert.equal(applyDI(45, .2, 0), 45);                                      // inside Melee's 0.2875 deadzone
+  assert.ok(Math.abs(staleness(['fsmash', 'jab1', 'fsmash'], 'fsmash') - (1 - .09 - .07)) < 1e-9);
+  assert.ok(Math.abs(chargeMultiplier(60) - 1.367) < 1e-9); assert.equal(chargeMultiplier(0), 1);
+});
+
+/** Fox faces right at x=0, the victim stands just inside the jab. */
+function duel(victim = 'mario' as const, gap = .7): Arena {
+  const a = arena({ fighters: ['fox', victim] });
+  a.place(0, 0, { facing: 1 }); a.place(1, gap, { facing: -1 });
+  return a;
 }
-function fight(count = 2, stocks = 3) { const state = create(count, stocks); state.phase = 'fight'; state.endsAt = 61000; return state; }
-function tick(state: State, frames = 1, entries: [string, Input][] = [], start = 1000) { for (let frame = 1; frame <= frames; frame++) rules.tick(state, new Map(entries), 1 / 60, start + frame * 1000 / 60); }
-function input(value: Partial<Input> = {}): Input { return { ...neutralInput(), ...value }; }
-
-test('selection rejects stale/invalid choices and all choices advance after a readable minimum', () => {
-  const state = create();
-  assert.throws(() => rules.parseAction({ turnId: 'round', kind: '__proto__' }));
-  assert.throws(() => rules.applyAction(state, 'p0', { turnId: 'old', kind: 'falco' }, 1000));
-  for (const p of state.players) rules.applyAction(state, p.id, { turnId: 'round', kind: 'falco' }, 1000);
-  assert.throws(() => rules.applyAction(state, 'p0', { turnId: 'round', kind: 'fox' }, 1100));
-  tick(state); assert.equal(state.phase, 'select');
-  rules.tick(state, new Map(), 1 / 60, 4000); assert.equal(state.phase, 'vote');
-  for (const p of state.players) rules.applyAction(state, p.id, { turnId: 'round', stage: 'cloudbreak' }, 4000);
-  rules.tick(state, new Map(), 1 / 60, 4000); assert.equal(state.phase, 'countdown');
-  assert.throws(() => rules.applyAction(state, 'p0', { turnId: 'round', kind: 'fox' }, 4000));
-  rules.tick(state, new Map(), 1 / 60, 7000); assert.equal(state.phase, 'fight'); assert.equal(state.endsAt, 67000);
+const hitEvents = (a: Arena) => a.s.events.filter(e => e.kind === 'hit');
+test('a jab lands on its first active frame: damage, equal hitlag both sides, then launch at 0.03 units/kb', () => {
+  const a = duel(), jab = MOVESET.fox.jab1!, hb = jab.windows[0]!.hitboxes[0]!;
+  a.press(0, 'attack', { x: 0, y: 0 });
+  a.tick(); assert.equal(a.f(1).damage, 0);
+  a.tick(); // frame 2
+  assert.equal(a.f(1).damage, hb.damage);
+  const lag = hitlagFrames(hb.damage);
+  assert.equal(a.f(1).hitlag, lag); assert.equal(a.f(0).hitlag, lag);
+  const frozen = a.f(1).x; a.tick(lag - 1); assert.equal(a.f(1).x, frozen);
+  a.tick();
+  const kb = knockback(hb.damage, hb.damage, PHYSICS.mario.weight, hb.kbBase, hb.kbGrowth);
+  assert.ok(Math.abs(Math.hypot(a.f(1).kx, a.f(1).ky) - kb * .03 * UNIT) < 1e-9);
+  assert.equal(hitEvents(a).length, 1);
+  a.tick(3); assert.equal(hitEvents(a).length, 1, 'one hit per target per hitbox group');
 });
-
-test('missing choices use defaults, and wall time ends a match even after a stall', () => {
-  const state = create(); rules.tick(state, new Map(), 1 / 60, 61000); assert.equal(state.phase, 'vote');
-  rules.tick(state, new Map(), 1 / 60, 81000); assert.equal(state.phase, 'countdown');
-  rules.tick(state, new Map(), 1 / 60, 84000); assert.equal(state.phase, 'fight');
-  rules.tick(state, new Map(), 1 / 60, 150000); assert.equal(rules.outcome(state).complete, true);
+test('DI rotates a strong launch and SDI shifts the victim during hitlag', () => {
+  const launch = (sdi: boolean, di: number) => {
+    const a = duel('mario', .8); a.f(1).damage = 120;
+    a.press(0, 'smash', { x: 1, y: 0 }); a.hold(0, { smash: false });
+    for (let t = 0; t < 40 && !a.f(1).hitlag; t++) a.tick();
+    assert.ok(a.f(1).hitlag > 2);
+    const x0 = a.f(1).x;
+    if (sdi) { for (let t = 0; t < 4; t++) { a.hold(1, { x: t % 2 ? 0 : 1, y: 0 }); a.tick(); } }
+    const moved = a.f(1).x - x0;
+    a.hold(1, { x: -di * Math.SQRT1_2, y: di * Math.SQRT1_2 });
+    while (a.f(1).hitlag) a.tick();
+    return { angle: Math.atan2(a.f(1).ky, a.f(1).kx) * 180 / Math.PI, moved };
+  };
+  const none = launch(false, 0), di = launch(false, 1), sdi = launch(true, 0);
+  assert.ok(Math.abs(di.angle - none.angle) > 5 && Math.abs(di.angle - none.angle) <= 18.01, `${none.angle} → ${di.angle}`);
+  assert.ok(sdi.moved >= 6 * UNIT * 2 - 1e-9, `SDI ${sdi.moved}`);
 });
-
-test('inputs reject malformed axes, buttons, counters, extra fields, and settings', () => {
-  for (const value of [null, [], { ...input(), x: NaN }, { ...input(), x: 2 }, { ...input(), jump: 1 }, { ...input(), presses: { jump: -1, attack: 0, special: 0, smash: 0 } }, { ...input(), extra: 1 }]) assert.throws(() => rules.parseInput(value));
-  for (const value of [{ seconds: -1 }, { stocks: 999 }, { extra: true }]) assert.throws(() => rules.validateSettings(value));
-  assert.deepEqual(rules.validateSettings({}), { stocks: 3, seconds: 900 });
+test('shields: damage and shieldstun, powershield parry in the first frames, drain while held, break into dizzy', () => {
+  const a = duel(); a.hold(1, { shield: true }); a.tick(10);
+  assert.equal(a.f(1).state, 'shield');
+  const hp = a.f(1).shield;
+  a.press(0, 'attack', { x: 0, y: 0 }); a.tick(2);
+  assert.equal(a.f(1).damage, 0); assert.ok(a.f(1).shield < hp - 5); assert.equal(a.f(1).state, 'shieldstun');
+  assert.ok(a.s.events.some(e => e.kind === 'shield'));
+  const b = duel(); b.press(0, 'attack', { x: 0, y: 0 }); b.tick(); b.hold(1, { shield: true }); b.press(1, 'shield'); b.tick();
+  assert.ok(b.s.events.some(e => e.kind === 'parry'), 'powershield'); assert.equal(b.f(1).damage, 0); assert.ok(b.f(1).shield > 99);
+  const c = duel(); c.hold(1, { shield: true }); let broke = false;
+  for (let t = 0; t < 400; t++) { c.tick(); broke ||= c.s.events.some(e => e.kind === 'shieldbreak'); }
+  assert.equal(c.f(1).state, 'dizzy'); assert.ok(broke);
+  c.hold(1, { shield: false }); for (let t = 0; t < 600 && c.f(1).state === 'dizzy'; t++) c.tick();
+  assert.equal(c.f(1).state, 'idle');
 });
-
-test('a coalesced short tap jumps once and old counter heartbeats cannot repeat it', () => {
-  const state = fight(), p = state.players[0], tap = input({ presses: { jump: 1, attack: 0, special: 0, smash: 0 } });
-  tick(state, 4, [['p0', tap]]); assert.ok(p.y > 0); assert.equal(p.jumps, 1);
-  tick(state, 90, [['p0', tap]]); assert.equal(p.grounded, true); assert.equal(p.y, 0); assert.equal(p.jumps, 2);
-  tick(state, 5, [['p0', tap]]); assert.equal(p.y, 0);
+test('grab beats shield; pummel adds damage; throws launch with their own command; mashing breaks out sooner', () => {
+  const a = duel('mario', .6); a.hold(1, { shield: true }); a.tick(12);
+  a.press(0, 'grab'); a.tick(10);
+  assert.equal(a.f(0).state, 'grab'); assert.equal(a.f(1).state, 'grabbed'); assert.equal(a.f(1).grabbedBy, 'p0');
+  a.hold(1, { shield: false }); a.tick(4);
+  a.press(0, 'attack'); a.tick(2); assert.equal(a.f(0).move, 'pummel');
+  for (let t = 0; t < 120 && a.f(0).state !== 'grab'; t++) a.tick();
+  assert.ok(a.f(1).damage > 0, 'pummel'); const d = a.f(1).damage;
+  a.hold(0, { x: -1 }); a.tick(); a.hold(0, { x: 0 });
+  assert.equal(a.f(0).move, 'bthrow');
+  a.tick(MOVESET.fox.bthrow!.release! + 1);
+  assert.equal(a.f(1).grabbedBy, null); assert.equal(a.f(1).damage, d + MOVESET.fox.bthrow!.throw!.damage);
+  while (a.f(1).hitlag) a.tick();
+  assert.ok(a.f(1).kx < 0, 'Fox back throw launches behind him (script reversal)');
+  const hold = (mash: boolean) => {
+    const b = duel('mario', .6); b.press(0, 'grab'); b.tick(10); let t = 0;
+    for (; t < 400 && b.f(1).state === 'grabbed'; t++) { if (mash && t % 2) b.press(1, 'attack'); b.tick(); }
+    return t;
+  };
+  assert.ok(hold(true) < hold(false) / 2);
 });
-
-test('the actual 20 Hz channel preserves a press and release between network sends', () => {
-  const state = fight(), sent: Input[] = [], channel = new HeldInputChannel((kind, value) => { if (kind === 'state') sent.push(value as Input); });
-  channel.set(input(), 0);
-  channel.set(input({ attack: true, presses: { jump: 0, attack: 1, special: 0, smash: 0 } }), 10);
-  channel.set(input({ presses: { jump: 0, attack: 1, special: 0, smash: 0 } }), 20);
-  assert.equal(sent.length, 1); channel.flush(50); assert.equal(sent.length, 2);
-  tick(state, 1, [['p0', rules.parseInput(sent[1])]]); assert.equal(state.players[0].move, 'jab');
-  tick(state, 60, [['p0', sent[1]]]); assert.equal(state.players[0].move, null);
+test('equal grounded attacks clank and both rebound; unequal ones only rebound the weaker', () => {
+  const a = arena({ fighters: ['mario', 'mario'] }); a.place(0, 0, { facing: 1 }); a.place(1, 1.1, { facing: -1 });
+  a.press(0, 'attack', { x: 1, y: 0 }); a.press(1, 'attack', { x: -1, y: 0 });
+  for (let t = 0; t < 12 && !a.s.events.some(e => e.kind === 'clash'); t++) a.tick();
+  assert.ok(a.s.events.some(e => e.kind === 'clash'));
+  assert.equal(a.f(0).damage + a.f(1).damage, 0); assert.equal(a.f(0).move, null); assert.equal(a.f(1).move, null);
 });
-
-test('two jumps, finite recovery, and landing restore movement resources', () => {
-  const state = fight(), p = state.players[0]; p.x = -7;
-  tick(state, 4, [['p0', input({ jump: true, presses: { jump: 1, attack: 0, special: 0, smash: 0 } })]]);
-  tick(state, 1, [['p0', input({ jump: true, presses: { jump: 2, attack: 0, special: 0, smash: 0 } })]]); assert.equal(p.jumps, 0);
-  tick(state, 1, [['p0', input({ y: -1, presses: { jump: 2, attack: 0, special: 1, smash: 0 } })]]); assert.equal(p.move, 'rise'); assert.equal(p.recoveryUsed, true);
-  tick(state, 90); tick(state, 1, [['p0', input({ y: -1, presses: { jump: 2, attack: 0, special: 2, smash: 0 } })]]); assert.notEqual(p.move, 'rise');
-  tick(state, 180); assert.equal(p.grounded, true); assert.equal(p.jumps, 2); assert.equal(p.recoveryUsed, false);
+test('simultaneous hits trade: both take damage the same frame', () => {
+  const a = arena({ fighters: ['fox', 'fox'] }); a.place(0, 0, { facing: 1 }); a.place(1, .8, { facing: -1 });
+  for (const i of [0, 1]) { const f = a.f(i); f.y += 2; f.grounded = false; f.ground = null; f.state = 'air'; f.vy = .05; } // airborne attacks never clank
+  a.press(0, 'attack', { x: 0, y: 0 }); a.press(1, 'attack', { x: 0, y: 0 });
+  let t = 0; for (; t < 10 && !a.f(0).damage; t++) a.tick();
+  assert.equal(a.f(0).move, null); assert.ok(a.f(0).damage > 0 && a.f(0).damage === a.f(1).damage, `${a.f(0).damage} ${a.f(1).damage}`);
 });
-
-test('attacks have startup, hit once per target, and grow knockback with damage and lower weight', () => {
-  const state = fight(), [p, target] = state.players; p.x = -.5; target.x = .5;
-  const attack = input({ presses: { jump: 0, attack: 1, special: 0, smash: 0 } });
-  tick(state, 1, [['p0', attack]]); assert.equal(target.damage, 0);
-  tick(state, 6, [['p0', attack]]); assert.equal(target.damage, 4); assert.equal(target.mode, 'hurt');
-  tick(state, 20, [['p0', attack]]); assert.equal(target.damage, 4);
-  assert.ok(launchForce(150, 10, 82, 25, 90) > launchForce(20, 10, 82, 25, 90));
-  assert.ok(launchForce(100, 10, 82, 25, 90) > launchForce(100, 10, 118, 25, 90));
+test('stale moves weaken with repetition; a fully charged smash deals ×1.367', () => {
+  const hit = (charge: number, repeats: number) => {
+    const a = duel('mario', .9); a.f(0).stale = Array(repeats).fill('fsmash');
+    a.press(0, 'smash', { x: 1, y: 0 }); a.hold(0, { smash: charge > 0 });
+    for (let t = 0; t < 120 && !a.f(1).damage; t++) { if (a.f(0).charge >= charge) a.hold(0, { smash: false }); a.tick(); }
+    return a.f(1).damage;
+  };
+  const fresh = hit(0, 0), staled = hit(0, 3), charged = hit(60, 0);
+  assert.ok(Math.abs(staled - fresh * (1 - .09 - .08 - .07)) < 1e-6, `${staled} vs ${fresh}`);
+  assert.ok(Math.abs(charged / fresh - 1.367) < 1e-6, `${charged / fresh}`);
 });
-
-test('simultaneous attacks trade without roster-order advantage', () => {
-  const state = fight(), [a, b] = state.players; a.x = -.5; b.x = .5; b.kind = 'fox';
-  const attack = input({ attack: true, presses: { jump: 0, attack: 1, special: 0, smash: 0 } });
-  tick(state, 5, [['p0', attack], ['p1', attack]]);
-  assert.equal(a.damage, 4); assert.equal(b.damage, 4);
-});
-
-test('shield absorbs damage, drains, breaks, and releases', () => {
-  const state = fight(), [p, target] = state.players; p.x = -.5; target.x = .5;
-  tick(state, 6, [['p0', input({ attack: true })], ['p1', input({ shield: true })]]);
-  assert.equal(target.damage, 0); assert.ok(target.shield < 94); assert.ok(state.impacts.some(e => e.kind === 'block'));
-  tick(state, 215, [['p1', input({ shield: true })]]); assert.equal(target.mode, 'hurt');
-  tick(state, 130); assert.ok(target.shield > 0); assert.notEqual(target.mode, 'shield');
-});
-
-test('fall-through affects raised platforms; the main floor catches the fighter', () => {
-  const state = fight(), p = state.players[0]; p.x = -4; p.y = 2.7; p.grounded = true;
-  tick(state, 50, [['p0', input({ y: 1 })]]); assert.equal(p.y, 0); assert.equal(p.grounded, true);
-});
-
-test('blast zones cost stocks, credit recent attacker, respawn safely, and finish on last survivor', () => {
-  const state = fight(), [p, target] = state.players; target.lastHitBy = p.id; target.lastHitAt = 1000; target.x = STAGE.blastX + 2;
-  tick(state); assert.equal(target.stocks, 2); assert.equal(p.kos, 1); assert.equal(target.mode, 'respawn'); assert.equal(target.damage, 0);
-  tick(state, 65); assert.ok(target.invulnerable); assert.equal(target.stocks, 2);
-  target.stocks = 1; target.y = STAGE.blastBottom - 2; tick(state);
-  assert.equal(state.phase, 'complete'); assert.deepEqual(rules.outcome(state).winners, [p.id]);
-});
-
-test('disconnect is neutral, reconnect preserves fighter, and 15 seconds absent forfeits', () => {
-  const state = fight(), p = state.players[0];
-  rules.onPresenceChange(state, p.id, false, 1000); tick(state, 30, [[p.id, input({ x: 1 })]]); assert.equal(p.x, -1.6);
-  rules.onPresenceChange(state, p.id, true, 2000); tick(state, 10, [[p.id, input({ x: 1 })]], 2000); assert.ok(p.x > -1.6);
-  rules.onPresenceChange(state, p.id, false, 3000); rules.tick(state, new Map(), 1 / 60, 18000); assert.equal(p.stocks, 0); assert.equal(state.phase, 'complete');
-});
-
-test('maximum roster, timeout tie rules, public projection isolation, and replay start clean', () => {
-  const state = fight(4); state.players[0].damage = 20; state.players[1].stocks = 2;
-  rules.tick(state, new Map(), 1 / 60, state.endsAt); assert.deepEqual(rules.outcome(state).winners, ['p2', 'p3']);
-  const view = rules.publicView(state, { nowMs: 61000, phase: 'results' });
-  assert.equal('pending' in view.players[0], false); assert.equal('lastHitBy' in view.players[0], false);
-  view.players[0].presses.attack = 50; assert.equal(state.players[0].presses.attack, 0);
-  const replay = create(4); assert.ok(replay.players.every(p => !p.chosen && p.damage === 0 && p.stocks === 3 && !p.kos));
-});
-
-test('four-player sustained combat stays finite and reaches authoritative results', () => {
-  const state = fight(4, 5); let random = 27;
-  const next = () => { random = (Math.imul(random, 1664525) + 1013904223) >>> 0; return random / 4294967296; };
-  const counts = state.players.map(() => zeroCounts());
-  function zeroCounts() { return { jump: 0, attack: 0, special: 0, smash: 0 }; }
-  for (let frame = 0; frame <= 3601 && state.phase !== 'complete'; frame++) {
-    const entries: [string, Input][] = state.players.map((p, index) => {
-      const other = state.players.filter(q => q.id !== p.id && q.stocks).sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x))[0];
-      if (frame % 45 === 0) counts[index].jump++;
-      if (frame % 80 === 0) counts[index].special++;
-      return [p.id, input({ x: other ? Math.sign(other.x - p.x) : 0, y: next() > .5 ? -.8 : .8, jump: frame % 45 < 12, attack: true, shield: frame % 200 > 170, presses: { ...counts[index] } })];
-    });
-    rules.tick(state, new Map(entries), 1 / 60, 1000 + frame * 1000 / 60);
-    for (const p of state.players) { assert.ok([p.x, p.y, p.vx, p.vy, p.damage, p.shield].every(Number.isFinite)); assert.ok(p.stocks >= 0 && p.stocks <= 5); }
-  }
-  assert.equal(state.phase, 'complete'); assert.ok(state.players.some(p => p.damage > 0 || p.falls > 0));
+test('crouch-cancel softens knockback to two thirds', () => {
+  const kb = (crouch: boolean) => {
+    const a = duel('mario', .7); a.f(1).damage = 60; if (crouch) { a.hold(1, { y: -1 }); a.tick(3); }
+    a.press(0, 'attack', { x: 0, y: 0 }); a.tick(2); while (a.f(1).hitlag) a.tick();
+    return Math.hypot(a.f(1).kx, a.f(1).ky);
+  };
+  assert.ok(Math.abs(kb(true) / kb(false) - 2 / 3) < .03);
 });

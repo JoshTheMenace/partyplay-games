@@ -1,0 +1,66 @@
+[
+ {
+  "name": "Default",
+  "colors": {
+   "primary": "#3f9a3c",
+   "light": "#f1ede2",
+   "trim": "#7a4b2a",
+   "hair": "#f2c85a",
+   "skin": "#f6cfa8",
+   "dark": "#231a1c",
+   "eye": "#3a78d8",
+   "eye-white": "#ffffff",
+   "metal": "#c6ccd8",
+   "secondary": "#3450b8",
+   "accent": "#d23a2e"
+  }
+ },
+ {
+  "name": "Goron Red",
+  "colors": {
+   "primary": "#c8362c",
+   "light": "#f1ede2",
+   "trim": "#7a4b2a",
+   "hair": "#f2c85a",
+   "skin": "#f6cfa8",
+   "dark": "#231a1c",
+   "eye": "#3a78d8",
+   "eye-white": "#ffffff",
+   "metal": "#c6ccd8",
+   "secondary": "#3450b8",
+   "accent": "#d23a2e"
+  }
+ },
+ {
+  "name": "Zora Blue",
+  "colors": {
+   "primary": "#3a64c8",
+   "light": "#e8ecf4",
+   "trim": "#7a4b2a",
+   "hair": "#f2c85a",
+   "skin": "#f6cfa8",
+   "dark": "#231a1c",
+   "eye": "#3a78d8",
+   "eye-white": "#ffffff",
+   "metal": "#c6ccd8",
+   "secondary": "#3450b8",
+   "accent": "#d23a2e"
+  }
+ },
+ {
+  "name": "Dark",
+  "colors": {
+   "primary": "#3b3a46",
+   "light": "#8a8898",
+   "trim": "#2a2228",
+   "hair": "#e9e6ef",
+   "skin": "#f6cfa8",
+   "dark": "#231a1c",
+   "eye": "#3a78d8",
+   "eye-white": "#ffffff",
+   "metal": "#c6ccd8",
+   "secondary": "#3450b8",
+   "accent": "#d23a2e"
+  }
+ }
+]

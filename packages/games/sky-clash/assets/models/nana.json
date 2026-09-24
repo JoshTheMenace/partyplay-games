@@ -1,0 +1,198 @@
+{
+ "kind": "nana",
+ "name": "Nana",
+ "generator": "tools/blender/fighters/nana.py",
+ "height": 1.3,
+ "headTop": 1.3,
+ "tris": 18206,
+ "vertices": 9245,
+ "bytes": 534736,
+ "size": [
+  1.3359,
+  1.3109,
+  0.8157
+ ],
+ "bounds": {
+  "min": [
+   -0.668,
+   -0.0109,
+   -0.292
+  ],
+  "max": [
+   0.6679,
+   1.3,
+   0.5237
+  ]
+ },
+ "materials": [
+  "skin",
+  "dark",
+  "eye-white",
+  "eye",
+  "hair",
+  "accent",
+  "primary",
+  "light",
+  "secondary",
+  "trim",
+  "metal"
+ ],
+ "bones": [
+  "root",
+  "hips",
+  "spine",
+  "chest",
+  "neck",
+  "head",
+  "shoulder_L",
+  "upperarm_L",
+  "forearm_L",
+  "hand_L",
+  "shoulder_R",
+  "upperarm_R",
+  "forearm_R",
+  "hand_R",
+  "thigh_L",
+  "shin_L",
+  "foot_L",
+  "thigh_R",
+  "shin_R",
+  "foot_R",
+  "prop"
+ ],
+ "parents": {
+  "root": null,
+  "hips": "root",
+  "spine": "hips",
+  "chest": "spine",
+  "neck": "chest",
+  "head": "neck",
+  "shoulder_L": "chest",
+  "upperarm_L": "shoulder_L",
+  "forearm_L": "upperarm_L",
+  "hand_L": "forearm_L",
+  "shoulder_R": "chest",
+  "upperarm_R": "shoulder_R",
+  "forearm_R": "upperarm_R",
+  "hand_R": "forearm_R",
+  "thigh_L": "hips",
+  "shin_L": "thigh_L",
+  "foot_L": "shin_L",
+  "thigh_R": "hips",
+  "shin_R": "thigh_R",
+  "foot_R": "shin_R",
+  "prop": "hand_R"
+ },
+ "joints": {
+  "root": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "hips": [
+   0.0,
+   0.3606,
+   0.0
+  ],
+  "spine": [
+   0.0,
+   0.459,
+   0.0
+  ],
+  "chest": [
+   0.0,
+   0.5683,
+   0.0
+  ],
+  "neck": [
+   0.0,
+   0.6776,
+   0.0
+  ],
+  "head": [
+   0.0,
+   0.7431,
+   0.0
+  ],
+  "shoulder_L": [
+   0.0765,
+   0.6338,
+   0.0
+  ],
+  "upperarm_L": [
+   0.2076,
+   0.6393,
+   0.0
+  ],
+  "forearm_L": [
+   0.3606,
+   0.6393,
+   0.0
+  ],
+  "hand_L": [
+   0.5027,
+   0.6393,
+   0.0
+  ],
+  "shoulder_R": [
+   -0.0765,
+   0.6338,
+   0.0
+  ],
+  "upperarm_R": [
+   -0.2076,
+   0.6393,
+   0.0
+  ],
+  "forearm_R": [
+   -0.3606,
+   0.6393,
+   0.0
+  ],
+  "hand_R": [
+   -0.5027,
+   0.6393,
+   0.0
+  ],
+  "thigh_L": [
+   0.1093,
+   0.3388,
+   0.0
+  ],
+  "shin_L": [
+   0.1093,
+   0.1967,
+   0.0
+  ],
+  "foot_L": [
+   0.1093,
+   0.071,
+   0.0
+  ],
+  "thigh_R": [
+   -0.1093,
+   0.3388,
+   0.0
+  ],
+  "shin_R": [
+   -0.1093,
+   0.1967,
+   0.0
+  ],
+  "foot_R": [
+   -0.1093,
+   0.071,
+   0.0
+  ],
+  "prop": [
+   -0.5666,
+   0.6393,
+   0.0
+  ]
+ },
+ "extras": {},
+ "prop": {
+  "parent": "hand_R",
+  "visible": "always"
+ }
+}

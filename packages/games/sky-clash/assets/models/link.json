@@ -1,0 +1,233 @@
+{
+ "kind": "link",
+ "name": "Link",
+ "generator": "tools/blender/fighters/link.py",
+ "height": 1.98,
+ "headTop": 1.98,
+ "tris": 19914,
+ "vertices": 10124,
+ "bytes": 588896,
+ "size": [
+  1.888,
+  1.9902,
+  1.208
+ ],
+ "bounds": {
+  "min": [
+   -0.944,
+   -0.0102,
+   -0.3083
+  ],
+  "max": [
+   0.944,
+   1.98,
+   0.8996
+  ]
+ },
+ "materials": [
+  "skin",
+  "dark",
+  "eye-white",
+  "eye",
+  "hair",
+  "primary",
+  "secondary",
+  "light",
+  "trim",
+  "metal",
+  "accent"
+ ],
+ "bones": [
+  "root",
+  "hips",
+  "spine",
+  "chest",
+  "neck",
+  "head",
+  "shoulder_L",
+  "upperarm_L",
+  "forearm_L",
+  "hand_L",
+  "shoulder_R",
+  "upperarm_R",
+  "forearm_R",
+  "hand_R",
+  "thigh_L",
+  "shin_L",
+  "foot_L",
+  "thigh_R",
+  "shin_R",
+  "foot_R",
+  "prop",
+  "extra_cap_0",
+  "extra_cap_1",
+  "extra_cap_2",
+  "extra_cap_3"
+ ],
+ "parents": {
+  "root": null,
+  "hips": "root",
+  "spine": "hips",
+  "chest": "spine",
+  "neck": "chest",
+  "head": "neck",
+  "shoulder_L": "chest",
+  "upperarm_L": "shoulder_L",
+  "forearm_L": "upperarm_L",
+  "hand_L": "forearm_L",
+  "shoulder_R": "chest",
+  "upperarm_R": "shoulder_R",
+  "forearm_R": "upperarm_R",
+  "hand_R": "forearm_R",
+  "thigh_L": "hips",
+  "shin_L": "thigh_L",
+  "foot_L": "shin_L",
+  "thigh_R": "hips",
+  "shin_R": "thigh_R",
+  "foot_R": "shin_R",
+  "prop": "hand_L",
+  "extra_cap_0": "head",
+  "extra_cap_1": "extra_cap_0",
+  "extra_cap_2": "extra_cap_1",
+  "extra_cap_3": "extra_cap_2"
+ },
+ "joints": {
+  "root": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "hips": [
+   0.0,
+   1.0235,
+   0.0
+  ],
+  "spine": [
+   0.0,
+   1.1463,
+   0.0
+  ],
+  "chest": [
+   0.0,
+   1.3203,
+   0.0
+  ],
+  "neck": [
+   0.0,
+   1.5352,
+   0.0
+  ],
+  "head": [
+   0.0,
+   1.6171,
+   0.0
+  ],
+  "shoulder_L": [
+   0.0716,
+   1.4533,
+   0.0
+  ],
+  "upperarm_L": [
+   0.22,
+   1.4738,
+   0.0
+  ],
+  "forearm_L": [
+   0.5015,
+   1.4738,
+   0.0
+  ],
+  "hand_L": [
+   0.7574,
+   1.4738,
+   0.0
+  ],
+  "shoulder_R": [
+   -0.0716,
+   1.4533,
+   0.0
+  ],
+  "upperarm_R": [
+   -0.22,
+   1.4738,
+   0.0
+  ],
+  "forearm_R": [
+   -0.5015,
+   1.4738,
+   0.0
+  ],
+  "hand_R": [
+   -0.7574,
+   1.4738,
+   0.0
+  ],
+  "thigh_L": [
+   0.1075,
+   0.9825,
+   0.0
+  ],
+  "shin_L": [
+   0.1075,
+   0.5424,
+   0.0
+  ],
+  "foot_L": [
+   0.1075,
+   0.0921,
+   0.0
+  ],
+  "thigh_R": [
+   -0.1075,
+   0.9825,
+   0.0
+  ],
+  "shin_R": [
+   -0.1075,
+   0.5424,
+   0.0
+  ],
+  "foot_R": [
+   -0.1075,
+   0.0921,
+   0.0
+  ],
+  "prop": [
+   0.8469,
+   1.4416,
+   0.0
+  ],
+  "extra_cap_0": [
+   0.0,
+   1.8729,
+   -0.0307
+  ],
+  "extra_cap_1": [
+   0.0,
+   1.8525,
+   -0.1535
+  ],
+  "extra_cap_2": [
+   0.0,
+   1.7501,
+   -0.2456
+  ],
+  "extra_cap_3": [
+   0.0,
+   1.6068,
+   -0.2866
+  ]
+ },
+ "extras": {
+  "cap": [
+   "extra_cap_0",
+   "extra_cap_1",
+   "extra_cap_2",
+   "extra_cap_3"
+  ]
+ },
+ "prop": {
+  "parent": "hand_L",
+  "visible": "always"
+ }
+}

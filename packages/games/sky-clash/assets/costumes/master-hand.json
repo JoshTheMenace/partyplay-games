@@ -1,0 +1,38 @@
+[
+ {
+  "name": "Default",
+  "colors": {
+   "light": "#f6f4f0",
+   "trim": "#d9d4dc",
+   "secondary": "#ebe7ee",
+   "dark": "#2a2430"
+  }
+ },
+ {
+  "name": "Gold",
+  "colors": {
+   "light": "#f5d77a",
+   "trim": "#d0a84a",
+   "secondary": "#f0cc62",
+   "dark": "#2a2430"
+  }
+ },
+ {
+  "name": "Shadow",
+  "colors": {
+   "light": "#5a5666",
+   "trim": "#3c3846",
+   "secondary": "#4a4656",
+   "dark": "#2a2430"
+  }
+ },
+ {
+  "name": "Rose",
+  "colors": {
+   "light": "#f7cfd8",
+   "trim": "#e0a4b4",
+   "secondary": "#f2bccb",
+   "dark": "#2a2430"
+  }
+ }
+]

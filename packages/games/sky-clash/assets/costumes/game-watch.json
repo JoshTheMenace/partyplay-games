@@ -1,0 +1,26 @@
+[
+ {
+  "name": "Default",
+  "colors": {
+   "dark": "#17151b"
+  }
+ },
+ {
+  "name": "Red",
+  "colors": {
+   "dark": "#5e1a20"
+  }
+ },
+ {
+  "name": "Blue",
+  "colors": {
+   "dark": "#1b2a68"
+  }
+ },
+ {
+  "name": "Green",
+  "colors": {
+   "dark": "#194b2b"
+  }
+ }
+]

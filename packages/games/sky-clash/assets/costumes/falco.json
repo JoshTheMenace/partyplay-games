@@ -1,0 +1,70 @@
+[
+ {
+  "name": "Default",
+  "colors": {
+   "primary": "#f1eee6",
+   "secondary": "#c23a36",
+   "skin": "#3f6fe0",
+   "light": "#fbf6ec",
+   "hair": "#e03a2e",
+   "trim": "#f4b21e",
+   "metal": "#b4bcc8",
+   "emissive": "#6ad8ff",
+   "dark": "#1f1b24",
+   "eye": "#4a8fd8",
+   "eye-white": "#ffffff",
+   "accent": "#4a3a2c"
+  }
+ },
+ {
+  "name": "Red Team",
+  "colors": {
+   "primary": "#e2483c",
+   "secondary": "#3e3438",
+   "skin": "#3f6fe0",
+   "light": "#fbf6ec",
+   "hair": "#e03a2e",
+   "trim": "#f4b21e",
+   "metal": "#b4bcc8",
+   "emissive": "#ffb13d",
+   "dark": "#1f1b24",
+   "eye": "#4a8fd8",
+   "eye-white": "#ffffff",
+   "accent": "#4a3a2c"
+  }
+ },
+ {
+  "name": "Blue Team",
+  "colors": {
+   "primary": "#3f76e0",
+   "secondary": "#2c3858",
+   "skin": "#5a86f0",
+   "light": "#fbf6ec",
+   "hair": "#e03a2e",
+   "trim": "#f4b21e",
+   "metal": "#b4bcc8",
+   "emissive": "#8af0ff",
+   "dark": "#1f1b24",
+   "eye": "#4a8fd8",
+   "eye-white": "#ffffff",
+   "accent": "#4a3a2c"
+  }
+ },
+ {
+  "name": "Green Team",
+  "colors": {
+   "primary": "#57b554",
+   "secondary": "#2d4a2c",
+   "skin": "#3f6fe0",
+   "light": "#fbf6ec",
+   "hair": "#e03a2e",
+   "trim": "#f4b21e",
+   "metal": "#b4bcc8",
+   "emissive": "#b8ff6a",
+   "dark": "#1f1b24",
+   "eye": "#4a8fd8",
+   "eye-white": "#ffffff",
+   "accent": "#4a3a2c"
+  }
+ }
+]

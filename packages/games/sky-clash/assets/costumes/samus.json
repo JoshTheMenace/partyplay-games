@@ -1,0 +1,46 @@
+[
+ {
+  "name": "Default",
+  "colors": {
+   "primary": "#d8431f",
+   "secondary": "#f2a51e",
+   "metal": "#5b606e",
+   "emissive": "#48dc8a",
+   "accent": "#ffd84a",
+   "dark": "#1c1a22"
+  }
+ },
+ {
+  "name": "Pink",
+  "colors": {
+   "primary": "#e0558f",
+   "secondary": "#f7bfd8",
+   "metal": "#5b606e",
+   "emissive": "#48dc8a",
+   "accent": "#ffffff",
+   "dark": "#1c1a22"
+  }
+ },
+ {
+  "name": "Dark",
+  "colors": {
+   "primary": "#2c2a36",
+   "secondary": "#6c3aa0",
+   "metal": "#5b606e",
+   "emissive": "#ff5a5a",
+   "accent": "#b88aff",
+   "dark": "#1c1a22"
+  }
+ },
+ {
+  "name": "Green",
+  "colors": {
+   "primary": "#2f8a44",
+   "secondary": "#b8e05a",
+   "metal": "#4a5048",
+   "emissive": "#48dc8a",
+   "accent": "#ffd84a",
+   "dark": "#1c1a22"
+  }
+ }
+]

@@ -1,0 +1,62 @@
+[
+ {
+  "name": "Default",
+  "colors": {
+   "primary": "#4f6f4a",
+   "secondary": "#26292a",
+   "accent": "#c9a45a",
+   "light": "#eee2c0",
+   "hair": "#d9542a",
+   "dark": "#191417",
+   "metal": "#8e949e",
+   "eye-white": "#f6e8c4",
+   "emissive": "#ffd23a",
+   "trim": "#8a6a34"
+  }
+ },
+ {
+  "name": "Crimson",
+  "colors": {
+   "primary": "#4f6f4a",
+   "secondary": "#5a1a1c",
+   "accent": "#c9a45a",
+   "light": "#eee2c0",
+   "hair": "#ffb040",
+   "dark": "#191417",
+   "metal": "#8e949e",
+   "eye-white": "#f6e8c4",
+   "emissive": "#ff8a3a",
+   "trim": "#8a6a34"
+  }
+ },
+ {
+  "name": "Shadow",
+  "colors": {
+   "primary": "#3a3650",
+   "secondary": "#17151f",
+   "accent": "#8a7aa8",
+   "light": "#eee2c0",
+   "hair": "#9a5aff",
+   "dark": "#191417",
+   "metal": "#8e949e",
+   "eye-white": "#f6e8c4",
+   "emissive": "#c07aff",
+   "trim": "#5a4a78"
+  }
+ },
+ {
+  "name": "Frost",
+  "colors": {
+   "primary": "#6f8fa6",
+   "secondary": "#27385a",
+   "accent": "#d6e2ea",
+   "light": "#eee2c0",
+   "hair": "#e8f4ff",
+   "dark": "#191417",
+   "metal": "#8e949e",
+   "eye-white": "#f6e8c4",
+   "emissive": "#7af0ff",
+   "trim": "#8aa0b8"
+  }
+ }
+]

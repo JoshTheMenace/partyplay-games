@@ -1,0 +1,193 @@
+{
+ "kind": "sandbag",
+ "name": "Sandbag",
+ "generator": "tools/blender/fighters/sandbag.py",
+ "height": 1.6,
+ "headTop": 1.6,
+ "tris": 14738,
+ "vertices": 7830,
+ "bytes": 431304,
+ "size": [
+  0.9838,
+  1.6,
+  0.6507
+ ],
+ "bounds": {
+  "min": [
+   -0.4919,
+   0.0,
+   -0.3339
+  ],
+  "max": [
+   0.4919,
+   1.6,
+   0.3167
+  ]
+ },
+ "materials": [
+  "primary",
+  "dark",
+  "eye-white",
+  "accent",
+  "trim",
+  "secondary"
+ ],
+ "bones": [
+  "root",
+  "hips",
+  "spine",
+  "chest",
+  "neck",
+  "head",
+  "shoulder_L",
+  "upperarm_L",
+  "forearm_L",
+  "hand_L",
+  "shoulder_R",
+  "upperarm_R",
+  "forearm_R",
+  "hand_R",
+  "thigh_L",
+  "shin_L",
+  "foot_L",
+  "thigh_R",
+  "shin_R",
+  "foot_R",
+  "prop"
+ ],
+ "parents": {
+  "root": null,
+  "hips": "root",
+  "spine": "hips",
+  "chest": "spine",
+  "neck": "chest",
+  "head": "neck",
+  "shoulder_L": "chest",
+  "upperarm_L": "shoulder_L",
+  "forearm_L": "upperarm_L",
+  "hand_L": "forearm_L",
+  "shoulder_R": "chest",
+  "upperarm_R": "shoulder_R",
+  "forearm_R": "upperarm_R",
+  "hand_R": "forearm_R",
+  "thigh_L": "hips",
+  "shin_L": "thigh_L",
+  "foot_L": "shin_L",
+  "thigh_R": "hips",
+  "shin_R": "thigh_R",
+  "foot_R": "shin_R",
+  "prop": "hand_R"
+ },
+ "joints": {
+  "root": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "hips": [
+   0.0,
+   0.4,
+   0.0
+  ],
+  "spine": [
+   0.0,
+   0.62,
+   0.0
+  ],
+  "chest": [
+   0.0,
+   0.86,
+   0.0
+  ],
+  "neck": [
+   0.0,
+   1.08,
+   0.0
+  ],
+  "head": [
+   0.0,
+   1.2,
+   0.0
+  ],
+  "shoulder_L": [
+   0.12,
+   0.95,
+   0.0
+  ],
+  "upperarm_L": [
+   0.3,
+   0.95,
+   0.0
+  ],
+  "forearm_L": [
+   0.37,
+   0.94,
+   0.0
+  ],
+  "hand_L": [
+   0.43,
+   0.93,
+   0.0
+  ],
+  "shoulder_R": [
+   -0.12,
+   0.95,
+   0.0
+  ],
+  "upperarm_R": [
+   -0.3,
+   0.95,
+   0.0
+  ],
+  "forearm_R": [
+   -0.37,
+   0.94,
+   0.0
+  ],
+  "hand_R": [
+   -0.43,
+   0.93,
+   0.0
+  ],
+  "thigh_L": [
+   0.15,
+   0.32,
+   0.0
+  ],
+  "shin_L": [
+   0.18,
+   0.17,
+   0.03
+  ],
+  "foot_L": [
+   0.19,
+   0.06,
+   0.05
+  ],
+  "thigh_R": [
+   -0.15,
+   0.32,
+   0.0
+  ],
+  "shin_R": [
+   -0.18,
+   0.17,
+   0.03
+  ],
+  "foot_R": [
+   -0.19,
+   0.06,
+   0.05
+  ],
+  "prop": [
+   -0.48,
+   0.93,
+   0.0
+  ]
+ },
+ "extras": {},
+ "prop": {
+  "parent": "hand_R",
+  "visible": "none"
+ }
+}

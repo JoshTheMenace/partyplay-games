@@ -1,0 +1,30 @@
+[
+ {
+  "name": "Default",
+  "colors": {
+   "emissive": "#c77dff",
+   "dark": "#2a1640"
+  }
+ },
+ {
+  "name": "Cyan",
+  "colors": {
+   "emissive": "#5fe3ff",
+   "dark": "#10303e"
+  }
+ },
+ {
+  "name": "Lime",
+  "colors": {
+   "emissive": "#9dff5c",
+   "dark": "#1b3614"
+  }
+ },
+ {
+  "name": "Gold",
+  "colors": {
+   "emissive": "#ffc34d",
+   "dark": "#3e2a0e"
+  }
+ }
+]

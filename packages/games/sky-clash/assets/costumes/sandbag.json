@@ -1,0 +1,46 @@
+[
+ {
+  "name": "Default",
+  "colors": {
+   "primary": "#ece2c8",
+   "secondary": "#d9c9a2",
+   "trim": "#9c7f55",
+   "dark": "#1f1a1c",
+   "eye-white": "#ffffff",
+   "accent": "#c9564a"
+  }
+ },
+ {
+  "name": "Home-Run",
+  "colors": {
+   "primary": "#f6f4ee",
+   "secondary": "#e8e4da",
+   "trim": "#d8392f",
+   "dark": "#1f1a1c",
+   "eye-white": "#ffffff",
+   "accent": "#c9564a"
+  }
+ },
+ {
+  "name": "Burlap",
+  "colors": {
+   "primary": "#c8a26a",
+   "secondary": "#a8834e",
+   "trim": "#5e4326",
+   "dark": "#1f1a1c",
+   "eye-white": "#ffffff",
+   "accent": "#c9564a"
+  }
+ },
+ {
+  "name": "Denim",
+  "colors": {
+   "primary": "#9fb9dc",
+   "secondary": "#6f8fbf",
+   "trim": "#f2ead8",
+   "dark": "#1f1a1c",
+   "eye-white": "#ffffff",
+   "accent": "#c9564a"
+  }
+ }
+]

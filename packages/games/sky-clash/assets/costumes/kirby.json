@@ -1,0 +1,58 @@
+[
+ {
+  "name": "Default",
+  "colors": {
+   "primary": "#ffa3c6",
+   "secondary": "#e2264c",
+   "accent": "#ff6f9c",
+   "dark": "#1d1630",
+   "eye": "#2f6ff0",
+   "eye-white": "#ffffff",
+   "trim": "#b9824a",
+   "metal": "#c9ced8",
+   "hair": "#7c1d2c"
+  }
+ },
+ {
+  "name": "Yellow",
+  "colors": {
+   "primary": "#ffe066",
+   "secondary": "#f07a22",
+   "accent": "#ffb347",
+   "dark": "#1d1630",
+   "eye": "#2f6ff0",
+   "eye-white": "#ffffff",
+   "trim": "#b9824a",
+   "metal": "#c9ced8",
+   "hair": "#7c1d2c"
+  }
+ },
+ {
+  "name": "Blue",
+  "colors": {
+   "primary": "#8fb6ff",
+   "secondary": "#2a45b8",
+   "accent": "#c89cff",
+   "dark": "#1d1630",
+   "eye": "#2f6ff0",
+   "eye-white": "#ffffff",
+   "trim": "#b9824a",
+   "metal": "#c9ced8",
+   "hair": "#7c1d2c"
+  }
+ },
+ {
+  "name": "White",
+  "colors": {
+   "primary": "#f4f1ea",
+   "secondary": "#4a6fd8",
+   "accent": "#ffb6c9",
+   "dark": "#1d1630",
+   "eye": "#2f6ff0",
+   "eye-white": "#ffffff",
+   "trim": "#b9824a",
+   "metal": "#c9ced8",
+   "hair": "#7c1d2c"
+  }
+ }
+]

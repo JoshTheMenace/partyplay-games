@@ -1,0 +1,50 @@
+[
+ {
+  "name": "Default",
+  "colors": {
+   "primary": "#2c3f9e",
+   "secondary": "#c8222a",
+   "accent": "#f2b92a",
+   "light": "#eeeae2",
+   "skin": "#f0bf98",
+   "dark": "#1a1620",
+   "trim": "#1f2a66"
+  }
+ },
+ {
+  "name": "Blood Falcon",
+  "colors": {
+   "primary": "#2a2830",
+   "secondary": "#b01c24",
+   "accent": "#d64040",
+   "light": "#eeeae2",
+   "skin": "#f0bf98",
+   "dark": "#1a1620",
+   "trim": "#151418"
+  }
+ },
+ {
+  "name": "Red",
+  "colors": {
+   "primary": "#c4262c",
+   "secondary": "#f2f0ec",
+   "accent": "#f2b92a",
+   "light": "#eeeae2",
+   "skin": "#f0bf98",
+   "dark": "#1a1620",
+   "trim": "#7a141a"
+  }
+ },
+ {
+  "name": "White",
+  "colors": {
+   "primary": "#eeeef2",
+   "secondary": "#e05a8c",
+   "accent": "#f2b92a",
+   "light": "#eeeae2",
+   "skin": "#f0bf98",
+   "dark": "#1a1620",
+   "trim": "#a8a8b8"
+  }
+ }
+]
