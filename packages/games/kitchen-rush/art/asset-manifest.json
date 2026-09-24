@@ -1,217 +1,1377 @@
 {
-  "source": "Original Blender-authored Kitchen Rush kit",
+  "source": "Original procedural Blender kit (art/build_kit.py). No external meshes or textures.",
   "units": "metres",
   "up": "Y",
-  "forward": "Z",
-  "rig": "Rigid pivots: ArmL/ArmR, LegL/LegR, Head; runtime walk, carry and work poses",
+  "front": "+Z",
+  "counterHeight": 0.9,
+  "anchors": {
+    "boardSurface": 0.945,
+    "potFloor": 0.04,
+    "potRim": 0.25,
+    "panFloor": 0.045,
+    "plateSurface": 0.03,
+    "plateRadius": 0.25,
+    "crateFloor": 0.7,
+    "stoveTrivet": 0.93,
+    "beltSurface": 0.915,
+    "ovenHearth": 0.5,
+    "beltRibPeriod": 0.25,
+    "ovenMouthZ": 0.3,
+    "chefHeight": 1.6
+  },
+  "chefRig": "Body (hips) > Head, ArmL, ArmR; LegL, LegR are siblings of Body. Character left = +X. Material TeamColor is white.",
+  "animatedChildren": {
+    "stove": "stove_flame",
+    "belt": "belt_surface",
+    "bin": "bin_lid"
+  },
+  "tintable": {
+    "TeamColor": "player colour",
+    "CrateLabel": "ingredient colour",
+    "Floor": "theme floor",
+    "Wall": "theme wall"
+  },
+  "themes": {
+    "diner": [
+      "prop_plant",
+      "prop_stool",
+      "prop_topiary",
+      "prop_lamp",
+      "prop_bench",
+      "prop_sign",
+      "prop_window"
+    ],
+    "harbor": [
+      "prop_barrel",
+      "prop_buoy",
+      "prop_crate_stack",
+      "prop_lamp",
+      "prop_post",
+      "prop_boat",
+      "prop_lantern"
+    ],
+    "alpine": [
+      "prop_pine",
+      "prop_snowman",
+      "prop_logs",
+      "prop_rock",
+      "prop_lantern",
+      "prop_window"
+    ],
+    "canyon": [
+      "prop_cactus",
+      "prop_rock",
+      "prop_skull",
+      "prop_barrel"
+    ],
+    "market": [
+      "prop_lantern",
+      "prop_basket",
+      "prop_crate_stack",
+      "prop_awning",
+      "prop_plant"
+    ],
+    "grand": [
+      "prop_column",
+      "prop_plant",
+      "prop_rope",
+      "prop_topiary",
+      "prop_lamp"
+    ]
+  },
+  "bytes": 1630828,
   "assets": {
-    "chef0": {
-      "triangles": 7680,
-      "meshes": 10
+    "counter": {
+      "kind": "station",
+      "triangles": 524,
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.5,
+        0.0,
+        -0.505
+      ],
+      "max": [
+        0.5,
+        0.9,
+        0.505
+      ]
     },
-    "chef1": {
-      "triangles": 7680,
-      "meshes": 10
+    "board": {
+      "kind": "station",
+      "triangles": 924,
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.5,
+        0.0,
+        -0.505
+      ],
+      "max": [
+        0.5,
+        0.974,
+        0.505
+      ]
     },
-    "chef2": {
-      "triangles": 7680,
-      "meshes": 10
+    "stove": {
+      "kind": "station",
+      "triangles": 1404,
+      "materials": [
+        "Flame",
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.5,
+        0.0,
+        -0.5
+      ],
+      "max": [
+        0.5,
+        0.963,
+        0.506
+      ]
     },
-    "chef3": {
-      "triangles": 7680,
-      "meshes": 10
+    "oven": {
+      "kind": "station",
+      "triangles": 1096,
+      "materials": [
+        "Flame",
+        "Paint"
+      ],
+      "min": [
+        -0.5,
+        0.0,
+        -0.5
+      ],
+      "max": [
+        0.5,
+        1.315,
+        0.51
+      ]
     },
-    "lettuce_raw": {
-      "triangles": 552,
-      "meshes": 1
+    "sink": {
+      "kind": "station",
+      "triangles": 1460,
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.5,
+        0.0,
+        -0.505
+      ],
+      "max": [
+        0.5,
+        1.224,
+        0.505
+      ]
     },
-    "lettuce_chopped": {
+    "rack": {
+      "kind": "station",
+      "triangles": 964,
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.5,
+        0.0,
+        -0.505
+      ],
+      "max": [
+        0.5,
+        1.175,
+        0.505
+      ]
+    },
+    "return": {
+      "kind": "station",
+      "triangles": 1424,
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.5,
+        0.0,
+        -0.505
+      ],
+      "max": [
+        0.5,
+        1.46,
+        0.505
+      ]
+    },
+    "serve": {
+      "kind": "station",
+      "triangles": 1342,
+      "materials": [
+        "Flame",
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.5,
+        0.0,
+        -0.5
+      ],
+      "max": [
+        0.5,
+        1.498,
+        0.505
+      ]
+    },
+    "bin": {
+      "kind": "station",
+      "triangles": 1136,
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.36,
+        0.0,
+        -0.365
+      ],
+      "max": [
+        0.36,
+        1.023,
+        0.38
+      ]
+    },
+    "crate": {
+      "kind": "station",
+      "triangles": 1188,
+      "materials": [
+        "CrateLabel",
+        "Paint"
+      ],
+      "min": [
+        -0.485,
+        0.0,
+        -0.485
+      ],
+      "max": [
+        0.485,
+        0.9,
+        0.5
+      ]
+    },
+    "belt": {
+      "kind": "station",
+      "triangles": 868,
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.505,
+        0.0,
+        -0.481
+      ],
+      "max": [
+        0.505,
+        0.94,
+        0.481
+      ]
+    },
+    "floor_tile": {
+      "kind": "env",
+      "triangles": 176,
+      "materials": [
+        "Floor"
+      ],
+      "min": [
+        -0.5,
+        -0.06,
+        -0.5
+      ],
+      "max": [
+        0.5,
+        0.0,
+        0.5
+      ]
+    },
+    "ice_tile": {
+      "kind": "env",
       "triangles": 168,
-      "meshes": 1
+      "materials": [
+        "Gloss"
+      ],
+      "min": [
+        -0.5,
+        -0.06,
+        -0.5
+      ],
+      "max": [
+        0.5,
+        0.004,
+        0.5
+      ]
     },
-    "lettuce_cooked": {
-      "triangles": 552,
-      "meshes": 1
+    "gate_plank": {
+      "kind": "env",
+      "triangles": 508,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.5,
+        -0.08,
+        -0.5
+      ],
+      "max": [
+        0.5,
+        0.018,
+        0.5
+      ]
     },
-    "lettuce_burnt": {
-      "triangles": 552,
-      "meshes": 1
+    "portal_pad": {
+      "kind": "env",
+      "triangles": 734,
+      "materials": [
+        "Paint",
+        "PortalGlow"
+      ],
+      "min": [
+        -0.46,
+        -0.02,
+        -0.46
+      ],
+      "max": [
+        0.46,
+        0.051,
+        0.46
+      ]
     },
-    "tomato_raw": {
-      "triangles": 756,
-      "meshes": 1
-    },
-    "tomato_chopped": {
-      "triangles": 756,
-      "meshes": 1
-    },
-    "tomato_cooked": {
-      "triangles": 756,
-      "meshes": 1
-    },
-    "tomato_burnt": {
-      "triangles": 756,
-      "meshes": 1
-    },
-    "onion_raw": {
-      "triangles": 768,
-      "meshes": 1
-    },
-    "onion_chopped": {
-      "triangles": 756,
-      "meshes": 1
-    },
-    "onion_cooked": {
-      "triangles": 768,
-      "meshes": 1
-    },
-    "onion_burnt": {
-      "triangles": 768,
-      "meshes": 1
-    },
-    "patty_raw": {
-      "triangles": 672,
-      "meshes": 1
-    },
-    "patty_chopped": {
-      "triangles": 756,
-      "meshes": 1
-    },
-    "patty_cooked": {
-      "triangles": 672,
-      "meshes": 1
-    },
-    "patty_burnt": {
-      "triangles": 672,
-      "meshes": 1
-    },
-    "bun_raw": {
-      "triangles": 1008,
-      "meshes": 1
-    },
-    "bun_chopped": {
-      "triangles": 756,
-      "meshes": 1
-    },
-    "bun_cooked": {
-      "triangles": 1008,
-      "meshes": 1
-    },
-    "bun_burnt": {
-      "triangles": 1008,
-      "meshes": 1
-    },
-    "dough_raw": {
-      "triangles": 300,
-      "meshes": 1
-    },
-    "dough_chopped": {
-      "triangles": 756,
-      "meshes": 1
-    },
-    "dough_cooked": {
-      "triangles": 300,
-      "meshes": 1
-    },
-    "dough_burnt": {
-      "triangles": 300,
-      "meshes": 1
-    },
-    "cheese_raw": {
-      "triangles": 368,
-      "meshes": 1
-    },
-    "cheese_chopped": {
-      "triangles": 756,
-      "meshes": 1
-    },
-    "cheese_cooked": {
-      "triangles": 368,
-      "meshes": 1
-    },
-    "cheese_burnt": {
-      "triangles": 368,
-      "meshes": 1
+    "wall": {
+      "kind": "env",
+      "triangles": 1032,
+      "materials": [
+        "Wall"
+      ],
+      "min": [
+        -0.5,
+        0.0,
+        -0.51
+      ],
+      "max": [
+        0.5,
+        1.27,
+        0.51
+      ]
     },
     "plate": {
-      "triangles": 448,
-      "meshes": 1
+      "kind": "item",
+      "triangles": 320,
+      "materials": [
+        "Gloss"
+      ],
+      "min": [
+        -0.255,
+        0.0,
+        -0.255
+      ],
+      "max": [
+        0.255,
+        0.054,
+        0.255
+      ]
     },
     "plate_dirty": {
-      "triangles": 600,
-      "meshes": 1
+      "kind": "item",
+      "triangles": 380,
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.255,
+        0.0,
+        -0.255
+      ],
+      "max": [
+        0.255,
+        0.054,
+        0.255
+      ]
+    },
+    "pot": {
+      "kind": "item",
+      "triangles": 412,
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.316,
+        0.0,
+        -0.236
+      ],
+      "max": [
+        0.316,
+        0.255,
+        0.236
+      ]
+    },
+    "pan": {
+      "kind": "item",
+      "triangles": 296,
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.215,
+        0.0,
+        -0.215
+      ],
+      "max": [
+        0.464,
+        0.145,
+        0.215
+      ]
+    },
+    "extinguisher": {
+      "kind": "item",
+      "triangles": 428,
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.095,
+        0.0,
+        -0.093
+      ],
+      "max": [
+        0.129,
+        0.492,
+        0.125
+      ]
+    },
+    "soup_tomato": {
+      "kind": "soup",
+      "triangles": 148,
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.185,
+        0.0,
+        -0.182
+      ],
+      "max": [
+        0.185,
+        0.042,
+        0.182
+      ]
+    },
+    "soup_onion": {
+      "kind": "soup",
+      "triangles": 256,
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.185,
+        0.0,
+        -0.182
+      ],
+      "max": [
+        0.185,
+        0.036,
+        0.182
+      ]
+    },
+    "soup_mixed": {
+      "kind": "soup",
+      "triangles": 168,
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.185,
+        0.0,
+        -0.182
+      ],
+      "max": [
+        0.185,
+        0.036,
+        0.182
+      ]
+    },
+    "lettuce_raw": {
+      "kind": "food",
+      "triangles": 352,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.174,
+        0.0,
+        -0.172
+      ],
+      "max": [
+        0.174,
+        0.303,
+        0.173
+      ]
+    },
+    "lettuce_chopped": {
+      "kind": "food",
+      "triangles": 336,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.198,
+        0.0,
+        -0.176
+      ],
+      "max": [
+        0.191,
+        0.095,
+        0.177
+      ]
+    },
+    "tomato_raw": {
+      "kind": "food",
+      "triangles": 484,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.175,
+        0.0,
+        -0.179
+      ],
+      "max": [
+        0.175,
+        0.355,
+        0.179
+      ]
+    },
+    "tomato_chopped": {
+      "kind": "food",
+      "triangles": 240,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.193,
+        0.0,
+        -0.17
+      ],
+      "max": [
+        0.218,
+        0.154,
+        0.152
+      ]
+    },
+    "tomato_cooked": {
+      "kind": "food",
+      "triangles": 164,
+      "materials": [
+        "Gloss"
+      ],
+      "min": [
+        -0.169,
+        0.0,
+        -0.144
+      ],
+      "max": [
+        0.155,
+        0.193,
+        0.143
+      ]
+    },
+    "onion_raw": {
+      "kind": "food",
+      "triangles": 240,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.176,
+        0.0,
+        -0.176
+      ],
+      "max": [
+        0.176,
+        0.398,
+        0.176
+      ]
+    },
+    "onion_chopped": {
+      "kind": "food",
+      "triangles": 448,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.167,
+        0.0,
+        -0.171
+      ],
+      "max": [
+        0.203,
+        0.167,
+        0.172
+      ]
+    },
+    "onion_cooked": {
+      "kind": "food",
+      "triangles": 360,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.167,
+        0.0,
+        -0.171
+      ],
+      "max": [
+        0.203,
+        0.167,
+        0.172
+      ]
+    },
+    "patty_raw": {
+      "kind": "food",
+      "triangles": 440,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.211,
+        0.0,
+        -0.159
+      ],
+      "max": [
+        0.226,
+        0.184,
+        0.159
+      ]
+    },
+    "patty_chopped": {
+      "kind": "food",
+      "triangles": 232,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.169,
+        0.0,
+        -0.165
+      ],
+      "max": [
+        0.169,
+        0.095,
+        0.165
+      ]
+    },
+    "patty_cooked": {
+      "kind": "food",
+      "triangles": 244,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.169,
+        0.0,
+        -0.165
+      ],
+      "max": [
+        0.169,
+        0.086,
+        0.165
+      ]
+    },
+    "bun_raw": {
+      "kind": "food",
+      "triangles": 268,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.176,
+        0.0,
+        -0.171
+      ],
+      "max": [
+        0.176,
+        0.187,
+        0.171
+      ]
+    },
+    "dough_raw": {
+      "kind": "food",
+      "triangles": 228,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.175,
+        0.0,
+        -0.171
+      ],
+      "max": [
+        0.184,
+        0.204,
+        0.174
+      ]
+    },
+    "dough_cooked": {
+      "kind": "food",
+      "triangles": 340,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.215,
+        0.0,
+        -0.215
+      ],
+      "max": [
+        0.215,
+        0.045,
+        0.215
+      ]
+    },
+    "cheese_raw": {
+      "kind": "food",
+      "triangles": 272,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.182,
+        0.0,
+        -0.124
+      ],
+      "max": [
+        0.169,
+        0.164,
+        0.121
+      ]
+    },
+    "cheese_chopped": {
+      "kind": "food",
+      "triangles": 320,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.191,
+        0.0,
+        -0.181
+      ],
+      "max": [
+        0.171,
+        0.134,
+        0.194
+      ]
+    },
+    "burnt": {
+      "kind": "food",
+      "triangles": 160,
+      "materials": [
+        "Flame",
+        "Paint"
+      ],
+      "min": [
+        -0.165,
+        0.0,
+        -0.133
+      ],
+      "max": [
+        0.172,
+        0.213,
+        0.132
+      ]
+    },
+    "dish_side_salad": {
+      "kind": "dish",
+      "triangles": 294,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.125,
+        0.0,
+        -0.083
+      ],
+      "max": [
+        0.114,
+        0.067,
+        0.107
+      ]
     },
     "dish_salad": {
-      "triangles": 508,
-      "meshes": 1
+      "kind": "dish",
+      "triangles": 492,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.159,
+        0.0,
+        -0.118
+      ],
+      "max": [
+        0.153,
+        0.076,
+        0.109
+      ]
     },
-    "dish_soup": {
-      "triangles": 932,
-      "meshes": 1
+    "dish_tomato_soup": {
+      "kind": "dish",
+      "triangles": 410,
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.18,
+        0.0,
+        -0.177
+      ],
+      "max": [
+        0.18,
+        0.104,
+        0.177
+      ]
+    },
+    "dish_onion_soup": {
+      "kind": "dish",
+      "triangles": 460,
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.18,
+        0.0,
+        -0.177
+      ],
+      "max": [
+        0.18,
+        0.115,
+        0.177
+      ]
     },
     "dish_burger": {
-      "triangles": 1540,
-      "meshes": 1
+      "kind": "dish",
+      "triangles": 336,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.15,
+        0.0,
+        -0.15
+      ],
+      "max": [
+        0.15,
+        0.199,
+        0.15
+      ]
+    },
+    "dish_cheeseburger": {
+      "kind": "dish",
+      "triangles": 368,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.191,
+        0.0,
+        -0.191
+      ],
+      "max": [
+        0.191,
+        0.215,
+        0.191
+      ]
+    },
+    "dish_deluxe_burger": {
+      "kind": "dish",
+      "triangles": 500,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.15,
+        0.0,
+        -0.15
+      ],
+      "max": [
+        0.15,
+        0.312,
+        0.153
+      ]
     },
     "dish_pizza": {
-      "triangles": 1108,
-      "meshes": 1
+      "kind": "dish",
+      "triangles": 488,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.23,
+        0.0,
+        -0.227
+      ],
+      "max": [
+        0.23,
+        0.044,
+        0.227
+      ]
     },
-    "station_counter": {
-      "triangles": 788,
-      "meshes": 2
+    "prop_plant": {
+      "kind": "prop",
+      "triangles": 516,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.322,
+        0.0,
+        -0.327
+      ],
+      "max": [
+        0.339,
+        0.839,
+        0.318
+      ]
     },
-    "station_board": {
-      "triangles": 2396,
-      "meshes": 4
+    "prop_stool": {
+      "kind": "prop",
+      "triangles": 380,
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.205,
+        -0.0,
+        -0.21
+      ],
+      "max": [
+        0.205,
+        0.665,
+        0.21
+      ]
     },
-    "station_stove": {
-      "triangles": 2636,
-      "meshes": 2
+    "prop_bench": {
+      "kind": "prop",
+      "triangles": 340,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.8,
+        0.0,
+        -0.34
+      ],
+      "max": [
+        0.8,
+        0.99,
+        0.3
+      ]
     },
-    "station_oven": {
-      "triangles": 4852,
-      "meshes": 2
+    "prop_sign": {
+      "kind": "prop",
+      "triangles": 224,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.3,
+        0.029,
+        -0.386
+      ],
+      "max": [
+        0.3,
+        0.936,
+        -0.002
+      ]
     },
-    "station_sink": {
-      "triangles": 2148,
-      "meshes": 2
+    "prop_barrel": {
+      "kind": "prop",
+      "triangles": 308,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.31,
+        0.0,
+        -0.302
+      ],
+      "max": [
+        0.31,
+        0.66,
+        0.302
+      ]
     },
-    "station_plates": {
-      "triangles": 824,
-      "meshes": 2
+    "prop_buoy": {
+      "kind": "prop",
+      "triangles": 316,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.285,
+        0.0,
+        -0.05
+      ],
+      "max": [
+        0.285,
+        1.065,
+        0.135
+      ]
     },
-    "station_return": {
-      "triangles": 2192,
-      "meshes": 2
+    "prop_post": {
+      "kind": "prop",
+      "triangles": 360,
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.16,
+        0.0,
+        -0.16
+      ],
+      "max": [
+        0.16,
+        0.76,
+        0.16
+      ]
     },
-    "station_serve": {
-      "triangles": 1784,
-      "meshes": 2
+    "prop_crate_stack": {
+      "kind": "prop",
+      "triangles": 440,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.26,
+        0.0,
+        -0.26
+      ],
+      "max": [
+        0.308,
+        0.92,
+        0.288
+      ]
     },
-    "station_crate": {
-      "triangles": 2436,
-      "meshes": 1
+    "prop_boat": {
+      "kind": "prop",
+      "triangles": 280,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.902,
+        0.0,
+        -0.418
+      ],
+      "max": [
+        0.902,
+        0.3,
+        0.418
+      ]
     },
-    "station_belt": {
-      "triangles": 1520,
-      "meshes": 2
+    "prop_pine": {
+      "kind": "prop",
+      "triangles": 608,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.521,
+        0.0,
+        -0.548
+      ],
+      "max": [
+        0.521,
+        1.83,
+        0.548
+      ]
     },
-    "station_bin": {
-      "triangles": 648,
-      "meshes": 2
+    "prop_snowman": {
+      "kind": "prop",
+      "triangles": 992,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.432,
+        -0.02,
+        -0.3
+      ],
+      "max": [
+        0.432,
+        1.34,
+        0.3
+      ]
     },
-    "bell": {
-      "triangles": 332,
-      "meshes": 1
+    "prop_logs": {
+      "kind": "prop",
+      "triangles": 228,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.45,
+        0.006,
+        -0.27
+      ],
+      "max": [
+        0.45,
+        0.484,
+        0.27
+      ]
     },
-    "planter": {
+    "prop_cactus": {
+      "kind": "prop",
+      "triangles": 196,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.33,
+        0.0,
+        -0.14
+      ],
+      "max": [
+        0.33,
+        1.093,
+        0.14
+      ]
+    },
+    "prop_rock": {
+      "kind": "prop",
+      "triangles": 100,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.447,
+        -0.112,
+        -0.38
+      ],
+      "max": [
+        0.536,
+        0.459,
+        0.383
+      ]
+    },
+    "prop_skull": {
+      "kind": "prop",
+      "triangles": 360,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.451,
+        -0.002,
+        -0.221
+      ],
+      "max": [
+        0.451,
+        0.425,
+        0.3
+      ]
+    },
+    "prop_lantern": {
+      "kind": "prop",
+      "triangles": 286,
+      "materials": [
+        "Flame",
+        "Paint"
+      ],
+      "min": [
+        -0.03,
+        0.0,
+        -0.127
+      ],
+      "max": [
+        0.421,
+        1.517,
+        0.127
+      ]
+    },
+    "prop_awning": {
+      "kind": "prop",
+      "triangles": 852,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.48,
+        0.0,
+        -0.334
+      ],
+      "max": [
+        0.48,
+        1.568,
+        0.334
+      ]
+    },
+    "prop_basket": {
+      "kind": "prop",
+      "triangles": 592,
+      "materials": [
+        "Paint"
+      ],
+      "min": [
+        -0.28,
+        0.0,
+        -0.273
+      ],
+      "max": [
+        0.28,
+        0.34,
+        0.273
+      ]
+    },
+    "prop_column": {
+      "kind": "prop",
+      "triangles": 276,
+      "materials": [
+        "Gloss"
+      ],
+      "min": [
+        -0.28,
+        0.0,
+        -0.28
+      ],
+      "max": [
+        0.28,
+        2.57,
+        0.28
+      ]
+    },
+    "prop_rope": {
+      "kind": "prop",
+      "triangles": 424,
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.714,
+        -0.0,
+        -0.12
+      ],
+      "max": [
+        0.714,
+        0.9,
+        0.12
+      ]
+    },
+    "prop_window": {
+      "kind": "prop",
       "triangles": 600,
-      "meshes": 1
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.4,
+        0.655,
+        0.47
+      ],
+      "max": [
+        0.4,
+        1.31,
+        0.63
+      ]
     },
-    "fan": {
-      "triangles": 248,
-      "meshes": 1
+    "prop_lamp": {
+      "kind": "prop",
+      "triangles": 492,
+      "materials": [
+        "Flame",
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.294,
+        -0.0,
+        -0.16
+      ],
+      "max": [
+        0.294,
+        1.63,
+        0.16
+      ]
+    },
+    "prop_topiary": {
+      "kind": "prop",
+      "triangles": 212,
+      "materials": [
+        "Gloss",
+        "Paint"
+      ],
+      "min": [
+        -0.231,
+        0.0,
+        -0.238
+      ],
+      "max": [
+        0.23,
+        0.949,
+        0.233
+      ]
+    },
+    "chef": {
+      "kind": "chef",
+      "triangles": 3558,
+      "materials": [
+        "Paint",
+        "TeamColor"
+      ],
+      "min": [
+        -0.419,
+        0.0,
+        -0.316
+      ],
+      "max": [
+        0.419,
+        1.6,
+        0.289
+      ]
+    },
+    "chef_f": {
+      "kind": "chef",
+      "triangles": 3882,
+      "materials": [
+        "Paint",
+        "TeamColor"
+      ],
+      "min": [
+        -0.391,
+        0.0,
+        -0.356
+      ],
+      "max": [
+        0.391,
+        1.601,
+        0.27
+      ]
     }
   }
 }

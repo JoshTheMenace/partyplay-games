@@ -1,67 +1,182 @@
+// Shared, browser-safe vocabulary for rules, client and scene. No server-only logic or state lives here.
+
+// ── Food ────────────────────────────────────────────────────────────────────
 export type Ingredient = 'lettuce' | 'tomato' | 'onion' | 'patty' | 'bun' | 'dough' | 'cheese';
-export type Food = { kind: Ingredient; stage: 'raw' | 'chopped' | 'cooked' | 'burnt' };
-export type Item = { id: number; kind: 'food' | 'plate'; food: Food[]; dirty: boolean };
-export type StationKind = 'crate' | 'board' | 'stove' | 'oven' | 'belt' | 'counter' | 'plates' | 'return' | 'sink' | 'serve' | 'bin';
-export type Station = { id: string; kind: StationKind; x: number; z: number; ingredient?: Ingredient; item: Item | null; progress: number; heat: number; fire: number; working: boolean; powered: boolean };
+export type FoodState = 'raw' | 'chopped' | 'cooked' | 'burnt';
+export type Part = { food: Ingredient; state: FoodState };
+export const INGREDIENTS: Record<Ingredient, { name: string; color: string }> = {
+  lettuce: { name: 'Lettuce', color: '#6fbf45' }, tomato: { name: 'Tomato', color: '#e9503c' }, onion: { name: 'Onion', color: '#c99bd6' },
+  patty: { name: 'Beef', color: '#c0574f' }, bun: { name: 'Bun', color: '#e9ad5c' }, dough: { name: 'Dough', color: '#f1d49b' }, cheese: { name: 'Cheese', color: '#f7c948' },
+};
+/** Raw foods that a chopping board turns into `chopped`. Bun and dough are used whole. */
+export const CHOPPABLE: readonly Ingredient[] = ['lettuce', 'tomato', 'onion', 'patty', 'cheese'];
+/** Chopped foods a pot accepts (soups) and a pan accepts (fried beef). */
+export const POT_FOODS: readonly Ingredient[] = ['tomato', 'onion'];
+export const PAN_FOODS: readonly Ingredient[] = ['patty'];
+
+// ── Items ───────────────────────────────────────────────────────────────────
+/**
+ * Every movable thing has an id and exactly one location (chef hands, a tile, the floor/air, or a pending return).
+ * food: parts[0] is the ingredient. plate: parts are its contents. dirty: a stack of `count` dirty plates.
+ * pot / pan: parts are the ingredients inside; `cook` is seconds of heat applied (kept when lifted off the stove).
+ * A plate inside an oven uses `cook` for baking. extinguisher: no parts.
+ */
+export type ItemKind = 'food' | 'plate' | 'dirty' | 'pot' | 'pan' | 'extinguisher';
+export type Item = { id: number; kind: ItemKind; parts: Part[]; cook: number; count?: number };
+export const POT_CAPACITY = 3, PAN_CAPACITY = 1, PLATE_CAPACITY = 4;
+
+// ── Recipes ─────────────────────────────────────────────────────────────────
+export type RecipeId = 'side_salad' | 'salad' | 'tomato_soup' | 'onion_soup' | 'burger' | 'cheeseburger' | 'deluxe_burger' | 'pizza';
+export type Recipe = { id: RecipeId; name: string; parts: Part[]; value: number };
+const p = (food: Ingredient, state: FoodState): Part => ({ food, state });
+export const RECIPES: Record<RecipeId, Recipe> = {
+  side_salad: { id: 'side_salad', name: 'Side salad', value: 20, parts: [p('lettuce', 'chopped')] },
+  salad: { id: 'salad', name: 'Garden salad', value: 30, parts: [p('lettuce', 'chopped'), p('tomato', 'chopped')] },
+  tomato_soup: { id: 'tomato_soup', name: 'Tomato soup', value: 40, parts: [p('tomato', 'cooked'), p('tomato', 'cooked'), p('tomato', 'cooked')] },
+  onion_soup: { id: 'onion_soup', name: 'Onion soup', value: 40, parts: [p('onion', 'cooked'), p('onion', 'cooked'), p('onion', 'cooked')] },
+  burger: { id: 'burger', name: 'Burger', value: 40, parts: [p('bun', 'raw'), p('patty', 'cooked')] },
+  cheeseburger: { id: 'cheeseburger', name: 'Cheeseburger', value: 50, parts: [p('bun', 'raw'), p('patty', 'cooked'), p('cheese', 'chopped')] },
+  deluxe_burger: { id: 'deluxe_burger', name: 'Deluxe burger', value: 60, parts: [p('bun', 'raw'), p('patty', 'cooked'), p('lettuce', 'chopped'), p('tomato', 'chopped')] },
+  pizza: { id: 'pizza', name: 'Margherita pizza', value: 60, parts: [p('dough', 'cooked'), p('tomato', 'chopped'), p('cheese', 'chopped')] },
+};
+const signature = (parts: readonly Part[]) => parts.map(part => `${part.food}:${part.state}`).sort().join('|');
+const SIGNATURES = new Map(Object.values(RECIPES).map(recipe => [signature(recipe.parts), recipe.id]));
+/** Exact multiset match of a clean plate's contents. */
+export function matchRecipe(item: Item | null | undefined): RecipeId | undefined {
+  return item?.kind === 'plate' && item.parts.length ? SIGNATURES.get(signature(item.parts)) : undefined;
+}
+
+// ── Timing and movement (seconds, metres; one tile = 1 m) ───────────────────
+export const CHOP_SECONDS = 2.1, WASH_SECONDS = 1.6;
+export const POT_SECONDS = 9, PAN_SECONDS = 6, OVEN_SECONDS = 9;
+/** After food is done: warning begins at +BURN_WARN, food burns and the station ignites at +BURN_AT. */
+export const BURN_WARN = 5, BURN_AT = 9;
+export const FIRE_SPREAD_SECONDS = 4, EXTINGUISH_SECONDS = 1.1;
+export const RETURN_SECONDS = 6, BELT_SECONDS = 1.1;
+export const CHEF_RADIUS = 0.34, WALK_SPEED = 4.4, ACCEL = 40, ICE_ACCEL = 7, ICE_DRAG = 0.8;
+export const DASH_SPEED = 11, DASH_SECONDS = 0.18, DASH_COOLDOWN = 0.55;
+export const THROW_SPEED = 9, THROW_SECONDS = 0.45, RESPAWN_SECONDS = 3;
+export const COUNTER_HEIGHT = 0.9;
+/** Heat needed for a container to finish. A pot needs full time for any number of ingredients. */
+export const cookSeconds = (kind: ItemKind) => kind === 'pot' ? POT_SECONDS : kind === 'pan' ? PAN_SECONDS : OVEN_SECONDS;
+
+// ── Kitchen maps ────────────────────────────────────────────────────────────
+/**
+ * Maps are authored as equal-length rows. Row 0 is the back wall (far from camera); +X is right, +Z is toward the camera.
+ * Tile (col,row) is centred at x = col + .5 - cols/2, z = row + .5 - rows/2.
+ *
+ *  .  floor              @  floor + chef spawn       *  ice floor          ~  void (gap/water, never walkable)
+ *  g  drawbridge floor (walkable only while gates are open)                 T  portal pad (pairs in reading order)
+ *  #  counter            E  counter holding an extinguisher                 C  chopping board
+ *  O  stove with a pot   F  stove with a frying pan  V  oven               W  sink
+ *  R  clean plate rack   D  dirty plate return       H  serving hatch       X  bin
+ *  l t o p b d c   ingredient crates: lettuce tomato onion patty bun dough cheese
+ *  > < ^ v  conveyor belt counters moving their item one tile that way every BELT_SECONDS
+ */
+export type TileKind = 'floor' | 'ice' | 'void' | 'gate' | 'portal' | 'counter' | 'board' | 'stove' | 'oven' | 'sink' | 'rack' | 'return' | 'serve' | 'bin' | 'crate' | 'belt';
+export type Tile = { index: number; col: number; row: number; x: number; z: number; kind: TileKind; ingredient?: Ingredient; dir?: { x: number; z: number }; pair?: number; start?: 'pot' | 'pan' | 'extinguisher' };
+export type KitchenMap = { cols: number; rows: number; halfX: number; halfZ: number; tiles: Tile[]; spawns: { x: number; z: number }[] };
+export const WALKABLE: ReadonlySet<TileKind> = new Set(['floor', 'ice', 'gate', 'portal']);
+/** Counters and stations that can hold an item (crates, racks, returns, hatch and bin never hold one). */
+export const SURFACES: ReadonlySet<TileKind> = new Set(['counter', 'board', 'stove', 'oven', 'sink', 'belt']);
+/** Surfaces that catch fire when a neighbouring station burns. */
+export const FLAMMABLE: ReadonlySet<TileKind> = new Set(['counter', 'board', 'stove', 'oven', 'belt', 'crate']);
+const CRATES: Record<string, Ingredient> = { l: 'lettuce', t: 'tomato', o: 'onion', p: 'patty', b: 'bun', d: 'dough', c: 'cheese' };
+const BELTS: Record<string, { x: number; z: number }> = { '>': { x: 1, z: 0 }, '<': { x: -1, z: 0 }, '^': { x: 0, z: -1 }, v: { x: 0, z: 1 } };
+const KINDS: Record<string, TileKind> = { '.': 'floor', '@': 'floor', '*': 'ice', '~': 'void', g: 'gate', T: 'portal', '#': 'counter', E: 'counter', C: 'board', O: 'stove', F: 'stove', V: 'oven', W: 'sink', R: 'rack', D: 'return', H: 'serve', X: 'bin' };
+export function parseMap(rows: readonly string[]): KitchenMap {
+  const cols = rows[0].length, tiles: Tile[] = [], spawns: KitchenMap['spawns'] = [], portals: number[] = [];
+  if (rows.some(row => row.length !== cols)) throw new Error('Kitchen map rows must have equal length.');
+  rows.forEach((line, row) => [...line].forEach((char, col) => {
+    const kind = CRATES[char] ? 'crate' : BELTS[char] ? 'belt' : KINDS[char];
+    if (!kind) throw new Error(`Unknown kitchen map tile "${char}" at ${col},${row}.`);
+    const tile: Tile = { index: tiles.length, col, row, x: col + .5 - cols / 2, z: row + .5 - rows.length / 2, kind };
+    if (CRATES[char]) tile.ingredient = CRATES[char];
+    if (BELTS[char]) tile.dir = BELTS[char];
+    if (char === 'O') tile.start = 'pot'; else if (char === 'F') tile.start = 'pan'; else if (char === 'E') tile.start = 'extinguisher';
+    if (char === '@') spawns.push({ x: tile.x, z: tile.z });
+    if (kind === 'portal') portals.push(tile.index);
+    tiles.push(tile);
+  }));
+  for (let i = 0; i + 1 < portals.length; i += 2) { tiles[portals[i]].pair = portals[i + 1]; tiles[portals[i + 1]].pair = portals[i]; }
+  return { cols, rows: rows.length, halfX: cols / 2, halfZ: rows.length / 2, tiles, spawns };
+}
+export function tileAt(map: KitchenMap, x: number, z: number): Tile | undefined {
+  const col = Math.floor(x + map.halfX), row = Math.floor(z + map.halfZ);
+  return col < 0 || row < 0 || col >= map.cols || row >= map.rows ? undefined : map.tiles[row * map.cols + col];
+}
+
+// ── Levels (data authored in levels.ts) ─────────────────────────────────────
+export type Theme = 'diner' | 'harbor' | 'alpine' | 'canyon' | 'market' | 'grand';
+export type Level = {
+  id: string; name: string; location: string; blurb: string; theme: Theme; recipes: RecipeId[];
+  /** Maps for 1–4 chefs and 5–10 chefs. Each needs at least 4 / 10 spawns. */
+  small: readonly string[]; large: readonly string[];
+  /** Seconds a fresh order waits (before roster/relaxed adjustments). */
+  patience: number;
+  /** Score for one, two and three stars with two chefs over 180 seconds; starThresholds() scales it. */
+  stars: [number, number, number];
+  /** Most a crew can score relative to two chefs when the kitchen itself, not the crew, is the limit (caps star scaling). */
+  crowd?: number;
+  gates?: { open: number; closed: number; warn: number };
+};
+
+// ── Chefs and input ─────────────────────────────────────────────────────────
 export const CHARACTERS = [{ id: 'chef', name: 'Chef' }, { id: 'chef_f', name: 'Head chef' }, { id: 'cat', name: 'Cat' }, { id: 'dog', name: 'Dog' }, { id: 'iguana', name: 'Iguana' }, { id: 'axolotl', name: 'Axolotl' }] as const;
 export type CharacterId = typeof CHARACTERS[number]['id'];
-export type Chef = { id: string; name: string; color: string; character: CharacterId; x: number; z: number; facingX: number; facingZ: number; held: Item | null; connected: boolean; dashUntil: number; dashReady: number; worked: number; served: number; target: string | null; feedback: string; feedbackAt: number; commandSeq: number };
-export type Input = { x: number; y: number; use: boolean; dash: boolean; command: 'use' | 'drop' | 'toss' | 'dash' | null; seq: number };
-export type Settings = { kitchen: number; seconds: number; practice: boolean };
-export type Recipe = { id: string; name: string; icon: string; parts: Food[]; value: number };
-export const INGREDIENTS: Record<Ingredient, { name: string; icon: string; color: string }> = {
-  lettuce: { name: 'Lettuce', icon: '🥬', color: '#77ba43' }, tomato: { name: 'Tomato', icon: '🍅', color: '#ed5e43' }, onion: { name: 'Onion', icon: '🧅', color: '#cda2cf' }, patty: { name: 'Patty', icon: '🥩', color: '#bb6660' }, bun: { name: 'Bun', icon: '🍞', color: '#eeb86d' }, dough: { name: 'Dough', icon: '🫓', color: '#edca8d' }, cheese: { name: 'Cheese', icon: '🧀', color: '#f7cd47' },
+export type ChefStats = { served: number; chopped: number; washed: number; cooked: number; thrown: number; caught: number; extinguished: number; burnt: number; dashes: number; falls: number };
+export type Work = 'none' | 'chop' | 'wash' | 'spray';
+export type Chef = {
+  id: string; name: string; color: string; character: CharacterId;
+  x: number; z: number; vx: number; vz: number; fx: number; fz: number;
+  held: Item | null; work: Work; /** Tile index the chef is facing and would use, or -1. */ target: number;
+  dashing: boolean; /** Server time when a fallen chef reappears; 0 while standing. */ respawnAt: number;
+  connected: boolean; /** Highest command sequence the server has applied (acknowledgement for the phone). */ seq: number;
+  note: string; noteAt: number; stats: ChefStats;
 };
-export const RECIPES: Recipe[] = [
-  { id: 'salad', name: 'Garden salad', icon: '🥗', value: 80, parts: [{ kind: 'lettuce', stage: 'chopped' }, { kind: 'tomato', stage: 'chopped' }] },
-  { id: 'soup', name: 'Tomato soup', icon: '🍲', value: 110, parts: [{ kind: 'tomato', stage: 'cooked' }, { kind: 'onion', stage: 'cooked' }] },
-  { id: 'burger', name: 'House burger', icon: '🍔', value: 100, parts: [{ kind: 'patty', stage: 'cooked' }, { kind: 'lettuce', stage: 'chopped' }, { kind: 'bun', stage: 'raw' }] },
-  { id: 'pizza', name: 'Garden pizza', icon: '🍕', value: 110, parts: [{ kind: 'dough', stage: 'cooked' }, { kind: 'tomato', stage: 'chopped' }, { kind: 'cheese', stage: 'raw' }] },
-];
-export type Level = { name: string; location: string; subtitle: string; detail: string; accent: string; floor: string; recipes: number; patience: number; theme: number; topology: 'open' | 'split' | 'bridge'; mechanic: 'none' | 'scarce' | 'conveyor' | 'gust' | 'power' | 'finale' };
-const themes = [{ location: 'Sunrise Diner', accent: '#5dbcb0', floor: '#fff0cf' }, { location: 'Canal Canteen', accent: '#4aaecb', floor: '#e1eff0' }, { location: 'Clockwork Works', accent: '#c79359', floor: '#f7e4bf' }, { location: 'Rooftop Kitchen', accent: '#8c91c9', floor: '#efe6f0' }];
-function level(name: string, theme: number, recipes: number, topology: Level['topology'], mechanic: Level['mechanic'], subtitle: string, detail: string, patience = 110): Level { return { name, ...themes[theme], theme, recipes, topology, mechanic, subtitle, detail, patience }; }
-export const KITCHENS: Level[] = [
-  level('Fresh Start', 0, 1, 'open', 'none', 'Learn the rhythm', 'Chop lettuce and tomato, combine on a clean plate, then serve. Serve fresh salads to earn your first star.', 120),
-  level("Soup’s On", 0, 2, 'open', 'none', 'Turn up the heat', 'Chop tomato and onion, cook each on a stove, then plate. Watch the green cooking bar before food burns.', 120),
-  level('Lunch Line', 1, 3, 'split', 'none', 'Meet in the middle', 'Burgers join the menu. Cook the patty, chop lettuce, add a bun. Split up and pass food across the island.'),
-  level('Wash & Dash', 1, 3, 'split', 'scarce', 'Every plate matters', 'Half the usual dish stock. Keep the washing station busy; a dirty plate is your next order.', 120),
-  level('Pizza Post', 2, 4, 'open', 'none', 'Bake the whole pie', 'Plate raw dough, chopped tomato and cheese, then put the whole plate in an oven. Bake eight seconds.', 125),
-  level('Clockwork Crossing', 2, 4, 'bridge', 'none', 'Plan the crossing', 'The centre bridge closes after a warning. Permanent end crossings stay open; toss food across the canal.', 125),
-  level('Conveyor Club', 2, 4, 'split', 'conveyor', 'Keep the line moving', 'The three centre belts pass items toward the front every three seconds. Clear the end belt to keep deliveries moving.', 120),
-  level('Rooftop Gusts', 3, 4, 'open', 'gust', 'Take the outside lane', 'Ventilation warns for five seconds, then slows the centre. Work the perimeter during each gust.', 115),
-  level('Power Lunch', 3, 4, 'split', 'power', 'Share the power', 'Cooking banks alternate every eighteen seconds. Amber warns of a switch; paused food keeps its heat.', 125),
-  level('Grand Opening', 3, 4, 'split', 'finale', 'All hands on deck', 'Full menu, moving food belts, alternating cooker power and rooftop gusts. Assign a prep, cook, runner and dish crew.', 125),
-];
-export const hasPower = (level: Level) => level.mechanic === 'power' || level.mechanic === 'finale';
-export const hasGust = (level: Level) => level.mechanic === 'gust' || level.mechanic === 'finale';
-export const hasBelt = (level: Level) => level.mechanic === 'conveyor' || level.mechanic === 'finale';
-export type Ticket = { id: number; recipe: string; createdAt: number; expiresAt: number };
-export type LooseItem = { item: Item; x: number; z: number; vx: number; vz: number; flight: number };
-export type View = { players: Chef[]; stations: Station[]; loose: LooseItem[]; tickets: Ticket[]; settings: Settings; halfX: number; halfZ: number; startedAt: number; endsAt: number; now: number; complete: boolean; score: number; served: number; missed: number; waste: number; fires: number; combo: number; cleanPlates: number; dirtyPlates: number; thresholds: number[]; stars: number; event: string; eventAt: number; hazard: 'calm' | 'warning' | 'active'; recipeCounts: Record<string, number>; powerBank: number; powerWarning: boolean };
-export const SPEED = 3.6, RADIUS = .36, REACH = 1.72, CHOP_SECONDS = 2.4, COOK_SECONDS = 6, WASH_SECONDS = 2.5;
-export const neutral = (): Input => ({ x: 0, y: 0, use: false, dash: false, command: null, seq: 0 });
-export const foodLabel = (food: Food) => `${food.stage === 'raw' ? '' : food.stage + ' '}${INGREDIENTS[food.kind].name}`;
-export const itemLabel = (item: Item | null) => !item ? 'Empty hands' : item.kind === 'plate' ? item.dirty ? 'Dirty plate' : item.food.length ? `Plate: ${[...new Set(item.food.map(foodLabel))].map(label=>{const count=item.food.filter(f=>foodLabel(f)===label).length;return `${count>1?count+'× ':''}${label}`;}).join(' + ')}` : 'Clean plate' : foodLabel(item.food[0]);
-export const stationLabel = (station: Station) => station.kind === 'crate' ? INGREDIENTS[station.ingredient!].name : ({ board: 'Chopping board', stove: 'Stove', oven: 'Pizza oven', belt: 'Conveyor pass', counter: 'Pass counter', plates: 'Clean plates', return: 'Dirty dishes', sink: 'Wash sink', serve: 'Serve orders', bin: 'Food bin' } as const)[station.kind];
-export function dimensions(count: number) { return { halfX: count > 7 ? 14 : count > 4 ? 12 : 9, halfZ: count > 7 ? 8 : count > 4 ? 7 : 6 }; }
-export function layout(kitchen: number, count: number): Station[] {
-  const { halfX: x, halfZ: z } = dimensions(count), result: Station[] = [];
-  const add = (kind: StationKind, px: number, pz: number, ingredient?: Ingredient) => result.push({ id: `${kind}-${result.length}`, kind, x: px, z: pz, ...(ingredient ? { ingredient } : {}), item: null, progress: 0, heat: 0, fire: 0, working: false, powered: true });
-  const ingredients = [...new Set(RECIPES.slice(0, KITCHENS[kitchen].recipes).flatMap(recipe => recipe.parts.map(part => part.kind)))];
-  ingredients.forEach((ingredient, i) => add('crate', -x + 1.2 + i * 2.25, -z + 1.1, ingredient));
-  const banks = count > 7 ? 3 : 2;
-  for (let i = 0; i < banks; i++) { add('board', -x + 1.2 + i * 2.4, .1); add(kitchen===0?'board':'stove', x - 1.2 - i * 2.4, .1); }
-  add('plates', -3.8, z - 1.1); add('serve', x - 1.2, z - 1.1); add('sink', 1, z - 1.1); add('return', -1.4, z - 1.1); add('bin', -x + 1.2, z - 1.1);
-  if (KITCHENS[kitchen].topology === 'open') { add('counter', -1.2, .1); add('counter', 1.2, .1); }
-  add('counter', x - 3.6, z - 1.1);
-  if (count > 4) { add('board', -x + 1.2, -2.5); add('sink', -x + 5.8, z - 1.1); add(kitchen===0?'board':'stove', x - 1.2, 2.7); }
-  if (KITCHENS[kitchen].topology === 'split') for (const pz of [-2.2, 0, 2.2]) add(hasBelt(KITCHENS[kitchen]) ? 'belt' : 'counter', 0, pz);
-  if (KITCHENS[kitchen].recipes === 4) { add('oven', x - 1.2, -z + 3.5); if (count > 4) add('oven', x - 3.6, -z + 3.5); }
-  return result;
-}
-export function unbakedPizza(item: Item | null) { return item?.kind === 'plate' && !item.dirty && item.food.length === 3 && ['dough:raw', 'tomato:chopped', 'cheese:raw'].every(part => item.food.some(food => `${food.kind}:${food.stage}` === part)); }
-export function recipeFor(item: Item | null): Recipe | undefined { if (!item || item.kind !== 'plate' || item.dirty) return; const signature = (parts: Food[]) => parts.map(p => `${p.kind}:${p.stage}`).sort().join('|'); return RECIPES.find(recipe => signature(recipe.parts) === signature(item.food)); }
-export function interpolate(a: View, b: View, alpha: number): View { return { ...b, players: b.players.map(player => { const old = a.players.find(p => p.id === player.id); return old ? { ...player, x: old.x + (player.x - old.x) * alpha, z: old.z + (player.z - old.z) * alpha } : player; }) }; }
+/**
+ * Complete held state plus one queued command. The phone resends the oldest unacknowledged command with its
+ * sequence until `Chef.seq` catches up, so quick taps survive input coalescing.
+ * grab: pick up / put down / combine. act: start chopping or washing the faced tile, otherwise throw held food.
+ * `act` (held) keeps an extinguisher spraying.
+ */
+export type Command = 'grab' | 'act' | 'dash';
+export type Input = { x: number; y: number; act: boolean; cmd: Command | null; seq: number };
+export const neutral = (): Input => ({ x: 0, y: 0, act: false, cmd: null, seq: 0 });
+export type Settings = { level: number; seconds: 150 | 180 | 240; relaxed: boolean };
+export const DEFAULT_SETTINGS: Settings = { level: 0, seconds: 180, relaxed: false };
 
-export function choppable(item: Item | null) { const food=item?.food[0]; return item?.kind==='food' && food?.stage==='raw' && !['bun','cheese'].includes(food.kind); }
+// ── Public view ─────────────────────────────────────────────────────────────
+/** Dynamic state of one tile; only tiles with something to show are listed. */
+export type TileState = { at: number; item?: Item; /** Chop or wash progress 0–1. */ progress?: number; /** Fire intensity 0–1. */ fire?: number; /** Plates stacked on a rack or return. */ count?: number };
+/** A thrown or dropped item. y is height above the floor; resting items have y = 0 and no velocity. */
+export type Loose = { item: Item; x: number; y: number; z: number; vx: number; vy: number; vz: number; by?: string };
+export type Order = { id: number; recipe: RecipeId; createdAt: number; expiresAt: number };
+export type EventType = 'serve' | 'wrong' | 'expire' | 'chop' | 'wash' | 'done' | 'warn' | 'burn' | 'fire' | 'extinguish' | 'throw' | 'catch' | 'land' | 'splash' | 'dash' | 'fall' | 'respawn' | 'portal' | 'gate' | 'pickup' | 'place' | 'star' | 'order';
+/** Recent happenings for effects and sound. Ids increase; clients react to ids they have not seen. */
+export type GameEvent = { id: number; at: number; type: EventType; x?: number; z?: number; player?: string; value?: number; recipe?: RecipeId };
+export type View = {
+  settings: Settings; players: Chef[]; tiles: TileState[]; loose: Loose[]; orders: Order[]; events: GameEvent[];
+  startedAt: number; endsAt: number; now: number; complete: boolean;
+  score: number; combo: number; served: number; failed: number; stars: number; thresholds: [number, number, number];
+  recipeCounts: Partial<Record<RecipeId, number>>;
+  gatesOpen: boolean; gateWarning: boolean;
+};
+export const EVENT_LIMIT = 32;
+
+// ── Labels shared by phone, display and tests ───────────────────────────────
+export const partLabel = (part: Part) => `${part.state === 'raw' ? '' : part.state[0].toUpperCase() + part.state.slice(1) + ' '}${part.state === 'raw' ? INGREDIENTS[part.food].name : INGREDIENTS[part.food].name.toLowerCase()}`;
+export function itemLabel(item: Item | null | undefined): string {
+  if (!item) return 'Empty hands';
+  if (item.kind === 'food') return partLabel(item.parts[0]);
+  if (item.kind === 'dirty') return `${item.count ?? 1} dirty plate${(item.count ?? 1) > 1 ? 's' : ''}`;
+  if (item.kind === 'extinguisher') return 'Extinguisher';
+  const recipe = matchRecipe(item), name = item.kind === 'plate' ? 'Plate' : item.kind === 'pot' ? 'Pot' : 'Pan';
+  if (recipe) return RECIPES[recipe].name;
+  return item.parts.length ? `${name}: ${item.parts.map(partLabel).join(' + ')}` : `Empty ${name.toLowerCase()}`;
+}
+export const TILE_LABELS: Record<TileKind, string> = {
+  floor: 'Floor', ice: 'Ice', void: 'Gap', gate: 'Drawbridge', portal: 'Portal', counter: 'Counter', board: 'Chopping board', stove: 'Stove', oven: 'Oven',
+  sink: 'Sink', rack: 'Clean plates', return: 'Dirty plates', serve: 'Serving hatch', bin: 'Bin', crate: 'Crate', belt: 'Conveyor',
+};
+export const tileLabel = (tile: Tile) => tile.kind === 'crate' ? `${INGREDIENTS[tile.ingredient!].name} crate` : TILE_LABELS[tile.kind];

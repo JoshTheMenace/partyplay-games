@@ -1,61 +1,65 @@
 # Kitchen Rush
 
-A cooperative 3D kitchen campaign for 1–10 players. Play solo on one device or use phone controllers with a shared display. Ten stages across four original restaurant settings introduce chopping, stove cooking, split passes, dish scarcity, whole-pizza baking, a drawbridge, conveyors, ventilation gusts, alternating cooker power and a combined finale. Each service lasts 3, 4 or 5 minutes. Everyone shares points and stars.
+A chaotic co-op cooking game for 1–10 chefs. Everyone shares one kitchen on the TV, one score and one set of stars. Phones are landscape controllers; a host can also play solo on one device with the keyboard. Kitchens are hand-built tile maps with pots, pans, ovens, spreading fires, dirty dishes, thrown food, conveyors, ice, drawbridges and portals.
 
-## Play
+## How to play
 
-Select Kitchen Rush in the shared launcher. Phones join, choose one of six cooks, and ready through the normal room flow. Appearance does not change movement or service time. The four animal cooks use the contributor’s character meshes with articulated hands and feet; human cooks and stations retain the existing kitchen kit. Food tickets use matching rendered icons. Drag the movement pad, then tap Use to take/place an ingredient or plate; hold Use to chop, wash or extinguish. Drop puts an item at your feet. Toss passes ingredients in your last movement direction; plates are carried safely. Tap Dash for a short burst in your movement direction, or your facing direction when standing still; releasing the controls does not cancel the burst. Dash recharges after 1.6 seconds. Keyboard: focus the pad for WASD/arrows, E to use, Q to drop, F to toss, Shift to dash.
+Read the tickets across the top of the screen. Each shows the dish, its ingredients and how to prepare them (knife = chop, pot = boil, flame = fry, oven = bake). Grab ingredients from crates, chop them on boards, cook them in pots and pans, put everything on a clean plate, and serve it at the hatch before the ticket's patience bar runs out.
 
-Follow the ticket exactly. Chopped lettuce + chopped tomato makes salad. Chopped tomato and onion each need stove cooking for soup. Burgers need cooked patty, chopped lettuce and a bun. Pizza is assembled as raw dough + chopped tomato + cheese on a plate, then the whole plate goes into an oven. Green means cooked; collect before burning. All recipes need a clean plate. Served plates return dirty after five seconds; take one to the sink and hold Use to wash it. The food bin clears mistakes while preserving plates. Empty-handed Use extinguishes fire.
+| Control | Phone | Keyboard |
+| --- | --- | --- |
+| Move | Left pad | WASD / arrows |
+| Grab: pick up, put down, combine, serve | Big yellow button | Space or J |
+| Chop · Throw: chop, wash, spray, throw food | Button above Grab (label changes) | K or E |
+| Dash | Small blue button | Shift or L |
 
-All ten stages are playable from the start, in any order. Best scores and stars save in the display browser under `party.kitchen-rush.campaign.v1`; they are local to that browser, not an account or server save. Play again returns to the lobby, where Settings opens the campaign map. Practice removes expiry, burning and disruptive hazards without adding campaign stars. Corrupted or unavailable storage does not stop play.
+Chopping and washing keep going after one tap while you stay put. Throw food to teammates, who catch it empty-handed. Food left cooking starts to burn and sets the stove on fire; grab an extinguisher (even off a burning counter, empty-handed) and hold Chop · Throw to spray. Served plates come back dirty and need washing. Every serve raises a combo (×1 to ×4); the HUD shows it as **Next tip ×N**, the multiplier the next serve's tip gets. A missed order costs 5 coins and resets it. **Relaxed** mode turns off burning and expiring orders and saves no stars.
 
-Stations use visible props instead of floating name labels: produce-filled wooden crates, a butcher block and cleaver, a dark cooktop, a brick pizza oven, a deep sink and faucet, clean plate racks, blue dirty-dish tubs, a pedal bin and a striped serving pass with a bell. Your phone still names the nearby station and action. When 80 items fill the floor, crates pause new ingredients until someone picks up or bins dropped food; existing held food and plates remain safe during disconnects.
+The phone shows what you hold, what you are facing and its progress, the next two orders (dish plus ingredient icons), the timer, score and next tip. Both buttons say exactly what a tap will do, using the same rules as the server: **Grab** reads "Take lettuce", "Add to plate", "Pour soup", "Serve!" or, when a tap would be refused, a short reason in red ("Wash first", "Not ordered"). **Chop · Throw** becomes Chop, Wash, Spray or Throw, and turns dark and dashed with a reason ("Food only", "Find a board") when a tap would do nothing. Server notes pop up briefly over the tickets. The phone buzzes on your catches and serves and on new fires, and remembers your chef (`party.kitchen-rush.cook`), so Play again keeps everyone's look unless they pick a new one.
 
-## Stage tour
+If a phone drops out, its chef slumps in place with a dimmed name, drops what it held, and teammates can walk straight through it; rejoining takes the same chef back. On a keyboard, keys pressed while a header button has focus go to that button.
 
-| Stage | New challenge |
+Solo play reserves bands for the steer pad (left) and buttons (right) through `--kr-hud-left/right`, so the camera fits the kitchen between them. Results lead with a headline that matches the stars and plates served, the coins still needed for the next star, and a big award card for every chef.
+
+Sound (host only): bells open the service, a soft high chime marks each new ticket after the opening orders, a warning bell rings at 10 seconds left and a tick sounds for each of the last five. Original music follows the room: a bossa nova in the lobby, a swing theme during service that speeds up for the last 30 seconds, and a results fanfare (or a comic trombone when no stars were earned). See `audio/README.md`.
+
+## Kitchens
+
+| # | Kitchen | Location | Menu | Twist |
+| --- | --- | --- | --- | --- |
+| 1 | First Shift | Sunny Side Diner | side salad, salad | Classic |
+| 2 | Soup Kitchen | Harbour Galley | tomato soup, onion soup | Dishwashing |
+| 3 | Burger Bar | Route 66 Grill | burger, salad, cheeseburger | Dishwashing |
+| 4 | Conveyor Cafe | Night Market | salad, burger, cheeseburger | Conveyors |
+| 5 | Slippery Summit | Glacier Lodge | tomato soup, salad, onion soup | Ice |
+| 6 | Drawbridge Deli | Red Rock Canyon | burgers of all kinds | Drawbridges, conveyors |
+| 7 | Portal Pizzeria | Canal Street Market | pizza, salads | Portals |
+| 8 | Grand Opening | The Grand Hotel | full menu | Portals, conveyors |
+
+Every kitchen is open from the start. Services last 2½, 3 or 4 minutes. Star targets scale with roster size and service length. The host browser saves best stars and scores per kitchen under `party.kitchen-rush.campaign.v2`.
+
+## Code map
+
+| File | Role |
 | --- | --- |
-| Fresh Start | Salads, chopping, clean plates and serving |
-| Soup’s On | Independent cooking, doneness and fire recovery |
-| Lunch Line | Burgers and divided preparation/cooking passes |
-| Wash & Dash | Limited plate inventory and dish turnaround |
-| Pizza Post | Whole-plate oven baking |
-| Clockwork Crossing | Timed central drawbridge; permanent alternate crossings |
-| Conveyor Club | Three automatically advancing pass belts |
-| Rooftop Gusts | Announced wind slows the central lane |
-| Power Lunch | Alternating cooker power; paused heat is retained |
-| Grand Opening | Full menu, belts, power and gusts together |
+| `DESIGN.md` | Rules, feel targets and file ownership (the contract) |
+| `src/model.ts`, `src/levels.ts` | Shared types, recipes, timing, map legend; level data, `kitchenMap`, `starThresholds` |
+| `src/server.ts`, `src/orders.ts` | Authoritative simulation, orders and scoring |
+| `src/scene.tsx`, `src/scene/**`, `src/models.ts` | Three.js kitchen, chefs, effects and camera |
+| `src/client.tsx` | Client module: settings, instructions, results, solo view, scene hook-up |
+| `src/controller.tsx` | Phone controller, command queue with acknowledgements, keyboard, haptics |
+| `src/hud.tsx` | Display HUD: order rail, timer, score and stars, banners, chef strip, icons with fallbacks |
+| `src/cook-lobby.tsx`, `src/picker.css` | Chef picker and crew board |
+| `src/audio.ts` | Event-driven sound and music on the host only (`AudioView`) |
+| `src/presentation.ts` | Pure labels, statuses, Grab and Chop · Throw hints (mirroring the server), results copy, level tags and pitches, awards |
+| `src/campaign.ts` | Browser-saved best stars and scores; this phone's remembered chef |
 
-## Code and validation
-
-`model.ts` defines shared vocabulary, public geometry, stage catalogue and exact recipes. `server.ts` owns movement, item ownership, work, heat, tickets, scoring and deadlines. `client.tsx` renders the controller, order HUD, campaign and results; acknowledged command queues preserve short taps through input coalescing. `scene.tsx` lazily mounts only on displays, reuses GPU geometry/materials, animates public snapshots and cleans up through ResourceScope. `campaign.ts` validates local best-score storage; `preferences.ts` reads graphics settings safely when browser storage is blocked.
+## Validation
 
 ```sh
 node --import tsx --test packages/games/kitchen-rush/tests/*.test.ts
-npm run typecheck
+npx tsc --noEmit -p .
 npx oxlint packages/games/kitchen-rush
 ```
 
-The manager owns immutable integration builds. See [current status](../../../output/kitchen-rush/STATUS.md) and [QA evidence](../../../output/kitchen-rush/QA.md) for exact included versions and tested behavior. Build02 proved real two-player salad and soup service, both dishwashing loops, results and replay. Build03 also proved the first two campaign stages through real three-star results, dishwashing, host reload and sequential unlocks. Build04 proved stages 3–5 through actual burgers, scarce-plate washing and whole-plate oven pizzas, with 15 earned stars retained after reload. The ten-stage map fits at 1280×720. Build05 includes deadline/storage hardening and passed the manager's 249 tests, typecheck and lint. Build05 also proved stages 6–8 through bridge closures/end routes, conveyor plate transfers and measured gust slowdown, with 18 saved stars. Stage 9 and a finale replay also earned stars, completing all ten stages with 20 retained stars. Focused quick-input, reconnect, contention, toss/dash, fire-recovery and longest-label checks passed. Build06 reproduced the late washing-step error as a helper placement assumption and recovered the same plate; no washing-rule change was needed. It also completed a ten-controller finale and separate low/balanced, reduced-motion and scene-resource checks. The full-service aggregate telemetry export failed after results; recovered results and repeated short-cycle metrics are reported separately. Build07 verified the ticket/score repair, four phone sizes and complete ten-name results buttons through a real three-minute service. Build08 verified the final footer-spacing repair with ten full names, actual held-food icons and a hazard banner at the supported display sizes; rule tests alone do not prove game feel or visual quality. Physical phones, touch/Wi-Fi contention, TV viewing distance and human group pacing remain separate checks. No music assets, git publication or deployment are included.
-
-### Gameplay polish
-
-Opening orders introduce the enabled menu in order; later orders vary by round seed and avoid a third simultaneous copy when another dish is available. Fresh Start remains salad-only and replaces unused cookers with extra prep boards. The display shows streak bonuses, progress to the next star and service celebrations; results compare the host's score with its previous best.
-
-Phones show the first ticket's recipe and patience, with Use beneath Dash. Cooker feedback distinguishes cooking, ready, near-burning, burnt and power-paused food, using the same timing for phone and scene indicators. Campaign saves and the ten-stage order are unchanged. Scene diagnostics require `?metrics`.
-
-## Authored Blender models
-
-The current source uses an original52-asset Blender kit for chefs, workstations, ingredients and finished dishes. [Asset source and rebuilding](art/README.md) documents the editable `.blend`, exported GLB, budgets and rigid animation pivots. `src/models.ts` owns abortable model loading and shared-resource cleanup; `src/scene.tsx` instances equipment and drives chef walk/carry/work poses from public gameplay state. No gameplay rules changed. The September11 art pass passed43 Kitchen tests, TypeScript, scoped lint, an isolated build and a real ten-controller service with five delivered dishes, plus replay/reload/reduced-motion/loading-failure recovery. Exact local evidence and limits: `output/kitchen-rush/blender/QA.md` in the platform checkout. The existing user runtime was preserved.
-
-## Sound effects
-
-Recorded chopping, cooking, ignition, fire, washing, dish handling, ready/warning bells, delivery and service start/end cues now play on the shared display or solo host. Use the platform's **Sound on/off** button. Phone controllers do not play the room's sound effects. No music is included; the soundtrack can be added separately.
-
-The [audio guide](audio/README.md) explains triggers, source licenses, volume limits and rebuilding. The in-game instructions link to `/games/kitchen-rush/audio/index.html` for individual clip previews and credits. Current focused QA is recorded in `output/kitchen-rush/audio/QA.md` in the consumer workspace.
-
-
-## Contributor character and icon integration
-
-Six lobby choices combine the existing human chefs with Aaron Hendricks’ cat, dog, iguana and axolotl meshes. The main workstation kit, animation, sound effects, dash and campaign remain intact. The 1.11 MB animal-only GLB loads alongside the main kit only when needed; phone controllers load PNG icons only. `art/extract_characters.py` reproducibly trims the contributor’s original GLB to the 18 required meshes. Asset tests check mesh names, bounds, colors, icons, cancellation and disposal.
+Sound clips and credits: `public/games/kitchen-rush/audio/` (preview page at `/games/kitchen-rush/audio/index.html`). Animal chefs use Aaron Hendricks' character meshes (see `art/extract_characters.py`).

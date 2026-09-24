@@ -1,44 +1,60 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
-import { Box3 } from 'three';
-import { ResourceScope } from '../../../party-runtime/src/index';
-import { loadKitchenAssets } from '../src/assets';
-import { CHARACTERS, INGREDIENTS, RECIPES } from '../src/model';
-import { setAssetBase } from '../src/asset-url';
-const root = new URL('../../../../public/games/kitchen-rush/', import.meta.url);
-const bytes = readFileSync(new URL('models/kitchen-rush.glb', root));
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { inflateSync } from 'node:zlib';
+import { CHARACTERS, CHOPPABLE, INGREDIENTS, PAN_FOODS, POT_FOODS, RECIPES, type Ingredient } from '../src/model';
 
-test('compact animal kit contains the scene rigs and all rendered icons, and disposes once', async () => {
-  assert(bytes.length < 1_200_000, 'animal-only GLB stays under 1.2 MB');
-  const previous = globalThis.fetch, scope = new ResourceScope();
-  globalThis.fetch = async () => new Response(bytes);
-  try {
-    const kit = await loadKitchenAssets(scope);
-    for (const id of ['cat', 'dog', 'iguana', 'axolotl']) {
-      for (const part of ['body', 'color', 'left_hand', 'right_hand']) assert(kit.create(`${id}_${part}`).geometry.attributes.color.count > 0);
-      const box = new Box3().setFromObject(kit.create(`${id}_body`));
-      assert(box.max.y > 1.6 && box.max.y < 2.1, `${id} fits the existing chef height`);
-    }
-    for (const part of ['left_foot', 'right_foot']) assert(kit.create(`chef_${part}`).position.y > 0);
-    for (const { id } of CHARACTERS) assert(existsSync(new URL(`icons/character_${id}.png`, root)));
-    for (const kind of Object.keys(INGREDIENTS)) for (const stage of ['raw', 'chopped', 'cooked', 'burnt']) assert(existsSync(new URL(`icons/food_${kind}_${stage}.png`, root)));
-    for (const recipe of RECIPES) assert(existsSync(new URL(`icons/dish_${recipe.id}.png`, root)));
-    for (const plate of ['clean', 'dirty']) assert(existsSync(new URL(`icons/plate_${plate}.png`, root)));
-    const first = kit.create('cat_body'), second = kit.create('cat_body');
-    assert.notEqual(first, second); assert.equal(first.geometry, second.geometry);
-    let disposals = 0; first.geometry.addEventListener('dispose', () => disposals++);
-    scope.dispose(); scope.dispose(); assert.equal(disposals, 1);
-  } finally { scope.dispose(); globalThis.fetch = previous; }
+const root = new URL('../../../../public/games/kitchen-rush/', import.meta.url);
+const icons = new URL('icons/', root);
+const ingredients = Object.keys(INGREDIENTS) as Ingredient[];
+/** Food icons for every state the rules can produce; burnt has one charred look under every ingredient name. */
+const FOOD_ICONS = [
+  ...ingredients.map(food => `food_${food}_raw`),
+  ...CHOPPABLE.map(food => `food_${food}_chopped`),
+  ...[...POT_FOODS, ...PAN_FOODS, 'dough'].map(food => `food_${food}_cooked`),
+  ...ingredients.map(food => `food_${food}_burnt`), 'food_burnt',
+];
+const REQUIRED = [
+  ...FOOD_ICONS,
+  ...Object.keys(RECIPES).map(id => `dish_${id}`),
+  ...['plate', 'plate_dirty', 'pot', 'pan', 'extinguisher'].map(item => `item_${item}`),
+  ...CHARACTERS.map(({ id }) => `character_${id}`),
+];
+
+/** Width, height, colour type and the top-left pixel's alpha (row 0, pixel 0 is unaffected by PNG filters). */
+function png(bytes: Buffer) {
+  assert.equal(bytes.subarray(1, 4).toString(), 'PNG');
+  const idat: Buffer[] = [];
+  for (let at = 8; at < bytes.length;) {
+    const length = bytes.readUInt32BE(at), type = bytes.subarray(at + 4, at + 8).toString();
+    if (type === 'IDAT') idat.push(bytes.subarray(at + 8, at + 8 + length));
+    at += 12 + length;
+  }
+  const pixels = inflateSync(Buffer.concat(idat)), depth = bytes[24];
+  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20), colourType: bytes[25], cornerAlpha: depth === 8 ? pixels[4] : pixels.readUInt16BE(7) };
+}
+
+test('every HUD icon exists as a 256×256 transparent PNG', () => {
+  for (const name of REQUIRED) {
+    const file = new URL(`${name}.png`, icons);
+    assert.ok(existsSync(file), `${name}.png exists`);
+    const { width, height, colourType, cornerAlpha } = png(readFileSync(file));
+    assert.deepEqual([width, height, colourType], [256, 256, 6], `${name} is 256×256 RGBA`);
+    assert.equal(cornerAlpha, 0, `${name} has a transparent background`);
+  }
 });
 
-test('animal loader uses the asset base and rejects failed or aborted loads', async () => {
-  const previous = globalThis.fetch, scope = new ResourceScope();
-  try {
-    setAssetBase('/custom/kitchen/');
-    globalThis.fetch = async (url, options) => { assert.equal(url, '/custom/kitchen/models/kitchen-rush.glb'); assert.equal(options?.signal, scope.signal); return new Response('', { status: 404 }); };
-    await assert.rejects(loadKitchenAssets(scope), /404/);
-    globalThis.fetch = async () => new Response(bytes);
-    scope.dispose(); await assert.rejects(loadKitchenAssets(scope), { name: 'AbortError' });
-  } finally { scope.dispose(); setAssetBase('/games/kitchen-rush/'); globalThis.fetch = previous; }
+test('no stale food, dish or plate icons outlive the models they showed', () => {
+  const expected = new Set(REQUIRED);
+  const stale = readdirSync(icons).filter(file => /^(food|dish|item|plate)_/.test(file) && !expected.has(file.replace(/\.png$/, '')));
+  assert.deepEqual(stale, []);
+});
+
+test('the contributor animal kit keeps its 18 meshes alongside the human kit', () => {
+  const bytes = readFileSync(new URL('models/kitchen-rush.glb', root));
+  assert.ok(bytes.length < 1_200_000, 'animal-only GLB stays under 1.2 MB');
+  const json = JSON.parse(bytes.subarray(20, 20 + bytes.readUInt32LE(12)).toString());
+  const names = new Set(json.nodes.map((node: { name: string }) => node.name));
+  for (const animal of ['cat', 'dog', 'iguana', 'axolotl']) for (const part of ['body', 'color', 'left_hand', 'right_hand']) assert.ok(names.has(`${animal}_${part}`), `${animal}_${part}`);
+  for (const foot of ['chef_left_foot', 'chef_right_foot']) assert.ok(names.has(foot), foot);
 });

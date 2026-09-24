@@ -1,130 +1,782 @@
-import { assertSerializable } from '../../../party-contract/src/serializable';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rules, walkable, type State } from '../src/server';
-import { KITCHENS, RECIPES, layout, neutral, recipeFor, type Food, type Input, type Item, type Station } from '../src/model';
-const create = (count = 2, kitchen = 0, practice = false) => rules.create({ roomId: 'kitchen', roundId: 'round', nowMs: 1000, seed: 42, players: Array.from({ length: count }, (_, i) => ({ id: `p${i}`, name: `Chef-${i}-LongName`, color: '#abcdef' })) }, { kitchen, seconds: 180, practice });
-function tick(state: State, inputs: Record<string, Input> = {}, seconds = 1 / 60) { const steps = Math.ceil(seconds * 60); for (let i = 0; i < steps; i++) rules.tick(state, new Map(Object.entries(inputs)), seconds / steps, state.now + seconds * 1000 / steps); }
-function food(id: number, kind: Food['kind'], stage: Food['stage'] = 'raw'): Item { return { id, kind: 'food', food: [{ kind, stage }], dirty: false }; }
-function at(state: State, station: Station, player = 0) { const chef = state.players[player]; const positions = [[0, 1.3], [0, -1.3], [1.3, 0], [-1.3, 0]]; for (const [dx, dz] of positions) if (walkable(state, station.x + dx, station.z + dz)) { chef.x = station.x + dx; chef.z = station.z + dz; chef.facingX = -dx / 1.3; chef.facingZ = -dz / 1.3; return chef; } throw new Error(`No approach to ${station.id}`); }
-function use(state: State, player = 0, held = false) { const chef = state.players[player]; tick(state, { [chef.id]: { ...neutral(), command: 'use', seq: chef.commandSeq + 1, use: held } }); }
-const station = (state: State, kind: Station['kind']) => state.stations.find(s => s.kind === kind)!;
-test('full-floor disconnect cycles cannot issue new food; clearing an item reopens crates',()=>{
-  const state=create(),chef=at(state,station(state,'crate'));
-  state.loose=Array.from({length:80},(_,i)=>({item:food(1000+i,'tomato'),x:0,z:0,vx:0,vz:0,flight:0}));
-  const nextId=state.nextId;
-  for(let i=0;i<20;i++){use(state);assert.equal(chef.held,null);rules.onPresenceChange(state,chef.id,false,state.now);rules.onPresenceChange(state,chef.id,true,state.now);}
-  assert.equal(state.loose.length,80);assert.equal(state.nextId,nextId);assert.match(chef.feedback,/Floor full/);
-  chef.x=0;chef.z=0;use(state);assert.ok(chef.held);assert.equal(state.loose.length,79);
-  at(state,station(state,'bin'));use(state);assert.equal(chef.held,null);
-  at(state,station(state,'crate'));use(state);assert.equal((chef.held as Item|null)?.id,nextId);
-  rules.onPresenceChange(state,chef.id,false,state.now);assert.equal(state.loose.length,80);assert.equal(chef.held,null);
-});
-test('tossed bun and cheese stay raw and can be recovered from a chopping board',()=>{
-  for(const kind of ['bun','cheese'] as const){
-    const state=create(2,4),chef=state.players[0],board=station(state,'board');
-    at(state,state.stations.find(s=>s.ingredient===kind)!);use(state);const id=chef.held!.id;
-    at(state,board);use(state);assert.equal(board.item,null);assert.equal(chef.held!.id,id);
-    chef.x=board.x+4.4;chef.z=board.z;chef.facingX=-1;chef.facingZ=0;assert.ok(walkable(state,chef.x,chef.z));
-    tick(state,{p0:{...neutral(),command:'toss',seq:chef.commandSeq+1}});tick(state,{},.6);
-    assert.equal((board.item as Item|null)?.id,id);at(state,board);tick(state,{p0:{...neutral(),use:true}},3);
-    assert.equal((board.item as Item|null)!.food[0].stage,'raw');use(state);assert.equal(chef.held!.id,id);assert.equal(chef.held!.food[0].stage,'raw');assert.equal(board.item,null);
+import { assertSerializable } from '../../../party-contract/src/serializable';
+import { rules, type State } from '../src/server';
+import {
+  BELT_SECONDS, BURN_AT, BURN_WARN, CHEF_RADIUS, DEFAULT_SETTINGS, EVENT_LIMIT, FIRE_SPREAD_SECONDS, OVEN_SECONDS, PAN_SECONDS, POT_SECONDS, RECIPES,
+  RESPAWN_SECONDS, RETURN_SECONDS, WALKABLE, WASH_SECONDS, matchRecipe, neutral,
+  type EventType, type FoodState, type Ingredient, type Input, type Item, type Part, type RecipeId,
+} from '../src/model';
+import { LEVELS } from '../src/levels';
+import { DT, find, press, setup, slot, standAt, step, walkTo, type Setup } from './helpers/kitchen';
+import { botInput } from './helpers/bot';
+
+// A compact kitchen with one of everything. Row 0 is the back wall.
+const K = [
+  '#ltoC#OOFV#',
+  'R.........H',
+  '#.........#',
+  'D.@...@...X',
+  '#.........W',
+  '#pbdc##E#R#',
+];
+const T = (char: string, n = 0) => find(K, char, n);
+const COUNTER = T('#', 1), SIDE = T('#', 3), BOARD = T('C'), POT = T('O'), POT2 = T('O', 1), PAN = T('F'), OVEN = T('V'), HATCH = T('H'), BIN = T('X'), SINK = T('W'), RACK = T('R'), RETURN = T('D');
+const kitchen = (options: Setup = {}) => setup(K, { ...options, level: { recipes: ['salad'], ...options.level } });
+const part = (food: Ingredient, state: FoodState = 'raw'): Part => ({ food, state });
+const make = (s: State, kind: Item['kind'], parts: Part[] = [], extra: Partial<Item> = {}): Item => ({ id: s.nextId++, kind, parts, cook: 0, ...extra });
+const food = (s: State, name: Ingredient, state: FoodState = 'raw') => make(s, 'food', [part(name, state)]);
+const plate = (s: State, recipe?: RecipeId) => make(s, 'plate', recipe ? RECIPES[recipe].parts.map(p => ({ ...p })) : []);
+const last = (s: State, type: EventType) => s.events.filter(event => event.type === type).at(-1);
+const count = (s: State, type: EventType) => s.events.filter(event => event.type === type).length;
+const view = (s: State) => rules.publicView(s, { nowMs: s.now, phase: 'playing' });
+const place = (s: State, player: number, x: number, z: number, fx = 0, fz = 1) => { Object.assign(s.players[player], { x, z, fx, fz, vx: 0, vz: 0 }); step(s); return s.players[player]; };
+/** Hand a chef an item (a function call, so TypeScript does not narrow `held` across ticks). */
+const hold = (chef: { held: Item | null }, item: Item | null) => { chef.held = item; };
+const H = (chef: { held: Item | null }): Item | null => chef.held;
+const tileXZ = (s: State, tile: number) => s.map.tiles[tile];
+const order = (s: State, recipe: RecipeId, id: number, seconds = 60) => ({ id, recipe, createdAt: s.now, expiresAt: s.now + seconds * 1000 });
+
+// ── Contract parsing ────────────────────────────────────────────────────────
+test('settings default from {}, accept every level and reject unknown keys or invalid values', () => {
+  assert.deepEqual(rules.validateSettings({}), DEFAULT_SETTINGS);
+  assert.deepEqual(rules.validateSettings({ level: LEVELS.length - 1, seconds: 240, relaxed: true }), { level: LEVELS.length - 1, seconds: 240, relaxed: true });
+  for (const bad of [null, [], 'x', { extra: 1 }, { toString: 1 }, { level: -1 }, { level: LEVELS.length }, { level: .5 }, { seconds: 200 }, { seconds: '180' }, { relaxed: 'yes' }, { level: undefined }]) {
+    assert.throws(() => rules.validateSettings(bad), Error, JSON.stringify(bad));
   }
 });
-test('settings and malformed inputs reject without coercion', () => { assert.deepEqual(rules.validateSettings({}), { kitchen: 0, seconds: 180, practice: false }); for (const invalid of [{ seconds: 5 }, { kitchen: 10 }, { practice: 'yes' }, { other: 1 }]) assert.throws(() => rules.validateSettings(invalid)); for (const input of [null, {}, { ...neutral(), x: NaN }, { ...neutral(), seq: -1 }, { ...neutral(), command: 'serve' }]) assert.throws(() => rules.parseInput(input)); const parsed = rules.parseInput({ ...neutral(), x: 1, y: 1 }); assert.ok(Math.hypot(parsed.x, parsed.y) <= 1); });
-test('all kitchens at every roster have clear spawns, no overlapping stations and an approach to every station', () => { for (let count = 1; count <= 10; count++) for (let kitchen = 0; kitchen < KITCHENS.length; kitchen++) { const state = create(count, kitchen); for (const chef of state.players) assert.ok(walkable(state, chef.x, chef.z), `${count}/${kitchen} ${chef.id}`); for (const a of state.stations) { at(state, a); for (const b of state.stations) if (a !== b) assert.ok(Math.abs(a.x - b.x) >= 1.8 || Math.abs(a.z - b.z) >= 1.8, `${count}/${kitchen}: ${a.id} overlaps ${b.id}`); } } });
-test('one acknowledged command transfers once across repeats, neutral release and old replay', () => { const state = create(), crate = station(state, 'crate'), chef = at(state, crate); const command = { ...neutral(), command: 'use' as const, seq: 1 }; tick(state, { p0: command }); const id = chef.held!.id; tick(state, { p0: command }, .2); assert.equal((chef.held as Item | null)?.id, id); tick(state); tick(state, { p0: command }); assert.equal((chef.held as Item | null)?.id, id); assert.equal(chef.commandSeq, 1); });
-test('two queued commands with separate acks both execute, stale seq cannot undo a newer command', () => { const state = create(), chef = at(state, station(state, 'crate')); use(state); const first = chef.held!.id; tick(state, { p0: { ...neutral(), command: 'drop', seq: 2 } }); assert.equal(state.loose[0].item.id, first); tick(state, { p0: { ...neutral(), command: 'use', seq: 1 } }); assert.equal(chef.held, null); use(state); assert.equal((chef.held as Item | null)?.id, first); });
-test('chopping preserves interrupted work and two chefs cannot speed it up', () => { const state = create(), board = station(state, 'board'); board.item = food(100, 'tomato'); at(state, board); at(state, board, 1); tick(state, { p0: { ...neutral(), use: true }, p1: { ...neutral(), use: true } }, 1); assert.ok(board.progress > .4 && board.progress < .43); const progress = board.progress; tick(state, {}, 1); assert.equal(board.progress, progress); tick(state, { p1: { ...neutral(), use: true } }, 1.5); assert.equal(board.item.food[0].stage, 'chopped'); assert.equal(state.players[1].worked, 1); });
-test('station contention conserves its single item', () => { const state = create(), board = station(state, 'board'); board.item = food(100, 'lettuce', 'chopped'); at(state, board); at(state, board, 1); tick(state, { p0: { ...neutral(), command: 'use', seq: 1 }, p1: { ...neutral(), command: 'use', seq: 1 } }); assert.equal(state.players.filter(p => p.held?.id === 100).length, 1); assert.equal(board.item, null); });
-test('complete salad: crates, chopping, plate assembly, exact service, dirty return and wash', () => { const state = create(), chef = state.players[0], board = station(state, 'board'), counter = station(state, 'counter'); at(state, station(state, 'plates')); use(state); const plate = chef.held!; at(state, counter); use(state); for (const kind of ['lettuce', 'tomato'] as const) { at(state, state.stations.find(s => s.ingredient === kind)!); use(state); at(state, board); use(state, 0, true); tick(state, { p0: { ...neutral(), use: true } }, 2.5); use(state); at(state, counter); use(state); } assert.equal(counter.item?.id, plate.id); assert.equal(recipeFor(counter.item)?.id, 'salad'); use(state); at(state, station(state, 'serve')); use(state); assert.equal(state.served, 1); assert.ok(state.score >= 80); assert.equal(chef.held, null); use(state); assert.equal(state.served, 1); tick(state, {}, 5.1); assert.equal(state.dirtyPlates, 1); at(state, station(state, 'return')); use(state); assert.equal((chef.held as Item | null)?.id, plate.id); assert.equal((chef.held as Item | null)?.dirty, true); at(state, station(state, 'sink')); use(state, 0, true); tick(state, { p0: { ...neutral(), use: true } }, 2.6); use(state); assert.equal((chef.held as Item | null)?.dirty, false); assert.equal((chef.held as Item | null)?.id, plate.id); });
-test('every recipe is exact, rejects partial/wrong/duplicate components and serves oldest matching ticket', () => { const state = create(4, 3), chef = at(state, station(state, 'serve')); for (const recipe of RECIPES) { chef.held = { id: 200, kind: 'plate', food: structuredClone(recipe.parts), dirty: false }; state.tickets = [{ id: 5, recipe: recipe.id, createdAt: state.now, expiresAt: state.now + 90000 }, { id: 6, recipe: recipe.id, createdAt: state.now, expiresAt: state.now + 90000 }]; use(state); assert.equal(state.tickets[0].id, 6); } assert.equal(state.served, 4); chef.held = { id: 201, kind: 'plate', food: [...RECIPES[0].parts, RECIPES[0].parts[0]], dirty: false }; use(state); assert.equal(state.served, 4); assert.ok(chef.held); });
-test('stove cooks, burns, catches fire, extinguishes, and burnt food can be disposed', () => { const state = create(2,1), stove = station(state, 'stove'), chef = at(state, stove); chef.held = food(100, 'patty'); use(state); tick(state, {}, 6.1); assert.equal(stove.item!.food[0].stage, 'cooked'); tick(state, {}, 10); assert.equal(stove.item!.food[0].stage, 'burnt'); tick(state, {}, 5); assert.equal(stove.fire, 1); assert.equal(state.fires, 1); tick(state, { p0: { ...neutral(), use: true } }, 2.1); assert.equal(stove.fire, 0); use(state); at(state, station(state, 'bin')); use(state); assert.equal(chef.held, null); assert.equal(state.waste, 1); });
-test('practice retains tickets and cooked food but still completes on time', () => { const state = create(2, 2, true), stove = station(state, 'stove'); stove.item = food(100, 'patty'); tick(state, {}, 110); assert.equal(stove.item.food[0].stage, 'cooked'); assert.equal(stove.fire, 0); assert.equal(state.missed, 0); assert.equal(state.hazard, 'calm'); rules.tick(state, new Map(), 1 / 60, state.endsAt); assert.equal(rules.outcome(state).complete, true); assert.equal(rules.outcome(state).winners.length, 0); });
-test('disconnect drops held items once, preserves cooking, and reconnect keeps acknowledged sequence', () => { const state = create(2,1), chef = state.players[0]; chef.held = food(100, 'tomato'); chef.commandSeq = 22; station(state, 'stove').item = food(101, 'patty'); rules.onPresenceChange(state, chef.id, false, state.now); rules.onPresenceChange(state, chef.id, false, state.now); assert.equal(state.loose.length, 1); tick(state, {}, 6.1); assert.equal(station(state, 'stove').item!.food[0].stage, 'cooked'); rules.onPresenceChange(state, chef.id, true, state.now); assert.equal(chef.commandSeq, 22); assert.equal(chef.held, null); });
-test('bridge closure telegraphs and safely clears chefs while permanent end crossings remain', () => { const state = create(10, 5), chef = state.players[0]; rules.tick(state, new Map(), 1 / 60, state.startedAt + 14000); assert.equal(state.hazard, 'warning'); chef.x = 0; chef.z = 0; rules.tick(state, new Map(), 1 / 60, state.startedAt + 18000); assert.equal(state.hazard, 'active'); assert.ok(Math.abs(chef.x) > 1.4); assert.equal(walkable(state, 0, 0), false); assert.equal(walkable(state, 0, -state.halfZ + 2.7), true); assert.equal(walkable(state, 0, state.halfZ - 2.7), true); });
-test('movement slides at counters, respects bounds and dash recharges', () => { const state = create(), chef = state.players[0]; chef.x = 0; chef.z = 2; tick(state, { p0: { ...neutral(), x: 1, dash: true } }, .3); assert.ok(chef.x > 1.8); const ready = chef.dashReady; tick(state, { p0: { ...neutral(), x: 1, dash: true } }, 1); assert.equal(chef.dashReady, ready); tick(state, { p0: { ...neutral(), x: 1 } }, 20); assert.ok(chef.x < state.halfX); assert.ok(walkable(state, chef.x, chef.z)); });
-test('plate disposal clears incorrect food without deleting its clean plate', () => { const state = create(), chef = at(state, station(state, 'bin')); chef.held = { id: 50, kind: 'plate', food: RECIPES[0].parts.slice(), dirty: false }; use(state); assert.equal((chef.held as Item | null)?.id, 50); assert.equal((chef.held as Item | null)?.food.length, 0); });
-test('public projection is detached and excludes server-only queue/counters; team ties share rank', () => { const state = create(10); state.served = 2; state.score = 300; const view = rules.publicView(state, { phase: 'playing', nowMs: state.now }); view.players[0].x = 500; assert.notEqual(state.players[0].x, 500); assert.ok(!('returns' in view)); assert.ok(!('nextId' in view)); const result = rules.outcome(state); assert.equal(result.winners.length, 10); assert.ok(result.rows.every(row => row.rank === 1 && row.score === 300)); });
-test('ticket expiry never creates submitted orders or negative score', () => { const state = create(); tick(state, {}, 125); assert.equal(state.served, 0); assert.equal(state.missed, 2); assert.equal(state.score, 0); });
-test('layouts scale space and workstations for ten chefs', () => { assert.ok(layout(0, 10).length > layout(0, 2).length); assert.equal(create(10).cleanPlates, 12); assert.equal(create(10).tickets.length, 4); });
 
-test('public snapshots satisfy the strict platform serializer at every kitchen and roster', () => { for (const count of [2, 10]) for (let kitchen = 0; kitchen < KITCHENS.length; kitchen++) { const state = create(count, kitchen); for (const phase of ['preparing', 'playing', 'results'] as const) { if (phase === 'results') rules.tick(state, new Map(), 1 / 60, state.endsAt); assert.doesNotThrow(() => assertSerializable(rules.publicView(state, { phase, nowMs: state.now }))); assert.doesNotThrow(() => assertSerializable(rules.playerView(state, state.players[0].id, { phase, nowMs: state.now }))); assert.doesNotThrow(() => assertSerializable(rules.outcome(state))); } } });
-test('pizza requires whole-plate oven baking and preserves plate identity', () => { const state = create(2, 4), chef = state.players[0], oven = station(state, 'oven'); chef.held = { id: 100, kind: 'plate', food: [{ kind: 'dough', stage: 'raw' }, { kind: 'tomato', stage: 'chopped' }, { kind: 'cheese', stage: 'raw' }], dirty: false }; assert.equal(recipeFor(chef.held), undefined); at(state, oven); use(state); assert.equal(oven.item?.id, 100); tick(state, {}, 8.1); assert.equal(recipeFor(oven.item)?.id, 'pizza'); use(state); assert.equal((chef.held as Item | null)?.id, 100); assert.equal(oven.item, null); });
-test('oven rejects incomplete plates and raw dough cannot bypass baking on a stove', () => { const state = create(2, 4), chef = at(state, station(state, 'oven')); chef.held = { id: 100, kind: 'plate', food: [{ kind: 'dough', stage: 'raw' }], dirty: false }; use(state); assert.equal(station(state, 'oven').item, null); chef.held = food(101, 'dough'); at(state, station(state, 'stove')); use(state); assert.equal(station(state, 'stove').item, null); });
-test('conveyor moves each item one station per beat, cannot duplicate or overwrite a full end', () => { const state = create(10, 6), belts = state.stations.filter(s => s.kind === 'belt'); belts[0].item = food(100, 'tomato'); tick(state, {}, 3.1); assert.equal(belts[0].item, null); assert.equal(belts[1].item?.id, 100); belts[2].item = food(101, 'onion'); tick(state, {}, 3.1); assert.equal(belts[1].item?.id, 100); assert.equal((belts[2].item as Item | null)?.id, 101); belts[2].item = null; tick(state, {}, 3.1); assert.equal(belts[1].item, null); assert.equal((belts[2].item as Item | null)?.id, 100); });
-test('power change is telegraphed; inactive cookers preserve heat and alternate fairly', () => { const state = create(2, 8), stoves = state.stations.filter(s => s.kind === 'stove'); rules.tick(state, new Map(), 1 / 60, state.startedAt + 15000); assert.equal(state.powerWarning, true); stoves[0].item = food(100, 'patty'); stoves[0].heat = 2; rules.tick(state, new Map(), 1 / 60, state.startedAt + 18000); assert.equal(stoves[0].powered, false); assert.equal(stoves[1].powered, true); assert.equal(stoves[0].heat, 2); tick(state, {}, 2); assert.equal(stoves[0].heat, 2); rules.tick(state, new Map(), 1 / 60, state.startedAt + 36000); assert.equal(stoves[0].powered, true); assert.ok(stoves[0].heat > 2); });
-test('scarce-dish stage scales limited stocks for minimum and maximum crews', () => { assert.equal(create(2, 3).cleanPlates, 2); assert.equal(create(10, 3).cleanPlates, 5); assert.equal(create(10, 2).cleanPlates, 12); });
-test('finale combines full menu, belts, power and announced wind; practice leaves cookers on', () => { const state = create(10, 9); assert.equal(KITCHENS[9].recipes, 4); assert.equal(state.stations.filter(s => s.kind === 'belt').length, 3); rules.tick(state, new Map(), 1 / 60, state.startedAt + 24000); assert.equal(state.hazard, 'active'); assert.ok(state.stations.some(s => !s.powered)); const practice = create(10, 9, true); rules.tick(practice, new Map(), 1 / 60, practice.startedAt + 24000); assert.equal(practice.hazard, 'calm'); assert.ok(practice.stations.every(s => s.powered)); });
-test('disconnect cannot strand a held item when the normal floor-drop cap is reached', () => { const state = create(); state.loose = Array.from({ length: 80 }, (_, i) => ({ item: food(100 + i, 'tomato'), x: 0, z: 0, vx: 0, vz: 0, flight: 0 })); state.players[0].held = food(999, 'onion'); rules.onPresenceChange(state, 'p0', false, state.now); assert.equal(state.players[0].held, null); assert.equal(state.loose.filter(item => item.item.id === 999).length, 1); });
-test('each stage has a connected walkable route from spawn to every essential station, including closed bridges', () => {
-  for (const count of [2, 10]) for (let kitchen = 0; kitchen < KITCHENS.length; kitchen++) for (const active of [false, true]) {
-    const state = create(count, kitchen); if (active) rules.tick(state, new Map(), 1 / 60, state.startedAt + 24000 - (kitchen === 5 ? 5000 : 0));
-    const scale = 4, key = (x: number, z: number) => `${x},${z}`, first = state.players[0], queue: [number, number][] = [[Math.round(first.x * scale), Math.round(first.z * scale)]], seen = new Set<string>();
-    for (let i = 0; i < queue.length; i++) { const [x, z] = queue[i]; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, nz = z + dz, name = key(nx, nz); if (!seen.has(name) && walkable(state, nx / scale, nz / scale)) { seen.add(name); queue.push([nx, nz]); } } }
-    for (const station of state.stations) assert.ok(queue.some(([x, z]) => Math.hypot(x / scale - station.x, z / scale - station.z) <= 1.72), `${count} chefs / stage ${kitchen + 1} / ${state.hazard}: no route to ${station.id}`);
+test('input parsing is strict and clamps the movement vector to length 1', () => {
+  const diagonal = rules.parseInput({ x: 1, y: -1, act: false, cmd: 'grab', seq: 3 });
+  assert.ok(Math.abs(Math.hypot(diagonal.x, diagonal.y) - 1) < 1e-9 && diagonal.x > 0 && diagonal.y < 0);
+  assert.deepEqual(rules.parseInput({ x: .3, y: -.4, act: true, cmd: null, seq: 0 }), { x: .3, y: -.4, act: true, cmd: null, seq: 0 });
+  const base = { x: 0, y: 0, act: false, cmd: null, seq: 0 };
+  for (const bad of [null, [], { ...base, extra: 1 }, { x: 0, y: 0, act: false, cmd: null }, { ...base, x: 1.5 }, { ...base, y: Number.NaN }, { ...base, act: 1 }, { ...base, cmd: 'jump' }, { ...base, seq: -1 }, { ...base, seq: 1.5 }]) {
+    assert.throws(() => rules.parseInput(bad), Error, JSON.stringify(bad));
+  }
+  assert.deepEqual(rules.neutralInput(), neutral());
+  assert.throws(() => rules.parseAction({}));
+  assert.deepEqual(rules.parseLobbyChoice!(undefined, false), { character: 'chef' });
+  assert.deepEqual(rules.parseLobbyChoice!({ character: 'axolotl' }, true), { character: 'axolotl' });
+  for (const bad of [{ character: 'dragon' }, { character: 'cat', hat: 1 }, 'cat', []]) assert.throws(() => rules.parseLobbyChoice!(bad, true));
+  const s = setup(K, { players: 2 });
+  assert.equal(s.players[0].character, 'chef');
+});
+
+// ── Grab interaction table ──────────────────────────────────────────────────
+test('grab with empty hands: crate, rack, return stack and surface items', () => {
+  const s = kitchen(), c = s.players[0];
+  standAt(s, 0, T('l')); press(s, 0, 'grab');
+  assert.deepEqual([H(c)?.kind, H(c)?.parts], ['food', [part('lettuce')]]);
+  assert.equal(last(s, 'pickup')?.player, 'p0');
+  press(s, 0, 'grab');
+  assert.equal(c.note, 'Hands are full');
+
+  hold(c, null);
+  const plates = slot(s, RACK).count;
+  standAt(s, 0, RACK); press(s, 0, 'grab');
+  assert.equal(H(c)?.kind, 'plate'); assert.equal(slot(s, RACK).count, plates - 1);
+  press(s, 0, 'grab'); // A clean empty plate goes back on the rack.
+  assert.equal(H(c), null); assert.equal(slot(s, RACK).count, plates);
+  slot(s, RACK).count = 0; press(s, 0, 'grab');
+  assert.equal(H(c), null); assert.match(c.note, /No clean plates/);
+
+  slot(s, RETURN).count = 3;
+  standAt(s, 0, RETURN); press(s, 0, 'grab');
+  assert.deepEqual([H(c)?.kind, H(c)?.count, slot(s, RETURN).count], ['dirty', 3, 0]);
+
+  hold(c, null);
+  slot(s, BOARD).item = food(s, 'tomato'); slot(s, BOARD).progress = .4;
+  standAt(s, 0, BOARD); press(s, 0, 'grab');
+  assert.deepEqual(H(c)?.parts, [part('tomato')]);
+  assert.deepEqual([slot(s, BOARD).item, slot(s, BOARD).progress], [null, 0], 'progress belongs to the tile and resets when its item leaves');
+  press(s, 0, 'grab'); press(s, 0, 'grab');
+  assert.equal(H(c)?.kind, 'food');
+  hold(c, null); press(s, 0, 'grab');
+  assert.equal(c.note, 'Put food here to chop it');
+});
+
+test('grab picks up a nearby loose item before the target tile and drops onto the floor with no target', () => {
+  const s = kitchen(), c = s.players[0], mid = tileXZ(s, find(K, '.', 12));
+  hold(c, food(s, 'onion'));
+  place(s, 0, mid.x, mid.z, 0, 1); // Facing open floor: no target.
+  assert.equal(c.target, -1);
+  press(s, 0, 'grab');
+  assert.equal(H(c), null); assert.equal(s.loose.length, 1); assert.equal(s.loose[0].y, 0);
+  press(s, 0, 'grab');
+  assert.deepEqual(H(c)?.parts, [part('onion')]); assert.equal(s.loose.length, 0);
+
+  // Standing at the board with an onion at their feet: the closer loose item wins.
+  press(s, 0, 'grab');
+  slot(s, BOARD).item = food(s, 'lettuce');
+  const drop = s.loose[0];
+  standAt(s, 0, BOARD);
+  Object.assign(drop, { x: c.x, z: c.z + .1 });
+  press(s, 0, 'grab');
+  assert.deepEqual(H(c)?.parts, [part('onion')]); assert.ok(slot(s, BOARD).item);
+});
+
+test('grab while holding: surface rules, combining into containers and adding food to a held plate', () => {
+  const s = kitchen(), c = s.players[0];
+  hold(c, plate(s));
+  standAt(s, 0, BOARD); press(s, 0, 'grab');
+  assert.equal(c.note, 'Boards are for food'); assert.equal(H(c)?.kind, 'plate');
+  standAt(s, 0, SINK); press(s, 0, 'grab');
+  assert.equal(c.note, 'The sink is for dirty plates');
+  standAt(s, 0, OVEN); press(s, 0, 'grab');
+  assert.match(c.note, /raw dough/);
+
+  standAt(s, 0, COUNTER); press(s, 0, 'grab');
+  assert.equal(slot(s, COUNTER).item?.kind, 'plate'); assert.equal(H(c), null); assert.equal(last(s, 'place')?.player, 'p0');
+  hold(c, food(s, 'lettuce')); press(s, 0, 'grab');
+  assert.equal(c.note, 'Needs chopping first');
+  hold(c, food(s, 'lettuce', 'chopped')); press(s, 0, 'grab');
+  assert.deepEqual(slot(s, COUNTER).item?.parts, [part('lettuce', 'chopped')]); assert.equal(H(c), null);
+  hold(c, food(s, 'bun')); press(s, 0, 'grab');
+  assert.equal(slot(s, COUNTER).item?.parts.length, 2, 'raw bun may be plated');
+
+  slot(s, COUNTER).item = food(s, 'tomato', 'chopped');
+  hold(c, make(s, 'plate', [part('lettuce', 'chopped')])); press(s, 0, 'grab');
+  assert.equal(matchRecipe(H(c)), 'salad'); assert.equal(slot(s, COUNTER).item, null);
+
+  slot(s, COUNTER).item = food(s, 'tomato', 'chopped');
+  hold(c, food(s, 'onion', 'chopped')); press(s, 0, 'grab');
+  assert.equal(c.note, 'Needs a plate');
+  hold(c, make(s, 'plate', [part('lettuce', 'chopped'), part('lettuce', 'chopped'), part('lettuce', 'chopped'), part('lettuce', 'chopped')])); press(s, 0, 'grab');
+  assert.equal(c.note, 'Plate is full');
+  hold(c, make(s, 'plate', [part('lettuce', 'burnt')])); press(s, 0, 'grab');
+  assert.equal(c.note, 'Bin the burnt food first');
+
+  // A held pot scoops chopped soup vegetables off a counter.
+  hold(c, make(s, 'pot')); press(s, 0, 'grab');
+  assert.deepEqual(H(c)?.parts, [part('tomato', 'chopped')]); assert.equal(slot(s, COUNTER).item, null);
+  // Dirty stacks merge.
+  slot(s, COUNTER).item = make(s, 'dirty', [], { count: 2 }); hold(c, make(s, 'dirty', [], { count: 1 })); press(s, 0, 'grab');
+  assert.equal(slot(s, COUNTER).item?.count, 3); assert.equal(H(c), null);
+  // Holding a plate at a bun crate adds a bun.
+  hold(c, plate(s)); standAt(s, 0, T('b')); press(s, 0, 'grab');
+  assert.deepEqual(H(c)?.parts, [part('bun')]);
+  standAt(s, 0, T('l')); press(s, 0, 'grab');
+  assert.equal(c.note, 'Needs chopping first');
+});
+
+test('pouring works both ways and refuses empty, uncooked or burnt contents', () => {
+  const s = kitchen(), c = s.players[0], pot = slot(s, POT).item!;
+  pot.parts = [part('tomato', 'cooked'), part('tomato', 'cooked'), part('tomato', 'cooked')]; pot.cook = POT_SECONDS;
+  hold(c, plate(s));
+  standAt(s, 0, POT); press(s, 0, 'grab');
+  assert.equal(matchRecipe(H(c)), 'tomato_soup'); assert.deepEqual([pot.parts, pot.cook], [[], 0]); assert.equal(c.stats.cooked, 1);
+  hold(c, plate(s)); press(s, 0, 'grab');
+  assert.equal(c.note, 'The pot is empty');
+  pot.parts = [part('onion', 'chopped')]; press(s, 0, 'grab');
+  assert.equal(c.note, 'Not cooked yet');
+  pot.parts = [part('onion', 'burnt')]; press(s, 0, 'grab');
+  assert.equal(c.note, 'Burnt! Bin it');
+
+  // Held cooked pot onto a plate on a counter.
+  slot(s, COUNTER).item = plate(s);
+  hold(c, make(s, 'pot', [part('onion', 'cooked'), part('onion', 'cooked'), part('onion', 'cooked')], { cook: POT_SECONDS + 1 }));
+  standAt(s, 0, COUNTER); press(s, 0, 'grab');
+  assert.equal(matchRecipe(slot(s, COUNTER).item), 'onion_soup'); assert.deepEqual(H(c)?.parts, []);
+  assert.equal(H(c)?.cook, 0);
+});
+
+test('bin destroys food, empties containers but keeps them, and refuses dirty plates or the extinguisher', () => {
+  const s = kitchen(), c = s.players[0];
+  standAt(s, 0, BIN);
+  hold(c, food(s, 'tomato')); press(s, 0, 'grab');
+  assert.equal(H(c), null);
+  hold(c, plate(s, 'salad')); press(s, 0, 'grab');
+  assert.deepEqual([H(c)?.kind, H(c)?.parts], ['plate', []]);
+  press(s, 0, 'grab');
+  assert.equal(c.note, 'Already empty');
+  hold(c, make(s, 'pot', [part('tomato', 'burnt')], { cook: 20 })); press(s, 0, 'grab');
+  assert.deepEqual([H(c)?.kind, H(c)?.parts, H(c)?.cook], ['pot', [], 0]);
+  hold(c, make(s, 'dirty', [], { count: 2 })); press(s, 0, 'grab');
+  assert.equal(c.note, 'Wash dirty plates in the sink'); assert.equal(H(c)?.kind, 'dirty');
+  hold(c, make(s, 'extinguisher')); press(s, 0, 'grab');
+  assert.equal(H(c)?.kind, 'extinguisher');
+  hold(c, null); press(s, 0, 'grab');
+  assert.equal(c.note, 'Nothing to take from the bin');
+});
+
+test('burning tiles refuse every grab until the fire is out, except an empty hand rescuing the extinguisher', () => {
+  const s = kitchen(), c = s.players[0];
+  slot(s, COUNTER).item = food(s, 'tomato'); slot(s, COUNTER).fire = 1;
+  standAt(s, 0, COUNTER); press(s, 0, 'grab');
+  assert.equal(c.note, 'Put it out first!'); assert.equal(H(c), null);
+  hold(c, food(s, 'onion')); press(s, 0, 'grab');
+  assert.equal(c.note, 'Put it out first!'); assert.equal(H(c)?.parts[0].food, 'onion');
+  slot(s, COUNTER).item = make(s, 'extinguisher'); press(s, 0, 'grab');
+  assert.equal(H(c)?.parts[0].food, 'onion', 'full hands still cannot use a burning tile');
+  hold(c, null); press(s, 0, 'grab');
+  assert.equal(H(c)?.kind, 'extinguisher', 'fire spreading onto the extinguisher never locks it away');
+});
+
+// ── Chopping ────────────────────────────────────────────────────────────────
+test('chopping starts with one tap, continues hands-free, cancels on walking away and keeps progress', () => {
+  const s = kitchen(), c = s.players[0];
+  hold(c, food(s, 'lettuce'));
+  standAt(s, 0, BOARD); press(s, 0, 'grab');
+  assert.match(c.note, /Chop/);
+  press(s, 0, 'act');
+  assert.equal(c.work, 'chop');
+  step(s, {}, 1);
+  const progress = slot(s, BOARD).progress;
+  assert.ok(progress > .45 && progress < .52, `progress ${progress}`);
+  step(s, { p0: { x: 0, y: .2 } }, .2); // A small nudge below the cancel threshold keeps chopping.
+  assert.equal(c.work, 'chop');
+  const kept = slot(s, BOARD).progress;
+  step(s, { p0: { x: 0, y: 1 } }, .3); // Walk away.
+  assert.equal(c.work, 'none'); assert.equal(slot(s, BOARD).progress, kept);
+  standAt(s, 0, BOARD); press(s, 0, 'act');
+  step(s, {}, 1.2);
+  assert.equal(slot(s, BOARD).item?.parts[0].state, 'chopped'); assert.equal(c.work, 'none'); assert.equal(c.stats.chopped, 1);
+  assert.equal(slot(s, BOARD).progress, 0); assert.equal(last(s, 'chop')?.player, 'p0');
+  press(s, 0, 'act');
+  assert.equal(c.note, 'Already chopped');
+  slot(s, BOARD).item = food(s, 'bun'); press(s, 0, 'act');
+  assert.equal(c.note, 'Bun is used whole'); assert.equal(c.work, 'none');
+});
+
+// ── Cooking, burning, fire ──────────────────────────────────────────────────
+test('pot takes up to three chopped soup vegetables; late additions dilute the heat', () => {
+  const s = kitchen(), c = s.players[0], pot = slot(s, POT).item!;
+  standAt(s, 0, POT);
+  for (const [item, note] of [[food(s, 'tomato'), 'Needs chopping first'], [food(s, 'lettuce', 'chopped'), 'Only tomato or onion go in a pot'], [food(s, 'tomato', 'cooked'), 'Already cooked']] as const) {
+    hold(c, item); press(s, 0, 'grab');
+    assert.equal(c.note, note); assert.equal(pot.parts.length, 0);
+  }
+  hold(c, food(s, 'tomato', 'chopped')); press(s, 0, 'grab');
+  step(s, {}, 4.5);
+  const one = pot.cook;
+  hold(c, food(s, 'tomato', 'chopped')); press(s, 0, 'grab');
+  assert.ok(Math.abs(pot.cook - (one + DT) / 2) < .05, `two parts halve the heat: ${pot.cook}`);
+  const two = pot.cook;
+  hold(c, food(s, 'tomato', 'chopped')); press(s, 0, 'grab');
+  assert.ok(Math.abs(pot.cook - (two + DT) * 2 / 3) < .05, `three parts keep two thirds: ${pot.cook}`);
+  hold(c, food(s, 'tomato', 'chopped')); press(s, 0, 'grab');
+  assert.equal(c.note, 'Pot is full'); assert.equal(pot.parts.length, 3);
+
+  step(s, {}, POT_SECONDS - pot.cook - .1);
+  assert.ok(pot.parts.every(p => p.state === 'chopped'));
+  step(s, {}, .2);
+  assert.ok(pot.parts.every(p => p.state === 'cooked')); assert.ok(last(s, 'done'));
+  step(s, {}, BURN_WARN);
+  assert.ok(last(s, 'warn')); assert.equal(count(s, 'burn'), 0);
+  step(s, {}, BURN_AT - BURN_WARN);
+  assert.ok(pot.parts.every(p => p.state === 'burnt'));
+  assert.equal(slot(s, POT).fire, 1); assert.ok(last(s, 'burn')); assert.ok(last(s, 'fire'));
+});
+
+test('heat is kept when a pot leaves the stove and a pan fries one chopped patty', () => {
+  const s = kitchen(), c = s.players[0], pan = slot(s, PAN).item!;
+  standAt(s, 0, PAN);
+  hold(c, food(s, 'patty')); press(s, 0, 'grab');
+  assert.equal(c.note, 'Needs chopping first');
+  hold(c, food(s, 'tomato', 'chopped')); press(s, 0, 'grab');
+  assert.equal(c.note, 'Only beef goes in a pan');
+  hold(c, food(s, 'patty', 'chopped')); press(s, 0, 'grab');
+  hold(c, food(s, 'patty', 'chopped')); press(s, 0, 'grab');
+  assert.equal(c.note, 'Pan is full');
+  hold(c, null);
+  step(s, {}, 3);
+  press(s, 0, 'grab'); // Lift the pan: it stops heating but keeps its heat.
+  const kept = H(c)!.cook;
+  step(s, {}, 2);
+  assert.equal(H(c)!.cook, kept);
+  press(s, 0, 'grab');
+  step(s, {}, PAN_SECONDS - kept + .1);
+  assert.equal(pan.parts[0].state, 'cooked');
+  hold(c, make(s, 'plate', [part('bun')])); press(s, 0, 'grab');
+  assert.equal(matchRecipe(H(c)), 'burger');
+});
+
+test('the oven bakes a plate with raw dough into a pizza', () => {
+  const s = kitchen(), c = s.players[0];
+  hold(c, plate(s));
+  standAt(s, 0, T('d')); press(s, 0, 'grab');
+  slot(s, COUNTER).item = food(s, 'tomato', 'chopped');
+  standAt(s, 0, COUNTER); press(s, 0, 'grab');
+  slot(s, COUNTER).item = food(s, 'cheese', 'chopped'); press(s, 0, 'grab');
+  standAt(s, 0, OVEN); press(s, 0, 'grab');
+  assert.equal(H(c), null);
+  step(s, {}, OVEN_SECONDS + .1);
+  assert.ok(last(s, 'done'));
+  press(s, 0, 'grab');
+  assert.equal(matchRecipe(H(c)), 'pizza'); assert.equal(c.stats.cooked, 1);
+});
+
+test('fire spreads to a flammable neighbour on schedule and the extinguisher cone puts everything out', () => {
+  const spread = (seed: number) => {
+    const s = kitchen({ seed }), pot = slot(s, POT).item!;
+    pot.parts = [part('tomato', 'chopped')]; pot.cook = POT_SECONDS + BURN_AT - .05;
+    step(s, {}, .1);
+    assert.equal(slot(s, POT).fire, 1);
+    step(s, {}, FIRE_SPREAD_SECONDS - .2);
+    assert.equal(count(s, 'fire'), 1);
+    step(s, {}, .2);
+    assert.equal(count(s, 'fire'), 2);
+    return s;
+  };
+  const s = spread(3), c = s.players[0], burning = () => s.slots.filter(t => t.fire > 0).length;
+  assert.deepEqual(spread(3).slots.map(t => t.fire > 0), s.slots.map(t => t.fire > 0), 'seeded spread is deterministic');
+  assert.ok([COUNTER, POT2].some(i => slot(s, i).fire === 1), 'spreads to an orthogonal flammable neighbour');
+  standAt(s, 0, T('E')); press(s, 0, 'grab');
+  assert.equal(H(c)?.kind, 'extinguisher');
+  standAt(s, 0, POT);
+  press(s, 0, 'act');
+  assert.equal(c.work, 'spray');
+  step(s, { p0: { act: true } }, 1.3);
+  assert.equal(burning(), 0); assert.ok(c.stats.extinguished >= 2); assert.ok(last(s, 'extinguish'));
+  step(s, {}, .1);
+  assert.equal(c.work, 'none');
+  press(s, 0, 'grab');
+  assert.equal(c.note, 'Something is already here', 'the burnt pot is safe but still occupies the stove');
+});
+
+// ── Serving and orders ──────────────────────────────────────────────────────
+test('serving pays value plus a combo-multiplied tip and fulfils the oldest matching order', () => {
+  const s = kitchen({ settings: { seconds: 240 }, level: { recipes: ['salad', 'side_salad'] } }), c = s.players[0];
+  s.orders = [order(s, 'salad', 100), order(s, 'side_salad', 101), order(s, 'salad', 102)];
+  standAt(s, 0, HATCH);
+  hold(c, plate(s, 'salad')); press(s, 0, 'grab');
+  assert.deepEqual(s.orders.map(o => o.id), [101, 102]);
+  assert.deepEqual([s.score, s.combo, s.served, c.stats.served, s.recipeCounts.salad, H(c)], [38, 2, 1, 1, 1, null]);
+  assert.deepEqual([last(s, 'serve')?.value, last(s, 'serve')?.recipe], [38, 'salad']);
+  hold(c, plate(s, 'side_salad')); press(s, 0, 'grab');
+  assert.equal(s.score, 38 + 20 + 16); assert.equal(s.combo, 3);
+  step(s, {}, 30); // Half the patience has drained on order 102.
+  hold(c, plate(s, 'salad')); press(s, 0, 'grab');
+  assert.equal(s.score, 74 + 30 + 4 * 3); assert.equal(s.combo, 4);
+});
+
+test('wrong dishes are refused at the hatch and stay in hand', () => {
+  const s = kitchen(), c = s.players[0];
+  s.orders = [order(s, 'salad', 100)];
+  standAt(s, 0, HATCH);
+  for (const [held, note] of [
+    [make(s, 'plate', [part('onion', 'chopped')]), 'That is not on the menu'], [plate(s, 'tomato_soup'), 'No one ordered tomato soup'],
+    [plate(s), 'The plate is empty'], [food(s, 'lettuce', 'chopped'), 'Serve dishes on a plate'],
+  ] as const) {
+    hold(c, held); press(s, 0, 'grab');
+    assert.equal(c.note, note); assert.equal(H(c), held); assert.equal(s.score, 0);
+  }
+  assert.equal(count(s, 'wrong'), 3); assert.equal(last(s, 'wrong')?.player, 'p0'); assert.equal(s.orders.length, 1);
+});
+
+test('orders open, arrive on a seeded schedule without flooding, and expire for a penalty', () => {
+  const s = setup(K, { players: 2, level: { recipes: ['salad', 'side_salad', 'tomato_soup'], patience: 52 } });
+  assert.deepEqual(s.orders.map(o => o.recipe), ['salad', 'side_salad']);
+  assert.equal(s.orders[0].expiresAt - s.orders[0].createdAt, 52 * 1.25 * 1000);
+  step(s, {}, 52 * 1.25 / 2.6 + .1);
+  assert.deepEqual(s.orders.map(o => o.recipe), ['salad', 'side_salad', 'tomato_soup'], 'each recipe is introduced once first');
+  assert.equal(setup(K, { players: 6 }).orders.length, 3);
+  for (let i = 0; i < 400; i++) { // Never more than two identical open orders.
+    step(s, {}, 1);
+    for (const id of ['salad', 'side_salad', 'tomato_soup']) assert.ok(s.orders.filter(o => o.recipe === id).length <= 2);
+    assert.ok(s.orders.length <= 4);
+    if (s.complete) break;
+  }
+  const e = kitchen(), before = e.orders.length;
+  e.score = 3; e.combo = 3; e.orders[0].expiresAt = e.now + 100;
+  step(e, {}, .2);
+  assert.deepEqual([e.failed, e.score, e.combo, e.orders.length], [1, 0, 1, before - 1]);
+  assert.equal(last(e, 'expire')?.recipe, 'salad');
+  e.score = 50; e.orders[0].expiresAt = e.now + 50;
+  step(e, {}, .1);
+  assert.equal(e.score, 45);
+  // The rail never runs dry: below the opening count, the next order arrives within 2.5 s, whatever the schedule says.
+  const r = kitchen(); r.orders.splice(1); r.nextOrderAt = r.now + 60000;
+  step(r, {}, 2.4); assert.equal(r.orders.length, 1);
+  step(r, {}, .2); assert.equal(r.orders.length, 2);
+});
+
+test('relaxed mode never burns food or expires orders', () => {
+  const s = kitchen({ settings: { relaxed: true } }), pot = slot(s, POT).item!;
+  pot.parts = [part('onion', 'chopped')];
+  step(s, {}, POT_SECONDS + BURN_AT + 5);
+  assert.equal(pot.parts[0].state, 'cooked'); assert.equal(pot.cook, POT_SECONDS); assert.equal(slot(s, POT).fire, 0);
+  assert.equal(count(s, 'warn') + count(s, 'burn') + count(s, 'fire'), 0);
+  step(s, {}, 120);
+  assert.equal(s.failed, 0); assert.ok(s.orders.length >= 2);
+});
+
+test('stars follow the thresholds and each new star emits once', () => {
+  const s = kitchen(), c = s.players[0];
+  s.score = s.thresholds[1] - 10;
+  step(s);
+  assert.equal(s.stars, 1); assert.equal(count(s, 'star'), 1);
+  s.orders = [order(s, 'salad', 900)];
+  standAt(s, 0, HATCH); hold(c, plate(s, 'salad')); press(s, 0, 'grab');
+  assert.equal(s.stars, 2); assert.deepEqual(s.events.filter(e => e.type === 'star').map(e => e.value), [1, 2]);
+});
+
+// ── Plates ──────────────────────────────────────────────────────────────────
+test('served plates return dirty after RETURN_SECONDS and wash one by one into the nearest rack', () => {
+  const s = kitchen(), c = s.players[0], nearRack = T('R', 1), racks = slot(s, nearRack).count;
+  assert.equal(slot(s, RACK).count + slot(s, nearRack).count, 1 + 3, 'players + 3 clean plates split between racks');
+  s.orders = [order(s, 'salad', 100), order(s, 'salad', 101)];
+  standAt(s, 0, HATCH);
+  hold(c, plate(s, 'salad')); press(s, 0, 'grab');
+  hold(c, plate(s, 'salad')); press(s, 0, 'grab');
+  step(s, {}, RETURN_SECONDS - .2);
+  assert.equal(slot(s, RETURN).count, 0);
+  step(s, {}, .3);
+  assert.equal(slot(s, RETURN).count, 2);
+  standAt(s, 0, RETURN); press(s, 0, 'grab');
+  standAt(s, 0, SINK); press(s, 0, 'grab');
+  assert.equal(slot(s, SINK).item?.count, 2); assert.match(c.note, /Wash/);
+  press(s, 0, 'act');
+  assert.equal(c.work, 'wash');
+  step(s, {}, WASH_SECONDS);
+  assert.equal(slot(s, nearRack).count, racks + 1); assert.equal(slot(s, SINK).item?.count, 1); assert.equal(c.work, 'wash', 'washing continues through the stack');
+  step(s, {}, WASH_SECONDS);
+  assert.equal(slot(s, nearRack).count, racks + 2); assert.equal(slot(s, SINK).item, null);
+  assert.deepEqual([c.work, c.stats.washed, count(s, 'wash')], ['none', 2, 2]);
+});
+
+test('kitchens without a sink return plates clean to a rack', () => {
+  const rows = ['#lC#H#', 'R.@..#', '######'], s = setup(rows, { level: { recipes: ['side_salad'] } }), c = s.players[0], rack = find(rows, 'R');
+  s.orders = [order(s, 'side_salad', 100)];
+  slot(s, rack).count = 0;
+  standAt(s, 0, rack); press(s, 0, 'grab');
+  assert.equal(c.note, 'Plates are on their way back');
+  hold(c, plate(s, 'side_salad'));
+  standAt(s, 0, find(rows, 'H')); press(s, 0, 'grab');
+  assert.equal(s.served, 1);
+  step(s, {}, RETURN_SECONDS + .1);
+  assert.equal(slot(s, rack).count, 1);
+});
+
+// ── Throwing ────────────────────────────────────────────────────────────────
+test('thrown food is caught by an empty-handed teammate', () => {
+  const s = kitchen({ players: 2 }), [a, b] = s.players, row2 = tileXZ(s, find(K, '.', 9));
+  place(s, 1, row2.x + 3, row2.z);
+  place(s, 0, row2.x, row2.z, 1, 0);
+  hold(a, food(s, 'tomato'));
+  press(s, 0, 'act');
+  assert.equal(H(a), null); assert.equal(s.loose.length, 1); assert.equal(s.loose[0].by, 'p0'); assert.ok(s.loose[0].y > .9);
+  step(s, {}, .4);
+  assert.deepEqual(H(b)?.parts, [part('tomato')]); assert.equal(s.loose.length, 0);
+  assert.deepEqual([a.stats.thrown, b.stats.caught, last(s, 'catch')?.player], [1, 1, 'p1']);
+  hold(b, plate(s)); press(s, 1, 'act');
+  assert.equal(b.note, 'Plates are too precious to throw'); assert.equal(H(b)?.kind, 'plate');
+});
+
+test('thrown food lands in an accepting pot, on an empty counter, on the floor, or rests beside a blocked station', () => {
+  const s = kitchen(), c = s.players[0], below = (tile: number, rows: number) => { const t = tileXZ(s, tile); return place(s, 0, t.x, t.z + rows, 0, -1); };
+  below(POT, 4); hold(c, food(s, 'tomato', 'chopped')); press(s, 0, 'act');
+  step(s, {}, .5);
+  assert.deepEqual(slot(s, POT).item?.parts, [part('tomato', 'chopped')]); assert.equal(s.loose.length, 0); assert.ok(last(s, 'land'));
+  below(COUNTER, 4); hold(c, food(s, 'lettuce', 'chopped')); press(s, 0, 'act');
+  step(s, {}, .5);
+  assert.deepEqual(slot(s, COUNTER).item?.parts, [part('lettuce', 'chopped')]);
+  hold(c, food(s, 'onion')); press(s, 0, 'act'); // Counter is now occupied.
+  step(s, {}, .5);
+  assert.equal(s.loose.length, 1); assert.equal(s.loose[0].y, 0); assert.equal(s.loose[0].by, undefined);
+  const resting = s.loose[0], floor = s.map.tiles.find(t => t.col === 5 && t.row === 1)!;
+  assert.ok(WALKABLE.has(s.map.tiles.find(t => Math.abs(t.x - resting.x) < .5 && Math.abs(t.z - resting.z) < .5)!.kind) && Math.abs(resting.x - floor.x) < .5);
+  const left = tileXZ(s, SIDE);
+  place(s, 0, left.x + 1, left.z, 1, 0); hold(c, food(s, 'cheese')); press(s, 0, 'act');
+  step(s, {}, .5);
+  assert.equal(s.loose.length, 2); assert.equal(s.loose[1].y, 0); assert.equal(s.loose[1].vx, 0);
+});
+
+test('food thrown into a gap splashes; chefs are stopped at the edge of the void', () => {
+  const rows = ['#######', '#@..~~#', '#######'], s = setup(rows), c = s.players[0];
+  hold(c, food(s, 'tomato'));
+  place(s, 0, c.x, c.z, 1, 0); press(s, 0, 'act');
+  step(s, {}, .5);
+  assert.equal(s.loose.length, 0); assert.ok(last(s, 'splash'));
+  step(s, { p0: { x: 1, y: 0 } }, 2);
+  const edge = s.map.tiles[find(rows, '~')].x - .5;
+  assert.ok(c.x <= edge - CHEF_RADIUS + 1e-6, `chef at ${c.x}, void edge ${edge}`);
+  press(s, 0, 'dash', { x: 1 }); step(s, { p0: { x: 1 } }, .5);
+  assert.ok(c.x <= edge - CHEF_RADIUS + 1e-6);
+});
+
+// ── Gimmicks ────────────────────────────────────────────────────────────────
+test('conveyors resolve from the front of a chain and wait when blocked', () => {
+  const rows = ['#>>>#C', '#.@..#', '######'], s = setup(rows), belt = (n: number) => slot(s, find(rows, '>', n)), end = slot(s, find(rows, '#', 1));
+  belt(0).item = food(s, 'tomato'); belt(1).item = food(s, 'onion'); belt(2).item = food(s, 'lettuce');
+  step(s, {}, BELT_SECONDS + DT);
+  assert.deepEqual([belt(0).item, belt(1).item?.parts[0].food, belt(2).item?.parts[0].food, end.item?.parts[0].food], [null, 'tomato', 'onion', 'lettuce'], 'the whole chain advances one tile');
+  step(s, {}, BELT_SECONDS);
+  assert.deepEqual([belt(1).item?.parts[0].food, belt(2).item?.parts[0].food], ['tomato', 'onion'], 'a blocked chain waits');
+  end.item = null;
+  step(s, {}, BELT_SECONDS);
+  assert.deepEqual([belt(1).item, belt(2).item?.parts[0].food, slot(s, find(rows, '#', 1)).item?.parts[0].food], [null, 'tomato', 'onion']);
+});
+
+test('ice keeps momentum: slower to start and much longer to stop than floor', () => {
+  const rows = ['############', '#@.........#', '#@*********#', '############'], s = setup(rows, { players: 2 }), [a, b] = s.players;
+  place(s, 0, a.x, a.z, 1, 0); place(s, 1, b.x + 1, b.z, 1, 0);
+  step(s, { p0: { x: 1 }, p1: { x: 1 } }, .25);
+  assert.ok(Math.abs(a.vx - 4.4) < 1e-6 && b.vx < 2.5, `floor ${a.vx} ice ${b.vx}`);
+  step(s, { p0: { x: 1 }, p1: { x: 1 } }, .5);
+  const [ax, bx] = [a.x, b.x];
+  step(s, {}, 2);
+  assert.ok(a.x - ax < .4 && b.x - bx > 3 * (a.x - ax), `stop: floor ${a.x - ax} ice ${b.x - bx}`);
+});
+
+test('dash is an impulse with a cooldown and a short input buffer', () => {
+  const rows = ['##############', '#@...........#', '##############'], s = setup(rows), c = s.players[0];
+  place(s, 0, c.x, c.z, 1, 0);
+  press(s, 0, 'dash');
+  assert.ok(c.dashing && c.vx > 10, `vx ${c.vx}`); assert.equal(c.stats.dashes, 1); assert.ok(last(s, 'dash'));
+  step(s, {}, .2);
+  assert.ok(!c.dashing);
+  press(s, 0, 'dash'); // Within cooldown but beyond the buffer: ignored.
+  assert.equal(c.stats.dashes, 1);
+  step(s, {}, .25);
+  press(s, 0, 'dash'); // Within 150 ms of ready: buffered.
+  assert.equal(c.stats.dashes, 1);
+  step(s, {}, .15);
+  assert.equal(c.stats.dashes, 2);
+});
+
+test('drawbridges drop chefs and their items into the gap; plates and pots come home; chefs respawn', () => {
+  const rows = ['######', 'R@g.W#', 'O@g.D#', '######'], s = setup(rows, { players: 2, level: { gates: { open: 4, closed: 3, warn: 1 } } }), [a, b] = s.players;
+  const gate = (n: number) => tileXZ(s, find(rows, 'g', n));
+  standAt(s, 0, find(rows, 'R')); press(s, 0, 'grab');
+  standAt(s, 1, find(rows, 'O')); press(s, 1, 'grab');
+  assert.deepEqual([H(a)?.kind, H(b)?.kind], ['plate', 'pot']);
+  H(b)!.parts = [part('tomato', 'chopped')];
+  place(s, 0, gate(0).x, gate(0).z); place(s, 1, gate(1).x, gate(1).z);
+  step(s, {}, 3.1 - (s.now - s.startedAt) / 1000);
+  assert.ok(s.gateWarning && s.gatesOpen);
+  step(s, {}, 1);
+  assert.ok(!s.gatesOpen); assert.equal(last(s, 'gate')?.value, 0);
+  assert.ok(a.respawnAt > 0 && b.respawnAt > 0); assert.deepEqual([H(a), H(b), a.target], [null, null, -1]);
+  assert.equal(count(s, 'fall'), 2); assert.equal(a.stats.falls, 1);
+  assert.deepEqual(slot(s, find(rows, 'O')).item && [slot(s, find(rows, 'O')).item!.kind, slot(s, find(rows, 'O')).item!.parts], ['pot', []], 'pot goes home empty');
+  press(s, 0, 'grab'); // Commands from a fallen chef are acknowledged but ignored.
+  assert.equal(a.seq, 2); assert.equal(H(a), null);
+  step(s, {}, RESPAWN_SECONDS);
+  assert.equal(a.respawnAt, 0); assert.equal(count(s, 'respawn'), 2);
+  assert.ok(s.map.spawns.some(p => p.x === a.x && p.z === a.z) || Math.hypot(a.x - s.map.spawns[0].x, a.z - s.map.spawns[0].z) < .8);
+  step(s, {}, RETURN_SECONDS - RESPAWN_SECONDS);
+  assert.equal(slot(s, find(rows, 'D')).count, 1, 'the lost plate returns as a dirty plate');
+  while (s.gatesOpen) step(s);
+  step(s, { p0: { x: 1 }, p1: { x: 1 } }, 1);
+  assert.ok(s.players.every(c => c.x < gate(0).x - .5 - CHEF_RADIUS + 1e-6), 'closed gates block walking');
+});
+
+test('portals move chefs (keeping momentum) and thrown food to their pair', () => {
+  const rows = ['#########', '#@.T#T..#', '#########'], s = setup(rows), c = s.players[0], [from, to] = [tileXZ(s, find(rows, 'T')), tileXZ(s, find(rows, 'T', 1))];
+  step(s, { p0: { x: 1 } }, .6);
+  assert.ok(c.x > to.x, `chef at ${c.x}`); assert.ok(c.vx > 4); assert.equal(last(s, 'portal')?.player, 'p0');
+  step(s, { p0: { x: -1 } }, 1.3);
+  assert.ok(c.x < from.x, 'walking back through the pair returns'); assert.equal(count(s, 'portal'), 2);
+  const start = tileXZ(s, find(rows, '@'));
+  place(s, 0, start.x, start.z, 1, 0); hold(c, food(s, 'tomato', 'chopped'));
+  press(s, 0, 'act'); step(s, {}, .5);
+  assert.equal(s.loose.length, 1); assert.ok(s.loose[0].x > to.x + 1 && s.loose[0].y === 0, 'the tomato flew on from the paired portal');
+  assert.equal(count(s, 'portal'), 3);
+});
+
+// ── Collision and crowding ──────────────────────────────────────────────────
+const inside = (s: State) => {
+  const { map } = s;
+  for (const c of s.players) if (!c.respawnAt) {
+    for (const tile of map.tiles) {
+      if (WALKABLE.has(tile.kind) && (tile.kind !== 'gate' || s.gatesOpen)) continue;
+      const px = Math.max(tile.x - .5, Math.min(c.x, tile.x + .5)), pz = Math.max(tile.z - .5, Math.min(c.z, tile.z + .5));
+      if (Math.hypot(c.x - px, c.z - pz) < CHEF_RADIUS - 1e-6) return `${c.id} overlaps ${tile.kind} at ${tile.col},${tile.row}`;
+    }
+    if (Math.abs(c.x) > map.halfX - CHEF_RADIUS + 1e-6 || Math.abs(c.z) > map.halfZ - CHEF_RADIUS + 1e-6) return `${c.id} out of bounds`;
+  }
+  return '';
+};
+const random = (seed: number) => () => ((seed = Math.imul(seed ^ (seed >>> 15), 0x2c1b3c6d) + 0x9e3779b9 >>> 0) / 4294967296);
+
+test('random walking and dashing never lets a chef enter a station, the void or leave the map', () => {
+  for (const rows of [K, ['#########', '#@.~~.@.#', '#..~C..*#', '#@**.~..#', '#########']]) {
+    const s = setup(rows, { players: 4 }), roll = random(11);
+    const inputs: Record<string, Partial<Input>> = {};
+    for (let t = 0; t < 20 * 60; t++) {
+      if (t % 20 === 0) for (const c of s.players) inputs[c.id] = { x: roll() * 2 - 1, y: roll() * 2 - 1, ...(roll() < .3 ? { cmd: 'dash' as const, seq: c.seq + 1 } : {}) };
+      step(s, inputs);
+      const problem = inside(s);
+      assert.equal(problem, '', `tick ${t}: ${problem}`);
+    }
   }
 });
-test('busy multi-chef transfers preserve every plate and keep item ownership unique', () => {
-  const state = create(10, 9), plateTotal = state.cleanPlates; let random = 7;
-  for (let i = 0; i < 1500; i++) {
-    random = (Math.imul(random, 1664525) + 1013904223) >>> 0; const player = random % 10, site = state.stations[(random >>> 8) % state.stations.length]; at(state, site, player); use(state, player, true);
-    const items = [...state.players.flatMap(chef => chef.held ? [chef.held] : []), ...state.stations.flatMap(station => station.item ? [station.item] : []), ...state.loose.map(item => item.item), ...state.returns.map(entry => entry.item)];
-    assert.equal(new Set(items.map(item => item.id)).size, items.length); assert.equal(items.filter(item => item.kind === 'plate').length + state.cleanPlates, plateTotal);
+
+test('ten chefs crowding one spot never overlap deeply, stay on the floor, and can walk apart', () => {
+  const s = setup(null, { players: 10 }), centre = { x: 0, z: s.map.tiles.find(t => WALKABLE.has(t.kind))!.z };
+  let minGap = Infinity;
+  for (let t = 0; t < 5 * 60; t++) {
+    const inputs: Record<string, Partial<Input>> = {};
+    for (const c of s.players) { const dx = centre.x - c.x, dz = centre.z - c.z, d = Math.hypot(dx, dz) || 1; inputs[c.id] = { x: dx / d, y: dz / d, ...(t % 30 === 0 ? { cmd: 'dash' as const, seq: c.seq + 1 } : {}) }; }
+    step(s, inputs);
+    for (let i = 0; i < 10; i++) for (let j = i + 1; j < 10; j++) minGap = Math.min(minGap, Math.hypot(s.players[i].x - s.players[j].x, s.players[i].z - s.players[j].z));
+    assert.equal(inside(s), '');
   }
-});
-test('tap-place, release, then a fresh hold starts and resumes chopping without picking raw food back up', () => { const state = create(), board = station(state, 'board'), chef = at(state, board); chef.held = food(100, 'tomato'); use(state); assert.equal(chef.held, null); tick(state); use(state, 0, true); assert.equal(chef.held, null); assert.equal(board.item?.id, 100); tick(state, { p0: { ...neutral(), use: true } }, 1); const interrupted = board.progress; tick(state, {}, .3); use(state, 0, true); assert.ok(board.progress > interrupted); tick(state, { p0: { ...neutral(), use: true } }, 1.5); assert.equal(board.item!.food[0].stage, 'chopped'); tick(state); use(state); assert.equal((chef.held as Item | null)?.id, 100); });
-test('tap-place, release, then a fresh hold washes a dirty dish; only a clean dish is picked up', () => { const state = create(), sink = station(state, 'sink'), chef = at(state, sink); chef.held = { id: 100, kind: 'plate', food: [], dirty: true }; use(state); tick(state); use(state, 0, true); assert.equal(chef.held, null); tick(state, { p0: { ...neutral(), use: true } }, 2.6); assert.equal(sink.item?.dirty, false); tick(state); use(state); assert.equal((chef.held as Item | null)?.id, 100); });
-test('a serve at the ticket deadline is rejected before expiry cleanup and preserves the dish', () => { const state = create(2, 1), chef = at(state, station(state, 'serve')); chef.held = { id: 100, kind: 'plate', food: structuredClone(RECIPES[0].parts), dirty: false }; const deadline = state.tickets[0].expiresAt; rules.tick(state, new Map([['p0', { ...neutral(), command: 'use' as const, seq: 1 }]]), 1 / 60, deadline); assert.equal(state.served, 0); assert.equal(chef.held?.id, 100); assert.equal(state.missed, 2); });
-test('serving just before expiry remains valid, and practice accepts its non-expiring tickets', () => { for (const practice of [false, true]) { const state = create(2, 1, practice), chef = at(state, station(state, 'serve')); chef.held = { id: 100, kind: 'plate', food: structuredClone(RECIPES[0].parts), dirty: false }; rules.tick(state, new Map([['p0', { ...neutral(), command: 'use' as const, seq: 1 }]]), 1 / 60, state.tickets[0].expiresAt + (practice ? 100 : -1)); assert.equal(state.served, 1); assert.equal(chef.held, null); } });
-
-test('solo service has a reachable star target, longer ticket patience, results and a fresh replay', () => {
-  const solo=create(1), team=create(2);
-  assert(solo.thresholds[0]<team.thresholds[0]); assert(solo.tickets[0].expiresAt>team.tickets[0].expiresAt);
-  for(let i=0;i<2;i++) { const chef=at(solo,station(solo,'serve')); chef.held={id:100+i,kind:'plate',food:structuredClone(RECIPES[0].parts),dirty:false}; use(solo); }
-  assert.equal(solo.served,2); assert(solo.stars>=1);
-  rules.tick(solo,new Map(),1/60,solo.endsAt); assert(rules.outcome(solo).complete); assert.equal(create(1).score,0);
+  assert.ok(minGap > CHEF_RADIUS, `closest pair ${minGap}`);
+  const before = s.players.map(c => ({ x: c.x, z: c.z }));
+  for (let t = 0; t < 2 * 60; t++) step(s, Object.fromEntries(s.players.map((c, i) => [c.id, { x: Math.cos(i * 2.4), y: Math.sin(i * 2.4) }])));
+  const moved = s.players.filter((c, i) => Math.hypot(c.x - before[i].x, c.z - before[i].z) > .3).length;
+  assert.ok(moved >= 8, `${moved} of 10 chefs walked free`);
 });
 
-test('a stationary dash moves along facing for one burst, then stops', () => {
-  const state = create(), chef = state.players[0]; chef.x = 0; chef.z = 2; chef.facingX = 1; chef.facingZ = 0;
-  tick(state, { p0: { ...neutral(), dash: true } }); tick(state, {}, .4);
-  assert.ok(chef.x > 2 && chef.x < 2.4, 'dash covers about 2.24 metres without held movement');
-  assert.equal(chef.z, 2); const x = chef.x; tick(state, {}, .3); assert.equal(chef.x, x);
-});
-test('released dash commands execute once, acknowledge cooldown presses and preserve held food', () => {
-  const state = create(), chef = state.players[0]; chef.x = 0; chef.z = 2; chef.facingX = 1; chef.facingZ = 0; chef.held = food(99, 'lettuce');
-  const dash = rules.parseInput({ ...neutral(), command: 'dash', seq: 1 });
-  tick(state, { p0: dash }, .2); assert.ok(chef.x > 1.1); assert.equal(chef.commandSeq, 1); assert.equal(chef.held?.id, 99);
-  const ready = chef.dashReady;
-  tick(state, { p0: { ...dash, seq: 2 } }, 1.8); assert.equal(chef.commandSeq, 2); assert.equal(chef.dashReady, ready, 'cooldown taps cannot queue a later dash');
-  tick(state, { p0: dash }); assert.equal(chef.dashReady, ready, 'old commands cannot retrigger');
-  chef.x = 0; tick(state, { p0: { ...dash, seq: 3 } }); assert.ok(chef.dashReady > ready); assert.ok(chef.x > 0);
-});
-test('dash normalizes a partial diagonal stick and cannot pass through a counter', () => {
-  const state = create(), chef = state.players[0]; chef.x = 0; chef.z = 2;
-  tick(state, { p0: { ...neutral(), x: .2, y: -.2, dash: true } }, .1);
-  assert.ok(Math.abs(Math.hypot(chef.x, chef.z - 2) - .64) < .001, 'dash speed does not shrink with joystick deflection');
-  const board = station(state, 'board'); at(state, board); const x = chef.x, z = chef.z; chef.dashReady = 0; tick(state); tick(state, { p0: { ...neutral(), dash: true } }, .4);
-  assert.ok(walkable(state, chef.x, chef.z)); assert.ok(Math.hypot(chef.x - x, chef.z - z) < .3, 'counter blocks the burst');
+// ── Presence and commands ───────────────────────────────────────────────────
+test('disconnecting drops anything held, freezes the chef as a ghost others walk through, and reconnect restores them', () => {
+  const s = kitchen({ players: 2 }), [a, b] = s.players;
+  hold(a, food(s, 'tomato')); hold(b, make(s, 'extinguisher'));
+  step(s, { p0: { x: 1 } }, .2);
+  rules.onPresenceChange(s, 'p0', false, s.now); rules.onPresenceChange(s, 'p1', false, s.now);
+  assert.deepEqual([H(a), H(b), a.connected, a.vx, s.loose.map(drop => drop.item.kind)], [null, null, false, 0, ['food', 'extinguisher']]);
+  const { x, z } = a;
+  press(s, 0, 'grab'); step(s, { p0: { x: 1 } }, .5);
+  assert.deepEqual([a.x, a.z, H(a)], [x, z, null], 'disconnected chefs are frozen');
+  rules.onPresenceChange(s, 'p0', true, s.now);
+  assert.equal(s.players.length, 2); assert.ok(a.connected);
+  step(s, { p0: { x: -1 } }, .2);
+  assert.ok(a.x < x);
+  // p1 is still away: p0 walks straight through them and leaves them where they froze.
+  const ghost = { x: b.x, z: b.z };
+  place(s, 0, b.x - 1, b.z); step(s, { p0: { x: 1 } }, .5);
+  assert.ok(a.x > ghost.x + .8, `walked through (${a.x} vs ${ghost.x})`);
+  assert.deepEqual([b.x, b.z], [ghost.x, ghost.z]);
 });
 
-test('disconnect cancels an active dash before the chef returns', () => {
-  const state = create(), chef = state.players[0]; chef.x = 0; chef.z = 2; chef.facingX = 1; chef.facingZ = 0;
-  tick(state, { p0: { ...neutral(), command: 'dash', seq: 1 } }); const x = chef.x;
-  rules.onPresenceChange(state, chef.id, false, state.now); rules.onPresenceChange(state, chef.id, true, state.now);
-  tick(state, {}, .4); assert.equal(chef.x, x); assert.equal(chef.dashUntil, 0);
+test('commands apply once per sequence number; resends are ignored and new sequences apply', () => {
+  const s = kitchen(), c = s.players[0];
+  standAt(s, 0, T('l'));
+  const tap: Partial<Input> = { cmd: 'grab', seq: 1 };
+  step(s, { p0: tap }, .5); // The phone keeps resending until the ack arrives.
+  assert.equal(c.seq, 1); assert.equal(H(c)?.kind, 'food'); assert.equal(count(s, 'pickup'), 1);
+  step(s, { p0: tap });
+  assert.equal(H(c)?.kind, 'food');
+  step(s, { p0: { cmd: 'grab', seq: 5 } });
+  assert.equal(c.seq, 5); assert.equal(c.note, 'Hands are full');
+  step(s, { p0: { cmd: null, seq: 6 } });
+  assert.equal(c.seq, 6);
+  step(s, { p0: { cmd: 'grab', seq: 4 } });
+  assert.equal(c.seq, 6);
 });
 
-
-test('cook choices are validated and survive round creation without delaying service', () => {
-  for (const character of ['chef', 'chef_f', 'cat', 'dog', 'iguana', 'axolotl']) {
-    const lobbyChoice = rules.parseLobbyChoice!({ character }, false);
-    const state = rules.create({ roomId: 'kitchen', roundId: 'round', seed: 42, nowMs: 1000, players: [{ id: 'p0', name: 'Cook', color: '#abcdef', lobbyChoice }] }, { kitchen: 0, seconds: 180, practice: false });
-    assert.equal(state.players[0].character, character);
-    assert.equal(state.endsAt - state.startedAt, 180000);
-    assertSerializable(rules.publicView(state, { phase: 'playing', nowMs: 1000 }));
+// ── Projection, outcome, determinism ────────────────────────────────────────
+test('public views are lean, sparse and pass the live transport check at 1 and 10 chefs', () => {
+  for (const players of [1, 10]) {
+    const s = setup(null, { players });
+    step(s, Object.fromEntries(s.players.map(c => [c.id, { x: .7, y: .3, cmd: 'dash' as const, seq: 1 }])), 1);
+    const v = view(s);
+    assertSerializable(v); assertSerializable(rules.outcome(s)); assert.equal(rules.playerView(s, 'p0', { nowMs: s.now, phase: 'playing' }), null);
+    assert.equal(v.players.length, players);
+    assert.ok(v.tiles.every(t => t.item || t.progress || t.fire || t.count), 'only tiles with something to show');
+    assert.ok(v.players.every(c => [c.x, c.z, c.vx, c.vz, c.fx, c.fz].every(n => Math.round(n * 1000) / 1000 === n)), 'positions are rounded');
+    assert.ok(JSON.stringify(v).length < (players === 1 ? 6000 : 14000), `snapshot ${JSON.stringify(v).length} bytes`);
   }
-  for (const invalid of [{ character: 'unknown' }, { character: 'cat', speed: 99 }, [], 'cat']) assert.throws(() => rules.parseLobbyChoice!(invalid, false));
-  assert.equal(create().players[0].character, 'chef');
+  for (let level = 0; level < LEVELS.length; level++) for (const players of [1, 10]) {
+    const s = setup(null, { players, settings: { level } });
+    step(s, Object.fromEntries(s.players.map(c => [c.id, { x: -.5, y: .8 }])), .5);
+    assertSerializable(view(s));
+    assert.equal(inside(s), '', `level ${level} with ${players} chefs spawns on the floor`);
+  }
+  const busy = kitchen({ players: 2 }), c = busy.players[0];
+  slot(busy, BOARD).item = food(busy, 'lettuce'); slot(busy, BOARD).progress = .3; slot(busy, COUNTER).fire = .5; slot(busy, RETURN).count = 2;
+  busy.players[1].held = make(busy, 'dirty', [], { count: 2 });
+  hold(c, food(busy, 'tomato')); place(busy, 0, c.x, c.z, 1, 0); press(busy, 0, 'act');
+  const v = view(busy);
+  assertSerializable(v);
+  assert.equal(v.loose.length, 1); assert.equal(v.loose[0].by, 'p0');
+  assert.ok(v.tiles.some(t => t.progress === .3) && v.tiles.some(t => t.fire! > .49) && v.tiles.some(t => t.count === 2));
+  assert.equal(v.events.at(-1)?.type, 'throw');
+  for (let i = 0; i < EVENT_LIMIT + 10; i++) { press(busy, 1, 'dash'); step(busy, {}, .6); }
+  assert.equal(view(busy).events.length, EVENT_LIMIT);
+  const ids = view(busy).events.map(e => e.id);
+  assert.ok(ids.every((id, i) => !i || id > ids[i - 1]));
+});
+
+test('outcome: everyone wins together once anything is served, each chef labelled with a highlight', () => {
+  const s = kitchen({ players: 2 }), [a, b] = s.players;
+  assert.deepEqual(rules.outcome(s).winners, []);
+  s.orders = [order(s, 'salad', 100)];
+  hold(a, plate(s, 'salad')); standAt(s, 0, HATCH); press(s, 0, 'grab');
+  b.stats.chopped = 4;
+  step(s, {}, s.settings.seconds);
+  const outcome = rules.outcome(s);
+  assert.equal(outcome.complete, true); assert.deepEqual(outcome.winners, ['p0', 'p1']);
+  assert.deepEqual(outcome.rows.map(r => [r.score, r.rank, r.label]), [[s.score, 1, '1 served'], [s.score, 1, '4 chopped']]);
+  const frozen = JSON.stringify(view(s));
+  step(s, { p0: { x: 1 } }, 1);
+  assert.equal(JSON.stringify(view(s)), frozen, 'a complete round no longer changes');
+});
+
+test('same seed and inputs give identical rounds', () => {
+  const run = () => {
+    const s = setup(null, { players: 4, seed: 99 }), roll = random(5), inputs: Record<string, Partial<Input>> = {};
+    for (let t = 0; t < 40 * 60; t++) {
+      if (t % 15 === 0) for (const c of s.players) inputs[c.id] = { x: roll() * 2 - 1, y: roll() * 2 - 1, act: roll() < .2, cmd: (['grab', 'act', 'dash'] as const)[Math.floor(roll() * 3)], seq: c.seq + 1 };
+      step(s, inputs);
+    }
+    return JSON.stringify(view(s));
+  };
+  assert.equal(run(), run());
+});
+
+// ── End to end ──────────────────────────────────────────────────────────────
+/** Scripted chef: fetch, chop, cook and plate `recipe` using only walking inputs and taps. */
+function cookAndServe(s: State, recipe: RecipeId) {
+  const tiles = s.map.tiles, c = s.players[0], score = s.score;
+  const reachable = (i: number) => s.map.tiles.some(t => WALKABLE.has(t.kind) && Math.abs(t.col - tiles[i].col) + Math.abs(t.row - tiles[i].row) === 1);
+  const where = (test: (i: number) => boolean) => tiles.filter(t => test(t.index) && reachable(t.index)).sort((a, b) => Math.hypot(a.x - c.x, a.z - c.z) - Math.hypot(b.x - c.x, b.z - c.z))[0].index;
+  const empty = (kind: string) => where(i => tiles[i].kind === kind && !s.slots[i].item && s.slots[i].fire <= 0);
+  const chop = (name: Ingredient) => {
+    walkTo(s, 0, where(i => tiles[i].ingredient === name)); press(s, 0, 'grab');
+    const board = empty('board');
+    walkTo(s, 0, board); press(s, 0, 'grab'); press(s, 0, 'act');
+    step(s, {}, 2.3);
+    assert.equal(s.slots[board].item?.parts[0].state, 'chopped');
+    press(s, 0, 'grab');
+  };
+  walkTo(s, 0, where(i => tiles[i].kind === 'rack' && s.slots[i].count > 0)); press(s, 0, 'grab');
+  const plateAt = empty('counter');
+  walkTo(s, 0, plateAt); press(s, 0, 'grab');
+  const cooked = RECIPES[recipe].parts.filter(p => p.state === 'cooked'), pot = cooked.length ? where(i => s.slots[i].item?.kind === 'pot') : -1;
+  for (const p of cooked) { chop(p.food); walkTo(s, 0, pot); press(s, 0, 'grab'); }
+  for (const p of RECIPES[recipe].parts.filter(p => p.state !== 'cooked')) {
+    if (p.state === 'chopped') chop(p.food); else { walkTo(s, 0, where(i => tiles[i].ingredient === p.food)); press(s, 0, 'grab'); }
+    walkTo(s, 0, plateAt); press(s, 0, 'grab');
+  }
+  if (pot >= 0) {
+    step(s, {}, POT_SECONDS);
+    walkTo(s, 0, plateAt); press(s, 0, 'grab');
+    walkTo(s, 0, pot); press(s, 0, 'grab');
+  } else { walkTo(s, 0, plateAt); press(s, 0, 'grab'); }
+  assert.equal(matchRecipe(H(c)), recipe);
+  walkTo(s, 0, where(i => tiles[i].kind === 'serve')); press(s, 0, 'grab');
+  assert.equal(H(c), null); assert.equal(s.recipeCounts[recipe], 1); assert.ok(s.score > score);
+}
+
+test('end to end: a salad from crate to hatch on level 0, then a soup on a custom kitchen', () => {
+  const s = setup(null, { players: 2 }), first = s.orders[0].recipe;
+  assert.ok(RECIPES[first].parts.every(p => p.state !== 'cooked'), `level 0 opens with a prep-only dish (${first})`);
+  cookAndServe(s, first);
+  assert.equal(last(s, 'serve')?.recipe, first);
+  const soup = setup(['#tt#C#OO#', 'R.......H', '#.@...@.#', 'D.......W', '####X####'], { level: { recipes: ['tomato_soup'], patience: 120 } });
+  cookAndServe(soup, 'tomato_soup');
+});
+
+/** Runs bots through a whole service and returns the finished state. */
+function service(s: State) {
+  for (let guard = 0; !s.complete && guard < 300 * 60; guard++) {
+    const v = view(s);
+    rules.tick(s, new Map(s.players.map(c => [c.id, botInput(v, s.map, c.id)])), DT, s.now + DT * 1000);
+  }
+  return s;
+}
+
+test('two bots serve several orders in a 180 s service on level 0', () => {
+  const s = service(setup(null, { players: 2, seed: 21 }));
+  assert.ok(s.served >= 3, `served ${s.served}, failed ${s.failed}, score ${s.score}`);
+});
+
+test('two bots cook and serve soup on a pot kitchen', () => {
+  const rows = ['#tt#CC#OO#', 'R........H', 'E.@....@.#', 'D........W', '####X#####'];
+  const s = service(setup(rows, { players: 2, seed: 5, level: { recipes: ['tomato_soup'], patience: 90 } }));
+  assert.ok(s.served >= 2, `served ${s.served}, failed ${s.failed}`);
 });

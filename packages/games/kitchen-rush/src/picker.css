@@ -1,14 +1,40 @@
-.kr-picker h2 { margin: 0; }
-.kr-picker > p { margin: .5rem 0; }
-.kr-characters { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .6rem; margin-bottom: 1rem; }
-.kr-characters button { display: grid; justify-items: center; min-height: 64px; padding: .5rem; color: var(--kp-cream); background: var(--kp-ink); border: 3px solid transparent; border-radius: 16px; font: inherit; cursor: pointer; }
-.kr-characters button[aria-pressed=true] { border-color: var(--kp-sun); background: #393446; }
+/* Kitchen Rush lobby: chef picker on phones, crew board on the shared screen. */
+.kr-lobby { --kr-paper: #fff8e7; --kr-brown: #2b1b12; display: grid; gap: 14px; margin-bottom: 1rem; }
+.kr-tonight { --theme: #ff6b57; display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto auto; align-items: center; column-gap: 12px; margin: 0; padding: 10px 16px; color: var(--kr-brown); background: linear-gradient(90deg, var(--theme) 0 8px, var(--kr-paper) 8px); border: 3px solid var(--kp-ink); border-radius: 16px; box-shadow: 0 4px 0 var(--kp-ink); }
+.kr-tonight > span { grid-row: 1 / 3; padding: 4px 10px; border-radius: 99px; background: var(--kp-ink); color: var(--kp-sun); font: .8rem var(--font-display); text-transform: uppercase; letter-spacing: .08em; }
+.kr-tonight strong { font: 1.35rem/1.05 var(--font-display); }
+.kr-tonight small { grid-column: 2; font-weight: 800; color: #6b4e36; }
+.kr-tonight em { grid-column: 3; grid-row: 1 / 3; display: flex; gap: 2px; }
+.kr-tonight em svg { width: 26px; height: 26px; fill: #2b1b1222; color: #2b1b1255; }
+.kr-tonight em svg.kr-got { fill: var(--kp-sun); color: var(--kp-ink); }
+.kr-crew { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.kr-crew li { position: relative; display: grid; justify-items: center; gap: 2px; padding: 10px 8px; border-radius: 16px; background: #05071a99; border: 3px solid #fff6e526; text-align: center; }
+.kr-crew li.kr-is-ready { border-color: var(--chef); }
+.kr-crew .kr-face { font-size: 72px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--chef) 60%, transparent) 0 55%, transparent 70%); }
+.kr-crew b { position: absolute; top: 8px; left: 8px; display: grid; place-items: center; min-width: 26px; height: 26px; border-radius: 50%; background: var(--chef); color: var(--kp-ink); font: .95rem var(--font-display); }
+.kr-crew strong { max-width: 100%; overflow-wrap: anywhere; }
+.kr-crew small { display: flex; align-items: center; gap: 3px; font-weight: 900; color: var(--muted-foreground); }
+.kr-crew .kr-is-ready small { color: var(--kp-lime); }
+.kr-crew small svg { width: 16px; height: 16px; }
+.kr-lobby-empty { margin: 0; color: var(--muted-foreground); }
+.kr-lobby-phone > header { display: flex; align-items: center; gap: 12px; }
+.kr-lobby-phone h2 { margin: 0; font-size: 1.7rem; }
+.kr-lobby-phone header p { margin: 0; font-size: .85rem; color: var(--muted-foreground); }
+.kr-lobby-phone .kr-me { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--chef); color: var(--kp-ink); font: 1.5rem var(--font-display); box-shadow: 0 0 0 3px var(--kp-ink), 0 0 0 5px var(--chef); }
+.kr-characters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.kr-characters button { display: grid; justify-items: center; gap: 2px; min-height: 44px; padding: 8px 4px 10px; color: var(--kr-brown); background: var(--kr-paper); border: 3px solid var(--kp-ink); border-radius: 18px; box-shadow: 0 4px 0 var(--kp-ink); font: inherit; font-weight: 900; cursor: pointer; }
+.kr-characters button .kr-icon { font-size: min(92px, 22vw); border-radius: 50%; background: radial-gradient(circle, #f3e5c4 0 60%, transparent 62%); }
+.kr-characters button[aria-checked=true] { background: var(--chef); color: var(--kp-ink); transform: translateY(-3px); box-shadow: 0 7px 0 var(--kp-ink), 0 0 0 3px var(--kp-cream); }
+.kr-characters button[aria-checked=true] .kr-icon { background: radial-gradient(circle, #fff8e7 0 60%, transparent 62%); }
 .kr-characters button:focus-visible { outline: 3px solid var(--kp-sky); outline-offset: 3px; }
-.kr-characters img { width: min(100%,100px); aspect-ratio: 1; object-fit: contain; }
-.kr-cook-roster { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 12px; }
-.kr-cook-roster > div { display: grid; justify-items: center; padding: 8px; border-radius: 12px; background: var(--kp-ink); }
-.kr-cook-roster img { width: 72px; }
-.kr-art-icon { width: 1.25em; height: 1.25em; object-fit: contain; vertical-align: middle; }
-@media (orientation: landscape) and (max-height: 600px) { .kr-characters { grid-template-columns: repeat(6,minmax(0,1fr)); } .kr-characters img { max-width: 64px; } }
-
-.kr-characters button:disabled { cursor: default; opacity: .6; }
+.kr-characters button:disabled { cursor: default; }
+.kr-characters button:disabled:not([aria-checked=true]) { opacity: .55; }
+.kr-lobby-go { display: grid; gap: 10px; }
+.kr-lobby-go .kp-btn { width: 100%; margin: 0; }
+@media (orientation: landscape) and (max-height: 520px) {
+  .kr-characters { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+  .kr-characters button .kr-icon { font-size: min(64px, 12vw); }
+  .kr-lobby-go { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .kr-lobby-phone h2 { font-size: 1.3rem; }
+}
+@media (prefers-reduced-motion: reduce) { .kr-characters button { transition: none; } }

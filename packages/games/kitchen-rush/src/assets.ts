@@ -1,19 +1,22 @@
-import { BufferGeometry, DoubleSide, Matrix4, Mesh, MeshStandardMaterial } from 'three';
+import { BufferGeometry, DoubleSide, Matrix4, Mesh, type Material } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { ResourceScope } from '../../../party-runtime/src/index';
 import { assetUrl } from './asset-url';
 
-/** One scene owns the kit; instances share geometry and materials until round disposal. */
+/**
+ * Contributor animal chefs (models/kitchen-rush.glb, credit Aaron Hendricks): `<animal>_body`, `<animal>_color`
+ * (team colour), `<animal>_left_hand`, `<animal>_right_hand`, plus shared `chef_left_foot` / `chef_right_foot`.
+ * Each mesh is re-centred on its own pivot; clones share geometry until round disposal.
+ */
 export async function loadKitchenAssets(scope: ResourceScope) {
   const response = await fetch(assetUrl('models/kitchen-rush.glb'), { signal: scope.signal });
   if (!response.ok) throw new Error(`Kitchen assets failed to load (${response.status}).`);
   const gltf = await new GLTFLoader().parseAsync(await response.arrayBuffer(), '');
-  const geometry = new Set<BufferGeometry>(), materials = new Set<MeshStandardMaterial>();
-  gltf.scene.traverse(object => { if (object instanceof Mesh) { geometry.add(object.geometry); for (const material of Array.isArray(object.material) ? object.material : [object.material]) materials.add(material); } });
-  // parseAsync cannot be aborted; a late result is disposed immediately by the scope.
+  const geometry = new Set<BufferGeometry>(), materials = new Set<Material>();
+  gltf.scene.traverse(object => { if (object instanceof Mesh) { geometry.add(object.geometry); for (const material of [object.material].flat()) materials.add(material); } });
   scope.defer(() => { geometry.forEach(item => item.dispose()); materials.forEach(item => item.dispose()); });
   scope.signal.throwIfAborted();
-  const prototypes = new Map<string, Mesh>(), tints = new Map<string, MeshStandardMaterial>();
+  const prototypes = new Map<string, Mesh>();
   gltf.scene.updateMatrixWorld(true);
   gltf.scene.traverse(object => {
     if (!(object instanceof Mesh)) return;
@@ -24,6 +27,6 @@ export async function loadKitchenAssets(scope: ResourceScope) {
     const prototype = new Mesh(normalized, object.material); prototype.position.copy(position); prototype.name = object.name; prototypes.set(object.name, prototype);
   });
   const get = (name: string) => { const mesh = prototypes.get(name); if (!mesh) throw new Error(`Missing Kitchen Rush asset: ${name}`); return mesh; };
-  const tint = (color: string) => { let material = tints.get(color); if (!material) { material = new MeshStandardMaterial({ color, vertexColors: true, roughness: .7, side: DoubleSide }); tints.set(color, material); materials.add(material); } return material; };
-  return { geometry: (name: string) => get(name).geometry, tint, create(name: string, color?: string) { const mesh = get(name).clone(); if (color) mesh.material = tint(color); return mesh; } };
+  return { has: (name: string) => prototypes.has(name), geometry: (name: string) => get(name).geometry, create: (name: string) => get(name).clone() };
 }
+export type AnimalKit = Awaited<ReturnType<typeof loadKitchenAssets>>;
