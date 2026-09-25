@@ -1,50 +1,43 @@
 # Night Job
 
-A cooperative overhead heist game for one to four players, inspired by the 2013 Monaco. Choose a specialist, steal the objective, collect optional loot, and get the whole crew to the exit. Detection leads to pursuit and recovery; an alarm does not end the job.
+A cooperative top-down 3D heist for one to four thieves, inspired by Monaco (2013). The TV shows the building as a navy blueprint; each thief's line of sight reveals the lit room around them. Steal the objective, grab optional loot, and get the whole crew to the getaway. Being spotted starts a chase you can escape, not a game over.
 
 ## Play
 
-Select Night Job in the PartyPlay library or room picker. The host selects a mission and Normal or Relaxed difficulty in Settings. Players choose a specialist and a tool, then Ready. The host is a dedicated TV or laptop map display and never occupies a player seat. Each player joins on a phone, which shows controls and status, not a map. One phone is enough for a single-player heist; the shared screen is still required.
+Pick Night Job in the PartyPlay library, choose a mission and Normal or Relaxed in Settings, and have each player join on a phone, pick one of eight specialists and one of six tools, then Ready. The host screen is a dedicated TV display and never takes a seat.
 
-Watch the shared map and move with the phone's left pad. Push toward doors, safes, terminals, hiding places, objectives, and fallen teammates to work on them. Hold Sneak to move quietly. Tap Tool to use the selected equipment; drag and release the tranquilizer or shotgun button to aim. The pad also supports arrow keys for keyboard accessibility on a controller browser. Tools recharge once per ten personally collected coins. All players share the heist result.
+The phone is a landscape controller: a light push on the stick sneaks silently, a full push runs and leaves noise rings guards can hear, and holding Sneak forces quiet movement. Push into doors, locks, safes, terminals, windows, vents, hiding spots, fallen teammates or the objective to work on them. Tap Tool to use your equipment in the direction you face. Every ten coins you collect refills a tool charge. Results award one to three stars against par (elapsed time plus 3 s per missed coin) and hand out crew awards.
 
-Three original jobs:
-
-- The Velvet Ledger: steal a casino's accounting ledger.
-- Glasshouse Exchange: take a jewel from an auction conservatory.
-- Last Ferry: lift the customs manifest and escape by boat.
-
-Eight specialists provide faster locks, guard intelligence, companion collection, silent takedowns, wall breaching, disguise, circuit hacking, or distraction. Every mission retains ordinary routes for every role. Duplicate roles are allowed and seat numbers distinguish teammates.
+Missions: **The Velvet Ledger** (casino), **Glasshouse Exchange** (glass conservatory), **Last Ferry** (night docks).
 
 ## Implementation
 
-`model.ts` is the browser-safe contract and role/tool metadata. `maps.ts` holds public architecture and original authored content; `server-levels.ts` keeps guard placement and patrols server-only. `geometry.ts` defines continuous collision, navigation, and sight independently: glass blocks movement while passing sight.
+[DESIGN.md](DESIGN.md) is the contract for rules, tuning, the level format, networking and the asset kit. `src/model.ts` holds the shared types and constants.
 
-The server owns every gameplay result. Clients send held movement and acknowledged tool actions through the existing PartyPlay connection. Public snapshots contain shared team knowledge, visible guards, and deliberate Scout markers. Full hidden guard state never enters the browser renderer.
+| Area | Files |
+| --- | --- |
+| Shared, browser-safe | `model.ts`, `geometry.ts` (grid, exact rays, sight polygons, A*), `level.ts` (ASCII level parser), `maps/` |
+| Server authority | `server.ts`, `sim/` (crew, NPCs, security, projection; `harness.ts` is the test/bot kit), `server-levels/` (NPC routes, never imported by clients) |
+| TV renderer | `scene.tsx`, `render/` (Three.js world, blueprint fog shader, actors, cones, effects, 2D overlay) |
+| UI and audio | `client.tsx`, `hud.tsx`, `controller.tsx`, `lobby.tsx`, `results.tsx`, `preview.ts`, `audio.ts`, `style.css` |
+| Art | `art/build-kit.py` builds `public/games/night-job/models/night-job-kit.glb` in Blender; see `art/README.md` |
+| Music | `music/tracks.ts` composes six original loops in code (synth engine shared with Ichi); `music/export.ts` renders the three chosen ones to `public/games/night-job/music/<mission>.mp3` |
 
-Canvas presentation uses the existing scene readiness lifecycle, with one full-floor map on the host. Phones use lightweight DOM controls, report ordinary readiness, and do not mount a canvas or game renderer. `audio.ts` synthesizes original effects on the host and respects the shared mute control. There is no bundled music. The host mixer uses bounded synthesized voices with stereo positioning, distinct tool sounds, loot streaks, injury and recharge cues; mute, hiding the tab, disconnect and disposal stop active sounds.
-
-The renderer caches the schematic and lit floor paintings, then draws only the server-projected sight and actors. Wall plinths mark the full collision footprint beneath the thinner raised artwork. Outlined sprites, walk cycles, work rings, security cones and smoke communicate state; reduced motion removes decorative movement. Lobby and mission cards preview the authored architecture without exposing guard patrols.
+The server owns every result. Public snapshots contain only crew knowledge: NPCs in sight, doors as last seen, crew-made noises and Scout/Wire intel. The host display plays each mission's music loop (Velvet Rope, Orchid Bossa, Last Ferry Shanty) under synthesised effects; it ducks during alarms and fades on a bust.
 
 ## Development
 
-Run commands from the parent PartyPlay repository, where dependencies and the room application live:
+From the parent PartyPlay repository:
 
 ```sh
 node --import tsx --test packages/games/night-job/tests/*.test.ts
-npm run typecheck
-npm run lint
-npm run test:platform
-npm run build:isolated -- night-job-your-unique-run
-npm run serve:isolated -- night-job-your-unique-run 4377
+node --import tsx --test tests/night-job-room.test.ts tests/registry-contract.test.ts
+npm run typecheck && npm run lint
+npm run build:isolated -- night-job-<unique-run>
+npm run serve:isolated -- night-job-<unique-run> <port>
+blender -b --python packages/games/night-job/art/build-kit.py   # rebuild the model kit
+node --import tsx packages/games/night-job/music/render.ts output/night-job-music   # audition all six loops
+node --import tsx packages/games/night-job/music/export.ts   # re-export the mission loops (needs ffmpeg)
 ```
 
-Never run Prettier. Use a new isolated build name for each build; do not replace assets under an active browser session.
-
-## Art and attribution
-
-Maps, names, dialogue, Canvas artwork, launcher artwork, and synthesized effects are authored for this project. No Monaco art, fonts, soundtrack, level data, or source code is bundled. The shared platform supplies its existing licensed fonts and interface primitives. Source research and the implementation plan live in the parent repository under `docs/party-platform/MONACO-RESEARCH.md` and `docs/game-plans/night-job.md`.
-
-## Verification
-
-The game is implemented and integrated in the library. Automated and real-browser acceptance evidence is recorded separately from physical-device testing. The parent repository's `docs/verification/night-job.md` records the final build, actual automated/browser checks, and remaining device/playtest limits. Emulated touch is not physical-phone evidence.
+Never run Prettier. Maps, models, names, music and sounds are original; no Monaco assets or code are used.
