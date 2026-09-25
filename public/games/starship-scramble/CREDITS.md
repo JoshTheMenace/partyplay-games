@@ -1,6 +1,6 @@
 # Starship Scramble assets
 
-Hull artwork is original vector geometry in `src/render/hulls.ts` and `src/render/cutaway.ts`, with exposed interiors rendered in `src/ui/cutaway.tsx`. Room positions come from the game's own hull definitions. Crew figures in `src/ui/crew.tsx` are original SVG artwork: Human, Bastion, Skitter and Ember silhouettes, with deterministic human appearance variants. Codex authored the version 2 deck/hull foundation and coordinated the crew artwork; Claude Fable reviewed and refined each ship's presentation. Sound cues are synthesized at runtime in `src/render/audio.ts`. Fonts come from the shared PartyPlay bundle.
+Ship sprites, paint masks, sector backdrops and UI icons are original renders (see Artwork below). Fonts come from the shared PartyPlay bundle.
 
 Background music supplied by the user for this game, copied without transcoding:
 
@@ -8,3 +8,13 @@ Background music supplied by the user for this game, copied without transcoding:
 - SpaceIdle: Cosmic Discovery, Quiet Discovery, Weightless Drift, Weightless Drift(1). The two Drift recordings are distinct files.
 
 Original titles are retained here; asset filenames use lowercase ASCII slugs. No additional authorship or redistribution license was supplied.
+
+## Artwork
+
+All rendered art is original and procedural, made for this game in Blender 5.2 (Cycles) by the scripts in `packages/games/starship-scramble/art/` (see its README to regenerate). No third-party models, textures, HDRIs or photographs are used.
+
+- `ships/`: one top-down sprite per hull. Silhouettes are generated from the game's own deck plans in `src/defs/hulls.ts`, with a matching white `-paint.png` mask for captain and faction tints.
+- `backdrops/`: 1920×1080 starfields, nebulae and set pieces for the Rustbelt, the Veil, Meridian, the Armada Reach, the hangar and the sector map.
+- `icons/`: 128×128 renders for weapon kinds, augments, scrap, crew, repair and missiles.
+
+Scripts and renders were authored by Claude (Anthropic) for this project.

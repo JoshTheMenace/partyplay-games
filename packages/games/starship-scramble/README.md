@@ -1,71 +1,61 @@
 # Starship Scramble
 
-A cooperative fleet expedition for one to four captains. Each captain commands a separate ship and retains ownership of crew deployed aboard other vessels. Shared displays show the fleet; landscape phones show interiors and captain controls. A playing host can use the personal view without another device.
+Co-op FTL for the living room. One to four captains each fly their own ship in one fleet: jump across branching sector maps, answer distress calls, shop, and fight real-time battles while the Crimson Armada closes in. Destroy the Armada Flagship to win. A short run (one sector) takes about 15–20 minutes; a standard run (three sectors) about 30–45. [DESIGN.md](DESIGN.md) is the rules contract.
 
-The complete game is integrated with PartyPlay. Actual room play, campaign tests, visual checks and remaining hardware limits are recorded in [QA.md](QA.md). The original scope is in [DESIGN.md](DESIGN.md).
+## How to play
+
+- **TV**: the shared battle scene (allies left, enemies right), the sector map with the advancing Armada front, event cards, loot and stores. Everyone watches the same screen.
+- **Phone** (landscape in battle): your ship big on the left, weapon cards along the bottom, target ships on the right. Tap a weapon, then a room on an enemy to aim; **Fire** sends a synchronized volley. Tap crew, then a room, to move them. Teleport: crew in your teleporter room → Teleport → ship → room; **Recall** works any time, even while the teleporter recharges. Anyone can pause.
+- Between battles, vote on beacons and event choices, claim loot, buy from stores, and upgrade systems or swap weapons.
+- Co-op matters: shields only fall to volleys landing together, support weapons repair and shield allies, and a lost ship is rebuilt from a fleet reserve. The run ends only if the whole fleet dies in one battle.
+- The host can play on the TV itself with the personal view: mouse targeting, keys 1–4 select weapons, Space pauses, F fires.
 
 ## Architecture
 
-- `src/contracts/index.ts` is the shared entity/action/view schema. Crew owner, historical home ship, current ship, and cargo carrier are separate fields. There is no power allocation model.
-- `src/simulation/` owns room movement, crew work, targeting, weapon and system effects, drones, enemy behavior, and destruction. All gameplay timers use simulation time. Destruction kills everyone aboard in one batch and returns events for cargo and participation updates.
-- `src/expedition/` owns seeded routes, persistent encounters, capability checks, contribution consent, personal stores and inventory transactions. Event definitions use a finite effect union. Browser modules import only presentation definitions, never outcomes or future content.
-- `src/server.ts` composes the rules. Reliable actions run against a candidate state and commit only after successful validation, so a rejected purchase, teleport, or event cannot leave partial mutations. The server owns pause quorum, leader selection, phase changes, and full fleet consequences.
-- `src/projections.ts` sends bounded fleet summaries and one additional inspected interior. Other ships expose their room layout, installed system identities and exterior weapon definitions; crew and live room conditions require owned crew in that room or an active scan. Only the captain's own ship exposes weapon controls.
-- `src/save.ts` validates versioned saves, definition references, ownership, locations, capacities and numeric bounds before producing a fresh candidate. Saved captain slots are assigned explicitly in the new room. A live reconnect keeps its existing seat.
-- `src/ui/`, `src/render/`, `src/client.tsx` and `src/styles.css` implement the game presentation. Local navigation is independent of attack orders; accepted responses restore a previous interior only if the captain has not deliberately navigated elsewhere.
-- `src/render/cutaway.ts` fits each hull exterior around its authoritative room grid; `src/ui/cutaway.tsx` draws the painted armor, interior equipment, doors and crew. Hangar previews, fleet deck plans, target thumbnails and live room buttons use the same geometry. Version 2 deck plans use offset compartments and larger machinery rooms. Ordered crew cross real shared doorways; version 1 saves validate against their original layout before remapping positions within the same room.
-
-`src/render/weapons.ts` defines shared hardpoints, and `src/ui/weapons.tsx` draws the installed turrets, launch tubes and coil emitters outside the room controls. The foreground canvas in `src/render/fleet-scene.ts` launches each server-reported shot from that mount toward its selected room, with weapon-specific flight effects and local shield/impact feedback. Optional visual metadata remains compatible with older saves.
-
-Crew species live in the browser-safe `src/definitions/presentation/species.ts` catalogue. Simulation reads the same values for health, movement, melee and repair. Skills remain separate from species. Original SVG figures in `src/ui/crew.tsx` use stable crew IDs for appearance, with ownership rings and small names in the cutaway; the roster shows full names, species and traits.
-
-The platform registration opts into bounded action history. The client uses monotonic command sequences and explicitly retires acknowledged or abandoned commands. The server retains a finite recent acknowledgement window and a retired watermark, so old purchases cannot run again after their acknowledgement is removed. Other games keep their existing action policy.
-
-## Play
-
-The TV shows the deck plans of every combatant, expanding small fleets to use the available space. Combat keeps one objective, ship names, compact hull/shield values and system abbreviations; the footer appears only for urgent alerts or reconnects. On a phone, Fleet opens the visual ship picker. Weapons and support systems use ship → room targeting. Teleporting adds crew selection first: choose the crew, tap a ship, then tap the destination room. Selecting a ship alone never sends the gameplay order. Crew aboard another vessel reveal only their occupied compartments; scanners reveal the full interior for their duration.
-
-Standard sectors use seeded branching networks with three departure choices, visible signal/shop/hostile destinations, route-specific connections and occasional two-column shortcuts. Taking a shortcut skips both an encounter opportunity and its pursuit increase. Every beacon remains reachable from departure and every branch reaches the exit. The final approach preserves quest follow-up delivery; Training retains its four-beacon route. Existing saves retain their stored map, with new sectors using the new generator.
-
-Choose a hull and mark ready. Vote for a connected beacon, resolve its encounter, then collect equipment or shop. A weapon order selects a weapon, target vessel, and room, and repeats until held or its target is gone. Crew follow room orders; direct movement is optional. Teleportation can use an operational allied transporter, but only the crew owner can authorize their transfer.
-
-On landscape phones, the ship cutaway is the main view. Use the ship selector, Arms, Crew, or the captain menu to open secondary controls; the phase button opens the route, encounter, station or salvage screen. Hull selection opens a full cutaway preview before confirmation. Ship paint is separate from the captain color used to identify crew ownership. Route locations have consistent lane/column codes such as A1 and B1 on both screens; these identify destinations without implying undisclosed encounter risks or rewards.
-
-New ships start with a mixed crew, and stations let you choose a recruit's species and skill independently. Species have modest fixed traits:
-
-| Species | Trait |
+| Folder | Role |
 | --- | --- |
-| Human | 100 health; balanced movement, combat and repair |
-| Bastion | 140 health; moves 20% slower |
-| Skitter | 85 health; moves 25% faster |
-| Ember | 25% more crew-combat damage; repairs 15% slower |
-
-Existing saved crew without a species remain Human with their saved health. Crew bonuses affect that character, including aboard another captain's ship; they do not change ownership or weapon damage.
-
-Any active captain can pause battle. Captains can queue orders and mark ready to resume; the expedition leader can explicitly continue without an idle captain. Disconnection pauses once for that disconnect episode. Spectators do not block active captains. Between battles, hostile damage stops while crew movement, repairs, healing and extraction continue, so reading an event or shopping does not cost lives.
-
-At zero hull, the ship explodes and everyone physically aboard dies. Owned survivors elsewhere remain controllable. Scrap stays with its captain; equipment aboard the lost hull is destroyed. Loot has no allocation quota. The first accepted pickup receives an item personally, and one captain may collect the entire pile. Unclaimed items are discarded when the fleet leaves; there is no shared cargo pool.
-
-Standard expeditions select five sector themes and visit thirty beacons. Training uses a short four-beacon route through store, event, battle and finale. Relaxed difficulty reduces hostile hull durability. The proposed 75–120 minute standard pacing target still needs ordinary human playtesting.
-
-The host plays the supplied SpaceBattle playlist during combat, including tactical pause, and SpaceIdle elsewhere, from lobby through results. Phones retain their sound cues without duplicating the music. The shared Sound control mutes the soundtrack; leaving the game stops it. Music files stream individually from `public/games/starship-scramble/music/`.
-
-## Save and resume
-
-Use the room menu to download a save. Automatic room checkpoints use the platform's existing save service. A fresh room needs the same number of player seats, including eliminated captain slots; each player then chooses an unclaimed saved captain. Combat restores paused. Queued pause edits and held input are cleared on export; already accepted standing crew/weapon orders remain.
-
-Finish session suspends the expedition; it does not declare victory. Permanent saved files are the way to continue after a room expires. Temporary room credentials are not an account or cloud save system.
+| `src/contracts.ts` | Shared, browser-safe types for state, actions and views, plus `overheat(combat)`. |
+| `src/defs/` | Browser-safe definitions: hulls and deck plans, weapons, systems, augments, species, geometry. |
+| `src/sim/` | The deterministic combat simulation: systems, weapons, projectiles, crew AI, boarding, hazards, boss phases. |
+| `src/run/` | The run: map generation, phase flow, events, battles and squads, loot and stores, saves, public view. |
+| `src/content/` | Server-only content: enemies, sectors and the event library. |
+| `src/server.ts` | `GameRules` for the platform: action parsing, validation and the tick. |
+| `src/display/`, `src/phone/`, `src/render/`, `src/audio/` | TV and phone UI, canvas rendering, sound. |
+| `art/` | Blender scripts that regenerate the hull sprites and backdrops in `public/games/starship-scramble/`. |
+| `tests/` | Sim, run, content and UI tests. `tests/run-bot.ts` holds the scripted captains used for full-run balance checks. |
 
 ## Development
 
-Run from the platform checkout:
+Run from the platform checkout root:
 
 ```sh
-node --import tsx --test packages/games/starship-scramble/tests/*.test.ts
-npm run typecheck
-npm run lint
-npm run build:isolated -- starship-unique-run
-npm run serve:isolated -- starship-unique-run 4347
+node --import tsx --test packages/games/starship-scramble/tests/*.test.ts   # full suite, ~45 s
+SS_BALANCE=1 node --import tsx --test packages/games/starship-scramble/tests/run-balance.test.ts   # 30-seed win-rate sweeps, a few minutes
+npx tsc --noEmit
+npx oxlint game-modules/packages/games/starship-scramble
+npm run build:isolated -- <name>
+npm run serve:isolated -- <name> <port>
 ```
 
-Use a fresh build name and an unused port. Game source and assets live in `game-modules`, reached through existing platform symlinks. Do not run Prettier or publish Git changes without separate user authorization.
+Use a fresh build name and an unused port. Never run Prettier. Game source lives in the `game-modules` submodule, reached through the platform's symlinks.
+
+## Balance
+
+Scripted captains (`tests/run-bot.ts`) play whole runs through the public rules API: they focus the weakest enemy, hold weapons for volleys, fix fires and breaches, send hurt crew to the medbay, board through the teleporter while the target's shields are up, recall a losing away team, and flee only when losing. 30 seeds per row. Fight times are combat seconds per battle, Flagship included.
+
+| Run | Captains | Wins | Fight median / p90 (s) | Target |
+| --- | --- | --- | --- | --- |
+| Cadet · short | 1 (Wayfarer) | 97% | 60 / 184 | ≥ 70% |
+| Cadet · short | 2 | 100% | 61 / 116 | ≥ 70% |
+| Cadet · short | 3 | 100% | 54 / 102 | |
+| Cadet · short | 4 | 100% | 59 / 145 | ≥ 70% |
+| Cadet · short | solo Lancer | 97% | 56 / 103 | ≥ 45% |
+| Cadet · short | solo Bulwark | 100% | 61 / 204 | ≥ 45% |
+| Cadet · short | solo Corsair | 87% | 71 / 173 | ≥ 45% |
+| Cadet · short | solo Halcyon | 100% | 92 / 159 | ≥ 45% |
+| Captain · standard | 1 | 30% | 74 / 174 | 15–35% |
+| Captain · standard | 2 | 27% | 74 / 190 | |
+| Captain · standard | 3 | 47% | 69 / 245 | |
+| Captain · standard | 4 | 40% | 74 / 190 | 30–50% |
+
+Flagship battles run about 1.5–4 minutes; ordinary battles about a minute. The levers live in `src/run/combat.ts` (fleet-size hull, charge and Flagship scaling, the per-beacon threat budget, escorts) and `OVERHEAT_MS` in `src/contracts.ts`. The bots are stronger than a new table in a crowded room, so Cadet is deliberately generous; the scripted numbers are not a substitute for human playtests.
