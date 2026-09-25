@@ -1,1 +1,0 @@
-export function hash(x: number, z: number, seed: number) { let n = Math.imul(x + seed, 374761393) ^ Math.imul(z + 31, 668265263); n = Math.imul(n ^ n >>> 13, 1274126177); return ((n ^ n >>> 16) >>> 0) / 4294967296; }
