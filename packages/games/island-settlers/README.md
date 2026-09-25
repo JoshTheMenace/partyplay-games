@@ -1,79 +1,139 @@
 # Island Settlers
 
-An in-progress Catan-inspired game for 1–10 people, with CPUs filling tables to at least three players. The laptop/TV shows the board; players can join with phones for private cards, trading, and placement. A seated host can switch between their hand and the board on one device. Claude Fable authored the frontend and animations; Codex owns rules, integration, and verification.
+A Catan-style trading and building game for PartyPlay. The TV (or laptop) shows a 3D board and
+public HUD; each player's phone holds their private hand, trades and placements. Tables have 3–10
+seats; CPUs fill seats that no human takes, so one person can play alone.
 
-Players can open **Rules** from their phone header during play. The topic picker covers the base game, this room’s turn style and victory target, and enabled expansions, missions and variants. It preserves unfinished actions and does not pause the room.
+This is **v2**, a from-scratch rewrite of the earlier game. The design lives in
+[docs/v2](docs/v2): [ENGINE](docs/v2/ENGINE.md) (rules engine), [EXPERIENCE](docs/v2/EXPERIENCE.md)
+(what players see and touch), [BUILD-PLAN](docs/v2/BUILD-PLAN.md), [DATA-NEEDS](docs/v2/DATA-NEEDS.md)
+and [CONTRACT-CHANGES](docs/v2/CONTRACT-CHANGES.md). The shared contract is `src/model.ts` +
+`src/geometry.ts`. Verification status is in [QA.md](QA.md); expansion scope and adaptations are in
+[EXPANSIONS.md](EXPANSIONS.md).
 
-## Implemented rules
+## Features
 
-- Snake-order setup, seeded terrain and number placement, five finite resource supplies, dice production, ports, roads, settlements, cities, and piece limits.
-- Robber/discards/theft; Knight, Road Building, Year of Plenty, Monopoly, and hidden victory-point development cards; purchase-turn restrictions; Longest Route and Largest Army.
-- Public offers and counteroffers, explicit acceptance, proposer confirmation, bank trades, and atomic exchanges. A spent hand invalidates unaffordable offers/acceptances.
-- **Standard:** one main turn, then a paired action turn for five or more players. The paired player is halfway around the roster and cannot trade with players. Games finish when the active player reaches the chosen target.
-- **Connect-style:** shared automatic production, simultaneous trading/building, 60/90/120-second action rounds, and a three-second minimum before advancing when everyone is done. Confirmed placements claim contested spots. Victory is checked at round end; equal highest qualifying scores share victory.
-- **Seafarers / Open Seas:** a generated home island and six smaller islands, ships and ship movement, pirate, gold production choices, mixed road/ship routes, and two points for the player's first settlement on each new island.
-- **Cities & Knights:** commodities, three improvement tracks, metropolises, walls, knight actions, barbarian defense and private progress cards.
-- **Traders & Barbarians:** independently selectable fishing, rivers/bridges/gold, merchant-train bidding, coastal barbarian attacks, and wagon deliveries. Friendly Robber and Harbormaster are optional variants.
-- **Explorers & Pirates:** hidden exploration, movable cargo ships, harbor settlements, settlers and crews, pirate-lair capture, fish delivery and spice-trade missions. Select the missions individually.
-- Phone disconnects pause actions and the Connect clock until every seated player returns. Reload uses the existing room credentials; seats and accepted actions persist for the life of the room.
+- Base game: snake setup, production, robber and discards, ports, bank and player trades (offers,
+  counteroffers, accept, proposer confirms), development cards, Longest Road, Largest Army.
+- Generated boards for 3–4 (19 land hexes), 5–6 (30) and 7–10 seats (37), with fair-number rules
+  (no adjacent 6/8, no equal neighbours, no 2 next to 12) and evenly spaced ports.
+- Optional balanced dice (a shuffled deck of the 36 rolls).
+- Step timers: Off, Relaxed (default) or Brisk. An expired step is played for the seat. A
+  disconnected seat is only waited on when it owes a decision (30 s grace, then auto-play).
+- TV: Three.js board built from original Blender models, dice theatre, resource fly-outs, seat rail,
+  race-to-target bar, event log, a finale that reveals hidden points, then a results screen with
+  standings, per-seat stats, dice histogram and records. Play again starts a fresh board.
+- Phone: SVG map with pan/zoom, hand cards, Build / Trade / Cards / End turn, prompts (discard,
+  robber, gold, progress cards and module choices) and a results summary. Portrait and landscape.
+- Seated host: a controller dock over the TV board, with a Hide hand toggle for mirrored screens.
+- Synthesized sound effects (WebAudio, no files), phone haptics, and a host-only soundtrack.
 
-The default is Standard + Seafarers, 12 points. Every supported map/expansion combination can use either turn style. Cities & Knights works with Base, Seafarers, or Explorers & Pirates. All five Traders & Barbarians scenarios can be stacked on Base or Seafarers; only fishing accompanies Explorers & Pirates. Settings explain incompatible choices. See [EXPANSIONS.md](EXPANSIONS.md) for rules sources and adaptations. The hour target is not established by automated testing. Standard play, larger rosters, and learning games can take longer.
+## Modes
 
-## Deliberate adaptations and current limits
+- **Standard.** One turn at a time. With 5–6 seats the 2025 "paired players" rule gives the seat
+  halfway round a build turn (no player trades). With 7–10 seats that paired turn runs at the same
+  time as the main turn (a PartyPlay adaptation).
+- **Connect rounds** (PartyPlay adaptation for big groups). One shared roll pays everyone, then all
+  seats trade and build at once for 60, 90 or 120 s. The first confirmed placement wins a contested
+  spot. Victory is checked at round end; the highest qualifying total wins and ties share.
 
-This is not a complete reproduction of all CATAN editions or scenarios. The 3–4-player base uses the familiar 19 land hexes; 5–6 uses 30, and 7–10 uses a custom 37-hex island with increased supplies. The larger paired-turn rule is an adaptation. Open Seas is our generated scenario using Seafarers mechanics, not the complete published scenario campaign.
+Both modes work with every legal map and expansion combination. The victory target (8–30) defaults
+to a suggested value for the chosen setup.
 
-Connect-style preserves private hands, the shared contested board, classic cards/robber, and a configurable victory target. Suggested targets reflect the selected modules. Official Connect instead has different region, active-side, resource-visibility, robber, and scoring rules. Odd rosters are supported by our adaptation. Do not describe it as exact official Connect.
+## Expansions
 
-All bank/card transfers and placements are server-authoritative. Selection previews stay local until confirmed. The server sends explicit public/private projections; the frontend never imports server state or RNG. Actions carry a phase/turn ID and reliable transport IDs. Transactions operate on a copy so rejection cannot partially spend cards or change random state.
+- **Maps (pick one):** Base island; **Seafarers** with New Shores, Four Islands or Fog Islands;
+  **Explorers & Pirates** with any of the Pirate Lairs, Fish for Catan and Spices missions (Land Ho!
+  is always on).
+- **Cities & Knights** on any map.
+- **Traders & Barbarians scenarios:** Fishing, Rivers, Caravans, Barbarian Attack, Deliveries
+  (the T&B scenario). Only Fishing is allowed on Explorers & Pirates.
+- **Variants:** Friendly Robber, Harbormaster.
 
-Save/resume across server restarts is deferred. Closing the room or losing the host beyond its shared two-minute grace ends the room. The published scenario campaigns, Event Cards and the two-player variant are not implemented. All expansion maps are generated adaptations, including the combined coastal/warehouse layout and river paths. Human balance and physical-device acceptance remain unfinished; automated completion is not a production certification.
+All maps are generated, not the printed scenario boards. Disabled options show a one-line reason in
+Settings. See [EXPANSIONS.md](EXPANSIONS.md) for combinations, sources and adaptations.
 
 ## CPU opponents
 
-Choose **Play on this screen**, then start a round alone to face two CPUs. In Settings, **Fill the table with CPUs** sets a total of 3–10 seats; human players always take priority. Three or more humans with the default three-seat setting play without CPUs. For a laptop/TV with one phone, select **Watch only**, join the phone and start. A playing host has **Your hand** and **Board** tabs; switching views preserves unfinished selections.
+CPUs run on the server and see only public information and their own hand. Nine personas (Maya the
+harbor trader, Theo the road builder, Iris, Omar, Lena, Ravi, Nora, Felix, Juno) bias goals and
+resources. Three levels:
 
-CPUs act on the server, one action every 700ms, using only public information and their own private projection. They use the same action validation as humans and pause when a human disconnects. They support both turn styles and supported expansion combinations, including required choices, expedition movement and deliveries. They accept affordable, useful offers at fair value; the human proposer still confirms the exchange. On its own Standard turn, a CPU waits eight seconds after accepting to allow confirmation. They do not initiate offers or counteroffers. This is a basic strategy level, without selectable difficulty or expert negotiation. CPU seats are chosen at round start, not substituted for disconnected friends.
+| Level | Behaviour |
+| --- | --- |
+| Easy | Noisy choices, never proposes trades, robber only avoids itself |
+| Normal (default) | Proposes one trade per turn, refuses a leader near the target, leader-aware robber |
+| Sharp | Exact scoring, two proposals and counteroffers, races for contested spots, plans setup further ahead |
+
+CPUs use the same validated actions as humans and support every module's commands and prompts.
+
+## Controls
+
+- **Host:** add the game, **Play on this screen**, then **Watch only** (TV only) or stay seated.
+  **Settings** holds table size, map, turns, target, timers, CPU level, expansions and variants. A
+  seated host clicks glowing spots on the 3D board, or uses ←/→ and Enter in the dock; Escape closes
+  a sheet.
+- **Phone:** join with the room code, **Ready to play**. On your turn roll, then use Build, Trade,
+  Cards and End turn. To place, tap a glowing spot, then **Confirm** (or Back). Trade: pick cards to
+  give and get, choose recipients, send; accept or counter others' offers. The lobby details list
+  the rules for every mode and module.
 
 ## Code map
 
-- `model.ts`: browser-safe geometry, piece, action, public/private-view types and costs.
-- `board.ts`: generated maps, unique vertices/edges, resource distribution, nonadjacent red numbers, ports.
-- `server.ts`, `state.ts`, `core.ts`: authoritative turns, legal targets, transactions, scoring, and projections.
-- `expansion-settings.ts`, `expansion-model.ts`: shared configuration and browser-safe action/view types.
-- `expansions.ts`: module initialization, private commands and mandatory-choice continuation.
-- `cities-knights.ts`, `traders-barbarians.ts`, `barbarian-scenarios.ts`, `explorers-pirates.ts`: each family’s rules; `expansion-score.ts` composes its scoring.
-- `expansion-state.ts`: server-only decks, unrevealed terrain, and per-turn bookkeeping.
-- Frontend files: Fable's host scene/HUD, phone map and controls, presentation helpers, and styles.
-- `tests/rules.test.ts`, `tests/expansions.test.ts`: deterministic rules, privacy, conservation, combination overrides, clocks, and completed ten-player simulations.
-- `cpu-base.ts`, `cpu.ts`: production CPU choices based only on public/own-private views; the QA drivers reuse these policies. `tests/cpu.test.ts` covers filling, pacing, disconnects, trades and complete ten-seat matches.
+| Path | Contents |
+| --- | --- |
+| `src/model.ts`, `geometry.ts` | Contract: settings, views, actions, costs, timers; hex geometry |
+| `src/settings.ts` | Settings validation, combination restrictions, suggested targets |
+| `src/manifest.ts`, `server.ts`, `client.tsx` | Platform manifest, room-server adapter, lazy view loader |
+| `src/engine/` | Server-only rules: state, stage flow, actions, legal moves, production, trade, dev cards, score, timers and auto-play, projections, seeded RNG |
+| `src/engine/board/` | Board generation: layouts, terrain, numbers, ports, islands, Seafarers and E&P maps |
+| `src/engine/modules/` | One module per expansion, scenario and variant, wired through `registry.ts` hooks |
+| `src/cpu/` | CPU `decide`: setup, turn planning, trades, robber, prompts, personas; `advice/` per module |
+| `src/ui/scene/` | Three.js TV board, pieces, tokens, overlays, camera |
+| `src/ui/display/` | TV HUD: banner, seat rail, left rail, dice theatre |
+| `src/ui/controller/`, `personal/` | Phone controller; seated-host dock |
+| `src/ui/trade/`, `map/`, `results/`, `shared/`, `sfx/` | Trade sheet, phone SVG map, results, shared labels/help/icons, sound |
+| `src/music.ts`, `audio.tsx` | Host soundtrack rotation |
+| `art/` | Blender Python scripts for `public/games/island-settlers/models/*.glb` |
+| `tests/` | `board`, `core`, `rules`, `trade`, `modules`, `cpu`, `ui`, `fixtures`, `browser` |
 
-Game content lives in the games submodule. The parent integrates the two registries, discovery metadata, and a trusted registration setting for 4,096 actions/player with 1 KiB maximum action payloads. Other games keep their existing 256-action allowance. The product of count and size is bounded below the original worst-case retained-payload limit, and old acknowledgements remain available for deduplication.
+## Tests, preview and browser driver
 
-## Background music
-
-The host plays the three user-supplied tracks in order, repeating after roughly 20 minutes. Phones and guest displays do not fetch or play them. The platform’s Sound on/off control pauses/resumes the current track at a 22% background volume. Playback also stops outside the round, while hidden or disconnected, and is disposed when leaving the game. Browser autoplay restrictions can require a host tap. Failed files are skipped; reconnecting or a user gesture can retry a failed playlist.
-
-`src/music.ts` owns rotation and streaming; `src/audio.tsx` uses the existing shared AudioView hook for host ownership, sound preference and cleanup. Original MP3s and provenance are in `public/games/island-settlers/music/` in the games repository.
-
-## Validation
-
-Base/Seafarers acceptance and expansion-batch evidence are recorded separately in [QA.md](QA.md). It lists build fingerprints, actual UI actions/results/replay, maximum-roster layouts and remaining release work.
-
-Run from the parent PartyPlay repository:
+Run from the parent PartyPlay repository root. Never run Prettier.
 
 ```sh
-node --import tsx --test packages/games/island-settlers/tests/*.test.ts
-node --import tsx --test tests/registry-contract.test.ts
-npm run typecheck
-npm run lint
-npm test
-npm run build:isolated -- settlers-unique-run
-npm run serve:isolated -- settlers-unique-run 4387
+node --import tsx --test packages/games/island-settlers/tests/all.test.ts   # whole game suite
+node --import tsx --test packages/games/island-settlers/tests/modules/*.test.ts   # one folder
+BOARD_SEEDS=500 node --import tsx --test packages/games/island-settlers/tests/board/matrix.test.ts
+npm run typecheck && npm run lint && npm test
 ```
 
-No Prettier. Browser acceptance status and remaining limits belong in `QA.md`; automated rules completion alone is not visual or human pacing evidence. Do not publish as production-ready until that report supports it.
+UI preview on fixtures, no server ([tests/fixtures/preview/README.md](tests/fixtures/preview/README.md)):
 
-## Research and provenance
+```sh
+npx vite --config packages/games/island-settlers/tests/fixtures/preview/vite.config.ts   # :5390
+```
 
-Rules researched from the official [base rules and almanac](https://www.catan.com/sites/default/files/2021-06/catan_base_rules_2020_200707.pdf), [FAQ](https://www.catan.com/faq/basegame), [Seafarers rulebook](https://www.catan.com/sites/default/files/2025-03/CN3083%20CATAN%E2%80%93Seafarers%20Rulebook%202025%20secured%20reduced.pdf), [5–6-player rules](https://www.catan.com/sites/default/files/2025-03/CN3082%20CATAN%20%E2%80%93%205-6%20Rulebook%202025%20reduced.pdf), and [Connect event rules](https://www.catan.com/sites/default/files/2025-06/CAT_Connect_Manual_Event_RZ%20ENG%20250514s.pdf). Rulebook downloads are local research material under the parent's ignored output directory, not game assets. Game artwork is procedural and original; shared font licenses remain with PartyPlay. No official artwork, logos, or rulebook text are distributed in the game.
+Real-browser game: a watching TV (1920×1080), two phones (390×844) and two CPUs play a full game
+through the real UI to results and Play again. The driver reads WebSocket frames to choose moves
+with the CPU brain, then presses the real buttons; it never injects actions.
+
+```sh
+npm run build:isolated -- settlers-my-run
+npm run serve:isolated -- settlers-my-run 4396
+PLAYWRIGHT=<playwright index.mjs> CHROME=<chrome-headless-shell> node --import tsx \
+  packages/games/island-settlers/tests/browser/m3.mjs http://127.0.0.1:4396 output/my-run [solo]
+```
+
+`tests/browser/driver.mjs` exports `observe`, `play` and `execute` for other scenarios.
+
+## Provenance
+
+- **Art:** original. Pieces, props and landmarks are built by the Python scripts in `art/` (no
+  downloaded models, textures or kits); hex tiles and number tokens are built in code. See
+  [art/README.md](art/README.md).
+- **Sound effects:** synthesized at runtime; no audio files.
+- **Music:** three MP3s supplied by the project owner, kept byte-for-byte with SHA-256 hashes in
+  `public/games/island-settlers/music/manifest.json`. No license or artist attribution was provided.
+- **Rules:** researched from the official catan.com rulebooks and combination sheets listed in
+  [EXPANSIONS.md](EXPANSIONS.md). No official artwork, logos or rulebook text is included.

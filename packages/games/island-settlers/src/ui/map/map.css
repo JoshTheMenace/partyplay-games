@@ -1,0 +1,81 @@
+/* Phone/host SVG map (EXPERIENCE §4.3). Stroke widths in px use non-scaling-stroke, so zoom never fattens them. */
+.island-settlers-map {
+  position: relative; width: 100%; overflow: hidden; border-radius: 14px;
+  background: radial-gradient(circle at 50% 45%, #1d6b9e, #0b2d4f 80%);
+}
+.island-settlers-map[data-mode='mini'] { aspect-ratio: 366 / 230; cursor: pointer; }
+.island-settlers-map[data-mode='full'] { height: 100%; min-height: 220px; }
+.island-settlers-map-svg {
+  display: block; width: 100%; height: 100%; touch-action: none; user-select: none; -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.island-settlers-map[data-mode='mini'] .island-settlers-map-svg { touch-action: auto; pointer-events: none; }
+.island-settlers-map-text { font-family: var(--font-display); pointer-events: none; }
+.island-settlers-dim { opacity: 0.75; }
+.island-settlers-ghost { opacity: 0.7; pointer-events: none; }
+
+/* Hotspots. The shared [tabindex]:focus-visible outline would be drawn in SVG units (hexes, not px),
+   which is the "giant cream ring" bug; the scoped rule wins and the map draws its own 3px ring. */
+.island-settlers-hotspot { cursor: pointer; outline: none; }
+.island-settlers-map .island-settlers-hotspot:focus-visible { outline: none; }
+.island-settlers-focus { fill: none; stroke: none; pointer-events: none; }
+.island-settlers-map .island-settlers-hotspot:focus-visible .island-settlers-focus {
+  stroke: var(--kp-cream); stroke-width: 3px; vector-effect: non-scaling-stroke;
+}
+.island-settlers-ring {
+  transform-box: fill-box; transform-origin: center; pointer-events: none;
+  animation: island-settlers-breathe 1.6s ease-in-out infinite;
+}
+.island-settlers-ring-ink { fill: none; stroke: var(--kp-ink); stroke-width: 5.5px; vector-effect: non-scaling-stroke; }
+.island-settlers-ring-face {
+  fill: rgb(5 7 26 / 0.4); stroke: var(--kp-cream); stroke-width: 3px; vector-effect: non-scaling-stroke;
+}
+.island-settlers-hotspot[data-occupied] .island-settlers-ring-face { fill: none; stroke: var(--kp-sun); }
+.island-settlers-rim {
+  fill: rgb(255 210 74 / 0.14); stroke: var(--kp-sun); stroke-width: 3px; vector-effect: non-scaling-stroke;
+  stroke-linejoin: round; pointer-events: none; animation: island-settlers-rim 1.6s ease-in-out infinite;
+}
+.island-settlers-hotspot[data-selected] .island-settlers-ring { animation: none; }
+.island-settlers-hotspot[data-selected] .island-settlers-ring-face {
+  fill: none; stroke: var(--kp-cream); stroke-width: 3.5px;
+}
+.island-settlers-hotspot[data-selected] .island-settlers-rim {
+  animation: none; fill: rgb(255 246 229 / 0.28); stroke: var(--kp-cream); stroke-width: 4px;
+}
+@keyframes island-settlers-breathe { 50% { transform: scale(1.18); } }
+@keyframes island-settlers-rim { 50% { fill: rgb(255 210 74 / 0.04); } }
+
+/* Last-roll glow on the mini map (1.5 s). */
+.island-settlers-glow {
+  fill: rgb(255 210 74 / 0.3); stroke: var(--kp-sun); stroke-width: 4px; vector-effect: non-scaling-stroke;
+  pointer-events: none; animation: island-settlers-glow 1.5s ease-out forwards;
+}
+@keyframes island-settlers-glow { 50% { opacity: 1; } to { opacity: 0; } }
+
+.island-settlers-map-tools { position: absolute; right: 8px; bottom: 8px; display: grid; gap: 8px; }
+.island-settlers-map-tools button {
+  width: 48px; height: 48px; padding: 0; border-radius: 12px; border: 3px solid var(--kp-ink);
+  background: var(--kp-cream); color: var(--kp-ink); font: 1.5rem/1 var(--font-display);
+  box-shadow: 0 3px 0 var(--kp-ink);
+}
+.island-settlers-map-tools button:disabled { opacity: 0.45; }
+
+.island-settlers-map-screen {
+  width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; border: 0; background: var(--kp-ink);
+  color: var(--kp-cream); padding: max(8px, var(--safe-top)) max(8px, var(--safe-right))
+    max(8px, var(--safe-bottom)) max(8px, var(--safe-left));
+}
+.island-settlers-map-screen[open] { display: flex; flex-direction: column; gap: 8px; }
+.island-settlers-map-screen::backdrop { background: var(--kp-ink); }
+.island-settlers-map-screen > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.island-settlers-map-screen h2 { margin: 0; font-size: 1.4rem; }
+.island-settlers-map-screen .kp-btn { margin: 0; }
+.island-settlers-map-screen > .island-settlers-map { flex: 1; min-height: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .island-settlers-ring, .island-settlers-rim { animation: none; }
+  .island-settlers-glow { animation-timing-function: steps(1, end); }
+}
+
+/* 320-wide phones: the mini map is 296×220 (EXPERIENCE §4.1). */
+@media (max-width: 359px) { .island-settlers-map[data-mode='mini'] { aspect-ratio: 296 / 220; } }

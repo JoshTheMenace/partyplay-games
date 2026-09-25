@@ -1,42 +1,88 @@
-# Expansion rules and combinations
+# Expansions: scope, combinations and adaptations
 
-The existing Base and Seafarers game has completed ten-player browser acceptance. The additional expansion families are implemented in a separate rules/UI batch. [QA.md](QA.md) records its actual verification; this document describes scope and adaptations.
+Each expansion, scenario and variant is one engine module under `src/engine/modules/`, wired
+through the hooks in `registry.ts`. Settings validation and suggested targets live in
+`src/settings.ts`; the in-game rules text is `src/ui/shared/help.ts`. Engine details are in
+[ENGINE §14 and §19](docs/v2/ENGINE.md).
 
-## Scope and combinations
+## Scope
 
-Add Cities & Knights, the five Traders & Barbarians scenarios, and Explorers & Pirates missions. Keep Standard and Connect-style play and 3–10 seats. All generated maps, rosters above six, and simultaneous rounds remain explicit PartyPlay adaptations. Human pacing and balance are separate release gates; an hour is not a promise for a combined game.
+| Module | Implemented |
+| --- | --- |
+| Seafarers | Ships and ship moves, pirate, gold fields, mixed road/ship routes. Scenarios: New Shores (start on the main island, +2 per new island), Four Islands (start anywhere; +2 per island without a starting building), Fog Islands (routes reveal fog for 1 resource, no island bonus) |
+| Explorers & Pirates | Fog exploration, harbor settlements, ships carrying settlers and crews, 3:1 bank, gold. Missions: Pirate Lairs, Fish for Catan, Spices; Land Ho! alone has no pirate ship |
+| Cities & Knights | Commodities, Science/Trade/Politics tracks and metropolises, knights, walls, barbarian ship and event die, progress cards (hand limit 4); robber held until the first attack |
+| Fishing | Coastal grounds and lake, fish spends 2–7, the old boot |
+| Rivers | Bridges, river gold, Wealthiest (+1) and Poor (−2), gold for resources |
+| Caravans | Oasis camel trains, secret bids, doubled roads and camel points |
+| Barbarian Attack | Coastal landings and conquest, knights and prisoners, defense cards, no robber |
+| Deliveries | Wagon, castle/quarry/glassworks depots, road tolls, upgrades, road barbarians, own dev deck |
+| Friendly Robber | No blocking or robbing seats with 2 or fewer points |
+| Harbormaster | Harbor points per port building; first to 3 takes +2 |
 
-Choose one map/sea system: Base, Seafarers, or Explorers & Pirates. Cities & Knights is additive to all three. The two sea systems cannot be combined: Seafarers ships form routes while expedition ships move and carry cargo. On Base/Seafarers, expose individual fishing, rivers, merchant trains, barbarian attack, and wagon-delivery selections. On Explorers & Pirates, fishing is compatible; the other four scenarios are excluded by the official combination notes.
+Not implemented: the published scenario campaigns and printed boards, Event Cards, CATAN for Two,
+Swift Journey (Deliveries dev card), and save/resume across server restarts.
 
-The newer Cities & Knights + Barbarian Attack combination replaces the approaching barbarian fleet with coastal attacks and uses Cities & Knights progress cards/knight strengths. The delivery scenario replaces robber movement with road barbarians. These are explicit rule overrides, not two independent effects triggered together.
+## Combinations
 
-## Generated scenarios and limits
+1. Maps are exclusive: Base, Seafarers or Explorers & Pirates.
+2. Cities & Knights combines with all three maps.
+3. Explorers & Pirates allows only Fishing among the scenarios, and neither variant (no land robber,
+   no ports).
+4. Barbarian Attack and Deliveries each replace the land robber, so Friendly Robber is rejected.
+5. Four Islands rejects Rivers, Caravans, Barbarian Attack and Deliveries (they need a home island).
+6. Barbarian Attack + C&K: coastal attacks replace the barbarian ship track; ship rolls and
+   improvements land barbarians, 3 prisoners score 1 point.
+7. Barbarian Attack + Deliveries: coastal invaders also block wagon paths beside their hex.
+8. Official pair rules also applied: E&P + C&K (Medicine, Aqueduct on a 7, island-bound knights,
+   Taxation activates the pirate), Fishing with C&K / E&P / Barbarian Attack spends, Rivers + C&K
+   pillage ransom, Seafarers + Rivers ship-off-river move, no lake with Deliveries or Fog Islands,
+   2 fish for +2 wagon movement, no Poor penalty with Barbarian Attack or Deliveries.
 
-These are original generated maps using the expansion mechanics, not reproductions of every published scenario board or campaign. The combined coastal/delivery map uses one castle depot and assigns coastal invaders to adjacent wagon paths automatically. River courses/crossings and merchant-train starts are generated. The 36 hidden expedition hexes form a compact outer discovery region around the home island. Terrain, shoal numbers and spice benefits are seeded before discovery. Seven-to-ten-player supplies, progress-deck duplication and all Connect timing are adaptations.
+A rejected choice always shows its reason; nothing is dropped silently.
 
-The selectable Traders & Barbarians variants are Friendly Robber and Harbormaster. Event Cards and CATAN for Two are excluded. Alternate campaigns, scenario-specific victory conditions and the official 5–6-player expansion board layouts are not claimed here.
+**Suggested targets** (the host can change them): Base 10; New Shores 14, Four Islands 13, Fog
+Islands 12; Explorers 8 + Lairs 4, Fish 3, Spices 2 (so 8/12/15/17). C&K adds 3 on Base, 2 on
+Seafarers and 5 on Explorers. Scenario floors: Fishing 10, Rivers 10, Caravans 12, Barbarian Attack
+12, Deliveries 13. Official pair targets replace both floors: BA + Deliveries 14, Caravans +
+Deliveries 15, Fishing + Deliveries 12, Fishing + Rivers 10, C&K + Caravans 15, C&K + Deliveries
+15. On Seafarers, Caravans adds 2 and Deliveries 3 to the map target. Harbormaster adds 1.
 
-The legal-command protocol supports every module on the same private phone. Building/trading precede movement; a Connect player can move while another is still building. Mandatory theft, defense, progress and caravan decisions pause shared actions and the deadline. The TV remains the public display.
+## PartyPlay adaptations
 
-Approximate one-hour pacing is unverified. Combining multiple expansions increases rules and decision time. Suggested targets are configuration guidance, not human-playtest results.
+- All maps are generated per table size; 5–10 seat supplies, dev decks and port counts are scaled.
+- 7–10 seats: the paired build turn runs at the same time as the main turn.
+- Connect rounds keep private hands and a shared board for 3–10 seats; setup stays sequential.
+- A safety-net round limit (15 rounds per target point in Standard, 12 in Connect, scaled per
+  module) ends a stalled game with the highest total winning.
+- Fog Islands accepts Barbarian Attack, Caravans and Deliveries on the home island, and Four Islands
+  rejects Caravans; the official sheets say the opposite for both.
+- Barbarian Attack: the castle replaces the central desert; every landing number 2–6 and 8–12 is
+  placed on the coast, and a number on two coastal hexes lands a barbarian on each.
+- Deliveries dev deck is 16 Knight, 3 Road Building, 3 VP (×1.5 at 5–6, ×2 at 7+), without Swift
+  Journey. At 3–4 seats the 2 and 12 hexes take the nearest legal number and 2/12 rolls are
+  rerolled; 5+ seats keep them.
+- Fishing: 44 tokens at 5–6 seats but one lake (the sheet adds a second); no "replace one token at
+  the 7 limit" option; with Caravans the lake replaces a forest instead of stacking 12 on the 2.
+- Rivers + T&B scenarios: no bridge gold, river-crossing wagon costs or 3 starting gold.
+- Deliveries on Seafarers: wagons do not cross sea edges.
 
-## Architecture
+## Official sources
 
-- `expansion-settings.ts`: shared configuration validation and selection restrictions. Never silently drop an incompatible selection.
-- `expansion-model.ts`: public board layers, private progress/token hands, and legal command descriptions. No decks, RNG, or unrevealed terrain.
-- Expansion commands use the same room action channel, turn IDs, copy-before-apply transactions, and private projections as the existing game.
-- Mandatory choices pause other actions and resume the interrupted phase. Connect timers account for that interruption.
-- Fable owns frontend source and animations; Codex owns rule modules, integration, tests, and browser acceptance.
+Read from catan.com, September 2026. Downloaded PDFs are local research under the parent's ignored
+`output/`, not game assets.
 
-## Official research
-
-Read 12 September 2026. Downloaded PDFs are ignored local research, not distributed assets.
-
-- [Cities & Knights, 2025 rules](https://www.catan.com/sites/default/files/2025-03/CN3087%20CATAN%E2%80%93Cities%26Knights_%20Rulebook.pdf): commodities, progress decks, improvement tracks, metropolises, knights, barbarian attacks.
-- [Traders & Barbarians, 2025 rules](https://www.catan.com/sites/default/files/2025-04/CN3089%20CATAN%20%E2%80%93%20T%26B%20Rulebook.pdf): five scenarios and variants.
-- [Explorers & Pirates, 2025 rules](https://www.catan.com/sites/default/files/2025-04/CN3085%20CATAN%20%E2%80%93%20E%26P%20Rulebook.pdf) and [mission guide](https://www.catan.com/sites/default/files/2025-04/CN3085%20CATAN%20%E2%80%93%20E%26P%20Missions.pdf): expedition cargo, hidden exploration, settlers, pirate lairs, fish, spices.
-- [Explorers & Pirates with Cities & Knights](https://www.catan.com/sites/default/files/2025-08/ExplorersPirates%20w%20CnK.pdf): city/harbor distinction, commodities, island-bound knights, adjusted progress cards.
-- [Explorers & Pirates with Traders & Barbarians](https://www.catan.com/sites/default/files/2025-08/ExplorersPirates%20w%20TnB.pdf): fishing integration and explicit exclusions.
-- [Official scenario-combination downloads](https://www.catan.com/traders-barbarians): pairwise rules for Cities & Knights, Seafarers and other Traders & Barbarians scenarios.
-
-No official artwork, logos, or rulebook prose is included in the game.
+- [Base rules and almanac](https://www.catan.com/sites/default/files/2021-06/catan_base_rules_2020_200707.pdf),
+  [5–6-player rules](https://www.catan.com/sites/default/files/2025-03/CN3082%20CATAN%20%E2%80%93%205-6%20Rulebook%202025%20reduced.pdf)
+- [Seafarers](https://www.catan.com/sites/default/files/2025-03/CN3083%20CATAN%E2%80%93Seafarers%20Rulebook%202025%20secured%20reduced.pdf)
+- [Cities & Knights](https://www.catan.com/sites/default/files/2025-03/CN3087%20CATAN%E2%80%93Cities%26Knights_%20Rulebook.pdf)
+- [Traders & Barbarians](https://www.catan.com/sites/default/files/2025-04/CN3089%20CATAN%20%E2%80%93%20T%26B%20Rulebook.pdf)
+  and its 5–6 extension
+- [Explorers & Pirates](https://www.catan.com/sites/default/files/2025-04/CN3085%20CATAN%20%E2%80%93%20E%26P%20Rulebook.pdf),
+  [mission guide](https://www.catan.com/sites/default/files/2025-04/CN3085%20CATAN%20%E2%80%93%20E%26P%20Missions.pdf),
+  [with C&K](https://www.catan.com/sites/default/files/2025-08/ExplorersPirates%20w%20CnK.pdf),
+  [with T&B](https://www.catan.com/sites/default/files/2025-08/ExplorersPirates%20w%20TnB.pdf)
+- [Scenario combination sheets](https://www.catan.com/traders-barbarians): Fishing, Rivers, Merchant
+  Trains (Caravans), Barbarian Attack and T&B, each with C&K, Seafarers and the other scenarios
+- [Connect event rules](https://www.catan.com/sites/default/files/2025-06/CAT_Connect_Manual_Event_RZ%20ENG%20250514s.pdf)
+  (inspiration only; our Connect rounds are not the official rules)

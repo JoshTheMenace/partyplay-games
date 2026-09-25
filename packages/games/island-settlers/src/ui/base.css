@@ -1,0 +1,71 @@
+/* Island Settlers shared variables and shared components. Other UI packages keep their own CSS files. */
+:root {
+  --is-wood: #2f9a5f; --is-brick: #d8683f; --is-wool: #a3dc6f; --is-grain: #f0c24d; --is-ore: #9aa1b8;
+  --is-paper: #efe3bf; --is-cloth: #cf95dc; --is-coin: #ffd24a;
+  --is-panel: rgb(11 16 48 / 0.9); --is-panel-border: rgb(255 246 229 / 0.14);
+  --is-dim: rgb(255 246 229 / 0.72);
+}
+
+/* TV and seated-host stage: 1u = stage height / 980 (EXPERIENCE conventions). */
+.island-settlers-stage { position: absolute; inset: 0; container-type: size; --u: calc(100cqh / 980); }
+.island-settlers-panel {
+  background: var(--is-panel); border: calc(2 * var(--u, 1px)) solid var(--is-panel-border);
+  border-radius: calc(18 * var(--u, 1px)); color: var(--kp-cream);
+}
+
+/* Seat chip: seat fill, ink ring, ink emblem at half size. */
+.island-settlers-chip {
+  display: inline-grid; place-items: center; flex: none; box-sizing: border-box;
+  width: var(--chip-size); height: var(--chip-size); border-radius: 50%;
+  background: var(--chip-fill); border: calc(var(--chip-size) * 0.054) solid var(--kp-ink);
+}
+.island-settlers-chip > svg { width: 50%; height: 50%; fill: var(--kp-ink); }
+
+.island-settlers-icon { flex: none; vertical-align: -0.15em; }
+.island-settlers-good {
+  display: inline-flex; align-items: center; gap: 0.2em; padding: 0.1em 0.45em; border-radius: 999px;
+  background: var(--good); color: var(--kp-ink); border: 2px solid var(--good-deep); font-weight: 800;
+}
+.island-settlers-goods { display: inline-flex; flex-wrap: wrap; gap: 0.3em; align-items: center; }
+
+/* Lobby instructions and rules. */
+.island-settlers-instructions h2 { margin-top: 0; }
+.island-settlers-instructions ol { padding-left: 1.4rem; line-height: 1.5; }
+.island-settlers-instructions summary {
+  min-height: 44px; padding: 0.6rem 0; box-sizing: border-box; cursor: pointer; color: var(--kp-sky); font-weight: 800;
+}
+.island-settlers-topics h3 { font-size: 1.15rem; margin: 1rem 0 0.25rem; color: var(--kp-sun); }
+.island-settlers-topics ul { margin: 0; padding-left: 1.2rem; line-height: 1.45; }
+
+/* Settings modal. */
+.island-settlers-settings { display: grid; gap: 1.1rem; margin-bottom: 1rem; }
+.island-settlers-settings h3, .island-settlers-settings legend {
+  font: 1.2rem var(--font-display); margin: 0 0 0.5rem; padding: 0; color: var(--kp-cream);
+}
+.island-settlers-settings fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.island-settlers-settings small, .island-settlers-settings p { color: var(--is-dim); margin: 0.35rem 0 0; }
+.island-settlers-row { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; align-items: end; }
+.island-settlers-row label { display: grid; gap: 0.3rem; font-weight: 800; min-width: 12rem; }
+.island-settlers-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; font-weight: 800; }
+.island-settlers-preview > span { display: inline-flex; gap: 4px; }
+.island-settlers-radios { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 0.5rem; }
+.island-settlers-radios legend { grid-column: 1 / -1; }
+.island-settlers-radios label {
+  display: flex; gap: 0.6rem; align-items: flex-start; min-height: 48px; padding: 0.6rem 0.75rem; cursor: pointer;
+  border: 2px solid var(--is-panel-border); border-radius: 0.8rem; background: rgb(5 7 26 / 0.5);
+}
+.island-settlers-radios label[data-on] { border-color: var(--kp-sun); background: rgb(255 210 74 / 0.12); }
+.island-settlers-radios input { accent-color: var(--kp-sun); min-height: 0; margin: 0.2rem 0 0; }
+.island-settlers-radios span { display: grid; gap: 0.15rem; }
+.island-settlers-radios small { margin: 0; }
+.island-settlers-toggles { display: grid; gap: 0.4rem; }
+.island-settlers-toggle small { display: block; margin: -0.2rem 0 0.3rem; }
+.island-settlers-toggle small[data-blocked] { color: var(--kp-coral); }
+.island-settlers-link {
+  background: none; border: 0; color: var(--kp-sky); text-decoration: underline; font-weight: 800; margin-left: 0.5rem;
+}
+.island-settlers-scroll { overflow-x: auto; }
+.island-settlers-timers { border-collapse: collapse; width: 100%; font-size: 0.9rem; white-space: nowrap; }
+.island-settlers-timers th, .island-settlers-timers td { padding: 0.35rem 0.5rem; text-align: left; }
+.island-settlers-timers thead th { color: var(--is-dim); font-weight: 700; }
+.island-settlers-timers tr[data-on] { background: rgb(255 210 74 / 0.14); color: var(--kp-sun); }

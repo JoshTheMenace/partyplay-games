@@ -1,0 +1,162 @@
+/* Controller task-area screens (EXPERIENCE §4.2): overview, build, cards, placement, picks, robber, finale. */
+/* 4. Task area. */
+.island-settlers-task { flex: 1; display: grid; align-content: start; gap: 10px; }
+.island-settlers-screen { display: grid; gap: 12px; align-content: start; }
+.island-settlers-screen > .kp-btn { margin: 0; }
+.island-settlers-mini { width: 100%; }
+.island-settlers-task .island-settlers-board { height: clamp(260px, calc(100dvh - 400px), 480px); }
+.island-settlers-roll.kp-btn { width: 100%; min-height: 120px; font-size: 2.2rem; }
+.island-settlers-roll > span { display: flex; align-items: center; justify-content: center; gap: 12px; }
+
+.island-settlers-payout {
+  display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 4px 12px; padding: 10px 12px;
+  border-radius: 14px; background: var(--is-panel); border: 2px solid var(--is-panel-border);
+}
+.island-settlers-payout p { margin: 0; font-size: 18px; font-weight: 800; }
+.island-settlers-payout .island-settlers-goods { grid-column: 2; font-size: 16px; }
+.island-settlers-payout[data-tone='gain'] { border-color: rgb(120 217 85 / 0.6); }
+.island-settlers-payout[data-tone='blocked'], .island-settlers-payout[data-tone='seven'] {
+  border-color: rgb(255 87 72 / 0.5);
+}
+.island-settlers-dice { display: flex; gap: 4px; grid-row: span 2; }
+.island-settlers-hints { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.island-settlers-hints li {
+  padding: 8px 12px; border-radius: 999px; font-size: 16px; font-weight: 800; background: var(--kp-ink);
+  border: 2px dashed var(--is-panel-border);
+}
+.island-settlers-hints li[data-ready] { border: 2px solid var(--kp-lime); color: var(--kp-lime); }
+.island-settlers-now { display: flex; flex-wrap: wrap; gap: 8px; }
+.island-settlers-now .kp-btn { margin: 0 0 5px; min-height: 48px; }
+.island-settlers-now .kp-btn > span { display: flex; align-items: center; gap: 6px; }
+.island-settlers-log ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 16px; }
+.island-settlers-log li { color: var(--is-dim); }
+.island-settlers-log li:first-child { color: var(--kp-cream); }
+.island-settlers-log-full { max-height: 60dvh; overflow: auto; padding-left: 1.2rem; line-height: 1.5; }
+.island-settlers-emotes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.island-settlers-emotes button {
+  min-height: 48px; border-radius: 12px; border: 2px solid var(--is-panel-border); background: var(--kp-ink);
+  color: var(--kp-cream); font-weight: 800; font-size: 16px;
+}
+.island-settlers-emotes button[aria-pressed='true'] { border-color: var(--kp-sun); color: var(--kp-sun); }
+.island-settlers-skip { display: flex; align-items: center; gap: 10px; min-height: 48px; font-weight: 800; }
+.island-settlers-skip input { width: 24px; height: 24px; min-height: 0; accent-color: var(--kp-sun); }
+
+/* Build rows and cost chips. */
+.island-settlers-rows { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.island-settlers-row {
+  width: 100%; min-height: 64px; display: grid; grid-template-columns: 32px 1fr auto; align-items: center;
+  gap: 6px 10px; padding: 10px 12px; border-radius: 14px; text-align: left; font: inherit; color: var(--kp-cream);
+  background: var(--is-panel); border: 2px solid var(--is-panel-border);
+}
+.island-settlers-row > .island-settlers-icon { grid-row: span 3; }
+.island-settlers-row > b { font-size: 18px; font-weight: 800; }
+.island-settlers-row > .island-settlers-cost, .island-settlers-row-sub { grid-column: 2 / -1; }
+.island-settlers-row-sub { font-size: 15px; color: var(--is-dim); }
+.island-settlers-row:not(:disabled):hover { border-color: var(--kp-lime); }
+.island-settlers-row[data-off] { opacity: 0.6; cursor: not-allowed; }
+.island-settlers-row-status { font-size: 15px; font-weight: 800; text-align: right; color: var(--is-dim); }
+.island-settlers-row:not([data-off]) .island-settlers-row-status { color: var(--kp-lime); }
+.island-settlers-cost { display: flex; flex-wrap: wrap; gap: 6px; font-size: 15px; }
+.island-settlers-cost > span { display: inline-flex; align-items: center; gap: 3px; }
+.island-settlers-cost > span[data-short] .island-settlers-good {
+  outline: 3px solid var(--kp-coral); outline-offset: 1px;
+}
+.island-settlers-cost small { font-size: 13px; font-weight: 800; color: var(--kp-coral); }
+.island-settlers-free { color: var(--kp-lime); }
+.island-settlers-buy {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px;
+  border-radius: 14px; background: var(--is-panel); border: 2px solid var(--is-panel-border);
+}
+.island-settlers-buy > span { display: grid; gap: 4px; font-size: 18px; }
+.island-settlers-buy .kp-btn { margin: 0 0 5px; min-height: 48px; }
+
+/* Dev and progress cards: 2 columns of 170×96 tiles. */
+.island-settlers-devs {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 0; padding: 0;
+  list-style: none;
+}
+.island-settlers-devs li {
+  display: grid; gap: 4px; align-content: start; min-height: 96px; padding: 10px; border-radius: 14px;
+  background: linear-gradient(160deg, #2a2466, #151a47); border: 2px solid var(--kp-grape);
+}
+.island-settlers-devs b { font-size: 17px; }
+.island-settlers-devs small { font-size: 14px; line-height: 1.25; color: var(--is-dim); }
+.island-settlers-devs em { font-size: 14px; font-style: normal; font-weight: 800; color: var(--kp-sun); }
+.island-settlers-devs .kp-btn { margin: 4px 0 5px; min-height: 44px; }
+
+/* Placement, command sheets and pick grids. */
+.island-settlers-step { margin: 0; font-size: 22px; color: var(--kp-sun); }
+.island-settlers-segment {
+  display: grid; grid-auto-flow: column; gap: 4px; padding: 4px; border-radius: 14px; background: var(--kp-ink);
+}
+.island-settlers-segment button {
+  min-height: 48px; border-radius: 10px; border: 0; background: none; color: var(--kp-cream); font-weight: 800;
+  font-size: 16px;
+}
+.island-settlers-segment button[aria-pressed='true'] { background: var(--kp-sky); color: var(--kp-ink); }
+.island-settlers-confirm {
+  position: sticky; bottom: 0; z-index: 5; display: grid; gap: 8px; margin: 0 -10px;
+  padding: 10px 10px calc(10px + var(--safe-bottom)); background: var(--is-bg);
+  border-top: 2px solid var(--is-panel-border);
+}
+.island-settlers-detail { margin: 0; font-size: 16px; font-weight: 700; line-height: 1.35; }
+.island-settlers-sheet-actions { display: grid; gap: 8px; }
+.island-settlers-sheet-actions .kp-btn { margin: 0 0 5px; min-height: 52px; }
+.island-settlers-confirm .island-settlers-sheet-actions { grid-template-columns: 1fr auto; }
+.island-settlers-confirm .kp-btn-lg { font-size: 18px; padding: 0.7rem 1rem; }
+.island-settlers-command-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.island-settlers-command-head h3 { font: 22px/1.1 var(--font-display); }
+.island-settlers-field { display: grid; gap: 8px; }
+.island-settlers-field h3 { font: 18px var(--font-display); }
+.island-settlers-choices {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0; padding: 0; border: 0; min-width: 0;
+}
+.island-settlers-choices legend { grid-column: 1 / -1; padding: 0 0 6px; font: 18px var(--font-display); }
+.island-settlers-choices label {
+  display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 6px 10px; border-radius: 12px;
+  background: var(--kp-ink); border: 2px solid var(--is-panel-border); cursor: pointer;
+}
+.island-settlers-choices label[data-on] { border-color: var(--kp-sun); background: rgb(255 210 74 / 0.14); }
+.island-settlers-choices input { width: 20px; height: 20px; min-height: 0; margin: 0; accent-color: var(--kp-sun); }
+.island-settlers-choices span { display: grid; gap: 2px; font-size: 16px; }
+.island-settlers-choices b { display: inline-flex; align-items: center; gap: 6px; }
+.island-settlers-choices small { font-size: 14px; color: var(--is-dim); }
+.island-settlers-pick { display: grid; gap: 10px; }
+.island-settlers-counter { margin: 0; font-size: 24px; color: var(--kp-sun); }
+.island-settlers-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px 12px; }
+.island-settlers-grid .island-settlers-card { width: 100%; height: 120px; --is-icon: 40px; }
+.island-settlers-pile {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 56px; padding: 6px 10px;
+  border-radius: 14px; border: 2px dashed var(--is-panel-border); color: var(--is-dim); font-size: 16px;
+}
+.island-settlers-pile button { min-height: 44px; padding: 0 4px; border: 0; background: none; font-size: 18px; }
+
+/* Robber victims. */
+.island-settlers-victims { display: grid; gap: 8px; margin-bottom: 10px; }
+.island-settlers-victims button {
+  display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 10px; min-height: 56px;
+  padding: 6px 12px; border-radius: 14px; background: var(--kp-ink); color: var(--kp-cream); font: inherit;
+  font-size: 17px; text-align: left; border: 2px solid var(--is-panel-border);
+}
+.island-settlers-victims button[aria-checked='true'] {
+  border-color: var(--kp-coral); background: rgb(255 87 72 / 0.14);
+}
+.island-settlers-fan { display: inline-flex; align-items: center; }
+.island-settlers-fan i {
+  width: 14px; height: 20px; margin-right: -6px; border-radius: 3px; background: var(--kp-grape);
+  border: 2px solid var(--kp-ink);
+}
+.island-settlers-fan b { margin-left: 10px; font-size: 20px; }
+
+/* Finale. */
+.island-settlers-finale { justify-items: center; text-align: center; padding-top: 12px; }
+.island-settlers-finale .kp-title { font-size: 40px; color: var(--kp-sun); }
+.island-settlers-rank { margin: 0; font-size: 20px; font-weight: 800; }
+.island-settlers-parts { width: 100%; border-collapse: collapse; font-size: 17px; }
+.island-settlers-parts th { text-align: left; font-weight: 700; padding: 8px 4px; }
+.island-settlers-parts td { text-align: right; padding: 8px 4px; font-weight: 800; }
+.island-settlers-parts tbody tr { border-bottom: 1px solid var(--is-panel-border); }
+.island-settlers-parts tfoot th, .island-settlers-parts tfoot td {
+  font: 22px var(--font-display); color: var(--kp-sun);
+}
+

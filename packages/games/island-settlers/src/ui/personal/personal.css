@@ -1,0 +1,170 @@
+/* Seated host dock (EXPERIENCE §4.9). Sizes in u (stage height / 980) with px floors for 720p. */
+.island-settlers-personal { position: absolute; inset: 0; pointer-events: none; }
+.island-settlers-pick-source { display: none; }
+.island-settlers-dock {
+  --is-chip: max(22px, calc(30 * var(--u))); --card-w: max(56px, calc(72 * var(--u)));
+  --card-h: max(76px, calc(96 * var(--u))); --is-icon: max(22px, calc(32 * var(--u))); --is-bg: #0d1338;
+  --gap: calc(16 * var(--u));
+  position: absolute; z-index: 5; pointer-events: auto; box-sizing: border-box; display: flex;
+  flex-direction: column; padding: calc(8 * var(--u)) var(--gap); transition: height 220ms ease-out;
+}
+.island-settlers-dock[data-layer='sheet'] { background: var(--is-bg); }
+
+/* Collapsed dock: the status line over one row of hand | actions | timer. */
+.island-settlers-dock-row {
+  flex: 1 0 auto; display: flex; align-items: center; gap: var(--gap); min-height: 0;
+}
+/* Sheet up: the sheet on top, then the status line and the buttons share one row under it. */
+.island-settlers-dock[data-layer='sheet'] {
+  display: grid; grid-template: minmax(0, 1fr) auto / minmax(0, 1fr) auto; align-items: center;
+  column-gap: var(--gap);
+}
+.island-settlers-dock[data-layer='sheet'] .island-settlers-dock-sheet { grid-column: 1 / -1; align-self: stretch; }
+.island-settlers-dock[data-layer='sheet'] .island-settlers-dock-status { margin: 0; min-width: 0; }
+.island-settlers-dock-me { flex: 1 1 0; min-width: min-content; }
+.island-settlers-dock-status {
+  flex: none; display: flex; align-items: center; gap: calc(10 * var(--u)); margin: 0 0 calc(6 * var(--u));
+  white-space: nowrap; font-size: max(13px, calc(20 * var(--u))); line-height: 1.1;
+}
+.island-settlers-dock-status b {
+  flex: none; font: 400 max(15px, calc(24 * var(--u))) / 1 var(--font-display);
+}
+.island-settlers-dock-status span {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--is-dim);
+}
+.island-settlers-dock-eye {
+  flex: none; display: grid; place-items: center; margin-left: auto; min-height: 0; padding: 0.15em 0.5em;
+  border-radius: 999px; border: 2px solid var(--is-panel-border); background: none; color: var(--is-dim);
+  cursor: pointer;
+}
+.island-settlers-dock-eye[aria-pressed='true'] { color: var(--kp-sun); border-color: var(--kp-sun); }
+
+/* The hand: the controller's cards at dock size; hidden while the sheet is up. */
+.island-settlers-dock .island-settlers-hand { display: flex; align-items: center; gap: var(--gap); }
+.island-settlers-dock[data-layer='sheet'] .island-settlers-hand { display: none; }
+.island-settlers-dock .island-settlers-cards { flex: none; justify-content: flex-start; gap: calc(10 * var(--u)); }
+.island-settlers-dock .island-settlers-card { margin: 0 0 5px; }
+.island-settlers-dock .island-settlers-card-name { font-size: max(11px, calc(16 * var(--u))); }
+.island-settlers-dock .island-settlers-count {
+  min-width: max(22px, calc(32 * var(--u))); height: max(22px, calc(32 * var(--u)));
+  font-size: max(15px, calc(22 * var(--u))); right: -5px; bottom: -7px;
+}
+.island-settlers-dock .island-settlers-ratio { font-size: max(11px, calc(14 * var(--u))); }
+/* C&K commodities: three slim pills stacked beside the resource cards, so 720p still fits. */
+.island-settlers-dock .island-settlers-cards[data-row='commodity'] { flex-direction: column; gap: 3px; }
+.island-settlers-dock .island-settlers-card[data-size='commodity'] {
+  flex: none; width: max(92px, calc(124 * var(--u))); height: calc((var(--card-h) - 6px) / 3); margin: 0;
+  padding: 0 6px; gap: 5px; border-radius: 7px; box-shadow: none; --is-icon: max(14px, calc(20 * var(--u)));
+}
+.island-settlers-dock .island-settlers-card[data-size='commodity'] .island-settlers-count {
+  position: static; min-width: 0; height: auto; margin-left: auto; padding: 0; border: 0; background: none;
+  color: inherit; font-size: max(13px, calc(18 * var(--u)));
+}
+/* The seat rail already shows your card counts; the dock keeps the room for cards. */
+.island-settlers-dock .island-settlers-hand-count { display: none; }
+.island-settlers-dock-me[data-hidden] .island-settlers-cards { filter: blur(9px) saturate(0.4); }
+
+/* Actions: the controller's bar laid flat, End kept 24u away from the tabs. */
+.island-settlers-dock-actions {
+  flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: calc(10 * var(--u));
+}
+.island-settlers-dock .island-settlers-bar {
+  position: static; margin: 0; padding: 0; background: none; border: 0; gap: calc(10 * var(--u));
+}
+.island-settlers-dock-actions .kp-btn {
+  flex: none; min-height: max(44px, calc(64 * var(--u))); margin: 0 0 5px;
+  padding: 0 max(12px, calc(20 * var(--u))); font-size: max(15px, calc(22 * var(--u)));
+}
+.island-settlers-dock .island-settlers-bar .island-settlers-end {
+  flex: none; margin-left: calc(24 * var(--u));
+}
+.island-settlers-dock .island-settlers-tab { padding-right: max(16px, calc(26 * var(--u))); }
+/* The badge sits just past the label (the skewed label span is its containing block). */
+.island-settlers-dock .island-settlers-badge { right: auto; left: 100%; top: -12px; margin-left: 2px; }
+.island-settlers-dock-roll > span { display: flex; align-items: center; gap: 0.35em; }
+.island-settlers-dock-actions .island-settlers-dock-roll { padding: 0 max(18px, calc(36 * var(--u))); }
+.island-settlers-dock .island-settlers-timer {
+  width: max(44px, calc(60 * var(--u))); height: max(44px, calc(60 * var(--u)));
+}
+.island-settlers-dock .island-settlers-timer b { font-size: max(16px, calc(22 * var(--u))); }
+
+/* Last payout while you wait: one line. */
+.island-settlers-dock .island-settlers-payout {
+  display: flex; align-items: center; gap: calc(10 * var(--u)); margin: 0; padding: 0; background: none;
+  border: 0; font-size: max(13px, calc(20 * var(--u)));
+}
+.island-settlers-dock .island-settlers-payout p { margin: 0; }
+
+/* Picking on the board: detail, Confirm and Back beside the hand. */
+.island-settlers-dock-actions > .island-settlers-screen {
+  display: flex; align-items: center; gap: calc(12 * var(--u)); min-width: 0;
+}
+.island-settlers-dock-actions .island-settlers-confirm {
+  position: static; display: flex; align-items: center; gap: calc(12 * var(--u)); margin: 0; padding: 0;
+  background: none; border: 0; min-width: 0;
+}
+.island-settlers-dock-actions :is(.island-settlers-detail, .island-settlers-note) {
+  flex: 0 1 auto; min-width: 0; max-width: max(180px, calc(360 * var(--u)));
+  font-size: max(13px, calc(19 * var(--u))); line-height: 1.25;
+}
+/* Only the detail text gives way; the buttons keep their size. */
+.island-settlers-dock-actions .island-settlers-sheet-actions { flex: none; display: flex; gap: calc(10 * var(--u)); }
+.island-settlers-dock-actions .island-settlers-step {
+  font-size: max(15px, calc(22 * var(--u))); white-space: nowrap;
+}
+.island-settlers-dock-actions .island-settlers-segment button { min-height: max(36px, calc(48 * var(--u))); }
+.island-settlers-dock-actions .island-settlers-choices { grid-template-columns: repeat(2, auto); }
+
+/* Finale: title and rank only; the TV shows the rest. */
+.island-settlers-dock-actions .island-settlers-finale { gap: calc(4 * var(--u)); display: grid; }
+.island-settlers-dock-actions .island-settlers-finale h2 { font-size: max(18px, calc(30 * var(--u))); }
+.island-settlers-dock-actions .island-settlers-parts { display: none; }
+
+/* Sheet: raised over the lower board; the board itself never moves. */
+.island-settlers-dock-sheet {
+  flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: calc(8 * var(--u));
+  padding-bottom: calc(8 * var(--u)); margin-bottom: calc(8 * var(--u));
+  border-bottom: 2px solid var(--is-panel-border); animation: island-settlers-dock-up 200ms ease-out;
+}
+@keyframes island-settlers-dock-up { from { opacity: 0; transform: translateY(24px); } }
+.island-settlers-dock-sheet-head { display: flex; align-items: center; gap: var(--gap); }
+.island-settlers-dock-sheet-head h3 {
+  margin: 0; font: 400 max(18px, calc(30 * var(--u))) / 1 var(--font-display);
+}
+.island-settlers-dock-sheet-head .kp-btn { margin: 0 0 0 auto; min-height: 40px; }
+.island-settlers-dock-scroll {
+  flex: 1 1 0; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 4px 4px 8px;
+}
+.island-settlers-dock-scroll .island-settlers-rows {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px;
+}
+.island-settlers-dock-scroll .island-settlers-devs {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+.island-settlers-dock-scroll .island-settlers-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+.island-settlers-dock-scroll .island-settlers-grid .island-settlers-card { width: 104px; height: 92px; }
+/* Commands and prompts: fields full width, the last pile and the confirm button share a row. */
+.island-settlers-dock-scroll .island-settlers-command {
+  grid-template-columns: minmax(0, 1fr) auto; gap: 10px 16px;
+}
+.island-settlers-dock-scroll :is(.island-settlers-command, .island-settlers-pick) > * { grid-column: 1 / -1; }
+.island-settlers-dock-scroll .island-settlers-command .island-settlers-pick { display: contents; }
+.island-settlers-dock-scroll .island-settlers-command .island-settlers-pile { grid-column: 1; }
+.island-settlers-dock-scroll .island-settlers-command > .island-settlers-confirm {
+  grid-column: 2; position: static; display: flex; align-items: center; gap: 12px; margin: 0; padding: 0;
+  background: none; border: 0;
+}
+.island-settlers-dock-scroll .island-settlers-confirm .kp-btn { margin: 0 0 5px; }
+
+/* One offer or notice floats just above the dock, in the board's corner (notices only over the sheet). */
+.island-settlers-dock-duties {
+  position: absolute; right: 0; bottom: calc(100% + 8 * var(--u)); width: min(340px, 34%);
+}
+.island-settlers-dock-duties .island-settlers-duties { gap: 6px; }
+.island-settlers-dock-duties .island-settlers-duty {
+  box-shadow: 0 4px 0 rgb(5 7 26 / 0.45); border-radius: 14px;
+}
+.island-settlers-dock-duties .kp-btn { min-height: 38px; padding: 0 12px; font-size: 15px; margin: 0 0 4px; }
+@media (prefers-reduced-motion: reduce) {
+  .island-settlers-dock, .island-settlers-dock-sheet { transition: none; animation: none; }
+}

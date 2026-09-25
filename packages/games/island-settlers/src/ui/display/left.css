@@ -1,0 +1,40 @@
+/* TV HUD left rail (EXPERIENCE §3.4): module widgets, ticker (offers: ui/trade Rail). Sizes in u. */
+.island-settlers-hud-left { display: flex; flex-direction: column; gap: calc(12 * var(--u)); }
+.island-settlers-hud-module {
+  flex: none; padding: calc(12 * var(--u)) calc(14 * var(--u)); display: grid; gap: calc(12 * var(--u));
+  font-size: max(12px, calc(18 * var(--u)));
+}
+.island-settlers-hud-widget { display: grid; gap: calc(6 * var(--u)); }
+.island-settlers-hud-widget p {
+  display: flex; align-items: center; gap: calc(8 * var(--u)); flex-wrap: wrap;
+}
+.island-settlers-hud-widget p > b:last-child { margin-left: auto; }
+.island-settlers-hud-widget .island-settlers-icon { width: calc(22 * var(--u)); height: calc(22 * var(--u)); }
+.island-settlers-hud-widget[data-alert] { color: var(--kp-coral); }
+.island-settlers-hud-widget-row > span { display: inline-flex; align-items: center; gap: calc(3 * var(--u)); }
+.island-settlers-hud-cells {
+  display: grid; grid-template-columns: repeat(var(--cells), minmax(0, calc(32 * var(--u))));
+  gap: calc(3 * var(--u));
+}
+.island-settlers-hud-cells li {
+  height: calc(32 * var(--u)); display: grid; place-items: center; border-radius: calc(7 * var(--u));
+  background: rgb(255 246 229 / 0.1);
+}
+.island-settlers-hud-cells li[data-past] { background: rgb(255 246 229 / 0.3); }
+.island-settlers-hud-cells li[data-now] { background: var(--kp-sun); color: var(--kp-ink); }
+.island-settlers-hud-widget[data-alert] li[data-now] { background: var(--kp-coral); }
+.island-settlers-hud-versus { font-size: max(13px, calc(20 * var(--u))); font-weight: 800; }
+.island-settlers-hud-versus b { font-size: calc(28 * var(--u)); color: var(--kp-sun); }
+.island-settlers-hud-versus small { color: var(--is-dim); }
+
+.island-settlers-hud-left > .island-settlers-rail { flex: 1 1 0; min-height: 0; overflow: hidden; }
+.island-settlers-hud-ticker {
+  flex: none; margin-top: auto; min-height: calc(116 * var(--u));
+  padding: calc(10 * var(--u)) calc(14 * var(--u));
+  display: grid; align-content: center; gap: calc(6 * var(--u)); font-size: max(13px, calc(20 * var(--u)));
+}
+.island-settlers-hud-ticker li {
+  display: flex; align-items: center; gap: calc(8 * var(--u)); line-height: 1.2;
+}
+.island-settlers-hud-ticker li:nth-child(2) { opacity: 0.6; }
+.island-settlers-hud-ticker li:nth-child(3) { opacity: 0.35; }

@@ -1,182 +1,70 @@
-# Island Settlers verification
+# Island Settlers v2: verification
 
-12 September 2026. The expansion families are playable, with human balance, teaching clarity and physical-device testing still required before a production release. See [EXPANSIONS.md](EXPANSIONS.md) for the supported combinations, generated-map adaptations and excluded campaigns/variants.
+Final check, 24 September 2026, after the wave 4 fix and repair passes. Earlier v1 evidence no longer
+applies: the engine, CPU and UI were rewritten.
 
-## CPU opponents · 14 September 2026
+## Build
 
-Final isolated build `settlers-cpu-20260914-c`, index SHA-256 `922851477da263304d427d49e0ccd9de6074a47aad6e62ab28c2085733d2ff1e`. Game-owned CPU seats fill a chosen 3–10-seat table while preserving every human seat. The manifest and catalog permit solo play. The server schedules CPU decisions from public/own-private projections, validates them through the normal transactional action path, and pauses for disconnected humans. The same legal-offer list serves CPU decisions and human acceptance buttons, including paired-turn and expansion movement restrictions. Standard CPUs allow eight seconds to confirm an offer they accept on their own turn. Connect expiry runs before a CPU can submit an expired action.
+- Isolated build `settlers-v2-final-09240107` (non-QA), index SHA-256
+  `ad4f7bb5ac920a6583e36d799db85cb64bd4c4502cc6ccbd0c82c4156dd44d67`.
+- Source: platform `47dd543` and game-modules `5b5f51e`, both with uncommitted v2 changes in the
+  working tree (nothing staged or committed).
 
-- **104 game tests passed**, including eleven CPU tests: roster/supply sizing across 1/2/3/6/10 humans and 3/6/10 table targets, private projections, pacing, disconnects, eligible/fair trades, confirmation grace, deadline expiry, and six complete one-human/nine-CPU matches covering Standard/Connect × Base/Seafarers/Explorers with expansion combinations. Three additional default three-seat simulations (seeds 1, 42, 731) reached the default 12-point target, including a CPU winner. **27 catalog/registry checks**, scoped TypeScript, lint, diff checks and isolated builds passed. No full-platform suite was rerun for this game-owned addition.
-- Build A, solo room `N2DFCY`: one laptop host and two CPUs, Standard Seafarers. **60 accepted human UI actions**, automatic CPU turns, a CPU winner after 62 turns, scores 10/7/4, reload retained results and replay created an empty board. Actions included setup, construction, bank trades, development-card purchase/play and robber movement. No game errors or rejected actions. The results screenshot catches the first row during its entrance animation; the outcome includes all three ranked rows.
-- Final C, room `3D4D4T`: one laptop host and nine CPUs, Connect Explorers + Cities & Knights + fishing. Hand/Board tabs, preserved selected road, Rules access and CPU guidance checked. Both host viewports (1280×720 and 1920×1080) were captured and the maximum-roster layout inspected. C removes a strip of scene background between the hand and tabs and describes CPU decisions as automatic rather than waiting on a phone; game rules are identical to A. B and C have identical built client hashes after removing an unused import.
-- Final C, room `RU8VM2`: watching laptop, one real UI-joined emulated phone and nine CPUs. Phone layouts at 320×568, 390×844, 667×375 and 844×390 had no horizontal document overflow and no Three canvas. Human city/road placement triggered automatic CPU setup. Navigating the sole phone away paused at game revision 6; it stayed there until the same phone/seat rejoined, then advanced to revision 10. Setup finished and nine further driver actions reached expansion movement in round one, including fish roll, sailing and settlement landing. No game errors or rejected actions; largest observed snapshot 123,275 bytes.
+## Automated checks (run from the platform root)
 
-Evidence under `output/playwright/island-settlers/`: `cpu-all-tests.txt`, `cpu-small-matches.txt`, `cpu-integration-tests.txt`, `cpu-types.txt`, `cpu-lint.txt`, `cpu-full-5.txt`, `cpu-layout-retry.txt`, `cpu-max-layout-result.txt`, `cpu-phone-layout-final.txt`, `cpu-phone-flow-final.txt`, and `cpu-{board,max-board,phone,ten}-*.png`. One rules selector was corrected from “Rules topic” to “Rule topic.” A room-cleanup runner omitted the confirmation dialog, and an early phone runner checked for Watch only before it loaded; both runner issues were corrected. The accidental two-human room is not counted as solo-phone evidence.
-
-The policy is a basic strategy level, without difficulty selection, proactive offers or counteroffers. CPU trade correctness is tested at the rules layer; a human/CPU negotiated exchange was not separately completed in the browser. Human balance, teaching clarity, physical phones and TV-distance readability remain release gates. The code-golf skill was unavailable; manual simplification reused the existing QA policies and authoritative offer eligibility instead of duplicating rules. No Prettier or git publication. Owned browser `settlers-cpu-0914` and isolated server port 4389 were closed after verification.
-
-## Background soundtrack · 13 September 2026
-
-Final build `settlers-music-20260913-b`, index SHA-256 `00f24209c829071fa3891d25a0db320f8c7be9ab6e2b65cab2830d3efeab123b`. Three user-supplied MP3s are copied byte-for-byte with source filenames and SHA-256 hashes in the public music manifest. The existing AudioView hook owns one streaming media element on the host, independently of its player seat. It plays only during a connected, visible round, follows the platform sound preference, pauses in place, wraps the playlist and releases the source on disposal.
-
-- Build A, room `52462R`: ten real UI-joined synthetic phones. Host playback decoded each supplied MP3; seeking near each ending exercised real ended events through all three tracks and back to the first. Durations: 191.84, 480 and 516.92 seconds. One host media element at volume 0.22; zero audio elements or soundtrack requests on all ten phones. Sound off paused at 52.41 seconds and Sound on resumed.
-- Offline emulation interrupted media requests but did not give a reliable room-socket disconnect check. It exposed an exhausted-playlist recovery defect. B permits a bounded retry after reconnection, restored visibility or a trusted gesture; ordinary updates still do not loop missing-file retries.
-- Final B, three-player room `HFBELE`: saved mute survived reload with playback paused at zero. Deliberately aborting all three asset requests stopped playback; restoring requests and toggling Sound on recovered real MP3 playback. End round paused the track; Close room removed its source. A QA selector initially looked for the in-game Room menu after returning to the lobby; corrected to the actual Close room control and reran successfully.
-- Four scoped music tests pass: order/wrap, pause/resume, missing-file bounds/recovery, blocked autoplay and disposal. Scoped Island Settlers TypeScript, lint, immutable build and diff checks pass. Whole-project typecheck is blocked by unrelated current Blockwild client/terrain test errors, recorded in `music-types.txt`. No changes to Blockwild or shared runtime files.
-
-Evidence: `output/playwright/island-settlers/music-check-result.txt`, `music-recovery-result.txt`, `music-tests.txt`, `music-scoped-types.txt`, `music-types.txt`. Browser verification establishes media decoding/playback state, not a human listening review or physical TV/phone volume check. Full-duration listening and live socket-disconnect recovery were not separately verified. Earlier complete-game/replay evidence applies to unchanged game rules. Code-golf skill unavailable; manual simplification retained one media element and the existing lifecycle hook. Owned browsers and ports 4355/4356 were closed, then browser ownership handed to Blockwild.
-
-## In-game rules reference · 13 September 2026
-
-Final build `settlers-rules-20260913-b`, index SHA-256 `fb8eb6a4a5b15a92a60fd1f32e2f5cb693e7a033ef84a1e24f44faf983effcd5`. A 57×44px Rules button in the phone header opens the shared accessible modal. Topic content reads only room settings and roster count; building costs come from the shared cost constants. The controller stays mounted. Content follows the implemented rules and conditionally replaces ordinary card/robber/award advice where expansions differ. The About topic links to official tabletop rulebooks and explains adaptations.
-
-- Build A: ten-player Connect room `UNBR2W`, Seafarers + Cities & Knights + all five Traders & Barbarians scenarios. All 16 applicable topics selected at 320×568, 390×844, 667×375 and 844×390. Dialogs remained within the viewport without horizontal overflow; screenshots inspected. Escape, focus containment/restoration and top/back dismissal passed. A selected map spot survived every open/close cycle, then its placement was accepted. Waiting-player access passed; another 40 setup/choice actions were accepted without errors.
-- Labeled rules-only fixtures: three-player Base and Explorers with only the fish mission. Checked base cards/awards/variants, exclusion of disabled expansions, and exclusion of unselected missions. All topic layouts fit 320px. These are fixtures, not played matches.
-- Final B: three-player Connect expedition room `EPH2RB`, 36 accepted actions including sailing, cargo and settlement landing. At round two during action, opening rules sent no action and the countdown continued from 58 to 56 seconds. Changing topics after scrolling reset the dialog to the beginning. B adds that scroll reset and corrects defense/delivery card descriptions; it otherwise retains A’s layout.
-- TypeScript, scoped lint, isolated builds and diff checks passed. No rules-engine changes or new rules tests. Earlier complete-game/replay evidence below remains applicable. Physical phones were not tested. Code-golf skill unavailable; manual simplification kept the feature in one game-owned component plus scoped styles.
-
-Evidence: `output/playwright/island-settlers/rules-check-result.txt`, `rules-fixture-result.txt`, `rules-flow-b-result.txt`, `rules-final-result.txt`, `rules-{320,390,667,844}.png`, `rules-fixture-{base,explorers}.png`, and `rules-button-320.png`. Owned browsers and previews on ports 4353/4354 were closed afterward.
-
-## Phone map spacing · 13 September 2026
-
-CSS-only refinement: the Island Settlers phone shell uses a safe-area-aware 4px gutter, map tasks add 4px, and nested expansion fields add none. Map panels have no border and an 8px corner radius; waiting maps use the same inset. Other game shells and the host HUD are unchanged.
-
-Isolated build `settlers-phone-map-20260913`, index SHA-256 `7f985e94754688e1304036c44eff30699cec410cd3c3a3ba9a20739cc3be2619`. Real room `6AVL5K` joined ten synthetic phones with Explorers & Pirates, Cities & Knights and fishing. At 320×568 and 390×844 the map measured 304px and 374px wide with exactly 8px on either side. At 667×375 and 844×390 it retained the landscape columns without horizontal overflow. All zoom controls remained 44×44px. Zoom/reset and a placement were exercised, followed by 40 accepted setup/roll actions with no game errors. Waiting-map and labeled nested expansion-layout fixture checks also measured 8px side insets at 320px. Screenshots inspected.
-
-Evidence: `output/playwright/island-settlers/map-check-result.txt`, `map-flow-result.txt`, `map-secondary-result.txt`, `map-{320,390,667,844}.png`, and `map-expansion-fixture-320.png`. Build and scoped diff checks passed. Earlier complete-game/replay evidence below applies to unchanged rules. No new rules tests were needed for CSS spacing; physical devices were not tested. The code-golf skill remains unavailable; manual simplification kept this to scoped CSS selectors without component changes. Owned preview/browser sessions were closed after verification.
-
-## Current expansion candidate
-
-`settlers-expansions-20260912-e`, index SHA-256 `8095b95b6211177ad4e018c27cebfdb7b75e96e523a0bef1d5b0f479f12d8545`.
-
-Fable authored the host/phone UI and animations, then repaired the maximum-roster layout and Council landmark label from screenshots. Codex implemented rules, integration and verification. Objects remain procedural geometry; no Blender assets were needed. The final source includes the compact 36-hex expedition discovery ring, per-seat city-improvement strips, paged status panels and the shared private command UI. E also repairs the pinned phone footer so its hint has an opaque background and every action can scroll above it.
-
-- Full-project TypeScript and scoped game lint passed on the final source.
-- Full repository suite on expansion build B source: **871 passed, 1 skipped, 0 failed**. The first sandboxed attempt stalled in network tests; it was stopped and rerun with local networking enabled. No networking code was changed for that test-environment issue.
-- Final game and registry checks: **111 passed**, including 89 Island Settlers tests and 22 registry projection checks. Covers complete seeded ten-player matches with Base, Seafarers and Explorers & Pirates in both Standard and Connect, finite inventories, privacy, cargo, missions, progress choices, coastal displacement, compatibility and deadline continuation.
-- No Prettier, commits, pushes, PRs, deployment or global browser cleanup.
-- The requested code-golf skill was not installed. A manual simplification pass removed unused expansion scaffolding/imports and shared the browser driver between base and expansion tests.
-
-## Real UI acceptance
-
-All joins, settings, readiness, placements, choices and replay actions below went through the UI. WebSockets were observed for snapshots and acknowledgements, never used to inject actions or hidden state. Ten-player runs used separate headless phone contexts, emulated touch and 16-character names.
-
-| Run | Result |
+| Check | Result |
 | --- | --- |
-| A: Standard, ten players, Seafarers + Cities & Knights + all five Traders & Barbarians scenarios | Room `UQHPXU`: **1,239 accepted UI actions**, no rejected game actions or game errors, a real 10-point winner, ten ranked results, host reload retained results, replay reset the board and expansion state. Includes caravan decisions, commodity trades, improvements, progress plays, knights and wagon movement/upgrades. |
-| B: Standard, ten players, Explorers & Pirates + Cities & Knights + fishing | Room `36Z67N`: **1,433 accepted UI actions**, no game errors, real 10-point results and clean replay. Includes 219 ship moves, 9 settler landings, 9 harbor upgrades, cargo purchases/transfers, crew landing, fish loading and a Council delivery. Peak observed snapshot 210,521 bytes. |
-| C: Connect, ten players, final compact expedition map + Cities & Knights + fishing | Room `5Z4X3F`: **120 accepted UI actions** across three rounds, including discoveries, landings and movement while other phones were still building. Phone disconnect paused play; returning retained the same seat/hand and restored elapsed clock time. Host reload retained the round. Full Connect completion is covered by simulation, not a complete Connect browser match. |
-| D: Council-label repair, three-player Standard expedition smoke | Room `W3CSQU`: **40 accepted UI actions** through real joins, setup and four turns, including movement, three landings, a city improvement and knight actions. Corrected Council label verified; no game errors. |
-| E: Final compiled candidate, three-player expedition smoke and phone-footer check | Room `3D5YNX`: **40 accepted UI actions**, no errors. At 320×568 and 390×844 the complete footer is opaque, its hint stays inside the panel, and the last action scrolls fully above it. Screenshots inspected. |
+| `npm run typecheck` | 0 errors |
+| `npm run lint` (oxlint on apps, packages, game-modules, tests, scripts) | exit 0, no diagnostics |
+| `npm test` (full platform suite, includes this game's `tests/all.test.ts`) | 1,911 tests: 1,910 pass, 1 skipped, 0 fail (358 s) |
+| `node --import tsx --test tests/registry-contract.test.ts tests/catalog.test.ts` | 36 pass |
+| `node --import tsx --test packages/games/island-settlers/tests/all.test.ts` | 415 pass, 0 fail (278 s) |
+| `npm run build:isolated -- settlers-v2-final-09240107` | Built |
 
-The UI driver required repairs for changed button labels, duplicate progress-card labels and the two different ship-purchase buttons. Those selector failures sent no rejected game actions and were resumed in the existing rooms. Browser repair history is distinct from game-rule failures.
+The game suite covers board generation (50 seeds per map and size; `BOARD_SEEDS=500` for the full
+sweep), stage flow, timers and auto-play, Connect rounds, trades, dev cards, scoring, every module and
+their combinations, CPU legality sweeps at 3–10 seats in both modes, complete CPU-only games, fuzzing,
+UI logic, scene data and model budgets.
 
-Builds A/B establish full gameplay and replay. C retests the subsequent map and layout refinements. D changes only the Council label relative to C’s game rules; E changes only action-bar CSS relative to D. Both have compiled smoke checks, and E has focused phone reachability checks.
+## Real browser runs (final build)
 
-## Rendering evidence
+Headless Chromium through `tests/browser/driver.mjs`: every move is chosen by the CPU brain from the
+phone's own view and executed by pressing the real UI. Nothing is injected.
 
-- Real host screenshots inspected at **1280×720 and 1920×1080**; phone screenshots at **320×568 and 390×844**. Phones use the lightweight SVG map with no Three canvas and no horizontal document overflow.
-- A labeled, hydrated maximum-content HUD fixture checks ten seats with city tracks, awards, defenders, coins, fish, prisoners and wagon status. It is separate from real-room acceptance. At 1280px all ten seat cards measured 111px client/scroll width; at 1920px all measured 143px. No protruding improvement strips.
-- The status list automatically pages at both host sizes, pauses while focused, and displays the last partial page correctly. The ticker retains 143.5px height at 720p and 295.4px at 1080p in that fixture. Maximum content takes several pages by design.
-- Initial observed defects were clipped city tracks/sidebar panels, an oversized expedition map span, and a Council vertex/player-ID label mix-up. Current evidence covers their repairs.
+| Run | Setup | Result |
+| --- | --- | --- |
+| Full game, room `Q33RS7` (`tests/browser/m3.mjs`) | Watching TV 1920×1080, 2 phones 390×844 (16-character names), 2 Normal CPUs; Standard, Base, 10 VP, Relaxed timers | Join → setup → 14 rounds, 54 opportunities → CPU winner at 11 VP (reason `target`) → finale → results (4 ranked rows) → Play again started a fresh empty setup. 183 accepted phone actions (26 roll, 17 build, 21 offer, 58 respond, 20 withdraw, 9 bank, 1 confirm-trade, 3 buy-dev, 2 answer, 26 end), 0 rejected, 0 UI misses, 0 page/console/server errors. 321 s |
+| C&K + Seafarers smoke, room `CA3ZTB` (`output/settlers-v2/w4/final/ck-sea.mjs`) | TV 1920×1080 at 2× pixel ratio, 2 phones 390×844, 2 Normal CPUs; Standard, New Shores + C&K, suggested target 16 | Setup + 3 full rounds (stopped at round 4): 56 accepted actions including 2 module commands and 2 prompt answers, 0 rejected, 0 errors |
 
-Current ignored artifacts in the parent repository:
+Screenshots in `output/settlers-v2/w4/final/` (parent repo, ignored), all inspected:
 
-- `output/playwright/island-settlers/exp-current.json`, `exp-results-1280.png`: A results/replay.
-- `exp-b-ep-current.json`, `exp-b-ep-results-1280.png`: B results/replay and action counts.
-- `exp-c-connect-final.txt`, `exp-c-recovery-result.txt`, `exp-c-ep-host-board-1280.png`, `exp-c-ep-host-board-1920.png`: compact map, Connect overlap and recovery.
-- `exp-c-fixture-result.txt`, `exp-c-fixture-1280.png`, `exp-c-fixture-1920.png`: maximum-content layout and paging.
-- `exp-d-smoke-result.txt`, `exp-d-inspect.txt`, `exp-d-final-host.png`, `exp-d-final-phone.png`: Council-label repair.
-- `exp-e-smoke-result.txt`, `exp-e-footer-result.txt`, `exp-e-footer-320.png`, `exp-e-footer-390.png`: final candidate and footer reachability.
-- `output/island-settlers/expansion-final-tests.txt`, `expansion-full-suite-network.txt`, `expansion-d-types.txt`, `expansion-d-lint.txt`: checks.
+- `game/a01`–`a15`: lobby, TV and phone setup, roll, offers, midgame, finale ("Theo wins! Revealing
+  hidden points"), TV and phone results, replay setup.
+- `ck-sea/tv-round1`–`4`, `tv-last`, `phone-last`, `crop-0`–`4`: C&K barbarian track and metropolis
+  panel, outer islands, phone commodity hand.
+- `tokens-zoom-2x.png`: a 2× crop of the C&K board with cities, settlements and roads beside number
+  tokens. Tokens sit at hex centres and cover no piece.
 
-Reproduce through `tests/browser-expansions.js` and `tests/prepare-browser.mjs expansions`; the base driver reuses that implementation. Configure only the QA driver’s options, then let it select those settings through the UI. Use isolated builds/owned rooms and bounded batches. It is a test player, not a shipped AI opponent.
+Earlier wave 4 evidence (not rerun on this build): a 10-phone roster on a 1280×720 TV (320 accepted
+actions), a seated host at 1280×720, phones at 320×568, 667×375 and 844×390 to results and replay,
+and the repair-ui C&K + New Shores phone checks, under
+`output/settlers-v2/w4/{qa,fix-ui,repair-ui}/`.
 
-## Remaining release gates
+## Observations from this run
 
-Human playtests must establish teaching clarity, negotiation feel, large-roster balance, combined-expansion pacing and couch-distance readability. Physical iOS/Android phones, older laptops and real Wi-Fi disruptions remain untested. Do not equate emulation or automated game completion with those checks. Approximately one hour remains a goal, especially uncertain with many expansions.
+- Results "Cities" and "Settlements" columns show points, not counts (4 cities show 8). Readable in
+  context, but the header could mislead.
+- In the offers capture the TV offer card is dimmed; it may be mid-animation.
+- On New Shores the phone map is small because the frame includes every outer island (known;
+  refitting as fog is explored is deferred).
 
-This implementation provides the major mechanics and supported combinations on generated maps. It does not include every published scenario/campaign, Event Cards, CATAN for Two, production AI opponents, or durable save/resume across server restarts. The official combination guidance is supplemented by documented PartyPlay map and 7–10-player adaptations. The compatibility matrix was not exhaustively human-playtested.
+## Remaining gaps
 
-Owned QA sessions A–E and servers on ports 4347–4351 were closed after verification; other user sessions/servers were preserved.
-
----
-
-The following is retained history from the earlier Base/Seafarers batch, not the current candidate’s status.
-
-# Earlier Base/Seafarers verification
-
-2026-09-12. **Playable first version, still in progress.** Standard and Connect-style, base island and the Open Seas Seafarers scenario support 3–10 human players. Human pacing, balance and physical-device testing remain release gates.
-
-## Current source and build status
-
-Claude Fable finished the frontend and successive repairs; Codex implemented rules, integration and verification. The last frontend change fixes the final partial offer-page label and pauses automatic scrolling during mouse/keyboard reading. That exact source passed a hydrated browser component check, scoped TypeScript and lint.
-
-The final successful collection build is `settlers-20260912-e`, index SHA-256 `35f892404a653031962ef80233a2a102d49f2d29bd24c0672ac83b6c0cbac913`. It includes the final offer-paging repair. Full-project TypeScript and lint passed. A three-player base-mode smoke test checked that final bundle; complete-match and maximum-roster evidence from earlier builds remains applicable to the unchanged rules and phone flows, with focused checks for the later visual repairs.
-
-An intermediate build (`settlers-20260912-d`) was blocked while concurrent Sky Clash work referenced a client file that did not yet exist. Once that separate file appeared, the final build and static checks passed. No Sky Clash files or registrations were reverted. During those edits the older QA server also logged `Catalog unavailable: Unknown room game: sky-clash`; existing rooms continued working, but catalog refreshes returned 503. This resolved build interruption is kept here to explain the intermediate logs.
-
-## Automated checks
-
-- Full project suite passed before the concurrent incomplete Sky Clash registration: **775 passed, 1 skipped, 0 failed** (776 total).
-- Final Island Settlers rules run: **51 passed**, including all roster sizes 3–10 with both expansions and both turn styles, transport serialization, atomic rejection, privacy, scoring, trades, robber/discards, gold/bank shortages, pre-roll cards, ships, pause/reconnect and fresh state.
-- Seeded ten-player simulations complete in Standard and Connect-style using public/private phone projections only, with resource conservation checked after every action. These are simulations, not human-duration evidence.
-- Shared WebSocket tests verify more than 256 actions, retained deduplication acknowledgements, payload limits and bounded registration configuration.
-- Final full and scoped TypeScript and lint passed. Diff whitespace checks passed. No Prettier was run.
-
-## Real multiplayer browser acceptance
-
-All acceptance actions used the UI. The driver observed WebSocket snapshots and acknowledgements to choose legal moves; it did not inject hidden state or send game actions directly. The maximum roster used ten separate headless phone contexts and 16-character player names.
-
-| Check | Evidence |
-| --- | --- |
-| Standard + Seafarers, ten players | Room `MBNRDH`, build A: joined, readied, placed both starting settlements/routes, played to a real 10-point winner at turn 133. **881 accepted acknowledgements, zero rejected moves**, including focused barter checks. All 50 development cards were bought during play. |
-| Results and replay | Ten ranked results, results survive host reload, Play again readies all ten seats and starts with zero roads/buildings/offers. |
-| Negotiation | Off-turn proposal, active-player acceptance and proposer confirmation transfer exactly the chosen cards. Ten simultaneous offers posted through phones. |
-| Recovery | Phone reload retains its seat and exact hand; host reload retains the round and board. |
-| Base + Standard, three players | Build E: real joins, readiness, snake setup and active turns in the final compiled client. |
-| Connect + Seafarers, ten players | Builds B and C: complete snake setup, 20 ready submissions across two active rounds, shared automatic production, ship placement and a confirmed old-ship move. Connect trades and phone/host reloads passed. A full Connect browser match was not repeated; its full completion is covered by the rules simulation. |
-| Game switching | Build C: Island Settlers → Quip Clash → Island Settlers preserves all ten seats, removes the old scene and starts a clean board. |
-| Phone interaction | Real emulated touch cancellation does not select a ship; a normal tap selects it and confirmation moves it. Measured target width 43.93 CSS px (44px rounding). |
-| Phone rendering | 320×568 and 390×844: no horizontal document overflow; zero Three canvases on phones. |
-| Host rendering | 1280×720 and 1920×1080, ten seats. Upright number tokens, visible islands and wrapped HUD text inspected in screenshots. |
-| Ten-offer containment | Final integrated layout: scrollable list bottom 539.61px, player rail begins 557.39px. Offers remain inside their panel. |
-| Final paging repair | Hydrated component fixture from the final source: automatically advances, identifies the last partial page correctly, holds position while focused, resumes after blur, and remains above the player rail. No component runtime errors. |
-
-Build A reported no browser/runtime or game-protocol errors. Later game checks likewise had no game runtime or rejected-action errors; the unrelated catalog HTTP errors above are not counted as a clean browser console.
-
-## Dense layout fixtures
-
-Separate synthetic rendered fixtures tested ten offers with nine acceptors, five resource types split across maximum-size trade requests, a 240-resource hand, 40 non-victory development cards, and a 120-card discard. Host fixtures fit 1280px, phone fixtures fit 320px, and offer lists remain above the player rail. These verify rendering, not normal match balance or acceptance of fabricated room actions. They never connect to or change a game room.
-
-A headless host sample recorded 4,474 rendered frames, p95 frame interval 16.7ms, zero sampled slow frames, 535 draw calls, 29,974 triangles, 12 geometries and 35 textures at pixel ratio 1. This is a development-machine observation, not a performance guarantee for TVs or older laptops.
-
-## Evidence and reproduction
-
-Parent-repository evidence is under `output/playwright/island-settlers/` (ignored local artifacts):
-
-- `acceptance-a.txt`, `flow-14-results.txt`, `results-1280.png`: complete match and replay.
-- `c-flow.txt`, `c-trade.txt`, `switch-games.txt`: final integrated multiplayer checks.
-- `c-host-board-1280.png`, `c-host-board-1920.png`, `c-host-offers-1280.png`: inspected host renders.
-- `touch-metrics.txt`, `b-phone-actions-320.png`, `b-phone-actions-390.png`: touch, layout and rendering measurements.
-- `fixtures-final.txt`, `fixture-*.png`: dense layout evidence.
-- `live-paging.txt`, `final-offer-paging.png`: final-source interactive component verification.
-- `e-base.txt`, `acceptance-e.txt`: final collection build smoke test.
-
-The game-owned `tests/browser-flow.js` records the repeatable Standard UI driver. From the parent, run `node packages/games/island-settlers/tests/prepare-browser.mjs` to prepare `output/playwright/island-settlers/flow.js`. Open a uniquely named Playwright CLI session on an isolated server's Island Settlers details page, add the game to that browser's library, then run the file in bounded batches until it reports `complete` and `replayed`. It creates synthetic phones and must only be used in an owned QA room. The additional focused scripts remain with the local evidence.
-
-QA browser sessions: `settlers-0912`, `settlers-0912-b`, `settlers-0912-c`, `settlers-final-fixture`, `settlers-final-build`. Owned server port: 4387. All owned QA rooms, browser sessions and servers were closed after checks; the user's other servers were preserved.
-
-## Remaining release work
-
-- Human playtests at small and large rosters: teaching clarity, negotiation feel, turn waiting, starting-position balance, island incentives and the approximate one-hour target. Ten-player Standard may run substantially longer.
-- Physical iOS/Android devices, older phones/laptops, real Wi-Fi interruptions and couch-distance TV readability. Browser emulation is not physical-device evidence.
-- More Seafarers scenarios and the other expansions. Open Seas is one generated scenario, not the published scenario campaign. Connect-style and seven-to-ten-player Standard are documented adaptations.
-- Durable host save/resume remains deferred. Reload recovery works while the existing room survives; server restarts lose the room. Disconnected seats pause play until they return.
-- Promote a build through the normal project workflow after human acceptance. No commits, pushes, PRs or deployment were performed.
-
-## Repair history
-
-The first TV render had small, sideways number tokens and HUD overlap. Fable replaced the cap textures with upright labels, measured the available HUD space and enlarged pieces. Real ten-offer testing exposed vertical overflow; Fable bounded and paginated that column. The harbour legend then exposed intrinsic-width overflow in the right grid, which Fable repaired. Final partial-page numbering and automatic-scroll interruption were checked in the independent live component fixture.
-
-Early browser-runner attempts needed corrected selectors for the actual results component and a wait for game revisions rather than the platform's ticking revision. A later paging attempt crossed a Connect deadline, which correctly cleared offers; another checked keyboard scrolling before its animation settled. These runner failures are not counted as accepted gameplay checks.
+- No physical iOS/Android phones, TVs or older laptops; emulated viewports only.
+- TV readability at couch distance is untested.
+- Human pacing, teaching clarity, negotiation feel and balance (large rosters, combined expansions)
+  need human playtests. CPU game lengths are not human durations.
+- This build's browser runs cover one full Base game and a short C&K + Seafarers game. Connect,
+  Explorers & Pirates, Traders & Barbarians scenarios and 10-seat games rely on the automated suite
+  and earlier wave 4 browser runs.
+- Deferred rules gaps are listed in [EXPANSIONS.md](EXPANSIONS.md) and ENGINE §19.

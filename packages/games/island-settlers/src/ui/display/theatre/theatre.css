@@ -1,0 +1,140 @@
+/* WP-theatre: dice chip, flights, production strip, finale pieces. 1u = stage height / 980. */
+.island-settlers-theatre {
+  position: absolute; inset: 0; pointer-events: none; container-type: size; --u: calc(100cqh / 980);
+  font-family: var(--font-body); color: var(--kp-cream); z-index: 4;
+}
+.island-settlers-theatre * { box-sizing: border-box; }
+
+/* Panels share the HUD look: navy 90 %, 2u cream-14 % border, 18u radius. */
+.island-settlers-dice, .island-settlers-strip {
+  background: var(--is-panel); border: calc(2 * var(--u)) solid var(--is-panel-border);
+  border-radius: calc(18 * var(--u)); box-shadow: 0 calc(6 * var(--u)) calc(18 * var(--u)) rgb(5 7 26 / 0.35);
+}
+
+/* Dice chip (248×88u): two 60u dice, or three 52u dice in Cities & Knights, then the total disc. */
+.island-settlers-dice {
+  height: 100%; display: flex; align-items: center; justify-content: center; gap: calc(10 * var(--u));
+  padding: 0 calc(12 * var(--u));
+}
+.island-settlers-dice[data-ck] { gap: calc(6 * var(--u)); }
+.island-settlers-die {
+  display: block; width: calc(60 * var(--u)); height: calc(60 * var(--u)); flex: none; transform-origin: 50% 90%;
+  filter: drop-shadow(0 calc(4 * var(--u)) 0 var(--kp-ink));
+}
+.island-settlers-dice[data-ck] .island-settlers-die { width: calc(52 * var(--u)); height: calc(52 * var(--u)); }
+.island-settlers-die > svg { display: block; width: 100%; height: 100%; }
+
+/* Roll totals look like the board's number tokens: cream disc, 6/8 in token red, a 7 in coral. */
+.island-settlers-total, .island-settlers-disc {
+  position: relative; display: grid; place-items: center; flex: none; border-radius: 50%;
+  background: var(--kp-cream); color: var(--kp-ink); border: calc(3 * var(--u)) solid var(--kp-ink);
+  line-height: 1; letter-spacing: -0.02em;
+}
+.island-settlers-total {
+  width: calc(68 * var(--u)); height: calc(68 * var(--u)); margin-left: calc(4 * var(--u));
+  font-size: max(22px, calc(44 * var(--u))); box-shadow: 0 calc(4 * var(--u)) 0 var(--kp-ink);
+}
+.island-settlers-dice[data-ck] .island-settlers-total { width: calc(56 * var(--u)); height: calc(56 * var(--u));
+  font-size: max(20px, calc(36 * var(--u))); margin-left: 0; }
+:is(.island-settlers-total, .island-settlers-disc)[data-tone='hot'] { color: #c62a22; }
+:is(.island-settlers-total, .island-settlers-disc)[data-tone='seven'] { background: var(--kp-coral); }
+.island-settlers-total-robber {
+  position: absolute; right: calc(-8 * var(--u)); top: calc(-8 * var(--u)); width: calc(28 * var(--u));
+  height: calc(28 * var(--u)); padding: calc(4 * var(--u)); border-radius: 50%; background: var(--kp-ink);
+  color: var(--kp-sun);
+}
+
+/* Flights: absolutely placed at the stage origin, moved by transform each frame. */
+.island-settlers-flight { position: absolute; left: 0; top: 0; will-change: transform; z-index: 2; }
+.island-settlers-flight[data-steal] { z-index: 3; }
+.island-settlers-card-stack { position: relative; display: block; width: calc(36 * var(--u)); height: calc(48 * var(--u)); }
+.island-settlers-card {
+  position: absolute; inset: 0; display: grid; place-items: center; color: var(--kp-ink);
+  background: var(--good); border: calc(2.5 * var(--u)) solid var(--kp-ink); border-radius: calc(7 * var(--u));
+  box-shadow: inset 0 0 0 calc(2 * var(--u)) var(--good-deep), 0 calc(4 * var(--u)) 0 var(--kp-ink);
+  transform: translateX(calc(var(--i, 0) * 10 * var(--u))) rotate(calc(var(--i, 0) * 7deg));
+}
+.island-settlers-card-badge {
+  position: absolute; right: calc(-14 * var(--u)); top: calc(-12 * var(--u)); z-index: 1;
+  min-width: calc(30 * var(--u)); height: calc(30 * var(--u)); padding: 0 calc(5 * var(--u));
+  display: grid; place-items: center; border-radius: 999px; background: var(--kp-ink); color: var(--kp-cream);
+  border: calc(2 * var(--u)) solid var(--kp-cream); font-size: max(13px, calc(20 * var(--u)));
+}
+.island-settlers-card-stack[data-count='2'] .island-settlers-card-badge { right: calc(-24 * var(--u)); }
+.island-settlers-card-stack:is([data-count='3'], [data-count='4'], [data-count='5']) .island-settlers-card-badge {
+  right: calc(-34 * var(--u));
+}
+.island-settlers-card-back {
+  position: relative; width: calc(40 * var(--u)); height: calc(54 * var(--u)); background: var(--kp-navy);
+  border-color: var(--kp-cream); box-shadow: inset 0 0 0 calc(3 * var(--u)) #1f2757, 0 calc(4 * var(--u)) 0 var(--kp-ink);
+}
+.island-settlers-card-back svg { width: 70%; fill: var(--kp-sun); stroke: var(--kp-sun); stroke-width: 1.8;
+  stroke-linecap: round; }
+
+/* Robber ping on a hex: a cream ring that widens and fades around a robber badge. */
+.island-settlers-ping {
+  position: absolute; left: 0; top: 0; width: var(--size); height: var(--size); display: grid; place-items: center;
+  opacity: var(--fade);
+}
+.island-settlers-ping::before {
+  content: ''; position: absolute; inset: 0; border-radius: 50%; border: calc(4 * var(--u)) solid var(--kp-cream);
+  transform: scale(var(--ring)); box-shadow: 0 0 0 calc(2 * var(--u)) var(--kp-ink);
+}
+.island-settlers-ping > svg {
+  width: calc(38 * var(--u)); height: calc(38 * var(--u)); padding: calc(6 * var(--u)); border-radius: 50%;
+  background: var(--kp-cream); color: var(--kp-ink); border: calc(2.5 * var(--u)) solid var(--kp-ink);
+}
+
+
+/* Production strip (64u, 48u for the host): disc, seat chips, notes. Never wraps. */
+.island-settlers-strip-slot { display: flex; align-items: stretch; }
+.island-settlers-strip {
+  display: flex; align-items: center; gap: calc(14 * var(--u)); max-width: 100%; white-space: nowrap;
+  padding: 0 calc(18 * var(--u)) 0 calc(8 * var(--u)); font-size: max(13px, calc(20 * var(--u))); font-weight: 800;
+}
+.island-settlers-disc { width: calc(48 * var(--u)); height: calc(48 * var(--u)); font-size: max(16px, calc(28 * var(--u))); }
+.island-settlers-strip-slot[data-host] .island-settlers-disc { width: calc(38 * var(--u)); height: calc(38 * var(--u));
+  font-size: max(14px, calc(22 * var(--u))); }
+.island-settlers-strip ul { display: flex; gap: calc(8 * var(--u)); margin: 0; padding: 0; list-style: none; }
+.island-settlers-strip-chip {
+  display: inline-flex; align-items: center; gap: calc(5 * var(--u)); height: calc(40 * var(--u));
+  padding: 0 calc(8 * var(--u)) 0 calc(5 * var(--u)); border-radius: 999px; background: rgb(255 246 229 / 0.08);
+  border: calc(2 * var(--u)) solid rgb(255 246 229 / 0.12);
+}
+.island-settlers-strip-chip b { font-size: max(14px, calc(22 * var(--u))); color: var(--kp-lime); }
+.island-settlers-strip-chip[data-blocked] { border-style: dashed; border-color: rgb(255 87 72 / 0.7);
+  color: var(--is-dim); font-size: max(12px, calc(18 * var(--u))); }
+.island-settlers-strip-robber { width: calc(22 * var(--u)); height: calc(22 * var(--u)); color: var(--kp-coral); }
+/* Fanned mini cards: 22u tall, each tucked 12u under the next. */
+.island-settlers-fan { display: inline-flex; padding-left: calc(12 * var(--u)); }
+.island-settlers-fan > span {
+  display: grid; place-items: center; width: calc(19 * var(--u)); height: calc(26 * var(--u));
+  margin-left: calc(-12 * var(--u)); border-radius: calc(4 * var(--u)); background: var(--good); color: var(--kp-ink);
+  border: calc(2 * var(--u)) solid var(--kp-ink); transform: rotate(calc(var(--i) * 6deg - 6deg));
+}
+.island-settlers-fan svg { width: 88%; height: 88%; }
+.island-settlers-strip-note { display: flex; align-items: center; gap: calc(8 * var(--u)); margin: 0; }
+.island-settlers-strip-note [data-dot] { color: var(--is-dim); }
+.island-settlers-mention { display: inline-flex; align-items: center; gap: calc(5 * var(--u)); }
+
+/* Seat-row "+2 grain" chips in the row's [data-seat-gains] slot (line 2, beside the VP numeral). */
+.island-settlers-gains {
+  position: absolute; left: 0; top: 0; display: flex; justify-content: flex-end; gap: calc(4 * var(--u));
+  overflow: hidden; padding-bottom: calc(3 * var(--u)); z-index: 1;
+}
+.island-settlers-gain {
+  display: inline-flex; align-items: center; gap: calc(3 * var(--u)); padding: 0 calc(8 * var(--u));
+  height: calc(30 * var(--u)); border-radius: 999px; background: var(--good); color: var(--kp-ink);
+  border: calc(2 * var(--u)) solid var(--kp-ink); font-size: max(13px, calc(20 * var(--u))); font-weight: 800;
+  white-space: nowrap; transform-origin: 100% 50%; box-shadow: 0 calc(3 * var(--u)) 0 var(--kp-ink);
+}
+.island-settlers-gains:not([data-words]) .island-settlers-gain-word { display: none; }
+
+/* Finale: a card turns over a seat's VP numeral, "?" on the back, "+2" on the sun face. */
+.island-settlers-flip {
+  position: absolute; left: 0; top: 0; display: grid; place-items: center; border-radius: calc(8 * var(--u));
+  background: #1f2757; color: var(--kp-cream); border: calc(3 * var(--u)) solid var(--kp-cream);
+  font-size: max(18px, calc(32 * var(--u))); box-shadow: 0 calc(4 * var(--u)) 0 var(--kp-ink); z-index: 2;
+}
+.island-settlers-flip[data-face] { background: var(--kp-sun); color: var(--kp-ink); border-color: var(--kp-ink); }
+.island-settlers-flip[data-face] > b { transform: scaleX(-1); }

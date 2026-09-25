@@ -1,0 +1,285 @@
+/* Trade UI: phone Trade tab, host dock sheet and the TV offer rail. Phone sizes in px, TV sizes in u. */
+.island-settlers-trade {
+  container-type: inline-size; display: grid; gap: 12px; align-content: start; color: var(--kp-cream);
+  --tcard-w: 64px; --tcard-h: 84px; --tcard-icon: 28px; --tok: 34px;
+}
+.island-settlers-trade h3 { margin: 0; }
+.island-settlers-trade-label {
+  font: 800 13px/1.2 var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: var(--is-dim);
+}
+.island-settlers-trade-why { margin: 0; font-size: 15px; line-height: 1.35; color: var(--is-dim); }
+.island-settlers-trade-why[data-block] { color: var(--kp-sun); font-weight: 800; }
+
+/* Players | Bank segmented control (48px). */
+.island-settlers-segment {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 16px;
+  background: rgb(5 7 26 / .6); border: 2px solid var(--is-panel-border);
+}
+.island-settlers-segment button {
+  min-height: 44px; border: 0; border-radius: 12px; background: transparent; color: var(--kp-cream);
+  font: 1.05rem var(--font-display); letter-spacing: .02em;
+}
+.island-settlers-segment button[aria-pressed="true"] { background: var(--kp-sun); color: var(--kp-ink); }
+.island-settlers-segment button:disabled { color: rgb(255 246 229 / .4); }
+
+.island-settlers-composer { display: grid; gap: 12px; }
+.island-settlers-trade-rows { display: grid; gap: 8px; }
+.island-settlers-trade-row {
+  display: grid; grid-template-columns: repeat(5, var(--tcard-w)); justify-content: space-between; row-gap: 18px;
+  padding: 6px 0 14px;
+}
+.island-settlers-trade-side { display: grid; gap: 10px; align-content: start; }
+.island-settlers-trade-summary { margin: 0; font-size: 18px; font-weight: 800; line-height: 1.3; }
+.island-settlers-trade-counter {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; padding: 4px 4px 4px 14px;
+  border-radius: 14px; background: rgb(181 138 255 / .16); border: 2px solid var(--kp-grape); font-weight: 800;
+}
+.island-settlers-trade-counter .kp-text-button { min-height: 44px; font-size: 15px; }
+.island-settlers-trade-quick, .island-settlers-trade-to {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+}
+.island-settlers-trade-to > .island-settlers-trade-label { width: 100%; }
+.island-settlers-trade-actions { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.island-settlers-trade-actions .kp-btn { margin-bottom: .4rem; }
+.island-settlers-trade-actions .kp-btn-lg { flex: 1 1 8rem; }
+.island-settlers-trade-actions .kp-btn-lime { flex-basis: 100%; }
+
+/* Pills: quick offers and recipients (48px targets). */
+.island-settlers-pill {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 16px; border-radius: 999px;
+  background: rgb(5 7 26 / .55); color: var(--kp-cream); border: 2px solid var(--is-panel-border);
+  font: 800 16px/1.1 var(--font-body); text-align: left;
+}
+.island-settlers-pill:has(.island-settlers-chip) { padding-left: 8px; }
+.island-settlers-pill[aria-pressed="true"] { border-color: var(--kp-sun); background: rgb(255 210 74 / .16); }
+.island-settlers-pill[aria-pressed="true"]::before { content: '✓'; color: var(--kp-sun); }
+.island-settlers-pill:disabled { cursor: default; }
+.island-settlers-pill[data-bank] { border-color: var(--kp-lime); color: var(--kp-lime); }
+.island-settlers-pill[data-short] { opacity: .62; }
+.island-settlers-pill small { color: var(--kp-coral); font-size: 13px; }
+
+/* Tappable resource card. */
+.island-settlers-tcard { position: relative; width: var(--tcard-w); }
+.island-settlers-tcard-face {
+  position: relative; display: grid; justify-items: center; align-content: center; gap: 3px;
+  width: 100%; height: var(--tcard-h); min-height: 0; padding: 10px 2px 14px; border-radius: 10px;
+  background: var(--good); color: var(--kp-ink); border: 2px solid var(--good-deep);
+  box-shadow: 0 3px 0 var(--good-deep); transition: transform 160ms ease-out;
+}
+.island-settlers-tcard-name { font-size: 13px; font-weight: 900; line-height: 1; }
+.island-settlers-tcard-face small { font-size: 12px; font-weight: 800; line-height: 1; opacity: .78; }
+.island-settlers-tcard[data-picked] .island-settlers-tcard-face {
+  transform: translateY(-3px); outline: 3px solid var(--kp-sun); outline-offset: 2px;
+}
+.island-settlers-tcard-face:disabled { cursor: default; }
+.island-settlers-tcard:not([data-picked]) .island-settlers-tcard-face:disabled { filter: saturate(.5); opacity: .7; }
+.island-settlers-tcard[data-empty] .island-settlers-tcard-face {
+  background: transparent; color: var(--kp-cream); border: 2px dashed rgb(255 246 229 / .45); box-shadow: none;
+  opacity: 1; filter: none;
+}
+.island-settlers-tcard[data-empty] .island-settlers-icon { opacity: .45; }
+.island-settlers-tcard-rate {
+  position: absolute; top: 3px; left: 3px; padding: 0 4px; border-radius: 6px; background: var(--kp-sun);
+  color: var(--kp-ink); border: 1.5px solid var(--kp-ink); font: 900 11px/15px var(--font-body);
+}
+.island-settlers-tcard-pick {
+  position: absolute; left: 50%; bottom: -14px; transform: translateX(-50%); min-width: 30px; height: 28px;
+  padding: 0 7px; border-radius: 14px; background: var(--kp-ink); color: var(--kp-sun); border: 2px solid var(--kp-sun);
+  font-size: 18px; line-height: 24px; font-weight: 400;
+}
+.island-settlers-tcard-minus {
+  position: absolute; z-index: 1; top: -14px; right: -14px; width: 44px; height: 44px; min-height: 44px; padding: 0;
+  display: grid; place-items: center; background: none; border: 0;
+}
+.island-settlers-tcard-minus span {
+  width: 28px; height: 28px; border-radius: 50%; background: var(--kp-cream); color: var(--kp-ink);
+  border: 2px solid var(--kp-ink); font: 900 22px/22px var(--font-body); box-shadow: 0 2px 0 var(--kp-ink);
+}
+
+@container (max-width: 340px) {
+  .island-settlers-trade-row { --tcard-w: 52px; --tcard-h: 72px; --tcard-icon: 22px; }
+  .island-settlers-tcard-name { font-size: 11px; }
+  .island-settlers-tcard-face small { font-size: 11px; }
+}
+
+/* Offer tokens and arrow (phone px; the TV card overrides --tok in u). */
+.island-settlers-tokens { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.island-settlers-token { display: inline-flex; align-items: center; gap: 3px; }
+.island-settlers-token i {
+  display: grid; place-items: center; width: var(--tok, 34px); height: var(--tok, 34px); border-radius: 22%;
+  background: var(--good); color: var(--kp-ink); border: 2px solid var(--good-deep);
+}
+.island-settlers-token b { font-size: calc(var(--tok, 34px) * .6); color: var(--kp-cream); }
+.island-settlers-trade-arrow { width: calc(var(--tok, 34px) * .85); flex: none; color: var(--kp-sun); }
+
+/* Phone offer cards. */
+.island-settlers-offer-card {
+  position: relative; display: grid; gap: 10px; padding: 12px 14px 18px; border-radius: 16px;
+  background: var(--is-panel); border: 2px solid var(--is-panel-border);
+}
+.island-settlers-offer-card[data-mine] { border-color: var(--kp-sky); scroll-margin: 12px; }
+.island-settlers-offer-card[data-compact] { padding-bottom: 14px; gap: 8px; }
+.island-settlers-offer-card > header { display: flex; align-items: center; gap: 10px; }
+.island-settlers-offer-card > header b { font-size: 17px; line-height: 1.25; flex: 1; }
+.island-settlers-offer-body { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.island-settlers-offer-body > span { display: grid; gap: 4px; }
+.island-settlers-offer-body small {
+  font-size: 12px; font-weight: 800; color: var(--is-dim); text-transform: uppercase;
+}
+.island-settlers-offer-answers { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.island-settlers-offer-answers li { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.island-settlers-offer-answers .kp-btn { margin: 0 0 .3rem auto; }
+.island-settlers-offer-who { display: grid; font-weight: 800; }
+.island-settlers-offer-who small { font-size: 14px; color: var(--is-dim); }
+.island-settlers-offer-answers li[data-state="accept"] small { color: var(--kp-lime); }
+.island-settlers-offer-answers li[data-state="counter"] small { color: var(--kp-grape); }
+.island-settlers-offer-answers li[data-state="decline"] { opacity: .6; }
+.island-settlers-offer-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.island-settlers-offer-chips small { width: 100%; font-size: 14px; font-weight: 800; color: var(--is-dim); }
+.island-settlers-resp[data-state="unable"] { opacity: .55; }
+.island-settlers-offer-buttons { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.island-settlers-offer-buttons .kp-btn { margin-bottom: .35rem; }
+.island-settlers-offer-wait { margin: 0; flex: 1; font-weight: 800; color: var(--kp-lime); }
+.island-settlers-trade-incoming { display: grid; gap: 10px; }
+.island-settlers-tag {
+  font: 800 12px/1 var(--font-body); font-style: normal; padding: 4px 8px; border-radius: 999px;
+  background: var(--kp-grape); color: var(--kp-ink); white-space: nowrap;
+}
+.island-settlers-expiry {
+  position: absolute; left: 14px; right: 14px; bottom: 7px; height: 4px; border-radius: 2px;
+  background: linear-gradient(90deg, var(--kp-sun) calc(var(--left) * 100%), rgb(255 246 229 / .14) 0);
+}
+
+/* Host dock sheet: card rows | segment + actions | offers, side by side inside the 420u sheet. */
+.island-settlers-trade[data-variant="dock"] {
+  height: 100%; overflow-y: auto; gap: 8px 22px; align-items: start;
+  grid-template: "rows seg offers" auto "rows note offers" auto "rows side offers" minmax(0, 1fr)
+    "rows msg offers" auto / max-content minmax(0, 1fr) minmax(0, .95fr);
+}
+.island-settlers-trade[data-variant="dock"] .island-settlers-trade-row {
+  --tcard-w: max(52px, calc(64 * var(--u, 1px))); --tcard-h: max(70px, calc(86 * var(--u, 1px)));
+  gap: 8px; padding: 2px 0 12px;
+}
+.island-settlers-trade[data-variant="dock"] .island-settlers-trade-rows { grid-area: rows; gap: 4px; }
+.island-settlers-trade[data-variant="dock"] .island-settlers-composer { display: contents; }
+.island-settlers-trade[data-variant="dock"] .island-settlers-segment { grid-area: seg; }
+/* Mouse targets: the short sheet keeps the composer and every recipient in view. */
+.island-settlers-trade[data-variant="dock"] .island-settlers-segment button { min-height: 34px; }
+.island-settlers-trade[data-variant="dock"] .island-settlers-trade-counter,
+.island-settlers-trade[data-variant="dock"] > [data-block] { grid-area: note; }
+.island-settlers-trade[data-variant="dock"] .island-settlers-trade-side {
+  grid-area: side; gap: 6px; align-self: stretch; min-height: 0; overflow-y: auto; padding: 0 4px 4px 0;
+}
+/* Short sheet: the action buttons come right after the summary, recipients and quick offers below. */
+.island-settlers-trade[data-variant="dock"] .island-settlers-trade-side > * { order: 3; }
+.island-settlers-trade[data-variant="dock"] .island-settlers-trade-summary { order: 0; font-size: 16px; }
+.island-settlers-trade[data-variant="dock"] .island-settlers-trade-actions { order: 1; }
+.island-settlers-trade[data-variant="dock"] .island-settlers-trade-side > .island-settlers-trade-why { order: 2; }
+.island-settlers-trade[data-variant="dock"] .island-settlers-trade-to > .island-settlers-trade-label { width: auto; }
+.island-settlers-trade[data-variant="dock"] .island-settlers-pill { min-height: 38px; font-size: 15px; }
+/* 6+ recipients: emblem-only toggles (names in the tooltip and on the TV rail), so all fit in the sheet. */
+.island-settlers-trade[data-variant="dock"] .island-settlers-trade-to:has(> :nth-child(8))
+  .island-settlers-pill:has(.island-settlers-chip) { gap: 2px; min-height: 34px; padding: 0 5px; }
+.island-settlers-trade[data-variant="dock"] .island-settlers-trade-to:has(> :nth-child(8))
+  .island-settlers-pill > :is(span:not(.island-settlers-chip), small) {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+.island-settlers-trade[data-variant="dock"] .kp-btn-lg { font-size: 1.05rem; padding: .55rem 1.2rem; }
+.island-settlers-trade[data-variant="dock"] .island-settlers-trade-to { gap: 6px; }
+.island-settlers-trade[data-variant="dock"] .island-settlers-trade-actions .kp-btn-lime { flex-basis: auto; }
+.island-settlers-trade[data-variant="dock"] > .kp-notice { grid-area: msg; margin: 0; }
+.island-settlers-trade[data-variant="dock"] .island-settlers-trade-offers {
+  grid-area: offers; align-self: stretch; max-height: 100%; overflow-y: auto; display: grid; gap: 10px;
+  align-content: start; padding-right: 4px;
+}
+.island-settlers-trade[data-variant="dock"] .island-settlers-offer-answers li { flex-wrap: wrap; }
+
+/* ---------------------------------------------------------------- TV rail (u) */
+.island-settlers-rail {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(10 * var(--u, 1px)); align-content: start;
+}
+.island-settlers-offer {
+  --tok: calc(32 * var(--u, 1px)); position: relative; display: grid; gap: calc(8 * var(--u, 1px));
+  padding: calc(12 * var(--u, 1px)) calc(14 * var(--u, 1px)) calc(16 * var(--u, 1px));
+  background: var(--is-panel); border: calc(2 * var(--u, 1px)) solid var(--is-panel-border);
+  border-radius: calc(18 * var(--u, 1px)); animation: island-settlers-offer-in 220ms ease-out;
+}
+.island-settlers-offer[data-counter] {
+  margin-left: calc(16 * var(--u, 1px)); border-color: rgb(181 138 255 / .6);
+}
+.island-settlers-offer > header { display: flex; align-items: center; flex-wrap: wrap; gap: calc(8 * var(--u, 1px)); }
+.island-settlers-offer > header b { font-size: max(13px, calc(20 * var(--u, 1px))); font-weight: 800; }
+.island-settlers-offer > header span { font-size: max(12px, calc(18 * var(--u, 1px))); color: var(--is-dim); }
+.island-settlers-offer .island-settlers-tag { font-size: max(11px, calc(16 * var(--u, 1px))); }
+.island-settlers-offer .island-settlers-offer-body { gap: calc(8 * var(--u, 1px)); }
+.island-settlers-offer .island-settlers-token b { font-size: max(12px, calc(22 * var(--u, 1px))); }
+.island-settlers-offer .island-settlers-trade-arrow { width: calc(28 * var(--u, 1px)); }
+.island-settlers-offer > footer { display: flex; flex-wrap: wrap; gap: calc(6 * var(--u, 1px)); }
+.island-settlers-offer-note, .island-settlers-offer-done {
+  margin: 0; font-size: max(12px, calc(18 * var(--u, 1px))); line-height: 1.25; color: var(--is-dim);
+}
+.island-settlers-offer-done {
+  color: var(--kp-lime); font-weight: 800; font-size: max(13px, calc(20 * var(--u, 1px)));
+}
+.island-settlers-offer .island-settlers-expiry {
+  left: calc(14 * var(--u, 1px)); right: calc(14 * var(--u, 1px)); bottom: calc(6 * var(--u, 1px));
+  height: calc(3 * var(--u, 1px)); min-height: 2px;
+}
+.island-settlers-offer[data-done] {
+  animation: island-settlers-offer-done var(--flash) linear, island-settlers-offer-out var(--collapse) ease-out
+    var(--flash) forwards;
+  border-color: var(--kp-lime); background: rgb(38 74 40 / .92);
+}
+@keyframes island-settlers-offer-in { from { opacity: 0; transform: translateY(calc(-8 * var(--u, 1px))); } }
+@keyframes island-settlers-offer-done { 0%, 30% { box-shadow: 0 0 0 calc(4 * var(--u, 1px)) var(--kp-lime); } }
+@keyframes island-settlers-offer-out { to { opacity: 0; transform: scaleY(.4); } }
+
+/* Response chips: dashed = pending, lime ring + ✓ = accepts, struck = declined, grape ring + ⇄ = countered. */
+.island-settlers-resp {
+  position: relative; display: inline-grid; border-radius: 50%; padding: calc(2 * var(--u, 1px));
+  transition: opacity 160ms ease-out, box-shadow 160ms ease-out;
+}
+.island-settlers-resp[data-state="pending"] { outline: calc(2 * var(--u, 1px)) dashed rgb(255 246 229 / .75); }
+.island-settlers-resp[data-state="accept"] { box-shadow: 0 0 0 calc(3 * var(--u, 1px)) var(--kp-lime); }
+.island-settlers-resp[data-state="counter"] { box-shadow: 0 0 0 calc(3 * var(--u, 1px)) var(--kp-grape); }
+.island-settlers-resp[data-state="decline"] { opacity: .4; }
+.island-settlers-resp[data-state="decline"]::after {
+  content: ''; position: absolute; left: 0; right: 0; top: 50%; height: calc(3 * var(--u, 1px));
+  background: var(--kp-cream); transform: rotate(-45deg);
+}
+.island-settlers-resp > svg {
+  position: absolute; right: calc(-6 * var(--u, 1px)); bottom: calc(-6 * var(--u, 1px));
+  width: max(13px, calc(20 * var(--u, 1px))); height: max(13px, calc(20 * var(--u, 1px)));
+  padding: calc(2 * var(--u, 1px)); border-radius: 50%; border: calc(1.5 * var(--u, 1px)) solid var(--kp-ink);
+  fill: var(--kp-ink); box-sizing: border-box;
+}
+.island-settlers-resp[data-state="accept"] > svg { background: var(--kp-lime); }
+.island-settlers-resp[data-state="counter"] > svg { background: var(--kp-grape); }
+
+.island-settlers-offer-rows {
+  list-style: none; margin: 0; padding: calc(6 * var(--u, 1px)) calc(10 * var(--u, 1px)); display: grid;
+  gap: calc(4 * var(--u, 1px)); background: var(--is-panel);
+  border: calc(2 * var(--u, 1px)) solid var(--is-panel-border);
+  border-radius: calc(14 * var(--u, 1px));
+}
+.island-settlers-offer-rows li {
+  --tok: calc(22 * var(--u, 1px)); display: flex; align-items: center; flex-wrap: wrap;
+  gap: calc(4 * var(--u, 1px)) calc(8 * var(--u, 1px)); min-height: calc(26 * var(--u, 1px));
+  font-size: max(12px, calc(18 * var(--u, 1px))); line-height: 1.2;
+}
+.island-settlers-offer-rows li[data-counter] { padding-left: calc(16 * var(--u, 1px)); }
+.island-settlers-offer-mini {
+  display: inline-flex; align-items: center; gap: calc(5 * var(--u, 1px)); margin-left: auto;
+}
+.island-settlers-offer-mini .island-settlers-token b { font-size: max(11px, calc(16 * var(--u, 1px))); }
+.island-settlers-offer-mini .island-settlers-trade-arrow { width: calc(18 * var(--u, 1px)); }
+.island-settlers-offer-mini em { white-space: nowrap; font-style: normal; font-weight: 800; color: var(--kp-lime); }
+.island-settlers-offer-mark { font-style: normal; font-weight: 900; color: var(--kp-grape); }
+.island-settlers-offer-rows[data-compact] li { flex-wrap: nowrap; }
+.island-settlers-offer-rows[data-compact] li > b { display: none; }
+.island-settlers-offer-rows[data-compact] .island-settlers-offer-mini { margin-left: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .island-settlers-offer, .island-settlers-tcard-face, .island-settlers-resp { animation: none; transition: none; }
+  .island-settlers-offer[data-done] { animation: island-settlers-offer-out 1ms linear var(--flash) forwards; }
+}
