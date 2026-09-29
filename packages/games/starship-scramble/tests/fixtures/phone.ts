@@ -1,7 +1,8 @@
 /** Phone/Personal fixtures for every phase at maximum content (4 captains, long names, full menus). Builds on fixtureCombat. */
 import type { ActionResult } from '../../../../party-contract/src/index';
-import type { Action, ClientProps, MapNode, NodeKind, PublicView } from '../../src/contracts';
+import type { Action, ClientProps, PublicView } from '../../src/contracts';
 import { hullDef } from '../../src/defs/hulls';
+import { sectorMap } from './screens';
 import { fixtureCombat } from './view';
 
 /** Combat as captain 0: teleporter and cloak installed, three weapons (one held, one support), an away team on the first enemy, FTL ready. */
@@ -26,15 +27,16 @@ const menu = (phase: PublicView['phase'], patch: Partial<PublicView> = {}): Publ
 };
 export const phoneHangar = () => { const v = menu('hangar'); v.captains[1].hullId = null; v.captains[3].ready = true; return { ...v, ships: v.ships.filter(s => s.captainId !== 'cap1') }; };
 
-const KINDS: NodeKind[] = ['hostile', 'distress', 'store', 'unknown', 'nebula', 'hostile', 'distress'];
-/** A 7-column sector with 2–4 beacons per column; the fleet sits in column 2 with three linked choices. */
+/** The dense 11-column sector (every beacon kind); the fleet sits on a wormhole with a shortcut two columns ahead. */
 export function phoneMap(): PublicView {
-  const rows = [1, 3, 4, 3, 4, 3, 1], nodes: MapNode[] = [];
-  rows.forEach((n, col) => { for (let row = 0; row < n; row++) nodes.push({ id: `n${col}-${row}`, col, row, x: .06 + col / 6 * .88 + (row % 2) * .015, y: .14 + (row + (4 - n) / 2 + .5) / 4 * .72, kind: col === 0 ? 'start' : col === 6 ? 'exit' : KINDS[(col * 3 + row) % 7], links: [], visited: col < 2 || col === 2 && row === 1, hazard: row === 2 && col === 4 ? 'asteroids' : 'none' }); });
-  for (const a of nodes) a.links = nodes.filter(b => b.col === a.col + 1 && Math.abs(b.row - a.row) <= 1).map(b => b.id);
-  const v = menu('map', { voteDeadline: Date.now() + 14000 });
-  v.map = { sectorId: 'veil', name: 'The Veil Nebula', theme: 'veil', nodes, currentId: 'n2-1', armadaCol: 1, columns: 7 };
-  v.captains[0].vote = 'n3-1'; v.captains[1].vote = 'n3-1'; v.captains[2].vote = 'n3-2';
+  const v = menu('map', { voteDeadline: Date.now() + 14000 }), map = sectorMap(), links = map.nodes.find(n => n.id === map.currentId)!.links;
+  v.map = map; v.captains[0].vote = links[0]; v.captains[1].vote = links[0]; v.captains[2].vote = links.at(-1)!;
+  return v;
+}
+/** One jump from the two sector exits. */
+export function phoneRoutes(): PublicView {
+  const v = phoneMap(); v.map.currentId = 'n9-1'; v.map.armadaCol = 7;
+  v.captains.forEach((c, i) => { c.vote = ['n10-0', 'n10-1', 'n10-1', null][i]; });
   return v;
 }
 const TEXT = 'A derelict Vesk brood-ship drifts across your bow, its chitin hull split open like a seed pod. Something inside is still broadcasting a distress loop in three languages, one of which your translator insists is "polite screaming". Scans show scrap, a working teleporter pad and eggs.';
@@ -63,7 +65,7 @@ export function phoneStore(): PublicView {
 }
 export const phoneOver = (): PublicView => { const v = menu('over', { result: 'victory', message: 'The Flagship breaks apart over Armada Reach. Drinks are on Mira.' }); v.captains.forEach((c, i) => c.stats = { damage: 40 + i * 17, kills: 3 + i, repairs: 11 - i, scrapEarned: 210 + i * 33, saves: i }); return v; };
 
-export const PHASES = { hangar: phoneHangar, map: phoneMap, event: phoneEvent, result: () => phoneEvent(true), loot: phoneLoot, store: phoneStore, combat: phoneCombat, paused: () => phoneCombat({ paused: true }), wrecked: () => phoneCombat({ wrecked: true }), boss: () => phoneCombat({ boss: true }), over: phoneOver };
+export const PHASES = { hangar: phoneHangar, map: phoneMap, routes: phoneRoutes, event: phoneEvent, result: () => phoneEvent(true), loot: phoneLoot, store: phoneStore, combat: phoneCombat, paused: () => phoneCombat({ paused: true }), wrecked: () => phoneCombat({ wrecked: true }), boss: () => phoneCombat({ boss: true }), over: phoneOver };
 /** Client props for captain 0 (player p0) with a recording mock sendAction. */
 export function phoneProps(view: PublicView, patch: Partial<ClientProps> = {}, log: Action[] = []): ClientProps {
   return { roomId: 'r1', roundId: 'round1', playerId: 'p0', viewRole: 'controller', isHost: false, publicView: view, privateView: { captainId: 'cap0' }, connected: true,

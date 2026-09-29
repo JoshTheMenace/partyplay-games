@@ -22,20 +22,26 @@ export function hangar(captains = 4, chosen = captains): PublicView {
   return { ...view, ships: [], crew: [], map: { ...view.map, nodes: [] }, sectorIndex: 0 };
 }
 
-/** A 7-column map with 1–4 rows per column, the fleet two jumps in, the Armada one column behind. */
+/** An 11-column map with 1–5 rows per column and every beacon kind; the fleet sits on a wormhole two jumps in, the Armada one column behind, and two exits name the next sectors. */
 export function sectorMap(): PublicView['map'] {
-  const rows = [1, 3, 4, 3, 4, 3, 1];
-  const kinds: NodeKind[][] = [['start'], ['hostile', 'unknown', 'distress'], ['store', 'nebula', 'hostile', 'unknown'], ['distress', 'hostile', 'unknown'], ['unknown', 'store', 'hostile', 'nebula'], ['hostile', 'distress', 'unknown'], ['exit']];
-  const at = (n: number, r: number) => n === 1 ? .5 : r / (n - 1);
-  const nodes: MapNode[] = rows.flatMap((n, col) => Array.from({ length: n }, (_, row) => ({ id: `n${col}-${row}`, col, row, x: .06 + col / 6 * .88 + ((col * 7 + row * 3) % 5 - 2) * .012,
-    y: .14 + .72 * at(n, row) + ((col * 5 + row) % 3 - 1) * .025, kind: kinds[col][row], links: [], visited: false, hazard: kinds[col][row] === 'nebula' ? 'nebula' : (col + row) % 4 === 1 ? 'asteroids' : 'none' })));
+  const kinds: NodeKind[][] = [['start'], ['hostile', 'unknown', 'distress'], ['store', 'wormhole', 'nebula', 'derelict', 'hostile'], ['elite', 'hostile', 'unknown', 'distress'], ['unknown', 'drydock', 'hostile', 'nebula', 'derelict'],
+    ['hostile', 'distress', 'store'], ['elite', 'unknown', 'hostile', 'derelict', 'distress'], ['hostile', 'wormhole', 'unknown', 'store'], ['distress', 'hostile', 'drydock', 'unknown', 'hostile'], ['hostile', 'derelict', 'unknown'], ['exit', 'exit']];
+  const rows = kinds.map(k => k.length), last = rows.length - 1, at = (n: number, r: number) => n === 1 ? .5 : r / (n - 1);
+  const nodes: MapNode[] = rows.flatMap((n, col) => Array.from({ length: n }, (_, row) => ({ id: `n${col}-${row}`, col, row, x: .06 + col / last * .88 + ((col * 7 + row * 3) % 5 - 2) * .006,
+    y: .14 + .72 * at(n, row) + ((col * 5 + row) % 3 - 1) * .012, kind: kinds[col][row], links: [], visited: false, hazard: kinds[col][row] === 'nebula' ? 'nebula' : (col + row) % 4 === 1 && col < last ? 'asteroids' : 'none' })));
+  const near = (node: MapNode, col: number) => nodes.filter(m => m.col === col).reduce((a, b) => Math.abs(b.y - node.y) < Math.abs(a.y - node.y) ? b : a).id;
   for (const node of nodes) {
     const next = nodes.filter(m => m.col === node.col + 1), t = at(rows[node.col], node.row);
-    node.links = next.filter(m => Math.abs(at(rows[m.col], m.row) - t) <= .34).map(m => m.id);
-    if (!node.links.length && next.length) node.links = [next.reduce((a, b) => Math.abs(at(rows[a.col], a.row) - t) < Math.abs(at(rows[b.col], b.row) - t) ? a : b).id];
+    node.links = next.filter(m => Math.abs(at(rows[m.col], m.row) - t) <= .3).map(m => m.id);
+    if (!node.links.length && next.length) node.links = [near(node, node.col + 1)];
+    if (node.kind === 'wormhole') node.links.push(near(node, node.col + 2));
+    if (node.col === last - 1) node.links = nodes.filter(m => m.col === last).map(m => m.id);
   }
+  const dests = [{ id: 'glasswater', name: 'Glasswater Drift', blurb: 'A slow tide of singing crystal. The Lumen Choir grows its ships here, and raiders chip at the edges for glass.' },
+    { id: 'marches', name: 'The Crimson Marches', blurb: 'Armada shipyards and picket lines, strewn with the burnt hulls of every fleet that came this far.' }];
+  nodes.filter(n => n.kind === 'exit').forEach((n, i) => { n.dest = dests[i]; });
   for (const id of ['n0-0', 'n1-1', 'n2-1']) nodes.find(n => n.id === id)!.visited = true;
-  return { sectorId: 'veil', name: 'The Veil', theme: 'Vesk Hive space', nodes, currentId: 'n2-1', armadaCol: 1, columns: 7 };
+  return { sectorId: 'veil', name: 'The Veil', theme: 'Vesk Hive space', nodes, currentId: 'n2-1', armadaCol: 1, columns: rows.length };
 }
 export function mapVote(): PublicView {
   const view = fleet(4, 'map'), [a, b] = view.map.nodes.find(n => n.id === view.map.currentId)!.links;
@@ -50,8 +56,16 @@ export function mapStart(): PublicView {
 }
 /** The last sector ends at the Flagship. */
 export function mapFinal(): PublicView {
-  const view = mapVote(); view.map.nodes.at(-1)!.kind = 'boss';
-  return { ...view, sectorIndex: 2, map: { ...view.map, sectorId: 'meridian', name: 'Meridian Deep', theme: 'Warden space', armadaCol: 2 } };
+  const view = mapVote(), nodes = view.map.nodes.filter(n => n.id !== 'n10-1').map(n => ({ ...n, links: n.links.filter(l => l !== 'n10-1') })), boss = nodes.at(-1)!;
+  boss.kind = 'boss'; delete boss.dest;
+  return { ...view, sectorIndex: 2, map: { ...view.map, nodes, sectorId: 'meridian', name: 'Meridian Deep', theme: 'Warden space', armadaCol: 2 } };
+}
+/** One jump from the sector exits: the fleet chooses its next sector. */
+export function mapRoutes(): PublicView {
+  const view = fleet(4, 'map'); view.map.currentId = 'n9-1'; view.map.armadaCol = 7;
+  view.map.nodes.forEach(n => { n.visited = ['n0-0', 'n1-1', 'n2-1', 'n4-2', 'n5-1', 'n6-2', 'n7-1', 'n9-1'].includes(n.id); });
+  view.captains.forEach((c, i) => { c.vote = ['n10-0', 'n10-1', 'n10-1', null][i]; });
+  return { ...view, voteDeadline: NOW + 6_000 };
 }
 
 const TEXT = 'A Vesk brood-ship drifts across the beacon, hull split and weeping green light. Its distress call repeats in eight languages, all of them wrong. Something inside is still moving. Your sensors count forty life signs, then four, then forty again. The Armada is two jumps behind you.';
@@ -93,5 +107,5 @@ export function over(result: 'victory' | 'defeat' = 'victory'): PublicView {
 
 export const SCREENS: Record<string, () => PublicView> = {
   'hangar-0': () => hangar(4, 0), 'hangar-1': () => hangar(1, 1), 'hangar-2': () => hangar(2, 2), 'hangar-3': () => hangar(3, 2), 'hangar-4': () => hangar(4, 4),
-  map: mapVote, 'map-start': mapStart, 'map-final': mapFinal, event: () => event(false), 'event-result': () => event(true), loot, store, victory: () => over('victory'), defeat: () => over('defeat'),
+  map: mapVote, 'map-start': mapStart, 'map-final': mapFinal, 'map-routes': mapRoutes, event: () => event(false), 'event-result': () => event(true), loot, store, victory: () => over('victory'), defeat: () => over('defeat'),
 };

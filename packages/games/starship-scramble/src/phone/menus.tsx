@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowBigRight, Check, ChevronLeft, ChevronRight, CircleHelp, Cloud, Coins, Crosshair, Crown, Home, Package, RadioTower, ShoppingBag, UserPlus, Wrench, type LucideIcon } from 'lucide-react';
+import { ArrowBigRight, Check, ChevronLeft, ChevronRight, CircleHelp, Cloud, Coins, Crosshair, Crown, Home, Package, PackageOpen, RadioTower, ShoppingBag, Skull, Tornado, UserPlus, Wrench, type LucideIcon } from 'lucide-react';
 import { ArcadeButton, Countdown, Panel, TextInput } from '../../../../party-ui/src/index';
-import type { CaptainView, ClientProps, NodeKind, Phase, PublicView, ShipView } from '../contracts';
+import type { CaptainView, ClientProps, MapNode, NodeKind, Phase, PublicView, ShipView } from '../contracts';
 import { PAINTS, augmentDef, systemDef, weaponDef } from '../defs/catalog';
 import { PLAYER_HULLS, hullDef } from '../defs/hulls';
 import { captainById, Dot, itemInfo, Meter, myCaptain, Notices, Pips, previewShip, shipOf, Spin, type Actions } from './common';
@@ -50,27 +50,38 @@ function Hangar({ props, view, me, ship, actions }: Ctx) {
   </section>;
 }
 
-const NODE: Record<NodeKind, [LucideIcon, string]> = { start: [Home, 'Start'], unknown: [CircleHelp, 'Unknown beacon'], hostile: [Crosshair, 'Hostile signal'], distress: [RadioTower, 'Distress call'], store: [ShoppingBag, 'Trading post'], nebula: [Cloud, 'Nebula'], exit: [ArrowBigRight, 'Sector exit'], boss: [Crown, 'Armada Flagship'] };
+const NODE: Record<NodeKind, [LucideIcon, string, string]> = {
+  start: [Home, 'Start', ''], unknown: [CircleHelp, 'Unknown beacon', 'Anything could be out there'], hostile: [Crosshair, 'Hostile signal', 'Expect a fight'],
+  distress: [RadioTower, 'Distress call', 'Someone needs help'], store: [ShoppingBag, 'Trading post', 'Buy, sell and repair'], nebula: [Cloud, 'Nebula', 'Hides nearby beacons'],
+  elite: [Skull, 'Elite contact', 'Tough fight, rare salvage'], drydock: [Wrench, 'Drydock', 'Repairs and refits'], derelict: [PackageOpen, 'Derelict', 'Risky salvage'],
+  wormhole: [Tornado, 'Wormhole', 'Opens a shortcut ahead'], exit: [ArrowBigRight, 'Sector exit', ''], boss: [Crown, 'Armada Flagship', 'The final battle'],
+};
+const HAZARD: Record<string, string> = { asteroids: 'asteroid field', solar: 'solar flares', 'ion-storm': 'ion storm' };
+/** The map is an overview; the reachable beacons are big labelled vote buttons beside (landscape) or below (portrait) it. */
 function SectorMap({ props, view, me, actions }: Ctx) {
-  const { map } = view, current = map.nodes.find(n => n.id === map.currentId), links = new Set(current?.links ?? []);
+  const { map } = view, current = map.nodes.find(n => n.id === map.currentId), links = new Set(current?.links ?? []), next = map.nodes.filter(n => links.has(n.id)).sort((a, b) => a.y - b.y);
   const at = (n: { x: number; y: number }) => ({ x: n.x * 100, y: n.y * 100 }); // run/map.ts positions are normalized 0..1 with margins
   const front = map.armadaCol < 0 ? 0 : Math.min(100, Math.max(0, ...map.nodes.filter(n => n.col <= map.armadaCol).map(n => at(n).x)) + 44 / Math.max(1, map.columns));
   const votes = (id: string) => view.captains.filter(c => c.vote === id).map(c => c.id), voted = view.captains.filter(c => c.vote).length;
+  const lane = (n: MapNode) => next.length < 2 ? null : `${next.indexOf(n) === 0 ? 'Upper' : next.indexOf(n) === next.length - 1 ? 'Lower' : 'Middle'} lane`;
+  const detail = (n: MapNode) => [lane(n), n.dest ? n.dest.blurb : NODE[n.kind][2], current && n.col > current.col + 1 && 'through the wormhole', n.hazard !== 'none' && n.kind !== 'nebula' && HAZARD[n.hazard], n.col <= map.armadaCol + 1 && n.kind !== 'exit' && n.kind !== 'boss' && 'the Armada will catch you'].filter(Boolean).join(' · ');
   return <section className="sp-map-panel" aria-label="Sector map">
     <div className="sp-panel-head"><div><p className="kp-eyebrow">Sector {view.sectorIndex + 1}/{view.sectorCount}</p><h2 className="sp-h">{map.name}</h2></div>
       <p className="sp-vote-state">{voted}/{view.captains.filter(c => c.connected).length} voted{view.voteDeadline && <> · <Countdown deadline={view.voteDeadline} serverNowMs={props.serverNowMs}/>s</>}</p></div>
-    <div className="sp-map">
-      <div className="sp-armada" style={{ width: `${front}%` }} aria-hidden="true"/>
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">{map.nodes.flatMap(n => n.links.map(id => { const m = map.nodes.find(k => k.id === id); if (!m) return null; const a = at(n), b = at(m);
-        return <line key={n.id + id} x1={a.x} y1={a.y} x2={b.x} y2={b.y} data-live={n.id === map.currentId || undefined} data-trail={n.visited && m.visited || undefined} vectorEffect="non-scaling-stroke"/>; }))}</svg>
-      {map.nodes.map(n => { const [Icon, name] = NODE[n.kind], p = at(n), reach = links.has(n.id), v = votes(n.id), mine = me.vote === n.id;
-        const label = `${name}${n.hazard !== 'none' ? `, ${n.hazard.replace('-', ' ')}` : ''}${n.id === map.currentId ? ', fleet is here' : ''}${reach ? `, ${v.length} vote${v.length === 1 ? '' : 's'}${mine ? ', your vote' : ''}` : ''}`;
-        return <button key={n.id} type="button" className="sp-node" data-kind={n.kind} data-reach={reach || undefined} data-here={n.id === map.currentId || undefined} data-visited={n.visited || undefined} aria-pressed={reach ? mine : undefined}
-          style={{ left: `${p.x}%`, top: `${p.y}%` }} tabIndex={reach ? 0 : -1} aria-disabled={!reach} aria-label={label} title={name}
-          onClick={() => reach && !actions.busy('vote') && actions.act({ type: 'vote', nodeId: n.id })}><Icon size={reach ? 20 : 15} aria-hidden="true"/>{n.hazard !== 'none' && <i className="sp-hazard"/>}<Voters view={view} ids={v}/></button>; })}
+    <div className="sp-map-body">
+      <div className="sp-map" aria-hidden="true">
+        <div className="sp-armada" style={{ width: `${front}%` }}/>
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none">{map.nodes.flatMap(n => n.links.map(id => { const m = map.nodes.find(k => k.id === id); if (!m) return null; const a = at(n), b = at(m);
+          return <line key={n.id + id} x1={a.x} y1={a.y} x2={b.x} y2={b.y} data-live={n.id === map.currentId || undefined} data-trail={n.visited && m.visited || undefined} data-warp={m.col > n.col + 1 || undefined} vectorEffect="non-scaling-stroke"/>; }))}</svg>
+        {map.nodes.map(n => { const Icon = NODE[n.kind][0], p = at(n);
+          return <span key={n.id} className="sp-node" data-kind={n.kind} data-reach={links.has(n.id) || undefined} data-voted={me.vote === n.id || undefined} data-here={n.id === map.currentId || undefined} data-visited={n.visited || undefined}
+            style={{ left: `${p.x}%`, top: `${p.y}%` }}><Icon size={links.has(n.id) ? 16 : 12}/>{n.hazard !== 'none' && <i className="sp-hazard"/>}</span>; })}
+      </div>
+      <div className="sp-jumps" role="group" aria-label="Next jump">{next.map(n => { const [Icon, name] = NODE[n.kind], v = votes(n.id), mine = me.vote === n.id;
+        return <button key={n.id} type="button" className="sp-jump" data-kind={n.kind} aria-pressed={mine} disabled={actions.busy('vote')} onClick={() => actions.act({ type: 'vote', nodeId: n.id })}>
+          <Icon size={22} aria-hidden="true"/><span><b>{n.dest ? `Exit to ${n.dest.name}` : name}</b><small>{detail(n)}</small></span><Voters view={view} ids={v}/></button>; })}</div>
     </div>
-    <p className="sp-legend">{[...new Set(map.nodes.map(n => n.kind))].map(k => { const [Icon, name] = NODE[k]; return <span key={k}><Icon size={14} aria-hidden="true"/>{name}</span>; })}</p>
-    <p className="sp-hint">{me.vote ? `You voted for ${NODE[map.nodes.find(n => n.id === me.vote)?.kind ?? 'unknown'][1]}. Tap another beacon to change.` : 'Tap a glowing beacon to vote for the next jump.'} The red wall is the Armada.</p>
+    <p className="sp-hint">{me.vote ? 'Vote cast. Tap another jump to change it.' : 'Vote for the next jump.'} Glowing beacons on the map are your options; the red wall is the Armada.</p>
   </section>;
 }
 

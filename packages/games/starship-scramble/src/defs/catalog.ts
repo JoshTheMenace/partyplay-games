@@ -28,6 +28,8 @@ export const WEAPONS: readonly WeaponDef[] = [
   w({ id: 'glaive-beam', name: 'Glaive Beam', kind: 'beam', tier: 3, price: 125, chargeMs: 22000, damage: 3, beamRooms: 3, fireChance: .1, blurb: 'Three damage per room across three rooms; each shield layer absorbs one.' }),
   w({ id: 'pegasus-missile', name: 'Pegasus Missile', kind: 'missile', tier: 3, price: 110, chargeMs: 17000, shots: 2, damage: 2, pierce: 9, ammo: 2, fireChance: .15, blurb: 'Twin warheads that ignore shields. Uses two missiles.' }),
   w({ id: 'storm-flak', name: 'Storm Flak', kind: 'flak', tier: 3, price: 100, chargeMs: 20000, shots: 7, damage: 1, crewDamage: 10, blurb: 'Seven fragments blanket the target room and its neighbours.' }),
+  w({ id: 'prism-beam', name: 'Prism Beam', kind: 'beam', tier: 2, price: 75, chargeMs: 15000, damage: 1, pierce: 1, beamRooms: 2, blurb: 'Lumen crystal that refracts straight through a single shield layer to sweep two rooms.' }),
+  w({ id: 'shard-flak', name: 'Shard Flak', kind: 'flak', tier: 1, price: 50, chargeMs: 14000, shots: 3, damage: 1, crewDamage: 10, blurb: 'Three crystal shards scatter around the target room.' }),
   w({ id: 'nanite-storm', name: 'Nanite Storm', kind: 'support', tier: 3, price: 95, chargeMs: 18000, damage: 4, crewDamage: 0, support: 'repair', target: 'ally', blurb: 'Fire at an ally: repairs 4 hull and fixes the struck system.' }),
 ];
 
@@ -68,6 +70,7 @@ export const SPECIES: readonly SpeciesDef[] = [
   { id: 'bastion', name: 'Bastion', blurb: 'Mineral folk: 140 health, 20% slower.', maxHp: 140, speed: .8, melee: 1, repair: 1, color: '#b5a1dd' },
   { id: 'skitter', name: 'Skitter', blurb: 'Insect folk: 25% faster, 85 health.', maxHp: 85, speed: 1.25, melee: 1, repair: 1, color: '#9bd576' },
   { id: 'ember', name: 'Ember', blurb: 'Fire-blooded brawlers: +25% melee, repair 15% slower.', maxHp: 100, speed: 1, melee: 1.25, repair: .85, color: '#f0aa68' },
+  { id: 'lumen', name: 'Lumen', blurb: 'Crystal choristers: repair 35% faster, 90 health, weak in a brawl.', maxHp: 90, speed: .9, melee: .8, repair: 1.35, color: '#ff9ed2' },
 ];
 export const ROLES: readonly { id: CrewRole; name: string; blurb: string; station: SystemId | null }[] = [
   { id: 'pilot', name: 'Pilot', blurb: '+5% evasion at the helm.', station: 'helm' },

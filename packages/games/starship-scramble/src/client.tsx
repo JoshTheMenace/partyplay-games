@@ -13,11 +13,13 @@ const Ready = (View: (props: ClientProps) => React.ReactNode) => function ReadyV
   useEffect(() => { let frame = requestAnimationFrame(() => { frame = requestAnimationFrame(() => ready.current()); }); return () => cancelAnimationFrame(frame); }, []);
   return <View {...props}/>;
 };
+const LENGTHS: Record<Settings['length'], string> = { short: 'Short · 1 sector, about 20 minutes', standard: 'Standard · 3 sectors, about 45–60 minutes', long: 'Long · 5 sectors, about 90+ minutes' };
 function SettingsView({ settings, onChange, disabled }: SettingsViewProps<Settings>) {
   return <div className="ss-settings">
     <ToggleRow label="Cadet difficulty · gentler enemies, extra reserve hulls" checked={settings.difficulty === 'cadet'} disabled={disabled} onChange={on => onChange({ ...settings, difficulty: on ? 'cadet' : 'captain' })}/>
-    <ToggleRow label="Short run · one sector, then the flagship (about 20 minutes)" checked={settings.length === 'short'} disabled={disabled} onChange={on => onChange({ ...settings, length: on ? 'short' : 'standard' })}/>
-    <p className="kp-muted">Cadet enemies have 25% less hull and charge 20% slower, and the fleet gets 3 reserve hulls instead of 2. A standard run crosses three sectors (about 45 minutes). Runs can be saved and resumed later.</p>
+    <label style={{ display: 'grid', gap: '.4rem', fontWeight: 800 }}>Run length<select value={settings.length} disabled={disabled} onChange={e => onChange({ ...settings, length: e.target.value as Settings['length'] })}>
+      {(Object.keys(LENGTHS) as Settings['length'][]).map(k => <option key={k} value={k}>{LENGTHS[k]}</option>)}</select></label>
+    <p className="kp-muted">Every sector exit lets the fleet vote on which sector comes next. Cadet enemies have less hull and charge slower, and the fleet gets 3 reserve hulls instead of 2. Runs can be saved and resumed later.</p>
   </div>;
 }
 function InstructionsView({ role }: InstructionsViewProps) {

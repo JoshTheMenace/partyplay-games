@@ -29,7 +29,9 @@ test('menus show votes, blue badges, disabled choices and results', () => {
   const ev = html(phoneEvent());
   for (const text of ['Teleporter', 'Needs Bastion crew', 'Screaming Derelict']) assert.ok(ev.includes(text), text);
   assert.ok(html(phoneEvent(true)).includes('Continue'));
-  assert.ok(html(PHASES.map()).includes('Sector exit'));
+  const map = html(PHASES.map());
+  for (const text of ['Elite contact', 'through the wormhole', 'aria-pressed="true"']) assert.ok(map.includes(text), text);
+  assert.ok(html(PHASES.routes()).includes('Exit to The Crimson Marches'));
   assert.ok(html(PHASES.store()).includes('Trading post'));
   assert.ok(html(PHASES.loot()).includes('Claimed by Mira'));
   assert.ok(html(PHASES.hangar()).includes('Launch ready'));

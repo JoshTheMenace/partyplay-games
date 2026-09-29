@@ -9,11 +9,13 @@ export const NOZZLE_X = -1.25;
 
 type Shape = 'smooth' | 'angular' | 'organic' | 'block' | 'blade';
 type Style = { shape: Shape; metal: [string, string]; nose: number; trim?: string; lights?: string };
+const CHOIR: Style = { shape: 'blade', metal: ['#d5f6fb', '#2c5870'], nose: 2, lights: '#ff9ed2' };
 const RAIDER: Style = { shape: 'angular', metal: ['#b9ab9c', '#4d4038'], nose: 1.3 }, ARMADA: Style = { shape: 'blade', metal: ['#9b9aa6', '#2f2d38'], nose: 1.8, trim: '#e8b64a' };
 const STYLES: Record<string, Style> = {
   skiff: RAIDER, raider: RAIDER, gunship: RAIDER, dreadnought: ARMADA, flagship: ARMADA,
   drone: { shape: 'block', metal: ['#a9b3c2', '#3c4452'], nose: .7, lights: '#6fd3ff' }, hive: { shape: 'organic', metal: ['#c1c99a', '#434a26'], nose: 1.2 },
   lifeboat: { shape: 'smooth', metal: ['#c9ced8', '#565d6b'], nose: 1 },
+  shard: CHOIR, cantor: CHOIR, cathedral: CHOIR,
 };
 const PLAYER: Style = { shape: 'smooth', metal: ['#e2e8f2', '#5d6980'], nose: 1.6 };
 const RADIUS: Record<Shape, number> = { smooth: .5, angular: .05, organic: .9, block: .22, blade: .1 };

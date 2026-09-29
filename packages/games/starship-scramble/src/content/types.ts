@@ -22,7 +22,7 @@ export type EventEffect =
   | { kind: 'ammo'; amount: number; who: Who }
   | { kind: 'systemDamage'; system: SystemId; amount: number; who: Who }
   | { kind: 'upgrade'; system: SystemId; who: Who }                // free tier if below max
-  | { kind: 'combat'; enemies: string[] | 'sector'; hazard?: Hazard; objective?: 'destroy' | 'survive'; bonus?: number } // enemy ids or a sector-appropriate squad; bonus multiplies loot
+  | { kind: 'combat'; enemies: string[] | 'sector'; hazard?: Hazard; objective?: 'destroy' | 'survive'; bonus?: number; elite?: boolean } // enemy ids or a sector-appropriate squad; bonus multiplies loot; elite squads are bigger and tougher
   | { kind: 'store' }                                              // open a store after this event
   | { kind: 'armada'; amount: number }                              // +n advances the pursuit front, -n delays it
   | { kind: 'reveal' }                                             // reveal all node kinds in this sector
@@ -39,15 +39,21 @@ export type EventDef = {
   /** At least one choice; a single-choice event is a no-decision beat. */ choices: ChoiceDef[];
 };
 export type EnemyDef = {
-  id: string; name: string; faction: 'raiders' | 'vesk' | 'wardens' | 'armada'; hullId: string; ai: EnemyAi;
+  id: string; name: string; faction: 'raiders' | 'vesk' | 'wardens' | 'choir' | 'armada'; hullId: string; ai: EnemyAi;
   weapons: string[]; systems: Partial<Record<import('../contracts').SystemId, number>>; hullBonus: number;
   crew: { species: SpeciesId; role: CrewRole }[]; fleeBelow: number; threat: number; scrap: [number, number];
   phases?: BossPhase[];
 };
-export type SectorDef = { id: string; name: string; theme: string; blurb: string; factions: EnemyDef['faction'][]; hazards: Hazard[]; tier: 1 | 2 | 3 | 4 };
+/**
+ * depths: run positions (1 = first sector) where this sector may be offered; difficulty follows the depth, not the sector.
+ * rows: beacons per middle column; weights: odds of each ordinary beacon kind (hostile, distress, unknown, nebula, derelict).
+ */
+export type SectorDef = { id: string; name: string; theme: string; blurb: string; factions: EnemyDef['faction'][]; hazards: Hazard[]; depths: number[];
+  rows: [min: number, max: number]; weights: Partial<Record<'hostile' | 'distress' | 'unknown' | 'nebula' | 'derelict', number>> };
 
 /** Every enemy id the content may reference. The run owner defines exactly these in src/content/enemies.ts. */
-export const ENEMY_IDS = ['raider-skiff', 'raider-brawler', 'raider-gunship', 'rogue-trader', 'vesk-scout', 'vesk-hive', 'vesk-brood', 'warden-drone', 'warden-lancer', 'warden-sentinel', 'armada-interceptor', 'armada-gunship', 'armada-dreadnought', 'flagship'] as const;
-export const SECTOR_IDS = ['rustbelt', 'veil', 'meridian'] as const;
+export const ENEMY_IDS = ['raider-skiff', 'raider-brawler', 'raider-gunship', 'raider-warlord', 'rogue-trader', 'vesk-scout', 'vesk-hive', 'vesk-brood', 'vesk-queen', 'warden-drone', 'warden-lancer', 'warden-sentinel',
+  'choir-shard', 'choir-cantor', 'choir-cathedral', 'armada-interceptor', 'armada-gunship', 'armada-dreadnought', 'flagship'] as const;
+export const SECTOR_IDS = ['rustbelt', 'veil', 'glasswater', 'meridian', 'cinder', 'sanctum', 'marches'] as const;
 /** Events the run engine triggers by id (content must define them, with kinds: []). */
 export const SPECIAL_EVENT_IDS = ['armada-ambush', 'flagship-hail'] as const;

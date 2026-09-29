@@ -14,6 +14,9 @@ export const ENEMIES: readonly EnemyDef[] = [
   e({ id: 'raider-gunship', name: 'Raider Gunship', faction: 'raiders', hullId: 'gunship', ai: 'shields', threat: 3, scrap: [44, 60], fleeBelow: .2,
     weapons: ['burst-laser', 'heavy-laser'], systems: { helm: 1, engines: 2, shields: 1, weapons: 2, oxygen: 1, medbay: 1, defense: 0, cloak: 0 }, hullBonus: 2,
     crew: crew('human:pilot', 'human:gunner', 'human:engineer', 'ember:soldier') }),
+  e({ id: 'raider-warlord', name: 'Raider Warlord', faction: 'raiders', hullId: 'gunship', ai: 'weapons', threat: 4, scrap: [58, 76], fleeBelow: .15, hullBonus: 6,
+    weapons: ['twin-heavy-laser', 'burst-laser', 'hellfire-missile'], systems: { helm: 2, engines: 2, shields: 2, weapons: 3, oxygen: 1, medbay: 1, defense: 1, cloak: 0 },
+    crew: crew('human:pilot', 'human:gunner', 'human:engineer', 'ember:soldier', 'ember:soldier') }),
   e({ id: 'rogue-trader', name: 'Rogue Trader', faction: 'raiders', hullId: 'raider', ai: 'balanced', threat: 2, scrap: [40, 56], fleeBelow: .5, hullBonus: 2,
     weapons: ['heavy-laser', 'ion-blast'], systems: { helm: 1, engines: 3, shields: 2, weapons: 2, oxygen: 1, medbay: 1 }, crew: crew('human:pilot', 'bastion:engineer', 'human:gunner') }),
   // Vesk Hive: ion and boarders; they want your crew.
@@ -25,6 +28,9 @@ export const ENEMIES: readonly EnemyDef[] = [
   e({ id: 'vesk-brood', name: 'Vesk Brood Mother', faction: 'vesk', hullId: 'hive', ai: 'boarder', threat: 3, scrap: [48, 64], fleeBelow: .15, hullBonus: 4,
     weapons: ['burst-laser', 'breach-missile'], systems: { helm: 1, engines: 2, shields: 2, weapons: 2, oxygen: 1, medbay: 2, teleporter: 2 },
     crew: crew('skitter:pilot', 'skitter:gunner', 'skitter:soldier', 'skitter:soldier', 'ember:soldier') }),
+  e({ id: 'vesk-queen', name: 'Vesk Brood Queen', faction: 'vesk', hullId: 'hive', ai: 'boarder', threat: 4, scrap: [58, 76], fleeBelow: .1, hullBonus: 8,
+    weapons: ['burst-laser-ii', 'breach-missile'], systems: { helm: 1, engines: 2, shields: 2, weapons: 2, oxygen: 1, medbay: 2, teleporter: 3 },
+    crew: crew('skitter:pilot', 'skitter:gunner', 'skitter:soldier', 'skitter:soldier', 'ember:soldier') }),
   // Wardens: automated, never flee, strip shields.
   e({ id: 'warden-drone', name: 'Warden Drone', faction: 'wardens', hullId: 'drone', ai: 'shields', threat: 2, scrap: [30, 42],
     weapons: ['ion-blast', 'basic-laser'], systems: { helm: 1, engines: 3, shields: 1, weapons: 2, defense: 0 }, crew: [] }),
@@ -32,6 +38,15 @@ export const ENEMIES: readonly EnemyDef[] = [
     weapons: ['heavy-laser', 'pike-beam'], systems: { helm: 1, engines: 3, shields: 1, weapons: 2, defense: 1 }, crew: [] }),
   e({ id: 'warden-sentinel', name: 'Warden Sentinel', faction: 'wardens', hullId: 'drone', ai: 'hunter', threat: 4, scrap: [56, 74], hullBonus: 8,
     weapons: ['burst-laser-ii', 'flak-cannon', 'ion-blast'], systems: { helm: 2, engines: 2, shields: 2, weapons: 3, defense: 2 }, crew: [] }),
+  // Lumen Choir: crystal ships that cloak, strip shields with ion and sweep rooms with beams. They never flee; they shatter.
+  e({ id: 'choir-shard', name: 'Choir Shard', faction: 'choir', hullId: 'shard', ai: 'hunter', threat: 2, scrap: [28, 38],
+    weapons: ['ion-blast', 'pike-beam'], systems: { helm: 1, engines: 3, shields: 1, weapons: 2, oxygen: 1, medbay: 1, cloak: 1 }, crew: crew('lumen:pilot', 'lumen:gunner') }),
+  e({ id: 'choir-cantor', name: 'Choir Cantor', faction: 'choir', hullId: 'cantor', ai: 'shields', threat: 3, scrap: [42, 58], hullBonus: 2,
+    weapons: ['heavy-ion', 'prism-beam'], systems: { helm: 1, engines: 2, shields: 2, weapons: 2, oxygen: 1, medbay: 1, defense: 1, cloak: 1 },
+    crew: crew('lumen:pilot', 'lumen:gunner', 'lumen:engineer') }),
+  e({ id: 'choir-cathedral', name: 'Choir Cathedral', faction: 'choir', hullId: 'cathedral', ai: 'boarder', threat: 5, scrap: [66, 86], hullBonus: 6,
+    weapons: ['glaive-beam', 'ion-scatter', 'shard-flak'], systems: { helm: 2, engines: 2, shields: 3, weapons: 3, oxygen: 2, medbay: 2, teleporter: 1, cloak: 1, defense: 2 },
+    crew: crew('lumen:pilot', 'lumen:gunner', 'lumen:engineer', 'lumen:medic', 'ember:soldier') }),
   // Crimson Armada: the pursuit. Hard hitters, little loot.
   e({ id: 'armada-interceptor', name: 'Armada Interceptor', faction: 'armada', hullId: 'skiff', ai: 'hunter', threat: 2, scrap: [16, 24],
     weapons: ['burst-laser', 'swift-missile'], systems: { helm: 2, engines: 3, shields: 1, weapons: 2, oxygen: 1, medbay: 1 }, crew: crew('human:pilot', 'human:gunner') }),

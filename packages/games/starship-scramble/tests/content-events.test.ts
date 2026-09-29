@@ -8,10 +8,10 @@ const byId = new Map(EVENTS.map(e => [e.id, e]));
 const choices = EVENTS.flatMap(e => e.choices.map(c => ({ e, c })));
 const effects = choices.flatMap(({ e, c }) => c.outcomes.flatMap(o => o.effects.map(x => ({ e, x }))));
 const has = (list: readonly { id: string }[], id: string) => list.some(item => item.id === id);
-const WHO = ['fleet', 'random', 'weakest'], HAZARDS = ['none', 'asteroids', 'solar', 'ion-storm', 'nebula'], KINDS = ['unknown', 'hostile', 'distress', 'nebula'];
+const WHO = ['fleet', 'random', 'weakest'], HAZARDS = ['none', 'asteroids', 'solar', 'ion-storm', 'nebula'], KINDS = ['unknown', 'hostile', 'distress', 'nebula', 'elite', 'drydock', 'derelict', 'wormhole'];
 const WEAPON_KINDS = new Set(WEAPONS.map(w => w.kind));
 /** Explicit enemies in a sector-locked event must belong to that sector's faction (the Armada roams everywhere). */
-const FACTION: Record<string, string[]> = { rustbelt: ['raider', 'rogue'], veil: ['vesk'], meridian: ['warden'] };
+const FACTION: Record<string, string[]> = { rustbelt: ['raider', 'rogue'], veil: ['vesk'], meridian: ['warden'], glasswater: ['choir', 'raider', 'rogue'], cinder: ['raider', 'rogue', 'vesk'], sanctum: ['choir', 'warden'], marches: ['warden', 'raider'] };
 const eligible = (sector: string, kinds: string[]) => EVENTS.filter(e => !e.requiresFlag && (e.sectors === 'any' || e.sectors.includes(sector)) && e.kinds.some(k => kinds.includes(k)));
 
 function checkEffect(x: EventEffect): string | null {

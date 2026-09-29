@@ -2,6 +2,18 @@
 
 Current build `ss-root-4` (2026-09-24T16:06:49Z, `qa:false`), client index SHA-256 `862a70853f93f812f0a8226723b0098b7f7668e6610fa267dcf8007495ab1ed4`. Evidence (local, ignored): `output/ss-dev/root/shots/` in the platform checkout. Isolated port 4532, headless Chromium driven through real UI clicks (no state injection). Owned servers and browsers are closed.
 
+## Longer runs update (2026-09-28)
+
+Build `ss-long-2` (isolated, port 4541, headless Chromium, real UI clicks; owned server and browsers closed). Evidence (local, ignored): `output/ss-dev/qa-long/` in the platform checkout.
+
+- Lobby: Settings shows the Run length select; Long applied through the real dialog.
+- TV host (watching) + 4 phones at 844×390 with 16-character names: join, ready, hangar, launch into a Long run (Sector 1 of 5). Dense 11-column map with every new beacon kind, wormhole arcs and named exits at 1280×720 and 1920×1080. All four phones voted through the jump list and the fleet jumped into an event.
+- Phone map at 844×390, 932×430, 568×320, 390×844 and 320×568: no horizontal overflow; every jump button at least 44 px.
+- Route choice: a real save exported by the scripted captains one jump before the Rustbelt exits, loaded through Room menu → Load world → Replace world. The TV showed both route cards, the phones showed "Exit to …" buttons with lanes; the fleet voted into Glasswater Drift (new map and backdrop), played two events and started a battle.
+- Choir battle: a scripted save mid-fight against a Cantor and two Shards, loaded the same way; TV at 1280×720 and 1920×1080 and the phone battle view. Cloaking, beams, Lumen crew and the painted crystal hulls render; no console errors in any flow.
+- Checks: `npx tsc --noEmit` and `npx oxlint` clean; game tests 92 pass (12 balance sweeps pass with `SS_BALANCE=1`, see README); platform `tests/starship-room.test.ts`, `tests/registry-contract.test.ts` and `tests/catalog.test.ts` pass.
+- Limits: a full human-played Standard or Long run was not played in the browser (the scripted captains play complete runs through the rules API); Flagship battles with four upgraded captains and two escorts can reach ~25 KB per snapshot (under the 32 KB cap, over the 24 KB target); physical phones and human pacing are unverified.
+
 ## Checks
 
 - `npx tsc --noEmit`, `npx oxlint game-modules/packages/games/starship-scramble`: clean.

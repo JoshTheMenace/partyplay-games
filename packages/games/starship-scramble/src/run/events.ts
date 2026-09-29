@@ -5,7 +5,7 @@ import { EVENTS } from '../content/events';
 import { ROLES, SPECIES, augmentDef, speciesDef, systemDef, weaponDef } from '../defs/catalog';
 import { berths, item, refit } from './fleet';
 import { pick, weighted } from './rng';
-import { LIMITS, captainById, currentNode, earn, fleet, living, recruit, scrapScale, sector, shipOf, type State } from './state';
+import { LIMITS, captainById, currentNode, earn, fleet, living, recruit, runDepth, scrapScale, sector, shipOf, type State } from './state';
 
 const CONTINUE: ChoiceDef = { id: 'continue', label: 'Continue', outcomes: [{ weight: 1, text: '', effects: [] }] };
 const KIND_NAMES: Record<WeaponKind, string> = { laser: 'Laser', missile: 'Missile', beam: 'Beam', ion: 'Ion', flak: 'Flak', support: 'Support' };
@@ -21,7 +21,7 @@ const STEPS = new Set(EVENTS.filter(e => e.choices.some(ch => ch.outcomes.some(o
  * comes up at the next beacon that can hold it, and no quest step starts in the final sector's last beacon column, where nothing could follow.
  */
 export function pickEvent(s: State, kind: NodeKind): EventDef | null {
-  const late = s.sectorIndex === s.sectors.length - 1 && currentNode(s).col >= s.map.columns - 2;
+  const late = s.sectorIndex === runDepth(s) - 1 && currentNode(s).col >= s.map.columns - 2;
   const pool = EVENTS.filter(e => e.kinds.includes(kind) && (e.sectors === 'any' || e.sectors.includes(sector(s).id)) && !(e.unique && s.seen.includes(e.id)) && (!e.requiresFlag || s.flags.includes(e.requiresFlag)) && !(late && STEPS.has(e.id)));
   const due = pool.filter(e => e.requiresFlag);
   return pool.length ? weighted(s, due.length ? due : pool, e => s.seen.includes(e.id) ? e.weight / 4 : e.weight) : null;

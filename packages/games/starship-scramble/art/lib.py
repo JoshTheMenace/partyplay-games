@@ -8,9 +8,10 @@ def reset(w, h, samples=96, denoise=True):
     scene = bpy.context.scene
     scene.render.engine = 'CYCLES'
     prefs = bpy.context.preferences.addons['cycles'].preferences
-    prefs.compute_device_type = 'METAL'; prefs.get_devices()
+    try: prefs.compute_device_type = 'METAL'; prefs.get_devices()
+    except TypeError: pass  # not a Metal build: render on the CPU
     for d in prefs.devices: d.use = d.type == 'METAL'
-    c = scene.cycles; c.device = 'GPU'; c.samples = samples; c.use_denoising = denoise; c.use_adaptive_sampling = True; c.max_bounces = 6
+    c = scene.cycles; c.device = 'GPU' if any(d.use for d in prefs.devices) else 'CPU'; c.samples = samples; c.use_denoising = denoise; c.use_adaptive_sampling = True; c.max_bounces = 6
     r = scene.render; r.resolution_x, r.resolution_y, r.resolution_percentage = w, h, 100; r.film_transparent = True
     r.image_settings.file_format = 'PNG'; r.image_settings.color_mode = 'RGBA'; r.image_settings.color_depth = '8'; r.image_settings.compression = 100
     scene.view_settings.view_transform = 'Standard'; scene.view_settings.look = 'None'

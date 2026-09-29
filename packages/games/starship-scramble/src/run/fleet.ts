@@ -4,21 +4,21 @@ import { AUGMENTS, ROLES, SPECIES, WEAPONS, augmentDef, speciesDef, systemDef, w
 import { hullDef } from '../defs/hulls';
 import { deriveShip } from '../sim';
 import { pick, random, weighted } from './rng';
-import { LIMITS, crewName, earn, enter, living, recruit, say, sector, shipOf, uid, type State } from './state';
+import { LIMITS, crewName, earn, enter, living, recruit, say, shipOf, tierOf, uid, type State } from './state';
 
-/** Weapon tier odds by sector tier. */
-const TIER_ODDS = [[.75, .25, 0], [.35, .55, .1], [.1, .6, .3], [.1, .6, .3]];
+/** Weapon tier odds by depth. */
+const TIER_ODDS = [[.75, .25, 0], [.35, .55, .1], [.1, .6, .3], [.05, .5, .45], [0, .4, .6]];
 const OPTIONAL: SystemId[] = ['teleporter', 'cloak', 'defense'];
 const nameOf = (kind: Exclude<Offer['kind'], 'crew'>, defId: string) => (kind === 'weapon' ? weaponDef : kind === 'augment' ? augmentDef : systemDef)(defId).name;
 
-const weaponTier = (s: State) => weighted(s, [1, 2, 3] as const, t => TIER_ODDS[sector(s).tier - 1][t - 1]);
+const weaponTier = (s: State) => weighted(s, [1, 2, 3] as const, t => TIER_ODDS[tierOf(s) - 1][t - 1]);
 export function item(s: State, kind: ItemKind, tier?: 1 | 2 | 3, id?: string): Item {
   const want = id || kind === 'augment' ? 0 : tier ?? weaponTier(s), defId = id ?? (kind === 'augment' ? pick(s, AUGMENTS).id : pick(s, WEAPONS.filter(w => w.tier === want)).id);
   return { id: uid(s, 'i'), kind, defId, ownerId: null };
 }
 /** Free crew slots aboard a ship (every faction counts). */
 export const berths = (s: State, ship: Ship) => hullDef(ship.hullId).rooms.reduce((sum, r) => sum + r.w * r.h, 0) - s.crew.filter(k => k.shipId === ship.id && k.state !== 'dead').length;
-export const prices = (s: State) => ({ repairPrice: sector(s).tier === 1 ? 2 : 3, ammoPrice: 10 });
+export const prices = (s: State) => ({ repairPrice: tierOf(s) === 1 ? 2 : tierOf(s) < 4 ? 3 : 4, ammoPrice: 10 });
 function spend(c: Captain, price: number) { if (c.scrap < price) throw new Error(`Need ${price} scrap.`); c.scrap -= price; }
 
 /** Sync weapon uids/power and shield layers after a refit, so the hangar and map show the real loadout. */
@@ -62,7 +62,7 @@ export function claim(s: State, c: Captain, itemId: string) {
 // ---------- store ----------
 /** Stock grows with the fleet. Weapons the fleet already carries are less likely, the optional system is one some hull can still install, and only some posts have recruits. */
 export function openStore(s: State) {
-  const n = s.captains.length, tier = sector(s).tier, fleet = s.ships.filter(x => x.captainId && x.status === 'active');
+  const n = s.captains.length, tier = tierOf(s), fleet = s.ships.filter(x => x.captainId && x.status === 'active');
   const owned = new Set([...fleet.flatMap(x => x.weapons.map(w => w.defId)), ...s.captains.flatMap(c => c.cargo.map(i => i.defId))]);
   const offer = (kind: Offer['kind'], defId: string, price: number, crew?: Offer['crew']): Offer => ({ id: uid(s, 'o'), kind, defId, price, soldTo: null, ...crew && { crew } });
   const weapons: string[] = [], augments: string[] = [];

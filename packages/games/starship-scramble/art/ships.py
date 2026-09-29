@@ -108,7 +108,9 @@ class Ship:
             dark=plain('dark', pal['dark'], .55, .4), trim=plain('trim', pal['trim'], .3, .75),
             deck=plated('deck', pal['deck'], plate=(1, 1), seam=.55, bump=.05, variance=.05, grime=.04, metal=.1, rough=.8, ao=.3),
             glass=plain('glass', (.012, .03, .055), .06, 0, emit=pal['glass'], estr=.45, coat=1),
-            crimson=plain('crimson', (.8, .07, .08), .4), glow=glow('glow', pal['glow'], 1.2), core=glow('core', tuple(.25 + .75 * c for c in pal['glow']), 1.5), halo=halo_mat('halo', pal['glow'], 1.1))
+            crimson=plain('crimson', (.8, .07, .08), .4), glow=glow('glow', pal['glow'], 1.2),
+            crystal=plain('crystal', tuple(.2 + .65 * c for c in pal['glow']), .12, .1, emit=pal['glow'], estr=.22, coat=1),
+            crystal2=plain('crystal2', tuple(.2 + .65 * c for c in pal['glass']), .12, .1, emit=pal['glass'], estr=.25, coat=1), core=glow('core', tuple(.25 + .75 * c for c in pal['glow']), 1.5), halo=halo_mat('halo', pal['glow'], 1.1))
         for name, col in (('red', (1, .15, .1)), ('green', (.2, 1, .35)), ('white', (1, .95, .85)), ('lamp', pal.get('lamp', pal['glow']))):
             s.m[name] = glow(name, col, 3); s.m['halo_' + name] = halo_mat('halo_' + name, col, 1.3)
         s.rm = np.zeros(s.px.shape, bool)
@@ -348,6 +350,7 @@ PAL = {k: {**BASE, **v} for k, v in {
     'raiders': dict(frame=(.16, .11, .08), metal=(.34, .2, .12), trim=(.95, .7, .1), glow=(1, .55, .2), glass=(1, .6, .2), lamp=(1, .45, .1), grime=.3),
     'vesk': dict(paint=(.82, .84, .76), frame=(.1, .12, .06), metal=(.14, .17, .08), trim=(.6, .9, .2), glow=(.55, 1, .25), glass=(.6, 1, .2), lamp=(.6, 1, .2), organic=True),
     'warden': dict(frame=(.2, .22, .26), metal=(.32, .34, .38), trim=(.55, .6, .68), glow=(.3, .65, 1), glass=(.3, .6, 1), lamp=(.35, .7, 1), grime=.05),
+    'choir': dict(paint=(.8, .88, .92), frame=(.04, .07, .1), metal=(.16, .26, .32), trim=(1, .45, .82), glow=(.35, .92, 1), glass=(1, .42, .86), lamp=(1, .5, .9), grime=.02),
     'armada': dict(frame=(.022, .02, .024), metal=(.1, .09, .1), trim=(.95, .7, .28), glow=(1, .42, .14), glass=(1, .2, .15), lamp=(1, .2, .15), grime=.06),
 }.items()}
 
@@ -621,9 +624,86 @@ def flagship(s):
     s.accent(rect(11.4, -1, 14, 5), .6)
     s.greebles(18)
 
+def gem(s, pts, z0, z1, mat='crystal', at=.45):
+    """Faceted crystal: a pyramid whose apex sits over the polygon's long axis, so every facet catches the light differently."""
+    s.mark(pts, z1, True)
+    a, b = max(((p, q) for p in pts for q in pts), key=lambda pq: math.dist(*pq)); ax, ay = a[0] + (b[0] - a[0]) * at, a[1] + (b[1] - a[1]) * at
+    bm = bmesh.new(); base = [bm.verts.new((x, -y, z0)) for x, y in (pts if area(wpts(pts)) > 0 else pts[::-1])]; top = bm.verts.new((ax, -ay, z1))
+    bm.faces.new(base[::-1])
+    for i in range(len(base)): bm.faces.new((base[i], base[(i + 1) % len(base)], top))
+    return from_bm(bm, 'gem', s.m[mat])
+
+def spire(s, pts, z0=.02, z1=.5, mat='crystal'):
+    """A crystal spire: a tall faceted gem with a smaller one grown at its root."""
+    gem(s, pts, z0, z1, mat)
+    cx, cy = sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)
+    gem(s, [(cx + (x - cx) * .45, cy + (y - cy) * .45) for x, y in pts], z1 * .6, z1 * 1.12, 'crystal2' if mat == 'crystal' else 'crystal', .6)
+
+def clusters(s, count):
+    """Small crystal outcrops on the hull plating."""
+    def make(cx, cy, w, h, a, z):
+        r = min(w, h) / 2; n = s.rng.choice((5, 6, 7))
+        gem(s, [(cx + math.cos(a + 2 * math.pi * k / n) * r * s.rng.uniform(.7, 1.1), cy + math.sin(a + 2 * math.pi * k / n) * r * s.rng.uniform(.7, 1.1)) for k in range(n)], z - .01, z + r * 1.4, s.rng.choice(('crystal', 'crystal2')), s.rng.uniform(.35, .65))
+    s.scatter(count, make, lambda: (s.rng.uniform(.18, .32),) * 2 + (s.rng.uniform(0, 6.3),))
+
+def shard(s):
+    """Choir shard: a faceted crystal dart with swept blade fins, crystal spines and a glowing prism nose."""
+    cy = s.cy
+    s.body(sym([(-.5, .45, .03), (1.0, -.2, .04), (2.8, -.58, .04), (5.3, -.52, .04), (6.7, .45, .03), (8.3, cy, 0)], cy), gap=.9, edge=.05)
+    for f in (1, -1):
+        m = (lambda q: q) if f > 0 else (lambda q: mirror(q, cy))
+        s.part(m([(1.2, -.25), (2.4, -1.3), (4.1, -1.05), (3.3, -.5)]), .02, .22, 'armor', .03, band=.06, tone=.72)
+        spire(s, m([(2.5, -1.1), (3.1, -1.38), (3.9, -1.05), (3.2, -.95)]), .22, .5)
+        spire(s, m([(5.5, -.4), (6.3, -.95), (6.95, .1), (6.55, .3)]), .02, .34, 'crystal2')
+        s.trim(m([(1.35, -.3), (2.45, -1.22), (4.0, -.98)]), .035)
+    gem(s, [(7.0, 1.15), (8.2, cy), (7.0, 1.85)], .1, .46, 'crystal', .3)
+    s.part(rect(-.9, 1.0, -.2, 2.0), .04, .26, 'frame', .04, decor=True)
+    s.nozzle(-.5, cy, .28, .6)
+    for y in (.95, 2.05): s.slit(.3, y - .025, 1.3, .05, s.z + .005, 'lamp', 1)
+    clusters(s, 4); s.greebles(2, ('vent', 'hatch'))
+
+def cantor(s):
+    """Choir cantor: a crystal spire-ship, a tall dorsal crystal and keel blade, prism prongs at the nose and glowing seams."""
+    cy = s.cy
+    s.body(smooth([(-.55, .75, .05), (.8, .45, .05), (2.4, .3, .05), (3.4, -.58, .05), (8.3, -.52, .05), (9.3, .4, .05), (10.6, cy, .02), (9.3, 3.6, .05), (6.9, 3.5, .05),
+                   (6.3, 4.6, .05), (3.7, 4.6, .05), (3.1, 3.5, .05), (.8, 3.55, .05), (-.55, 3.25, .05)]), gap=1.1, edge=.06)
+    spire(s, [(6.5, -.45), (7.3, -1.4), (8.3, -.45)], .02, .56)
+    spire(s, [(.7, .5), (1.6, -.95), (2.6, .35)], .02, .46, 'crystal2')
+    s.part([(1.0, 3.45), (2.4, 4.4), (3.2, 3.45)], .02, .24, 'armor', .03, band=.05, tone=.7)
+    spire(s, [(6.9, 3.45), (7.9, 4.35), (9.0, 3.5)], .02, .4)
+    for f in (1, -1):
+        m = (lambda q: q) if f > 0 else (lambda q: mirror(q, cy))
+        gem(s, m([(9.4, .6), (10.4, .95), (10.2, 1.45), (9.4, 1.3)]), .06, .4, 'crystal2', .6)
+    s.trim([(3.5, -.48), (8.2, -.44), (9.2, .45)], .035); s.trim([(3.8, 4.5), (6.2, 4.5)], .035)
+    s.part(rect(-1.0, .9, -.2, 3.1), .04, .27, 'frame', .05, decor=True)
+    for y in (1.5, 2.5): s.nozzle(-.55, y, .28, .65)
+    ellipsoid((9.9, -cy, .3), (.28, .22, .08), s.m['core'], 'eye'); s.card(9.9, cy, .7, .6, .5, 'halo')
+    clusters(s, 6); s.greebles(3, ('vent', 'hatch'))
+
+def cathedral(s):
+    """Choir cathedral: a vast crystal nave with flying-buttress wings, rows of towering spires, a rose-window core and a crystal prow."""
+    cy = s.cy
+    s.body(smooth([(-.6, .7, .06), (1.5, .45, .08), (3.3, -.6, .08), (8.8, -.6, .08), (10.2, .3, .08), (11.3, .85, .06), (12.5, cy, .02), (11.3, 3.2, .06), (10.4, 4.45, .08),
+                   (3.3, 4.62, .08), (1.5, 3.55, .08), (-.6, 3.3, .06)]), gap=1.3, step=.14)
+    for f in (1, -1):
+        m = (lambda q: q) if f > 0 else (lambda q: mirror(q, cy))
+        s.part(m([(3.4, -.5), (4.0, -1.05), (8.3, -1.05), (8.9, -.5)]), .02, .22, 'armor', .04, band=.07, seams=.8, tone=.7)
+        s.trim(m([(4.05, -.98), (8.25, -.98)]), .035)
+    for pts, z1, mat in (([(1.5, .35), (2.2, -1.35), (2.9, -.3)], .6, 'crystal'), ([(8.9, -.5), (9.6, -1.38), (10.4, .15)], .62, 'crystal'), ([(2.6, -.1), (3.0, -.95), (3.45, -.5)], .45, 'crystal2'),
+                          ([(1.5, 3.65), (2.2, 5.35), (2.9, 4.3)], .6, 'crystal'), ([(8.7, 4.5), (9.5, 5.35), (10.3, 4.35)], .62, 'crystal'), ([(3.0, 4.55), (3.4, 5.1), (3.9, 4.6)], .45, 'crystal2')):
+        spire(s, pts, .02, z1, mat)
+    for f in (1, -1):
+        m = (lambda q: q) if f > 0 else (lambda q: mirror(q, cy))
+        gem(s, m([(11.2, .95), (12.3, 1.5), (12.1, 1.75), (11.1, 1.45)]), .06, .44, 'crystal2', .6)
+    s.part(rect(-1.1, .8, -.2, 3.2), .04, .3, 'frame', .06, decor=True)
+    for y in (1.2, 2.0, 2.8): s.nozzle(-.6, y, .24, .6)
+    ellipsoid((11.7, -cy, .36), (.34, .3, .1), s.m['core'], 'rose'); s.card(11.7, cy, .8, .8, .7, 'halo')
+    for y in (.9, 4.2): s.slit(8.9, y, 1.4, .06, s.z + .005, 'lamp', 1)
+    clusters(s, 9); s.greebles(4, ('vent', 'hatch'))
+
 DESIGNS = {'wayfarer': ('wayfarer', wayfarer), 'lancer': ('lancer', lancer), 'bulwark': ('bulwark', bulwark), 'corsair': ('corsair', corsair), 'halcyon': ('halcyon', halcyon),
     'lifeboat': ('lifeboat', lifeboat), 'skiff': ('raiders', skiff), 'raider': ('raiders', raider), 'gunship': ('raiders', gunship), 'drone': ('warden', drone),
-    'hive': ('vesk', hive), 'dreadnought': ('armada', dreadnought), 'flagship': ('armada', flagship)}
+    'hive': ('vesk', hive), 'shard': ('choir', shard), 'cantor': ('choir', cantor), 'cathedral': ('choir', cathedral), 'dreadnought': ('armada', dreadnought), 'flagship': ('armada', flagship)}
 
 # ---------- build / render ----------
 def outline(path, color=(.02, .025, .05), px=2.2, strength=.9):

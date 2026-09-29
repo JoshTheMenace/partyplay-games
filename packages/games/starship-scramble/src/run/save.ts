@@ -1,8 +1,9 @@
 /** World saves: exportSave strips wall-clock and transient bits; loadSave validates every field and reseats the new roster. */
 import type { RoundContext } from '../../../../party-contract/src/index';
 import { assertSerializable } from '../../../../party-contract/src/serializable';
-import { SAVE_VERSION, type Settings } from '../contracts';
+import { RUN_SECTORS, SAVE_VERSION, type Settings } from '../contracts';
 import { ENEMY_IDS, SECTOR_IDS } from '../content/types';
+import { sectorDef } from '../content/sectors';
 import { EVENTS } from '../content/events';
 import { AUGMENTS, ROLES, SPECIES, SYSTEMS, WEAPONS } from '../defs/catalog';
 import { HULLS, PLAYER_HULLS, hullDef } from '../defs/hulls';
@@ -43,19 +44,20 @@ const combat = obj({ id, t: num, paused: bool, pausedBy: nul(str(32)), hazard, o
   events: arr(obj({ id, type: str(16), atMs: num, shipId: id, roomId: opt(id), amount: opt(num), weaponId: opt(weapon), fromShipId: opt(id), crewId: opt(id) }), 512),
   introUntilMs: num, enemyCharge: num, outcome: nul(oneOf(['victory', 'escaped', 'defeat'])), nextId: int, rng: int });
 const item = (v: unknown, p: string) => { obj({ id, kind: oneOf(['weapon', 'augment']), defId: id, ownerId: nul(id) })(v, p); const it = v as { kind: string; defId: string }; (it.kind === 'weapon' ? weapon : augment)(it.defId, `${p}.defId`); };
-const node = obj({ id, col: int, row: int, x: num, y: num, kind: oneOf(['start', 'unknown', 'hostile', 'distress', 'store', 'nebula', 'exit', 'boss']), links: arr(id, 4), visited: bool, hazard });
+const node = obj({ id, col: int, row: int, x: num, y: num, kind: oneOf(['start', 'unknown', 'hostile', 'distress', 'store', 'nebula', 'elite', 'drydock', 'derelict', 'wormhole', 'exit', 'boss']), links: arr(id, 6), visited: bool, hazard,
+  dest: opt(obj({ id: oneOf(SECTOR_IDS), name: str(64), blurb: str(200) })) });
 const event = ids(EVENTS), enemies = (v: unknown, p: string) => { if (v === 'sector') return; if (!Array.isArray(v) || !v.length) bad(p); arr(oneOf(ENEMY_IDS), 6)(v, p); };
 const bonus = is(v => typeof v === 'number' && v >= 0 && v <= 2); // loot multiplier; content tops out at 1.5
 const next: Check = (v, p) => { const kind = record(v, p).kind;
-  obj(kind === 'event' ? { kind: str(8), eventId: event } : kind === 'store' ? { kind: str(8) } : kind === 'combat' ? { kind: str(8), enemies, hazard: opt(hazard), objective: opt(oneOf(['destroy', 'survive'])), bonus: opt(bonus) } : bad(p))(v, p); };
+  obj(kind === 'event' ? { kind: str(8), eventId: event } : kind === 'store' ? { kind: str(8) } : kind === 'combat' ? { kind: str(8), enemies, hazard: opt(hazard), objective: opt(oneOf(['destroy', 'survive'])), bonus: opt(bonus), elite: opt(bool) } : bad(p))(v, p); };
 const count = is(v => Number.isSafeInteger(v) && (v as number) >= 0);
 const state = obj({
-  settings: obj({ difficulty: oneOf(['cadet', 'captain']), length: oneOf(['short', 'standard']) }), phase: oneOf(['hangar', 'map', 'event', 'combat', 'loot', 'store', 'over']),
+  settings: obj({ difficulty: oneOf(['cadet', 'captain']), length: oneOf(Object.keys(RUN_SECTORS)) }), phase: oneOf(['hangar', 'map', 'event', 'combat', 'loot', 'store', 'over']),
   turn: count, rng: int, nextId: count, ships: arr(ship, 12), crew: arr(crew, 96), combat: nul(combat), fight: nul(obj({ bonus, ambush: bool, endAt: nul(num), counted: arr(id, 512) })),
   captains: arr(obj({ id, playerId: nul(str(128)), name: str(64), color: str(32), connected: bool, shipId: nul(id), hullId: nul(ids(PLAYER_HULLS)), scrap: count, ready: bool, vote: nul(id),
     cargo: arr(item, LIMITS.cargo), stats: obj({ damage: num, kills: num, repairs: num, scrapEarned: num, saves: num }) }), 4),
-  sectors: arr(oneOf(SECTOR_IDS), 3), sectorIndex: count, revealed: bool,
-  map: obj({ sectorId: oneOf(SECTOR_IDS), name: str(64), theme: str(64), nodes: arr(node, 40), currentId: id, armadaCol: int, columns: int }),
+  sectors: arr(oneOf(SECTOR_IDS), SECTOR_IDS.length), sectorIndex: count, revealed: bool,
+  map: obj({ sectorId: oneOf(SECTOR_IDS), name: str(64), theme: str(64), nodes: arr(node, 72), currentId: id, armadaCol: int, columns: int }),
   event: nul(obj({ defId: event, outcome: nul(obj({ choiceId: id, text: str(1000), lines: arr(str(200), 32) })), next: nul(next) })),
   loot: nul(obj({ scrapEach: count, items: arr(item, 16), claims: rec(id, 16) })),
   offers: nul(arr(obj({ id, kind: oneOf(['weapon', 'augment', 'system', 'crew']), defId: id, price: count, soldTo: nul(id), crew: opt(obj({ name: str(24), species: ids(SPECIES), role: ids(ROLES) })) }), 16)), pending: arr(item, 16),
@@ -74,7 +76,8 @@ function consistent(s: State) {
   const used = [...s.ships, ...s.crew, ...s.captains.flatMap(c => c.cargo), ...s.loot?.items ?? [], ...s.pending, ...s.offers ?? [], ...s.combat ? [s.combat] : []].map(x => Number(/^[ebiok](\d+)$/.exec(x.id)?.[1] ?? -1));
   if (used.some(n => n >= s.nextId)) bad('nextId');
   for (const k of s.crew) { const at = shipById(s, k.shipId); if (!at || !at.rooms.some(r => r.id === k.roomId) || k.ownerId && !s.captains.some(c => c.id === k.ownerId)) bad(`crew ${k.id}`); }
-  if (s.sectorIndex >= s.sectors.length || s.map.sectorId !== s.sectors[s.sectorIndex]) bad('sector');
+  if (s.sectorIndex !== s.sectors.length - 1 || s.sectors.length > RUN_SECTORS[s.settings.length] || new Set(s.sectors).size !== s.sectors.length || s.map.sectorId !== s.sectors[s.sectorIndex]) bad('sector');
+  if (s.map.nodes.some(n => n.kind === 'exit' && (!n.dest || s.sectors.includes(n.dest.id)))) bad('map');
   const nodes = new Set(s.map.nodes.map(n => n.id));
   if (!nodes.has(s.map.currentId) || s.map.nodes.some(n => n.links.some(l => !nodes.has(l)))) bad('map');
   for (const o of s.offers ?? []) { (o.kind === 'weapon' ? weapon : o.kind === 'augment' ? augment : o.kind === 'crew' ? ids(ROLES) : system)(o.defId, 'offers'); if ((o.kind === 'crew') !== !!o.crew || o.crew && o.crew.role !== o.defId) bad('offers'); }
@@ -97,6 +100,9 @@ export function loadSave(ctx: RoundContext, raw: unknown): { state: State; setti
   if (save.v !== SAVE_VERSION) throw new Error('This save is from a different version of Starship Scramble.');
   state(save.state, 'state');
   const s = structuredClone(save.state) as State;
+  // Saves from before branching routes listed every planned sector up front and had unnamed exits.
+  const next = s.sectors[s.sectorIndex + 1];
+  if (next && s.map.nodes.some(n => n.kind === 'exit' && !n.dest)) { const d = sectorDef(next); s.sectors = s.sectors.slice(0, s.sectorIndex + 1); for (const n of s.map.nodes) if (n.kind === 'exit') n.dest = { id: d.id, name: d.name, blurb: d.blurb }; }
   consistent(s);
   s.captains.forEach((c, i) => {
     const player = ctx.players[i];

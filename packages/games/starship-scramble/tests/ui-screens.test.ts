@@ -44,12 +44,16 @@ test('map draws every beacon, link, vote and the Armada front', () => {
   const view = SCREENS.map(), html = render(view);
   assert.equal(count(html, 'class="ss-node '), view.map.nodes.length);
   assert.equal(count(html, 'class="ss-link '), view.map.nodes.reduce((n, node) => n + node.links.length, 0));
-  assert.equal(count(html, 'ss-link-reach'), 2);
+  assert.equal(count(html, 'ss-link-reach'), view.map.nodes.find(n => n.id === view.map.currentId)!.links.length);
   has(html, 'The Veil', 'Sector 2 of 3', 'Jumping in', '3/4 voted', 'Crimson Armada', `Votes: ${NAMES[0]}, ${NAMES[1]}`, `Votes: ${NAMES[2]}`, 'Distress', 'Hostile', '2</b><small>reserves');
   assert.equal(count(html, 'ss-node-overrun'), view.map.nodes.filter(n => n.col <= view.map.armadaCol).length);
   has(render(SCREENS['map-start']()), 'Vote for the next beacon', '0/2 voted');
   assert.equal(count(render(SCREENS['map-start']()), 'ss-node-overrun'), 0);
   has(render(SCREENS['map-final']()), 'Flagship', 'Meridian Deep', 'Sector 3 of 3');
+  assert.equal(count(html, 'ss-link-warp'), view.map.nodes.filter(n => n.kind === 'wormhole').length, 'wormhole shortcuts arc over a column');
+  has(html, 'Glasswater Drift', 'The Crimson Marches', 'Elite', 'Drydock', 'Derelict', 'Wormhole');
+  const routes = render(SCREENS['map-routes']());
+  assert.equal(count(routes, 'class="ss-routes"'), 1); has(routes, 'A slow tide of singing crystal', 'Armada shipyards and picket lines');
 });
 
 test('event shows the full 280-character text, four choices with badges and votes, then results', () => {
@@ -106,7 +110,8 @@ test('settings, instructions and results render their copy', async () => {
   const { client } = await clientModule;
   const html = (node: ReturnType<typeof createElement>) => renderToStaticMarkup(node).replace(/&#x27;/g, "'");
   const settings = html(createElement(client.SettingsView, { settings: { difficulty: 'cadet', length: 'standard' }, onChange() {}, disabled: false }));
-  assert.match(settings, /aria-checked="true"[^>]*aria-label="Cadet difficulty/); assert.match(settings, /aria-checked="false"[^>]*aria-label="Short run/);
+  assert.match(settings, /aria-checked="true"[^>]*aria-label="Cadet difficulty/); assert.match(settings, /<option value="standard" selected="">Standard/);
+  for (const text of ['Short · 1 sector', 'Long · 5 sectors']) assert.ok(settings.includes(text), text);
   assert.notEqual(html(createElement(client.InstructionsView, { role: 'display' })), html(createElement(client.InstructionsView, { role: 'controller' })));
   const results = html(createElement(client.ResultsView!, { outcome: { complete: true, winners: [], rows: [] }, publicView: SCREENS.defeat(), playerId: null }));
   for (const text of ['Defeat', ...NAMES, 'Damage']) assert.ok(results.includes(text), text);

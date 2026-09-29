@@ -143,7 +143,8 @@ for (const players of [1, 4]) test(`captain standard runs always end (${players}
     const run = new Run(players, { difficulty: 'captain', length: 'standard' }, seed * 7919);
     const result = run.finish();
     assert(result === 'victory' || result === 'defeat', `seed ${seed} ended with ${result} in phase ${run.state.phase}`);
-    assert(run.maxBytes < 24 * 1024, `seed ${seed} view ${run.maxBytes} bytes`);
+    // Flagship battles with four fully upgraded captains and two escorts reach ~25 KB (QA.md); the platform cap is 32 KB.
+    assert(run.maxBytes < 28 * 1024, `seed ${seed} view ${run.maxBytes} bytes`);
     assertSerializable(rules.outcome(run.state));
   }
 });
@@ -176,10 +177,22 @@ test('saves are validated strictly', () => {
     save => { save.state.crew[0].constructor = 'x'; }, save => { save.state.fight.bonus = 1e9; }, save => { save.state.ships.at(-1).phase = -2; },
     save => { save.state.event = { defId: 'armada-ambush', outcome: null, next: { kind: 'combat', enemies: [] } }; }, save => { save.state.captains[0].hullId = null; },
     save => { save.state.ships.find((x: any) => x.faction === 'enemy').enemyId = null; }, save => { save.state.nextId = 0; },
+    // Routes: repeated or unknown sectors, too many for the length, an exit without a destination or back to a visited sector.
+    save => { save.state.sectors.push('rustbelt'); }, save => { save.state.sectors = ['rustbelt', 'veil', 'meridian', 'cinder']; save.state.sectorIndex = 3; }, save => { save.state.sectors[0] = 'narnia'; },
+    save => { save.state.map.nodes.find((n: any) => n.kind === 'exit').dest = { id: save.state.sectors[0], name: 'Back', blurb: '' }; },
   ];
   for (const [i, breakIt] of broken.entries()) { const save = good(); breakIt(save); assert.throws(() => load(save), Error, `broken save ${i} rejected`); }
   assert.throws(() => load({ v: 1, state: { ...good().state, rng: Infinity } }), /serializable/);
   assert.throws(() => load(null));
+});
+
+test('saves from before branching routes load: the planned sectors become named exits', () => {
+  const run = midBattle(), save = JSON.parse(JSON.stringify(rules.exportSave!(run.state)));
+  save.state.sectors = ['rustbelt', 'veil', 'meridian'];
+  for (const n of save.state.map.nodes) delete n.dest;
+  const { state } = rules.loadSave!(ctx(roster(4), 5), save, { difficulty: 'captain', length: 'standard' });
+  assert.deepEqual(state.sectors, ['rustbelt']);
+  assert.deepEqual([...new Set(state.map.nodes.filter(n => n.kind === 'exit').map(n => n.dest?.name))], ['The Veil']);
 });
 
 test('finish suspends the run; loading resumes it', () => {

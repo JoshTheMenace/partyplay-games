@@ -4,7 +4,7 @@ Blender scripts that regenerate every rendered asset in `public/games/starship-s
 
 ## Regenerate
 
-Requires Blender 5.2 (Cycles; uses Metal on Apple GPUs, otherwise the CPU) and the repository's Node toolchain (for the hull export).
+Requires Blender 5.2 (Cycles; uses Metal on Apple GPUs, otherwise the CPU, where the full set takes much longer) and the repository's Node toolchain (for the hull export).
 
 ```sh
 sh packages/games/starship-scramble/art/render-all.sh            # everything, about 2 minutes on an M-series GPU
@@ -21,7 +21,7 @@ The `ships` stage first re-exports `hulls.json` from `src/defs/hulls.ts`, then r
 | `lib.py` | Shared scene/Cycles setup, materials (plated armor, chitin, glows, halo cards), mesh helpers, raster morphology/contour tracing, numpy PNG IO, a terse shader-node builder. |
 | `ships.py` | `ships/<hullId>.png` and `ships/<hullId>-paint.png` for every hull in `hulls.json`. |
 | `contact.py` | `contact-<hullId>.png` (tinted sprite with room rectangles, the paint mask, a half-scale TV preview) and `gallery.png`. |
-| `backdrops.py` | `backdrops/{rustbelt,veil,meridian,armada-reach,hangar,map}.jpg`, 1920×1080, JPEG quality 80. |
+| `backdrops.py` | `backdrops/{rustbelt,veil,glasswater,meridian,cinder,sanctum,marches,armada-reach,hangar,map}.jpg`, 1920×1080, JPEG quality 80. |
 | `icons.py` | `icons/{laser,missile,beam,ion,flak,support,augment,scrap,crew,repair,ammo}.png`, 128×128. |
 | `hulls.json` | Export of `HULLS` (generated; do not edit). |
 
@@ -36,7 +36,7 @@ How `ships.py` builds a hull. Grid coordinates (x, y down) map to Blender world 
 3. **Guards.** A build fails if the body misses a room or a turret mount, or if any raised part covers a room or leaves the sprite. The weapons room's outer top and bottom edges are kept free of greebles, because the game draws turrets there. Part tops never sit at a hull tier's height, which would z-fight and speckle the mask. After rendering, a warning fires if anything touches the image border or pokes more than about 12% past the inscribed shield ellipse (wing tips near the sprite corners usually do).
 4. **Two passes.** The beauty pass is followed by a soft 2 px dark outline. The paint-mask pass swaps every `paint`-tagged material to pure white emission, turns everything else into holdout, and hides glow cards. The mask is opaque white exactly where captain or faction paint applies (the neutral light-grey armor plates, skirts and wings), so a multiply tint keeps the shading. The structural frame, engines, trim, glass and deck stay untinted.
 
-Palettes per faction live in `PAL`: explorer blues and oranges for players; rust and hazard yellow for Raiders; organic chitin for the Vesk; grey with blue light bars for the Wardens; black, crimson and gold for the Armada.
+Palettes per faction live in `PAL`: explorer blues and oranges for players; rust and hazard yellow for Raiders; organic chitin for the Vesk; grey with blue light bars for the Wardens; pale armor grown with faceted cyan and rose crystal (`gem`, `spire`, `clusters`) for the Lumen Choir; black, crimson and gold for the Armada.
 
 ## Adding or changing a hull
 

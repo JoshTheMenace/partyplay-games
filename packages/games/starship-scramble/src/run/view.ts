@@ -3,7 +3,7 @@ import { deriveShip } from '../sim';
 import { eventView } from './events';
 import { prices } from './fleet';
 import { mapView } from './map';
-import { shipById, type State } from './state';
+import { runDepth, shipById, type State } from './state';
 
 /**
  * A 4v4 battle must fit the 24 KB snapshot budget: snapshots (10 Hz) carry at most the 12 newest events of the last 1.5 s,
@@ -20,7 +20,7 @@ export function publicView(s: State): PublicView {
     phase: s.phase, turn: s.turn, settings: s.settings, captains: s.captains.map(c => ({ ...c, cargo: s.combat ? [] : c.cargo, status: status(c.shipId) })),
     ships: s.ships.map(ship => ({ ...ship, phases: ship.phases.map(p => ({ ...p, weapons: [], systems: {} })), ...deriveShip(ship, s) })), crew: s.crew.filter(k => k.state !== 'dead'),
     combat: s.combat && { ...s.combat, events: s.combat.events.filter(e => e.atMs >= s.combat!.t - EVENT_WINDOW_MS).slice(-EVENT_CAP) },
-    map: s.combat ? { ...s.map, nodes: [] } : mapView(s.map, s.revealed), sectorIndex: s.sectorIndex, sectorCount: s.sectors.length,
+    map: s.combat ? { ...s.map, nodes: [] } : mapView(s.map, s.revealed), sectorIndex: s.sectorIndex, sectorCount: runDepth(s),
     event: eventView(s), loot: s.loot, store: s.offers && { offers: s.offers, ...prices(s) }, voteDeadline: s.deadline,
     reserves: s.reserves, message: s.message, result: s.result, fleetStats: s.fleetStats,
   } satisfies PublicView) as PublicView;

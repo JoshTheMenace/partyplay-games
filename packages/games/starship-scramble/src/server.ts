@@ -1,15 +1,13 @@
 import type { GameRules } from '../../../party-contract/src/index';
 import { assertSerializable } from '../../../party-contract/src/serializable';
-import type { Action, ActionType, Captain, Phase, PrivateView, PublicView, Settings } from './contracts';
-import { sectorDef } from './content/sectors';
+import { RUN_SECTORS, type Action, type ActionType, type Captain, type Phase, type PrivateView, type PublicView, type Settings } from './contracts';
 import { SYSTEMS } from './defs/catalog';
 import { PLAYER_HULLS } from './defs/hulls';
 import { applyCombatCommand, orderCrew, stepIdle, type CombatWorld } from './sim';
 import { tickCombat } from './run/combat';
 import { VOTE_MS, available, badge, choicesOf, eventDef } from './run/events';
 import { ammo, buy, claim, equip, repair, sell, unequip, upgrade } from './run/fleet';
-import { commission, launch, leave, tickEvent, tickMap } from './run/flow';
-import { COLUMNS, SHORT_COLUMNS, generateMap } from './run/map';
+import { commission, enterSector, launch, leave, tickEvent, tickMap } from './run/flow';
 import { exportSave, loadSave } from './run/save';
 import { allReady, currentNode, say, shipById, shipOf, type State } from './run/state';
 import { publicView } from './run/view';
@@ -44,8 +42,8 @@ function parseAction(raw: unknown): Action {
 function validateSettings(raw: unknown): Settings {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Settings must be an object.');
   const { difficulty = 'captain', length = 'standard', ...rest } = raw as Record<string, unknown>;
-  if (Object.keys(rest).length || (difficulty !== 'cadet' && difficulty !== 'captain') || (length !== 'short' && length !== 'standard')) throw new Error('Unknown Starship Scramble settings.');
-  return { difficulty, length };
+  if (Object.keys(rest).length || (difficulty !== 'cadet' && difficulty !== 'captain') || typeof length !== 'string' || !Object.hasOwn(RUN_SECTORS, length)) throw new Error('Unknown Starship Scramble settings.');
+  return { difficulty, length: length as Settings['length'] };
 }
 
 function act(s: State, c: Captain, a: Action, nowMs: number) {
@@ -105,15 +103,15 @@ function act(s: State, c: Captain, a: Action, nowMs: number) {
 export const rules: GameRules<State, null, Action, Settings, PublicView, PrivateView> = {
   validateSettings, parseAction, parseInput: () => null, neutralInput: () => null,
   create(ctx, settings) {
-    const cadet = settings.difficulty === 'cadet', sectors = settings.length === 'short' ? ['rustbelt'] : ['rustbelt', 'veil', 'meridian'];
+    const cadet = settings.difficulty === 'cadet';
     const s: State = {
       settings, phase: 'hangar', turn: 0, rng: ctx.seed | 0, nextId: 1, ships: [], crew: [], combat: null, fight: null,
       captains: ctx.players.slice(0, 4).map((p, i) => ({ id: `c${i}`, playerId: p.id, name: p.name, color: p.color, connected: true, shipId: null, hullId: null, scrap: cadet ? 50 : 20,
         ready: false, vote: null, cargo: [], stats: { damage: 0, kills: 0, repairs: 0, scrapEarned: 0, saves: 0 } })),
-      sectors, sectorIndex: 0, map: null!, revealed: false, event: null, loot: null, offers: null, pending: [], deadline: null,
+      sectors: [], sectorIndex: 0, map: null!, revealed: false, event: null, loot: null, offers: null, pending: [], deadline: null,
       reserves: cadet ? 3 : 2, scrapCarry: 0, flags: [], seen: [], message: 'Choose your ships', result: null, fleetStats: { jumps: 0, kills: 0, scrap: 0, lostShips: 0 },
     };
-    s.map = generateMap(s, sectorDef(sectors[0]), sectors.length === 1, sectors.length === 1 ? SHORT_COLUMNS : COLUMNS);
+    enterSector(s, 'rustbelt');
     return s;
   },
   applyAction(s, playerId, action, nowMs) {

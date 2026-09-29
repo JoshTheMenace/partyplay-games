@@ -1,7 +1,7 @@
 /** Sector backdrops (Blender renders) with a procedural nebula fallback, painted once per size into a static layer. */
 import { hash } from './hullart';
 
-export const BACKDROP_IDS = ['rustbelt', 'veil', 'meridian', 'armada-reach'] as const;
+export const BACKDROP_IDS = ['rustbelt', 'veil', 'glasswater', 'meridian', 'cinder', 'sanctum', 'marches', 'armada-reach'] as const;
 const images = new Map<string, HTMLImageElement | null>();
 export const loadImage = (src: string, signal?: AbortSignal) => new Promise<HTMLImageElement | null>(resolve => {
   if (signal?.aborted || typeof Image === 'undefined') return resolve(null);
@@ -15,6 +15,8 @@ export const backdropImage = (id: string) => images.get(id);
 const THEMES: Record<string, [deep: string, mid: string, glow: string, planet: string]> = {
   rustbelt: ['#1a0c10', '#7a3218', '#e0843a', '#8a4a2c'], veil: ['#0f0a24', '#4e2380', '#39b58c', '#3d2a66'],
   meridian: ['#07122a', '#1b4f86', '#5fd0e6', '#2a4f6e'], 'armada-reach': ['#1c0409', '#8c0f2a', '#ff7040', '#5a1420'],
+  glasswater: ['#04141c', '#135f6c', '#ff7ac8', '#1d4d5a'], cinder: ['#1c0704', '#8a2a0c', '#ff8a2a', '#7a2a10'],
+  sanctum: ['#110622', '#5a2388', '#ff9ed2', '#3a2266'], marches: ['#16060a', '#6e1420', '#ff5a3a', '#4a1418'],
 };
 /** Paints the full static backdrop (image cover-fit or procedural nebula, distant stars, vignette, header shade). */
 export function paintBackdrop(g: CanvasRenderingContext2D, w: number, h: number, id: string) {

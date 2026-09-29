@@ -1,5 +1,5 @@
 /** Server-only run state and the small helpers every run module shares. */
-import type { Captain, Combat, CrewRole, Item, Loot, Offer, Phase, PublicView, SectorMap, Settings, Ship, SpeciesId } from '../contracts';
+import { RUN_SECTORS, type Captain, type Combat, type CrewRole, type Item, type Loot, type Offer, type Phase, type PublicView, type SectorMap, type Settings, type Ship, type SpeciesId } from '../contracts';
 import type { EventEffect } from '../content/types';
 import { sectorDef } from '../content/sectors';
 import { createCrew, type World } from '../sim';
@@ -12,7 +12,7 @@ export type Fight = { bonus: number; ambush: boolean; endAt: number | null; coun
 export type State = World & {
   settings: Settings; phase: Phase; turn: number; rng: number; nextId: number;
   captains: Captain[]; combat: Combat | null; fight: Fight | null;
-  sectors: string[]; sectorIndex: number; map: SectorMap; revealed: boolean;
+  /** Sectors entered so far, in order; the current one is sectors[sectorIndex]. */ sectors: string[]; sectorIndex: number; map: SectorMap; revealed: boolean;
   event: EventState | null; loot: Loot | null; offers: Offer[] | null;
   /** Event items waiting for the next loot screen. */ pending: Item[];
   /** Wall-clock ms when the open vote or Continue step resolves. */ deadline: number | null;
@@ -26,9 +26,12 @@ export const CREW_NAMES = ['Ada', 'Bex', 'Cato', 'Dax', 'Edda', 'Fenn', 'Gus', '
 
 export const uid = (s: State, prefix: string) => `${prefix}${s.nextId++}`;
 export const sector = (s: State) => sectorDef(s.sectors[s.sectorIndex]);
+/** Sectors in this run, and the current sector's depth (1-based), which sets enemy strength, scrap and stock. */
+export const runDepth = (s: State) => RUN_SECTORS[s.settings.length];
+export const tierOf = (s: State) => s.sectorIndex + 1;
 export const currentNode = (s: State) => s.map.nodes.find(n => n.id === s.map.currentId)!;
-/** Scrap scaling by sector tier. */
-export const scrapScale = (s: State, amount: number) => Math.round(amount * [1, 1.3, 1.6, 1.6][sector(s).tier - 1]);
+/** Scrap scaling by depth. */
+export const scrapScale = (s: State, amount: number) => Math.round(amount * [1, 1.3, 1.6, 1.8, 2][tierOf(s) - 1]);
 export const captainById = (s: State, id: string | null) => s.captains.find(c => c.id === id) ?? null;
 export const shipById = (s: State, id: string | null) => s.ships.find(ship => ship.id === id) ?? null;
 export const shipOf = (s: State, c: Captain) => { const ship = shipById(s, c.shipId); if (!ship) throw new Error('Pick a hull in the hangar first.'); return ship; };

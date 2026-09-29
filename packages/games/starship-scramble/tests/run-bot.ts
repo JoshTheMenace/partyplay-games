@@ -50,8 +50,8 @@ export class Run {
       case 'hangar': return !c.shipId ? this.act(playerId, { type: 'hangar', hullId: this.hulls[seat % this.hulls.length], name: '', paint: c.color }) : c.ready ? undefined : this.act(playerId, { type: 'ready', ready: true });
       case 'map': { this.refit(playerId); if (c.vote) return;
         const node = v.map.nodes.find(n => n.id === v.map.currentId)!, links = v.map.nodes.filter(n => node.links.includes(n.id)), hurt = frac(ship!) < .5;
-        // Hurt captains head for a store or a quiet beacon; the rest wander.
-        const choice = hurt || c.scrap >= 120 ? links.find(n => n.kind === 'store') ?? (hurt ? links.find(n => n.kind !== 'hostile') : undefined) : undefined;
+        // Hurt captains head for a drydock, a store or a quiet beacon; the rest wander.
+        const choice = hurt || c.scrap >= 120 ? links.find(n => n.kind === (hurt ? 'drydock' : 'store')) ?? links.find(n => n.kind === 'store') ?? (hurt ? links.find(n => n.kind !== 'hostile' && n.kind !== 'elite') : undefined) : undefined;
         return this.act(playerId, { type: 'vote', nodeId: (choice ?? links[(v.turn + seat) % links.length]).id }); }
       case 'event': { const ev = v.event!;
         if (ev.result !== null) { this.refit(playerId); return c.ready ? undefined : this.act(playerId, { type: 'ready', ready: true }); }

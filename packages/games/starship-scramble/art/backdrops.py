@@ -176,7 +176,94 @@ def starmap():
         stars=[(1.4, .25, .065, .4, (.7, .8, 1)), (.5, .18, .09, .8, (1, .88, .75)), (.14, .2, .13, 1.8, (.75, .85, 1))]))
     glare(.55, .42, 10, (.55, .45, .8), .3, 2.5)
 
-SCENES = {'rustbelt': rustbelt, 'veil': veil, 'meridian': meridian, 'armada-reach': armada_reach, 'hangar': hangar, 'map': starmap}
+def crystal(name, loc, size, seed, mat, stretch=(1.8, 3.)):
+    """Faceted crystal: an uneven bipyramid, long point up, randomly tumbled."""
+    rnd = random.Random(seed); bm = bmesh.new(); n = rnd.choice((5, 6, 7)); L = size * rnd.uniform(*stretch)
+    ring = [bm.verts.new((math.cos(math.tau * k / n) * size * rnd.uniform(.35, .55), math.sin(math.tau * k / n) * size * rnd.uniform(.35, .55), rnd.uniform(-.1, .1) * size)) for k in range(n)]
+    top, bot = bm.verts.new((0, 0, L)), bm.verts.new((0, 0, -L * rnd.uniform(.2, .45)))
+    for k in range(n): bm.faces.new((ring[k], ring[(k + 1) % n], top)); bm.faces.new((ring[(k + 1) % n], ring[k], bot))
+    ob = from_bm(bm, name, mat); ob.location = loc; ob.rotation_euler = (rnd.random() * 6, rnd.random() * 6, rnd.random() * 6)
+    return ob
+
+def glasswater():
+    """Teal-and-rose crystal tide: faceted shards drifting along the top and bottom edges, lit by a blue-white star in the top-left corner."""
+    sky(dict(base=((.006, .016, .022), (.004, .008, .014)), seed=61, band=.3, floor=.08, nebula=[((.04, .28, .32), .03, .5, .42, .8, .6), ((.32, .08, .28), .06, .32, .48, .82, .9), ((.35, .75, .85), .02, .07, .55, .72, 0)]))
+    glare(-.92, .9, 12, (.5, .9, 1), .45, 2.5); glare(-.92, .9, 1.8, (.9, 1, 1), 2.4, 2, D - 6)
+    sun((.8, -.55, -.4), 3.4, (.8, .95, 1), .04); sun((-.9, .6, -.3), .9, (1, .5, .85), .1)
+    teal = plain('teal', (.05, .16, .2), .04, .35, emit=(.2, .8, 1), estr=.08, coat=1); rose = plain('rose', (.18, .06, .16), .04, .35, emit=(1, .4, .85), estr=.08, coat=1)
+    rnd = random.Random(61)
+    for i in range(60):
+        u, v, d = rnd.uniform(-1.1, 1.1), rnd.choice((-1, 1)) * rnd.uniform(.7, 1.06), rnd.uniform(50, 240)
+        crystal(f'c{i}', at(u, v, d), d * rnd.uniform(.012, .03), i, teal if rnd.random() < .7 else rose)
+
+def cinder():
+    """A swollen red giant filling the lower-left corner, slag rocks and embers drifting along the top and right edges."""
+    sky(dict(base=((.02, .006, .004), (.01, .003, .002)), seed=71, band=.3, floor=.08, nebula=[((.42, .1, .03), .03, .34, .45, .8, .7), ((.28, .05, .02), .08, .2, .5, .82, .9), ((.6, .3, .1), .02, .05, .55, .72, 0)],
+        stars=[(1.2, .2, .07, .4, (1, .7, .5)), (.45, .15, .1, .8, (1, .8, .6)), (.12, .2, .14, 2, (1, .85, .7))]))
+    def giant(n):
+        """Self-lit churning photosphere, brighter granules, a dark limb and a hot rim."""
+        f, _ = n.noise(n.coord('Object'), 2.6, 8, .62, .8); g, _ = n.noise(n.coord('Object'), 11, 5, .6)
+        col = n.ramp(n.math('ADD', f, n.math('MULTIPLY', g, .25)), [(.4, (.45, .05, .01)), (.58, (1, .28, .04)), (.72, (1, .62, .22))])
+        fr = n.node('ShaderNodeLayerWeight', [(0, .35)]).outputs['Facing']
+        return n.emission(n.add(n.rgb_scale(col, n.maprange(fr, 0, 1, 1.6, .5)), n.rgb_scale((1, .35, .08), n.math('POWER', fr, 5))))
+    bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=128, v_segments=64, radius=1)
+    star = from_bm(bm, 'giant', node_material('giant', giant), smooth=True); star.location = at(-1.08, -1.45, 520); star.scale = (175,) * 3
+    glare(-.85, -.85, 30, (1, .3, .06), .5, 1.8)
+    sun((.8, .6, -.35), 3.6, (1, .5, .22), .06); sun((-.6, -.3, -.4), .4, (.5, .4, .7), .2)
+    ember = glow('ember', (1, .45, .1), 6); rnd = random.Random(71)
+    for i, (u, v, d, r) in enumerate(((.98, .95, 45, 6), (-.2, 1.02, 60, 3.5), (1.04, -.9, 50, 5), (.55, .98, 80, 2.4), (.8, -1.02, 85, 2), (-.6, .96, 95, 1.6))):
+        rock(f'r{i}', at(u, v, d), r * .85, 70 + i, (.12, .06, .04))
+    for i in range(50):
+        u, v = rnd.uniform(-.6, 1.1), rnd.choice((-1, 1)) * rnd.uniform(.72, 1.05)
+        rock(f's{i}', at(u, v, rnd.uniform(120, 230)), rnd.uniform(.3, 1.0), 200 + i, (.14, .07, .04))
+    for i in range(90):
+        u, v, d = rnd.uniform(-1.1, 1.1), rnd.choice((-1, 1)) * rnd.uniform(.66, 1.05), rnd.uniform(60, 200)
+        bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=12, v_segments=6, radius=d * rnd.uniform(.0006, .0016)); from_bm(bm, 'spark', ember, smooth=True).location = at(u, v, d)
+
+def sanctum():
+    """Violet choir nebula: a cathedral of glowing crystal spires in the top-right corner and drifting shards along the bottom edge."""
+    sky(dict(base=((.012, .006, .022), (.006, .004, .012)), seed=81, band=.3, floor=.08, nebula=[((.3, .08, .42), .03, .34, .45, .8, .7), ((.06, .22, .32), .05, .22, .5, .82, .9), ((.55, .25, .6), .02, .06, .55, .72, 0)]))
+    glare(.82, .86, 14, (.8, .5, 1), .5, 2.2); glare(.82, .86, 3, (1, .8, 1), 1.4, 2, D - 6)
+    sun((-.7, -.6, -.4), 3, (.9, .8, 1), .05); sun((.8, .5, -.3), .8, (.4, .9, 1), .1)
+    spire = plain('spire', (.16, .08, .22), .04, .35, emit=(.85, .5, 1), estr=.3, coat=1); ice = plain('ice', (.05, .14, .18), .04, .35, emit=(.3, .85, 1), estr=.12, coat=1)
+    rnd = random.Random(81); base = at(.76, .7, 420)
+    for i in range(26):  # upright spires rising into the corner: local +Z (the long point) turned to world +Y
+        size = rnd.uniform(3, 9) * (1.5 if i < 5 else 1); ob = crystal(f'nave{i}', base + Vector((rnd.gauss(0, 26), rnd.gauss(0, 5), rnd.gauss(0, 20))), size, 300 + i, spire if i % 3 else ice, (2.5, 4.5))
+        ob.rotation_euler = (math.radians(-90), 0, rnd.gauss(0, .3))
+    for i in range(40):
+        u, v, d = rnd.uniform(-1.1, 1.1), rnd.uniform(-1.06, -.72) if i % 3 else rnd.uniform(.74, 1.05), rnd.uniform(60, 220)
+        if v > 0 and u > .3: continue
+        crystal(f'c{i}', at(u, v, d), d * rnd.uniform(.01, .026), 400 + i, ice if rnd.random() < .6 else spire)
+
+def marches():
+    """Armada territory: shipyard gantries with half-built crimson hulls across the top, burnt wreckage along the bottom, red warning lights."""
+    sky(dict(base=((.016, .006, .007), (.008, .004, .004)), seed=91, floor=.12, nebula=[((.3, .04, .05), .03, .45, .42, .78, 1.0), ((.2, .08, .05), .07, .3, .45, .8, 1.6), ((.5, .2, .1), .02, .08, .55, .72, 0)],
+        stars=[(1.2, .18, .07, .35, (1, .6, .5)), (.45, .15, .1, .8, (1, .7, .6)), (.12, .18, .14, 2, (1, .75, .7))]))
+    glare(-.9, .92, 10, (1, .3, .15), .4, 2.2)
+    sun((.7, -.5, -.5), 2.6, (1, .7, .55), .05); sun((-.8, .4, -.3), .5, (.5, .5, .8), .2)
+    steel = plated('yard', (.22, .2, .21), plate=(3, 1), seam=.4, metal=.6, rough=.4, ao=.3); crimson = plated('crimson', (.5, .05, .07), plate=(2, .8), seam=.4, metal=.4, rough=.35, ao=.3)
+    burnt = plain('burnt', (.13, .1, .1), .6, .5); red = glow('warn', (1, .12, .08), 5); fire = glow('fire', (1, .4, .1), 5); rnd = random.Random(91)
+    for k, (u, v, d, spin, tilt) in enumerate(((-.78, .9, 70, -8, 28), (.12, 1.02, 110, 4, 22), (.9, .86, 85, 10, 32))):
+        yard = link(bpy.data.objects.new('yard', None)); yard.location = at(u, v, d); yard.rotation_euler = (math.radians(tilt), 0, math.radians(spin)); L, w = d * .32, d * .045
+        def part(ob): ob.parent = yard; return ob
+        for y in (-w, w): part(cone((-L / 2, y, 0), (L / 2, y, 0), w * .07, w * .07, steel, 'truss', 10))
+        for j in range(13): x = -L / 2 + L * j / 12; part(cone((x, -w, 0), (x, w, 0), w * .05, w * .05, steel, 'rib', 8)); part(cone((x, -w, 0), (x + L / 12, w, 0), w * .025, w * .025, steel, 'lace', 6)) if j < 12 else None
+        bm = bmesh.new(); pts = [(L * .4, 0), (L * .1, w * .75), (-L * .3, w * .8), (-L * .4, w * .5), (-L * .42, 0), (-L * .4, -w * .5), (-L * .3, -w * .8), (L * .1, -w * .75)]
+        lo = [bm.verts.new((x * (.55 if k == 1 else 1), y, -w * .3)) for x, y in pts]; hi = [bm.verts.new((x * .85 * (.55 if k == 1 else 1), y * .5, w * .35)) for x, y in pts]
+        bm.faces.new(lo[::-1]); bm.faces.new(hi)
+        for i in range(len(pts)): bm.faces.new((lo[i], lo[(i + 1) % len(pts)], hi[(i + 1) % len(pts)], hi[i]))
+        part(from_bm(bm, 'hull', crimson)).location = (-L * .2 if k == 1 else 0, 0, 0)
+        for j in range(14):
+            bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=10, v_segments=5, radius=w * .06); part(from_bm(bm, 'lamp', red, smooth=True)).location = (-L / 2 + L * j / 13, rnd.choice((-w, w)) * 1.1, w * .1)
+    for i, (u, v, d, r) in enumerate(((-.95, -.92, 50, 5), (.3, -1.02, 65, 3.2), (1.02, -.9, 55, 4.5), (-.4, -1.0, 90, 2), (.7, -.98, 100, 1.8))):
+        ob = rock(f'w{i}', at(u, v, d), r * .8, 90 + i, (.08, .06, .06), (1.6, .5, .45)); ob.data.materials[0] = burnt
+        for j in range(3):
+            bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=10, v_segments=5, radius=r * .08); from_bm(bm, 'fire', fire, smooth=True).location = at(u, v, d) + Vector((rnd.gauss(0, r * .6), rnd.gauss(0, r * .3), r * .5))
+    for i in range(30):
+        u, d = rnd.uniform(-1.1, 1.1), rnd.uniform(120, 240)
+        bm = bmesh.new(); bmesh.ops.create_cube(bm, size=1); o = from_bm(bm, 'debris', burnt); o.location = at(u, rnd.uniform(-1.05, -.72), d); o.scale = (rnd.uniform(.6, 2.2), rnd.uniform(.1, .4), rnd.uniform(.3, .9)); o.rotation_euler = (rnd.random() * 6, rnd.random() * 6, rnd.random() * 6)
+
+SCENES = {'rustbelt': rustbelt, 'veil': veil, 'glasswater': glasswater, 'meridian': meridian, 'cinder': cinder, 'sanctum': sanctum, 'marches': marches, 'armada-reach': armada_reach, 'hangar': hangar, 'map': starmap}
 
 def main():
     args = sys.argv[sys.argv.index('--') + 1:]

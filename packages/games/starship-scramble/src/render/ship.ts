@@ -126,7 +126,7 @@ function crewPoint(m: Crew, now: number) {
 /** Last drawn screen position of a crew member (for death flashes). */
 export const crewScreen = (layout: ShipLayout, crewId: string) => { const p = tracks.get(crewId); return p ? toScreen(layout, p.x, p.y) : null; };
 /** Face and crown (hair, crystal, carapace, flame) per species; bodies use the species colour. */
-const HEAD: Record<SpeciesId, [face: string, crown: string]> = { human: ['#f3d2b3', '#4a2f24'], bastion: ['#e4dbf7', '#8d78c4'], skitter: ['#dff5b8', '#4f7a30'], ember: ['#ffd7a6', '#ff6a3a'] };
+const HEAD: Record<SpeciesId, [face: string, crown: string]> = { human: ['#f3d2b3', '#4a2f24'], bastion: ['#e4dbf7', '#8d78c4'], skitter: ['#dff5b8', '#4f7a30'], ember: ['#ffd7a6', '#ff6a3a'], lumen: ['#fde8ff', '#b56cff'] };
 const speciesColor = Object.fromEntries(SPECIES.map(s => [s.id, s.color])) as Record<SpeciesId, string>;
 
 /** A small front-facing figure standing on an ownership floor ring (circle = ally captain colour, diamond = hostile). */
@@ -144,7 +144,9 @@ function drawCrew(ctx: CanvasRenderingContext2D, m: Crew, layout: ShipLayout, o:
   ctx.fillStyle = face; ctx.beginPath(); if (m.species === 'bastion') ctx.roundRect(x - hr, hy - hr, hr * 2, hr * 2, hr * .35); else ctx.arc(x, hy, hr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   ctx.fillStyle = crown; ctx.beginPath();
   if (m.species === 'ember') { ctx.moveTo(x - hr * .8, hy - hr * .5); ctx.lineTo(x - hr * .3, hy - hr * 1.7); ctx.lineTo(x, hy - hr * .9); ctx.lineTo(x + hr * .4, hy - hr * 1.9); ctx.lineTo(x + hr * .8, hy - hr * .5); ctx.closePath(); }
-  else if (m.species === 'bastion') ctx.rect(x - hr, hy - hr, hr * 2, hr * .7); else ctx.arc(x, hy - hr * .15, hr * .98, Math.PI * 1.05, Math.PI * 1.95);
+  else if (m.species === 'bastion') ctx.rect(x - hr, hy - hr, hr * 2, hr * .7);
+  else if (m.species === 'lumen') for (const [dx, h] of [[-.55, 1.3], [0, 1.95], [.55, 1.3]]) { ctx.moveTo(x + (dx - .3) * hr, hy - hr * .55); ctx.lineTo(x + dx * hr, hy - hr * h); ctx.lineTo(x + (dx + .3) * hr, hy - hr * .55); ctx.closePath(); }
+  else ctx.arc(x, hy - hr * .15, hr * .98, Math.PI * 1.05, Math.PI * 1.95);
   ctx.fill();
   if (m.species === 'skitter') { ctx.strokeStyle = crown; ctx.lineWidth = lw * 1.2; ctx.beginPath(); ctx.moveTo(x - hr * .4, hy - hr * .8); ctx.lineTo(x - hr * .9, hy - hr * 1.8); ctx.moveTo(x + hr * .4, hy - hr * .8); ctx.lineTo(x + hr * .9, hy - hr * 1.8); ctx.stroke(); }
   if (m.state === 'repairing' || m.state === 'extinguishing' || m.state === 'fighting') { if (hash(Math.floor(now / 90) + x) > .45) { ctx.fillStyle = m.state === 'fighting' ? '#ff5748' : m.state === 'repairing' ? '#ffd24a' : '#e8f6ff';

@@ -14,8 +14,10 @@ import { rules } from '../src/server';
 import { startFight } from '../src/run/combat';
 import { badge, eventView, meets, resolveChoice } from '../src/run/events';
 import { openStore } from '../src/run/fleet';
-import { openEvent } from '../src/run/flow';
+import { enterSector, openEvent } from '../src/run/flow';
 import { COLUMNS, SHORT_COLUMNS, generateMap, mapView } from '../src/run/map';
+import { pick } from '../src/run/rng';
+import { publicView } from '../src/run/view';
 import { living, type State } from '../src/run/state';
 
 const NAMES = ['Mira', 'Oskar', 'Zed', 'Ana'];
@@ -39,7 +41,7 @@ const killAll = (s: State, faction: 'ally' | 'enemy') => { for (const x of s.shi
 test('settings default and reject unknown values', () => {
   assert.deepEqual(rules.validateSettings({}), { difficulty: 'captain', length: 'standard' });
   assert.deepEqual(rules.validateSettings({ difficulty: 'cadet', length: 'short' }), { difficulty: 'cadet', length: 'short' });
-  for (const bad of [null, [], 'cadet', { difficulty: 'hard' }, { length: 'epic' }, { difficulty: 'cadet', extra: 1 }]) assert.throws(() => rules.validateSettings(bad));
+  for (const bad of [null, [], 'cadet', { difficulty: 'hard' }, { length: 'epic' }, { length: 'toString' }, { difficulty: 'cadet', extra: 1 }]) assert.throws(() => rules.validateSettings(bad));
   assert.equal(rules.parseInput({ anything: 1 }), null); assert.equal(rules.neutralInput(), null);
 });
 
@@ -87,38 +89,62 @@ test('stale turns, wrong phases and spectators are rejected without side effects
   assert.equal(JSON.stringify(m), snapshot);
 });
 
-test('sector maps: 7 columns (9 in a short run), single start and exit, a trading post before the Flagship, every beacon reachable (200 seeds)', () => {
-  let hostile = 0, middle = 0;
-  for (let seed = 1; seed <= 200; seed++) for (const def of SECTORS) {
-    const final = def.id === 'meridian', map = generateMap({ rng: seed }, def, final), byId = new Map(map.nodes.map(n => [n.id, n]));
+test('sector maps: 11 columns (10 in a short run), one exit per next-sector option, special beacons, a post before the Flagship, every beacon reachable (200 seeds)', () => {
+  let hostile = 0, middle = 0, warps = 0;
+  for (let seed = 1; seed <= 200; seed++) for (const def of SECTORS) for (const final of [false, true]) {
+    const exits = final ? [] : SECTORS.filter(d => d !== def).slice(seed % 3, seed % 3 + 1 + seed % 2), map = generateMap({ rng: seed }, def, { final, columns: COLUMNS, exits }), byId = new Map(map.nodes.map(n => [n.id, n]));
     assert.equal(map.columns, COLUMNS); assert.equal(map.armadaCol, -1);
-    const col = (c: number) => map.nodes.filter(n => n.col === c);
+    const col = (c: number) => map.nodes.filter(n => n.col === c), last = COLUMNS - 1;
     assert.equal(col(0).length, 1); assert.equal(col(0)[0].kind, 'start'); assert.equal(map.currentId, col(0)[0].id);
-    assert.equal(col(COLUMNS - 1).length, 1); assert.equal(col(COLUMNS - 1)[0].kind, final ? 'boss' : 'exit');
-    for (let c = 1; c < COLUMNS - 1; c++) assert(final && c === COLUMNS - 2 ? col(c).length === 1 && col(c)[0].kind === 'store' : col(c).length >= 2 && col(c).length <= 4);
+    if (final) assert.deepEqual(col(last).map(n => n.kind), ['boss']);
+    else assert.deepEqual(col(last).map(n => n.dest?.id), exits.map(d => d.id), 'one named exit per option');
+    for (let c = 1; c < last; c++) assert(final && c === last - 1 ? col(c).length === 1 && col(c)[0].kind === 'store' : col(c).length >= (c === 1 || c === last - 1 ? 2 : def.rows[0]) && col(c).length <= (c === 1 || c === last - 1 ? 3 : def.rows[1]));
     for (const n of map.nodes) {
       assert(n.x >= 0 && n.x <= 1 && n.y >= 0 && n.y <= 1);
-      for (const l of n.links) assert.equal(byId.get(l)!.col, n.col + 1, 'links go one column forward');
-      if (n.col < COLUMNS - 1) assert(n.links.length > 0, 'every beacon leads on');
+      const far = n.links.filter(l => byId.get(l)!.col !== n.col + 1);
+      assert(far.length === (n.kind === 'wormhole' ? 1 : 0) && far.every(l => byId.get(l)!.col === n.col + 2 && byId.get(l)!.col < last), 'links go one column forward; wormholes add one link two ahead');
+      warps += far.length;
+      if (n.col < last) assert(n.links.length > 0, 'every beacon leads on');
     }
     const reach = new Set([map.currentId]); for (const n of map.nodes) if (reach.has(n.id)) n.links.forEach(l => reach.add(l));
     assert.equal(reach.size, map.nodes.length, 'every beacon is reachable');
-    const stores = map.nodes.filter(n => n.kind === 'store' && n.col < COLUMNS - 2);
-    assert(stores.length >= 1 && stores.length <= 2 && stores.every(n => n.col >= 2 && n.col <= 4));
-    if (def.id === 'veil') assert(map.nodes.some(n => n.kind === 'nebula' && n.hazard === 'nebula'));
-    else assert(!map.nodes.some(n => n.kind === 'nebula'));
-    const mids = map.nodes.filter(n => n.col > 0 && n.col < COLUMNS - 2); middle += mids.length; hostile += mids.filter(n => n.kind === 'hostile').length;
+    const count = (kind: string) => map.nodes.filter(n => n.kind === kind && n.col < last - (final ? 1 : 0));
+    assert(count('store').length === 2 && count('store').every(n => n.col >= 2 && n.col <= last - 2), 'two trading posts');
+    assert(count('elite').length === 2 && count('elite').every(n => n.col >= 3), 'two elites, never early');
+    assert(count('drydock').length === 1 && count('drydock')[0].col >= 4, 'one drydock in the back half');
+    assert.equal(map.nodes.some(n => n.kind === 'nebula'), def.hazards.includes('nebula'));
+    assert(map.nodes.every(n => !['start', 'exit', 'boss', 'store', 'drydock', 'wormhole'].includes(n.kind) || n.hazard === 'none'), 'no hazards at safe beacons');
+    const mids = map.nodes.filter(n => n.col > 0 && n.col < last - 1); middle += mids.length; hostile += mids.filter(n => n.kind === 'hostile').length;
   }
   assert(hostile / middle > .3 && hostile / middle < .45, `hostile share ${hostile / middle}`);
-  assert.deepEqual(generateMap({ rng: 7 }, sectorDef('veil'), false), generateMap({ rng: 7 }, sectorDef('veil'), false), 'seeded');
-  const short = generateMap({ rng: 7 }, sectorDef('rustbelt'), true, SHORT_COLUMNS);
-  assert.deepEqual([short.columns, short.nodes.filter(n => n.col >= SHORT_COLUMNS - 2).map(n => n.kind)], [9, ['store', 'boss']]);
+  assert(warps >= 200 * SECTORS.length * 2, 'wormholes in every map');
+  const plan = { final: false, columns: COLUMNS, exits: [sectorDef('meridian')] };
+  assert.deepEqual(generateMap({ rng: 7 }, sectorDef('veil'), plan), generateMap({ rng: 7 }, sectorDef('veil'), plan), 'seeded');
+  const short = generateMap({ rng: 7 }, sectorDef('rustbelt'), { final: true, columns: SHORT_COLUMNS, exits: [] });
+  assert.deepEqual([short.columns, short.nodes.filter(n => n.col >= SHORT_COLUMNS - 2).map(n => n.kind)], [10, ['store', 'boss']]);
 });
 
-test('nebulae hide neighboring beacon kinds until revealed', () => {
-  const map = generateMap({ rng: 3 }, sectorDef('veil'), false), nebula = map.nodes.find(n => n.kind === 'nebula')!;
-  const next = map.nodes.find(n => nebula.links.includes(n.id) && !['exit', 'nebula'].includes(n.kind));
+test('routes: every run starts in the Rustbelt, each exit offers unvisited sectors of the next depth, and lengths set the depth', () => {
+  for (const [length, depth] of [['short', 1], ['standard', 3], ['long', 5]] as const) for (let seed = 1; seed <= 40; seed++) {
+    const s = create(2, { length }, seed);
+    assert.deepEqual([s.sectors, publicView(s).sectorCount], [['rustbelt'], depth]);
+    for (let d = 1; d <= depth; d++) {
+      const exits = s.map.nodes.filter(n => n.kind === 'exit'), boss = s.map.nodes.filter(n => n.kind === 'boss');
+      if (d === depth) { assert.equal(exits.length, 0); assert.equal(boss.length, 1); break; }
+      assert(exits.length >= 1 && exits.length <= 2 && exits.every(n => sectorDef(n.dest!.id).depths.includes(d + 1) && !s.sectors.includes(n.dest!.id)), `${length} depth ${d}`);
+      enterSector(s, pick({ rng: seed }, exits).dest!.id);
+    }
+    assert.equal(new Set(s.sectors).size, depth);
+  }
+  const both = new Set<string>(); for (let seed = 1; seed <= 40; seed++) both.add(create(2, {}, seed).map.nodes.filter(n => n.kind === 'exit').map(n => n.dest!.id).sort().join());
+  assert.deepEqual([...both], ['glasswater,veil'], 'the Rustbelt always offers both depth-2 sectors');
+});
+
+test('nebulae hide neighboring beacon kinds until revealed; wormholes stay visible', () => {
+  const map = generateMap({ rng: 3 }, sectorDef('veil'), { final: false, columns: COLUMNS, exits: [sectorDef('meridian')] }), nebula = map.nodes.find(n => n.kind === 'nebula')!;
+  const next = map.nodes.find(n => nebula.links.includes(n.id) && !['exit', 'nebula', 'wormhole'].includes(n.kind));
   if (next) assert.equal(mapView(map, false).nodes.find(n => n.id === next.id)!.kind, 'unknown');
+  for (const n of mapView(map, false).nodes) if (map.nodes.find(m => m.id === n.id)!.kind === 'wormhole') assert.equal(n.kind, 'wormhole');
   assert.equal(mapView(map, true), map);
 });
 
@@ -139,7 +165,7 @@ test('content the engine relies on is complete and sane', () => {
   }
   const boss = ENEMIES.find(e => e.id === 'flagship')!;
   assert.equal(boss.phases!.length, 3); assert(boss.phases!.every((p, i, all) => i === 0 || p.maxHull > all[i - 1].maxHull));
-  assert.deepEqual(SECTORS.map(s => [s.id, s.tier]), [['rustbelt', 1], ['veil', 2], ['meridian', 3]]);
+  for (let d = 1; d <= 5; d++) assert(SECTORS.filter(s => s.depths.includes(d)).length >= (d === 1 ? 1 : 2), `depth ${d} offers a choice`);
 });
 
 test('requirement badges and availability follow the fleet', () => {

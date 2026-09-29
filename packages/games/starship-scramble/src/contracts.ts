@@ -9,13 +9,16 @@ export const SAVE_VERSION = 1;
 
 // ---------- identifiers ----------
 export type SystemId = 'helm' | 'engines' | 'shields' | 'weapons' | 'oxygen' | 'medbay' | 'teleporter' | 'cloak' | 'defense';
-export type SpeciesId = 'human' | 'bastion' | 'skitter' | 'ember';
+export type SpeciesId = 'human' | 'bastion' | 'skitter' | 'ember' | 'lumen';
 export type CrewRole = 'pilot' | 'gunner' | 'engineer' | 'medic' | 'soldier';
 export type WeaponKind = 'laser' | 'missile' | 'beam' | 'ion' | 'flak' | 'support';
 export type Hazard = 'none' | 'asteroids' | 'solar' | 'ion-storm' | 'nebula';
 export type Faction = 'ally' | 'enemy';
 
-export type Settings = { difficulty: 'cadet' | 'captain'; length: 'short' | 'standard' };
+export type RunLength = 'short' | 'standard' | 'long';
+export type Settings = { difficulty: 'cadet' | 'captain'; length: RunLength };
+/** Sectors per run by length; the last sector's exit is the Flagship. */
+export const RUN_SECTORS: Record<RunLength, number> = { short: 1, standard: 3, long: 5 };
 
 // ---------- browser-safe definitions (src/defs) ----------
 /** A room is an axis-aligned rectangle of grid cells. Ships face +x (nose right); enemies are drawn mirrored. */
@@ -107,8 +110,9 @@ export const OVERHEAT_MS = [60000, 150000] as const;
 export const overheat = (c: Pick<Combat, 't' | 'introUntilMs'>) => Math.min(1, Math.max(0, (c.t - c.introUntilMs - OVERHEAT_MS[0]) / (OVERHEAT_MS[1] - OVERHEAT_MS[0])));
 
 // ---------- run state ----------
-export type NodeKind = 'start' | 'unknown' | 'hostile' | 'distress' | 'store' | 'nebula' | 'exit' | 'boss';
-export type MapNode = { id: string; col: number; row: number; x: number; y: number; kind: NodeKind; links: string[]; visited: boolean; hazard: Hazard };
+export type NodeKind = 'start' | 'unknown' | 'hostile' | 'distress' | 'store' | 'nebula' | 'elite' | 'drydock' | 'derelict' | 'wormhole' | 'exit' | 'boss';
+/** A link to a node more than one column ahead is a wormhole shortcut. Exits name the sector they lead to. */
+export type MapNode = { id: string; col: number; row: number; x: number; y: number; kind: NodeKind; links: string[]; visited: boolean; hazard: Hazard; dest?: { id: string; name: string; blurb: string } };
 export type SectorMap = { sectorId: string; name: string; theme: string; nodes: MapNode[]; currentId: string; armadaCol: number; columns: number };
 export type ItemKind = 'weapon' | 'augment';
 export type Item = { id: string; kind: ItemKind; defId: string; ownerId: string | null };

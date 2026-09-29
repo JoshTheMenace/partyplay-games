@@ -7,27 +7,29 @@ import { createCrew, createShip, startCombat, stepCombat, type CombatWorld } fro
 import { shipLabel } from './events';
 import { berths, openLoot } from './fleet';
 import { int, pick, random, weighted } from './rng';
-import { captainById, currentNode, enter, living, online, recruit, say, scrapScale, sector, shipById, shipOf, uid, type State } from './state';
+import { captainById, currentNode, enter, living, online, recruit, say, scrapScale, sector, shipById, shipOf, tierOf, uid, type State } from './state';
 
 type CombatEffect = Extract<EventEffect, { kind: 'combat' }>;
-const PAINT: Partial<Record<EnemyDef['faction'], string>> = { vesk: '#6f8b2e', wardens: '#6a7688', armada: '#b01e32' };
+const PAINT: Partial<Record<EnemyDef['faction'], string>> = { vesk: '#6f8b2e', wardens: '#6a7688', choir: '#5ec8d8', armada: '#b01e32' };
 /**
- * Tuning by sector tier and by fleet size (index = captains − 1). A lone captain lacks the fleet's combined volleys, so enemies there are
- * softer; big fleets face tougher, faster-firing enemies. The Flagship's hull is BOSS[0] + BOSS[1] × captains of its authored phases.
+ * Tuning by depth (index = sector depth − 1) and by fleet size (index = captains − 1). A lone captain lacks the fleet's combined volleys, so enemies
+ * there are softer; big fleets face tougher, faster-firing enemies. The Flagship's hull is BOSS[0] + BOSS[1] × captains of its authored phases,
+ * times BOSS_DEPTH for the depth it is met at (a short run meets it after one sector, a long run after five). Elite squads get ELITE more hull.
  */
-const HULL_SCALE = [1, 1.2, 1.4, 1.4], FLEET_HULL = [.85, 1, 1.15, 1.25], FLEET_CHARGE = [.9, 1, 1.3, 1.4], BOSS = [-.1, .6], SHORT_BOSS = .5, CADET_HULL = .9, CADET_BOSS = .75;
+const HULL_SCALE = [1, 1.25, 1.5, 1.65, 1.8], FLEET_HULL = [.9, 1, 1.15, 1.25], FLEET_CHARGE = [.9, 1, 1.3, 1.4], BOSS = [-.1, .6], BOSS_DEPTH = [.5, .5, 1, 1.1, 1.2];
+const CADET_HULL = .9, CADET_BOSS = .75, ELITE = 1.15;
 /** Wall-clock beat after an outcome so the TV can show the last explosion. */
 const END_MS = 2500;
 const SQUADS = ENEMIES.filter(d => !d.phases && d.id !== 'rogue-trader');
 
-/** Per-enemy threat budget: grows with sector tier and beacon column, so every sector opens gently. */
-const cap = (s: State) => 1 + .5 * sector(s).tier + .25 * currentNode(s).col;
+/** Per-enemy threat budget: grows with depth and beacon column, so every sector opens gently; elite beacons field ships a class heavier. */
+const cap = (s: State, elite = false) => 1 + .5 * tierOf(s) + 1.5 * Math.min(1, currentNode(s).col / (s.map.columns - 2)) + (elite ? 1.5 : 0);
 /**
  * Enemies per fight by fleet size: 1 captain → 1 (sometimes 2 small), 2 → 2, 3 → 2–3, 4 → 3. Explicit (event) lists are padded or trimmed,
  * weakest first, to fit; outside ambushes an enemy over the beacon's budget is swapped for one within it (its faction, else the sector's).
  */
-function squad(s: State, enemies: CombatEffect['enemies'], ambush: boolean): EnemyDef[] {
-  const n = s.captains.length, size = n === 1 ? 1 : n === 2 ? 2 : n === 3 ? int(s, 2, 3) : 3, max = cap(s);
+function squad(s: State, enemies: CombatEffect['enemies'], ambush: boolean, elite = false): EnemyDef[] {
+  const n = s.captains.length, size = n === 1 ? 1 : n === 2 ? 2 : n === 3 ? int(s, 2, 3) : 3, max = cap(s, elite);
   if (enemies !== 'sector') {
     const within = (d: EnemyDef) => [SQUADS.filter(o => o.faction === d.faction && o.threat <= max), SQUADS.filter(o => sector(s).factions.includes(o.faction) && o.threat <= max)].find(l => l.length);
     const list = enemies.map(enemyDef).map(d => ambush || d.phases || d.threat <= max ? d : pick(s, within(d) ?? [d])).sort((a, b) => a.threat - b.threat);
@@ -46,13 +48,13 @@ function squad(s: State, enemies: CombatEffect['enemies'], ambush: boolean): Ene
 }
 
 /**
- * Flagship phases for this fleet: hull scales with fleet size and difficulty; it raises at most one shield layer per captain, powers
- * one weapon per captain plus one, and never boards a lone captain. Short runs (one sector of upgrades) meet it with a third less hull
- * and one level less of shields, point defense and teleporter. Fleets of 3 and 4 also face one and two Armada Gunship escorts (none on Cadet, where the Flagship is also 25% smaller).
+ * Flagship phases for this fleet: hull scales with fleet size, difficulty and depth; it raises at most one shield layer per captain, powers
+ * one weapon per captain plus one, and never boards a lone captain. Short runs (one sector of upgrades) meet it with half the hull
+ * and one level less of shields, point defense and teleporter; long runs with more hull. Fleets of 3 and 4 also face one and two Armada Gunship escorts (none on Cadet, where the Flagship is also 25% smaller).
  */
 function bossPhase(s: State, { systems, maxHull, ...p }: BossPhase, scale: number): BossPhase {
-  const n = s.captains.length, soft = sector(s).tier < 3 ? 1 : 0, less = (id: SystemId, min: number) => Math.max(min, (systems[id] ?? 0) - soft);
-  return { ...p, maxHull: Math.round(maxHull * scale * (soft ? SHORT_BOSS : 1)),
+  const n = s.captains.length, soft = tierOf(s) < 3 ? 1 : 0, less = (id: SystemId, min: number) => Math.max(min, (systems[id] ?? 0) - soft);
+  return { ...p, maxHull: Math.round(maxHull * scale * BOSS_DEPTH[tierOf(s) - 1]),
     systems: { ...systems, shields: Math.min(less('shields', 1), n), defense: less('defense', 0), teleporter: n > 1 ? less('teleporter', 0) : 0, weapons: Math.min(systems.weapons ?? 0, n + 1 - soft) } };
 }
 function spawn(s: State, d: EnemyDef, slot: number, scale: number) {
@@ -63,16 +65,17 @@ function spawn(s: State, d: EnemyDef, slot: number, scale: number) {
   for (const k of d.crew) recruit(s, null, ship, k.species, k.role);
 }
 
-/** Enemy hull scales with sector tier and fleet size, the Flagship's with fleet size only; enemy charge scales with fleet size. Cadet: −10% hull, 20% slower enemy charge. */
+/** Enemy hull scales with depth and fleet size, the Flagship's with fleet size and depth; enemy charge scales with fleet size. Cadet: −10% hull, 30% slower enemy charge. */
 export function startFight(s: State, effect: CombatEffect, ambush: boolean) {
-  const defs = squad(s, effect.enemies, ambush), cadet = s.settings.difficulty === 'cadet', boss = defs.some(d => d.phases), n = s.captains.length;
-  defs.forEach((d, slot) => spawn(s, d, slot, (d.phases ? BOSS[0] + BOSS[1] * n : HULL_SCALE[sector(s).tier - 1] * FLEET_HULL[n - 1]) * (cadet ? d.phases ? CADET_BOSS : CADET_HULL : 1)));
+  const defs = squad(s, effect.enemies, ambush, effect.elite), cadet = s.settings.difficulty === 'cadet', boss = defs.some(d => d.phases), n = s.captains.length;
+  // Flagship escorts keep second-sector strength however deep the fleet has come; the Flagship itself scales with BOSS_DEPTH.
+  defs.forEach((d, slot) => spawn(s, d, slot, (d.phases ? BOSS[0] + BOSS[1] * n : HULL_SCALE[(boss ? Math.min(2, tierOf(s)) : tierOf(s)) - 1] * FLEET_HULL[n - 1] * (effect.elite ? ELITE : 1)) * (cadet ? d.phases ? CADET_BOSS : CADET_HULL : 1)));
   const objective = boss ? 'boss' : effect.objective ?? 'destroy';
   s.combat = startCombat(s, { id: uid(s, 'b'), seed: int(s, 1, 0x7fffffff), hazard: effect.hazard ?? currentNode(s).hazard, objective, enemyCharge: FLEET_CHARGE[n - 1] * (cadet ? .7 : 1),
-    ...objective === 'survive' && { surviveMs: 40000 + 5000 * sector(s).tier } });
+    ...objective === 'survive' && { surviveMs: 40000 + 5000 * tierOf(s) } });
   s.fight = { bonus: effect.bonus ?? 1, ambush, endAt: null, counted: [] };
   enter(s, 'combat');
-  say(s, boss ? 'The Armada Flagship moves to engage!' : ambush ? 'Armada ambush!' : `${defs.length === 1 ? defs[0].name : `${defs.length} hostiles`} incoming`);
+  say(s, boss ? 'The Armada Flagship moves to engage!' : ambush ? 'Armada ambush!' : effect.elite ? `Elite contact: ${defs.map(d => d.name).join(', ')}` : `${defs.length === 1 ? defs[0].name : `${defs.length} hostiles`} incoming`);
 }
 
 /** The fleet jumps when a strict majority of connected captains with a working ship vote for it and the drive is charged. */

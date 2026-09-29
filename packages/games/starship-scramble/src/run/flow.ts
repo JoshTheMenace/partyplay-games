@@ -1,14 +1,14 @@
 /** Phase flow: hangar launch, fleet votes, jumps and beacon arrivals, event continuation. */
 import type { Captain, MapNode } from '../contracts';
-import { sectorDef } from '../content/sectors';
+import { SECTORS, sectorDef } from '../content/sectors';
 import { PLAYER_HULLS, hullDef } from '../defs/hulls';
 import { createShip } from '../sim';
 import { startFight } from './combat';
 import { ALL_VOTED_MS, available, choicesOf, eventDef, pickEvent, resolveChoice } from './events';
 import { openLoot, openStore, refit } from './fleet';
-import { generateMap } from './map';
+import { COLUMNS, SHORT_COLUMNS, generateMap } from './map';
 import { pick } from './rng';
-import { allReady, currentNode, enter, fleet, online, recruit, say, shipOf, type State } from './state';
+import { allReady, currentNode, enter, fleet, online, recruit, runDepth, say, shipOf, type State } from './state';
 
 /** Put a captain's chosen hull on the pad (a crewless preview until launch). Unnamed ships are "<captain>'s <hull>" when that fits 16 characters. */
 export function commission(s: State, c: Captain, hullId: string, name: string, paint: string) {
@@ -53,19 +53,22 @@ export function tickEvent(s: State, nowMs: number) {
 function jump(s: State, node: MapNode) {
   node.visited = true; s.map.currentId = node.id; s.map.armadaCol++; s.fleetStats.jumps++;
   for (const ship of fleet(s)) if (ship.augments.includes('hull-welders')) ship.hull = Math.min(ship.maxHull, ship.hull + 2);
-  if (node.kind === 'exit') return nextSector(s);
+  if (node.kind === 'exit') return enterSector(s, node.dest!.id);
   if (node.kind === 'boss') return openEvent(s, 'flagship-hail');
   if (node.col <= s.map.armadaCol) return openEvent(s, 'armada-ambush');
   if (node.kind === 'store') return openStore(s);
   const def = pickEvent(s, node.kind);
   if (def) return openEvent(s, def.id);
-  if (node.kind === 'hostile') return startFight(s, { kind: 'combat', enemies: 'sector' }, false);
+  if (node.kind === 'hostile' || node.kind === 'elite') return startFight(s, { kind: 'combat', enemies: 'sector', ...node.kind === 'elite' && { elite: true, bonus: 1.5 } }, false);
   enter(s, 'map'); say(s, 'A quiet beacon. The fleet catches its breath.');
 }
-function nextSector(s: State) {
-  s.sectorIndex++; s.revealed = false;
-  s.map = generateMap(s, sectorDef(s.sectors[s.sectorIndex]), s.sectorIndex === s.sectors.length - 1);
-  enter(s, 'map'); say(s, `Entering ${s.map.name}`);
+/** Enter a sector (the first at creation) and plot its map. Unless it is the run's last, its exits offer up to two unvisited sectors that fit the next depth. */
+export function enterSector(s: State, id: string) {
+  s.sectors.push(id); s.sectorIndex = s.sectors.length - 1; s.revealed = false;
+  const depth = s.sectors.length, final = depth === runDepth(s), options = final ? [] : SECTORS.filter(d => d.depths.includes(depth + 1) && !s.sectors.includes(d.id));
+  const first = options.length ? pick(s, options) : null, second = options.length > 1 ? pick(s, options.filter(d => d !== first)) : null;
+  s.map = generateMap(s, sectorDef(id), { final, columns: s.settings.length === 'short' ? SHORT_COLUMNS : COLUMNS, exits: [first, second].filter(d => d !== null) });
+  if (s.phase !== 'hangar') { enter(s, 'map'); say(s, `Entering ${s.map.name}`); }
 }
 export function openEvent(s: State, defId: string) {
   s.event = { defId, outcome: null, next: null };
