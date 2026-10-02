@@ -46,6 +46,8 @@ test('content banks, narration budget and catalog entry', () => {
     assert.ok(!(q.open && q.adult), 'adult questions are never on the record');
   }
   assert.ok(QUESTIONS.filter(q => q.open).length >= 30, 'plenty of on-the-record questions');
+  assert.ok(QUESTIONS.filter(q => !q.text.startsWith('Have you ever')).length >= 70, 'opinions and right-now checks, not only “have you ever”');
+  for (const crush of QUESTIONS.filter(q => /crush on (?!a cartoon)|kiss|date |dating|ex’s|partner/i.test(q.text))) assert.ok(crush.adult, `family-safe: ${crush.text}`);
   for (const w of WANTED) {
     assert.equal(w.items.length, WANTED_SIZE, w.title);
     assert.equal(new Set(w.items).size, WANTED_SIZE, w.title);
@@ -94,15 +96,17 @@ test('full games with bots: 3, 6 and 10 players; every player is the agent once 
 });
 
 test('round 2 with seven or more players: the three lowest connected scorers take the dial', () => {
-  for (const offline of [false, true]) {
+  for (const twist of ['', 'offline', 'repeat'] as const) {
     const n = start(7);
     n.until(() => pub(n).phase === 'scores');
     const s = inner(n);
     s.ids.forEach((id, i) => { s.scores[id] = [900, 100, 500, 0, 700, 300, 200][i]!; });
-    if (offline) n.connect('p3', false);
+    if (twist === 'offline') n.connect('p3', false);
+    if (twist === 'repeat') s.last = 'p3';
     n.until(() => pub(n).round === 2 && pub(n).phase === 'survey');
     assert.equal(pub(n).q!.count, 3, 'still three questions');
-    assert.deepEqual([agentOf(n), ...inner(n).queue], offline ? ['p1', 'p6', 'p5'] : ['p3', 'p1', 'p6'], 'lowest first');
+    const expected = { '': ['p3', 'p1', 'p6'], offline: ['p1', 'p6', 'p5'], repeat: ['p1', 'p6', 'p3'] }[twist];
+    assert.deepEqual([agentOf(n), ...inner(n).queue], expected, `lowest first (${twist || 'plain'}), never the same agent twice in a row`);
   }
 });
 

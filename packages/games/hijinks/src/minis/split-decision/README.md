@@ -31,7 +31,9 @@ The palette is `#ffe23a` electric yellow and `#9b4dff` purple on `#0c0322` void.
 ## Rules
 
 1. **Round 1: Split the room (×1).** Every player gets their own dilemma template with one blank, and fills in the catch
-   (60 characters max). Stuck players can tap *Let the machine fill it* (a house blank at half points).
+   (60 characters max). Stuck players can tap *Let the machine fill it* (a house blank at half points). Every blank sits
+   mid-sentence, so the server lowers the phone keyboard's automatic capital (on any would-you-rather option, and on
+   common opening words like "You" or "Every" in a catch; names and ALL CAPS stay) and drops a repeated leading "but".
 2. **Round 2: Would you rather? (×2).** Every player gets their own would-you-rather and writes **both** options. The two
    options must differ. The room picks A or B.
 3. **The Big Split (×3).** One dilemma for everyone. Every player writes their own catch. Then each phone judges every
@@ -105,17 +107,18 @@ With the bot pauses in the harness, a whole game takes 2.5 / 4.2 / 6.4 simulated
 
 | Bank | Count |
 | --- | --- |
-| Round 1 dilemmas (family) | 135 |
+| Round 1 dilemmas (family) | 154 |
 | Round 1 dilemmas (adult: nights out, dating, work, money) | 26 |
-| Would-you-rathers (family / adult) | 56 / 10 |
+| Would-you-rathers (family / adult) | 63 / 10 |
 | The Big Split dilemmas (family / adult) | 32 / 6 |
 | House blanks: clauses for dilemmas | 67 |
 | House blanks: actions for would-you-rathers | 48 |
 
-That is 265 templates and 115 house blanks, all original. Adult items are filtered when `settings.family` is on.
+That is 291 templates and 115 house blanks, all original. Adult items are filtered when `settings.family` is on.
 
 Templates are dealt with `dealFresh`, keyed by text. Every dealt template is marked with `api.used.add`, and unused ones
-come first, so a replay in the same night starts fresh. House blanks rotate, so two in one game never repeat.
+come first, so a replay in the same night starts fresh. House blanks rotate, so two in one game never repeat, and a
+machine fill never repeats the scenario's other option.
 
 ## Narration (`narration.ts`, 236 characters)
 
@@ -174,9 +177,9 @@ Shared lines:
 All runs live under `output/hijinks/split-decision/`. Every run finished join → menu → intro → three rounds → podium → menu
 → results with 0 page errors, 0 phone overflow findings and 0 rejected actions.
 
-- **Tests:** `tests/split-decision.test.ts` (15 tests: bot games at 3, 6 and 10 players, scoring table, ties and odd rooms,
+- **Tests:** `tests/split-decision.test.ts` (16 tests: bot games at 3, 6 and 10 players, scoring table, ties and odd rooms,
   unanimous/silent/house cards, round 2 and The Big Split, Bold bonuses, defaults, disconnects, stale/duplicate/out-of-phase
-  moves, privacy, family filter, night memory, reveal beats). `render-smoke.test.tsx` renders every phase on the TV and two
+  moves, fill cleaning and machine-fill duplicates, privacy, family filter, night memory, reveal beats). `render-smoke.test.tsx` renders every phase on the TV and two
   phones at 10 players (run with `--import ./output/hijinks/split-decision/css-hook.mjs`). Whole-project `tsc` and
   `oxlint packages/games/hijinks` are clean.
 - **Driver:** `qa-sd.ts` is a copy of `tools/qa-driver.ts` that keeps screenshots near real time on this loaded machine
@@ -197,9 +200,22 @@ they clear the author card); the rift ran through the writing copy (now on a gla
 small text in empty panels while voting (now large and centred until the voters land); the author's points sticker covered
 the avatar and “wrote this” (now below the card); an empty side now says “Nobody!”; the phone said “No , all on your own”.
 
+Independent review (2026-10-02), runs `review-1/p10`, `review-1/p3` (all viewports, settled), `review-2/p3`, `review-2/p10` and
+`review-3/p10` on builds `hj-b2-split-decision-r1…r3`, all with 0 page errors, 0 overflow and 0 rejected actions. Fixes:
+
+- Phone keyboards auto-capitalise, so real fills read "…but You sneeze…". The server now lowers that capital and drops a repeated "but".
+- A machine fill could repeat the author's own other option when the case differed. It now always skips the card's other blanks.
+- The TV hid the Bold tag on odd-room perfect splits (5–4), even though the minority was paid. The tag now shows and sits
+  inside its panel, clear of the verdict stamp.
+- Would-you-rather writing showed yes/no tips. It now has its own tips.
+- Two voters gathering in the portal stacked on top of each other. They now sit side by side.
+- The "Machine-filled · half points" chip wrapped with the dot at the start of a line. It now breaks after "Machine-filled".
+- Content: family dilemmas 135 → 154 and would-you-rathers 56 → 63, so family mode alone meets the 150/60 spec. Five
+  vague "Would you do it?" endings were made specific, and three house options that said "forever" were reworded because
+  they clashed with time-limited templates.
+
 ## Known gaps
 
 - Not tested on physical phones, real keyboards, real audio output or a real TV at couch distance.
-- No narrator recordings exist for `split-decision.*` lines yet; `api.say` returns 0 and the fixed beats carry the pacing.
 - Bots write the same few catches, so screenshots repeat text; human games will be more varied.
 - With ten players The Big Split take cards use about 30 px text in the reveal (readable, but the smallest type on the TV).

@@ -4,7 +4,9 @@ import { createNight, type Night, type NightOptions } from './harness';
 import { miniInfo } from '../src/minis/catalog';
 import { LINES } from '../src/minis/bracket-brawl/narration';
 import { BLIND, CATEGORIES, GENERIC, SMACKDOWN, STANDARD } from '../src/minis/bracket-brawl/content.server';
-import type { BrawlState } from '../src/minis/bracket-brawl/server';
+import { server, type BrawlState } from '../src/minis/bracket-brawl/server';
+import { mix, pick as pickN, random, shuffle } from '../src/core/server/rng';
+import type { MiniApi, PackPlayer } from '../src/core/contract';
 import { MAX_ANSWER, PTS, type BrawlPrivate, type BrawlPublic } from '../src/minis/bracket-brawl/types';
 
 const pub = (n: Night) => n.mini<BrawlPublic>();
@@ -92,7 +94,7 @@ test('seeding: small rooms write two answers in opposite halves; nobody faces th
   }
 });
 
-test('scoring: wins pay 100 × round, predictions 50 per round won, the champion 500 × bracket; all hidden until the crown', () => {
+test('scoring: wins pay 100, predictions 100 per round won, the champion 100 × rounds; all hidden until the crown', () => {
   const n = start(4);
   writeAll(n);
   at(n, 'predict');
@@ -112,14 +114,14 @@ test('scoring: wins pay 100 × round, predictions 50 per round won, the champion
   }
   const champ = pub(n).champ!, s = inner(n), wins: Record<string, number> = Object.fromEntries(n.ids.map(id => [id, 0]));
   assert.equal(champ.entry, 'e0');
-  assert.equal(champ.bonus, PTS.champ * 1);
+  assert.equal(champ.bonus, PTS.champ * 3);
   assert.deepEqual(champ.oracles, n.ids);
   assert.equal(champ.oracle, PTS.oracle * 3);
-  s.bouts.forEach((round, r) => round.forEach(b => { const w = by(n, b.sides[b.winner!]); if (w) wins[w]! += PTS.win * (r + 1); }));
-  for (const id of n.ids) assert.equal(pub(n).scores[id], wins[id]! + PTS.oracle * 3 + (champ.by === id ? PTS.champ : 0), id);
+  s.bouts.forEach(round => round.forEach(b => { const w = by(n, b.sides[b.winner!]); if (w) wins[w]! += PTS.win; }));
+  for (const id of n.ids) assert.equal(pub(n).scores[id], wins[id]! + PTS.oracle * 3 + (champ.by === id ? PTS.champ * 3 : 0), id);
   assert.ok(pub(n).entries.every(e => e.by || e.house), 'the crown unmasks every author');
 
-  // Smackdown (bracket 3) doubles wins and predictions; the champion bonus is 500 × 3.
+  // Smackdown (bracket 3) doubles match wins only; predictions and the champion bonus stay the same.
   n.until(() => pub(n).bracket === 3 && pub(n).phase === 'write');
   writeAll(n);
   at(n, 'predict');
@@ -131,10 +133,11 @@ test('scoring: wins pay 100 × round, predictions 50 per round won, the champion
   const [a0] = authors(n);
   voteAll(n, 0);
   at(n, 'result');
-  assert.equal(me(n, a0!).earned, PTS.win * 2 + PTS.oracle * 2, 'round-one win ×2 plus the doubled prediction');
+  assert.equal(me(n, a0!).earned, PTS.win * 2 + PTS.oracle, 'a doubled round-one win plus the prediction');
   assert.deepEqual(pub(n).scores, before);
   n.until(() => pub(n).phase === 'champ');
   assert.equal(pub(n).champ!.bonus, PTS.champ * 3);
+  assert.equal(pub(n).champ!.oracle, PTS.oracle * 3);
   n.until(() => n.state.phase === 'podium');
 });
 
@@ -172,6 +175,17 @@ test('missing answers: the House fills in, uncredited; timers follow the pace se
   const texts = inner(n).entries.map(e => e.text.toLowerCase());
   assert.equal(new Set(texts).size, texts.length, 'house answers never repeat or copy a player');
   assert.ok(inner(n).entries.filter(e => e.by === null).every(e => STANDARD.some(p => p.house.includes(e.text)) || GENERIC.includes(e.text)));
+});
+
+test('house answers skip near-copies of player answers (case, punctuation, a leading article)', () => {
+  const n = start(5), [h0, h1] = inner(n).cards[0]!.house;
+  n.send('p0', { turn: pub(n).turn, k: 'answer', slot: 0, text: `The ${h0!.toUpperCase()}!` });
+  n.send('p1', { turn: pub(n).turn, k: 'answer', slot: 0, text: `a ${h1!.replace(/^(?:a|an|the) /i, '')}` });
+  writeAll(n);
+  at(n, 'predict');
+  const house = inner(n).entries.filter(e => e.by === null).map(e => e.text);
+  assert.equal(house.length, 3);
+  assert.ok(!house.includes(h0!) && !house.includes(h1!), house.join(' | '));
 });
 
 test('disconnects: absent writers, predictors and voters are not waited for', () => {
@@ -264,4 +278,53 @@ test('night memory: a replay in the same night deals fresh prompts and house ans
   assert.deepEqual(prompts().filter(p => first.includes(p)), []);
   assert.ok(first.every(p => used.includes(p)), 'every dealt prompt is marked');
   assert.ok(used.some(k => k.startsWith('house:')), 'house answers are marked too');
+});
+
+/**
+ * Seeded nights for balance (also in output/hijinks/gaps/games/brawl-sim.ts): each player has a writing skill, an answer's
+ * quality is skill + luck (house answers a little weaker), voters favour the better answer through a noisy logistic and
+ * predictions call the answer that looks best. Returns the banked scores after each bracket and each bracket's champion.
+ */
+function night(players: number, seed: number) {
+  const rng = { seed: mix(seed) }, r = () => random(rng), gauss = () => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r()), used = new Set<string>();
+  let now = 1000, last = '';
+  const api: MiniApi = {
+    get now() { return now; }, random: r, shuffle: items => shuffle(rng, items), pick: (items, n) => pickN(rng, items, n),
+    seconds: b => b * 1000, say: () => 0, sfx() {}, music() {}, speak() {}, media: { put() {}, remove() {} },
+    settings: { family: true, timers: 'standard', readAloud: false, tutorials: true, startWith: '' }, used: { has: k => used.has(k), add: k => void used.add(k) },
+  };
+  const roster: PackPlayer[] = Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, color: '#fff', avatar: i, connected: true }));
+  const s = server.create(roster, api), skill = Object.fromEntries(s.ids.map(id => [id, gauss() * .6])), quality = new Map<string, number>();
+  const q = (text: string) => quality.get(text) ?? (quality.set(text, gauss() - .3), quality.get(text)!);
+  const totals: Record<string, number>[] = [], champs: (string | null)[] = [];
+  while (!server.result(s)) {
+    if (last !== s.turn) {
+      last = s.turn;
+      const act = (id: string, a: Record<string, unknown>) => { try { server.action(s, id, { turn: s.turn, ...a }, api); } catch { /* own matchup */ } };
+      if (s.phase === 'write') for (const id of s.ids) for (let slot = 0; slot < s.per; slot++) { const text = `${id} ${s.bracket} ${slot}`; quality.set(text, skill[id]! + gauss()); act(id, { k: 'answer', slot, text }); }
+      if (s.phase === 'predict') for (const id of s.ids) act(id, { k: 'predict', entry: [...s.entries].sort((a, b) => q(b.text) + gauss() * .8 - q(a.text) - gauss() * .8)[0]!.id });
+      if (s.phase === 'vote') { const [a, b] = s.bouts[s.round - 1]![s.index]!.sides.map(id => q(s.entries.find(e => e.id === id)!.text)); for (const id of s.ids) act(id, { k: 'vote', side: r() < 1 / (1 + Math.exp(-1.5 * (a! - b!))) ? 0 : 1 }); }
+      if (s.phase === 'champ') { totals.push({ ...s.scores }); champs.push(s.entries.find(e => e.id === s.champ!.entry)!.by); }
+    }
+    now = Math.max(now + 100, s.deadline); server.tick(s, api);
+  }
+  return { ids: s.ids, totals, champs };
+}
+
+test('balance: seeded nights keep the first two brackets in play while Smackdown stays the biggest prize', t => {
+  for (const players of [3, 10]) {
+    const nights = Array.from({ length: 150 }, (_, k) => night(players, 500 + k)), sum = (rec: Record<string, number>) => Object.values(rec).reduce((a, b) => a + b, 0);
+    let share = 0, leaderWins = 0, finalChamp = 0, finals = 0;
+    for (const { ids, totals: [, two, three], champs } of nights) {
+      const top = Math.max(...ids.map(id => three![id]!)), lead = Math.max(...ids.map(id => two![id]!)), winners = ids.filter(id => three![id] === top);
+      share += (sum(three!) - sum(two!)) / sum(three!);
+      if (winners.some(id => two![id] === lead)) leaderWins++;
+      if (champs[2]) { finals++; if (winners.includes(champs[2])) finalChamp++; }
+    }
+    const pc = (x: number) => Math.round(100 * x);
+    t.diagnostic(`${players}p: Smackdown pays ${pc(share / 150)}% of the points; its champion wins the night ${pc(finalChamp / finals)}%; the leader after two brackets wins ${pc(leaderWins / 150)}%`);
+    assert.ok(share / 150 > 1 / 3 && share / 150 < .45, 'Smackdown is the biggest bracket but not worth the first two together');
+    assert.ok(finalChamp / finals < .85, 'the Smackdown champion does not automatically win the night');
+    assert.ok(leaderWins / 150 > .4, 'leading after two brackets matters');
+  }
 });

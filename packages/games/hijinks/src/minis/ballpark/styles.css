@@ -47,6 +47,7 @@
 .bp-pill { margin-left: 16px; padding: 2px 18px; border-radius: 99px; background: #031016d9; border: 3px solid #2de0c866; color: var(--bp-teal); font-weight: 400; }
 .bp-foot { flex: none; min-height: 96px; display: grid; place-items: center; text-align: center; font-size: 36px; font-weight: 900; line-height: 1.15; text-wrap: balance; } .bp-foot > p { margin: 0; }
 .bp-foot b { color: var(--bp-amber); }
+.bp-foot .hj-still { display: inline-flex; vertical-align: middle; margin-left: 14px; }
 /* Badge details ("is on the dial", "+500") clear the name's thick underline. */
 .hj-ballpark .hj-badge small { margin-top: .35em; }
 .bp-spy { width: 34px; height: 54px; overflow: visible; }
@@ -105,6 +106,9 @@
 .bp-agent-card, .bp-hint { align-self: center; display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 30px 26px; border-radius: 30px; background: #031016c7; border: 3px solid #2de0c840; text-align: center; }
 .bp-agent-card .hj-badge { font-size: 38px; } .bp-agent-card .hj-badge small { color: var(--bp-amber); font-size: 28px; font-weight: 900; }
 .bp-agent-card p, .bp-hint p { margin: 0; font-size: 30px; font-weight: 800; line-height: 1.2; text-wrap: balance; } .bp-agent-card p b { color: var(--bp-teal); }
+.bp-ladder { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; font-family: var(--bp-mono); font-size: 24px; font-weight: 700; color: var(--kp-cream); }
+.bp-ladder li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 4px 14px; border-radius: 12px; background: #2de0c814; border: 2px solid #2de0c840; }
+.bp-ladder b { font-size: 30px; font-weight: 400; color: var(--bp-amber); }
 .bp-hint .kp-title { font-size: 52px; color: var(--bp-amber); } .bp-up { color: var(--bp-teal); white-space: nowrap; } .bp-down { color: var(--bp-amber); white-space: nowrap; }
 .bp-hint-much { padding: 14px 18px; border-radius: 18px; background: #ffb2381f; } .bp-hint-much b { color: var(--bp-amber); }
 .bp-floor { min-height: 0; display: flex; flex-direction: column; gap: 14px; }
@@ -117,7 +121,9 @@
 .bp-booth ul { flex: 1; min-height: 0; list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: 8px 6px; }
 .bp-booth li { position: relative; width: 116px; display: flex; justify-content: center; animation: hj-drop .5s cubic-bezier(.2, 1.4, .4, 1) backwards; }
 .bp-booth li .hj-badge { font-size: 19px; max-width: 100%; text-align: center; overflow-wrap: anywhere; }
-.bp-booth li .hj-badge small { font-family: var(--font-display); font-size: 26px; color: var(--kp-lime); animation: hj-stamp .45s cubic-bezier(.2, 1.6, .4, 1) backwards; }
+/* The pay stamp straddles the booth's bottom edge, clear of the title and the bettors' names. */
+.bp-booth-pay { position: absolute; bottom: -24px; left: 50%; translate: -50% 0; z-index: 2; padding: 0 14px; font-size: 32px; border-width: 5px; color: #17853a; background: #fbfaf2; }
+.bp-booth-pay small { font-size: .55em; }
 .bp-booth-sealed { margin: auto; font-size: 150px; color: #fff6e51f; -webkit-text-stroke: 0; filter: none; animation: hj-throb 2.4s ease-in-out infinite; }
 .bp-booth-empty { margin: auto; font-family: var(--bp-mono); font-size: 24px; letter-spacing: .14em; text-transform: uppercase; opacity: .55; }
 .bp-booth[data-win] { border-color: var(--kp-lime); box-shadow: 0 0 0 4px var(--kp-lime), 0 0 50px #78d95588; }

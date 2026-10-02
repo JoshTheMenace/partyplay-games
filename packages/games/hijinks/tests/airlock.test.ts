@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createNight, type Night, type NightOptions } from './harness';
+import { mix, pick as pickN, random, shuffle } from '../src/core/server/rng';
+import type { MiniApi, PackPlayer } from '../src/core/contract';
 import { miniInfo } from '../src/minis/catalog';
 import { LINES } from '../src/minis/airlock/narration';
 import { PAIRS, pairKey } from '../src/minis/airlock/content.server';
-import type { AirState } from '../src/minis/airlock/server';
+import { server, type AirState } from '../src/minis/airlock/server';
 import { ICONS, KINDS, MAX_ANSWER, MIN_RESUME_MS, TESTS, artKey, type AirPrivate, type AirPublic, type Kind } from '../src/minis/airlock/types';
 
 const pub = (n: Night) => n.mini<AirPublic>();
@@ -31,10 +33,10 @@ function legal(n: Night, id: string) {
 function answerAll(n: Night, ids = n.ids) { for (const id of ids) n.send(id, legal(n, id)); }
 /** Answers the current test and waits for the discussion. */
 function toDiscuss(n: Night) { at(n, 'test'); answerAll(n); at(n, 'discuss'); }
-function push(n: Night, by: string, suspects: string[]) { n.send(by, { turn: pub(n).turn, k: 'push', suspects }); }
+function push(n: Night, by: string, suspect: string) { n.send(by, { turn: pub(n).turn, k: 'push', suspect }); }
 function voteAll(n: Night, vote: 'airlock' | 'abort' | ((id: string) => 'airlock' | 'abort')) {
   const b = pub(n).ballot!;
-  for (const id of n.ids) if (id !== b.by && !b.suspects.includes(id)) n.send(id, { turn: pub(n).turn, k: 'vote', vote: typeof vote === 'string' ? vote : vote(id) });
+  for (const id of n.ids) if (id !== b.by && id !== b.suspect && !pub(n).out.includes(id)) n.send(id, { turn: pub(n).turn, k: 'vote', vote: typeof vote === 'string' ? vote : vote(id) });
 }
 
 test('content bank, narration budget and catalog entry', () => {
@@ -139,12 +141,12 @@ test('privacy: the public view is identical whoever the aliens are, and private 
   }
   // A push names suspects publicly but never says who is an alien until the doors open.
   at(n, 'test'); answerAll(n); at(n, 'discuss');
-  push(n, crew(n)[0]!, crew(n).slice(1, 3)); check();
+  push(n, crew(n)[0]!, crew(n)[1]!); check();
   voteAll(n, 'abort'); at(n, 'verdict'); check();
-  assert.equal(pub(n).verdict!.roles, undefined, 'roles stay hidden on an abort');
+  assert.equal(pub(n).verdict!.role, undefined, 'the role stays hidden on an abort');
 });
 
-test('hack and scan: aliens share one hack that reveals the crew prompt; crew scans verify; the TV never hears about it', () => {
+test('hack and scan: aliens share one hack that reveals the crew prompt; a crew scan shows the same line; the TV never hears about it', () => {
   const n = start(7), s = inner(n), [a1, a2] = s.aliens, human = crew(n)[0]!;
   at(n, 'test');
   const cues = n.view().cues.length, before = JSON.stringify(pub(n)), pair = cur(n).pair;
@@ -153,7 +155,7 @@ test('hack and scan: aliens share one hack that reveals the crew prompt; crew sc
   for (const alien of [a1!, a2!]) { assert.equal(me(n, alien).intercepted, pair.crew); assert.equal(me(n, alien).scan, false); }
   rejects(n.trySend(a2!, { turn: pub(n).turn, k: 'scan' }), /used up/);
   n.send(human, { turn: pub(n).turn, k: 'scan' });
-  assert.equal(me(n, human).verified, true); assert.equal(me(n, human).scan, false);
+  assert.equal(me(n, human).intercepted, pair.crew, 'a crew scan looks exactly like a hack'); assert.equal(me(n, human).scan, false);
   assert.equal(me(n, crew(n)[1]!).scan, true, 'each crewmate has their own scan');
   rejects(n.trySend(human, { turn: pub(n).turn, k: 'scan' }), /used up/);
   assert.equal(JSON.stringify(pub(n)), before, 'scans change nothing public');
@@ -163,22 +165,22 @@ test('hack and scan: aliens share one hack that reveals the crew prompt; crew sc
   for (const id of n.ids) n.send(id, { turn: pub(n).turn, k: 'ready' });
   at(n, 'test');
   assert.equal(me(n, a1!).intercepted, undefined, 'the hack lasts one test');
-  assert.equal(me(n, human).verified, undefined);
+  assert.equal(me(n, human).intercepted, undefined);
 });
 
 test('scoring: catching the alien pays the crew and the pusher; the result names the hero', () => {
   const n = start(5), alien = inner(n).aliens[0]!, team = crew(n), [hero] = team;
   toDiscuss(n);
-  push(n, hero!, [alien]);
+  push(n, hero!, alien);
   assert.equal(pub(n).phase, 'vote');
-  assert.deepEqual(pub(n).ballot, { by: hero, suspects: [alien] });
+  assert.deepEqual(pub(n).ballot, { by: hero, suspect: alien, saves: 1 });
   assert.equal(me(n, hero!).vote, 'airlock', 'the pusher votes airlock');
   rejects(n.trySend(alien, { turn: pub(n).turn, k: 'vote', vote: 'abort' }), /in the airlock/);
   voteAll(n, 'airlock');
   n.advance(1300);
   assert.equal(pub(n).phase, 'verdict');
   const v = pub(n).verdict!;
-  assert.equal(v.eject, true); assert.deepEqual(v.roles, { [alien]: 'alien' });
+  assert.equal(v.eject, true); assert.equal(v.role, 'alien');
   assert.deepEqual(v.votes.map(x => x.player), n.ids.filter(id => id !== alien));
   at(n, 'end');
   const e = pub(n).end!;
@@ -197,10 +199,10 @@ test('scoring: spacing a human ends it at once; the aliens bank 500 per test sur
   toDiscuss(n);
   for (const id of n.ids) n.send(id, { turn: pub(n).turn, k: 'ready' });
   toDiscuss(n);
-  push(n, alien, [victim!]);
+  push(n, alien, victim!);
   voteAll(n, 'airlock');
   at(n, 'verdict');
-  assert.deepEqual(pub(n).verdict!.roles, { [victim!]: 'crew' });
+  assert.equal(pub(n).verdict!.role, 'crew');
   at(n, 'end');
   assert.deepEqual([pub(n).end!.winner, pub(n).end!.how, pub(n).end!.survived], ['aliens', 'framed', 2]);
   n.until(() => n.state.phase === 'podium');
@@ -212,17 +214,51 @@ test('scoring: spacing a human ends it at once; the aliens bank 500 per test sur
   assert.ok(result.awards?.some(a => a.title === 'Master Framer' && a.playerId === alien));
 });
 
-test('two aliens: pushes need two suspects; one human among them hands the aliens the win', () => {
-  const n = start(7), [a1, a2] = inner(n).aliens, [c1, c2] = crew(n);
+test('two aliens: one suspect per push, two ABORTs save them, the hunt goes on until both are out', () => {
+  const n = start(7, { order: ['answer', 'rating', 'pick', 'choice', 'draw', 'answer', 'rating'] }), [a1, a2] = inner(n).aliens, [c1, c2, c3] = crew(n);
   toDiscuss(n);
-  rejects(n.trySend(c1!, { turn: pub(n).turn, k: 'push', suspects: [a1] }), /Pick 2/);
-  push(n, c1!, [a1!, c2!]);
+  rejects(n.trySend(c1!, { turn: pub(n).turn, k: 'push', suspects: [a1, a2] }), /Unknown field/);
+  // The other alien's lone ABORT can't veto: it takes two while two aliens are aboard.
+  push(n, c1!, a1!);
+  assert.equal(pub(n).ballot!.saves, 2);
   rejects(n.trySend(a2!, { turn: pub(n).turn, k: 'vote', vote: 'maybe' }), /airlock or abort/);
-  voteAll(n, 'airlock');
+  voteAll(n, id => id === a2 ? 'abort' : 'airlock');
+  at(n, 'verdict');
+  assert.deepEqual([pub(n).verdict!.eject, pub(n).verdict!.role], [true, 'alien']);
+  at(n, 'discuss');
+  assert.deepEqual(pub(n).out, [a1], 'the spaced alien is out and the discussion resumes');
+  assert.ok(pub(n).deadline - pub(n).at >= MIN_RESUME_MS);
+  rejects(n.trySend(a1!, { turn: pub(n).turn, k: 'ready' }), /spaced/);
+  rejects(n.trySend(c2!, { turn: pub(n).turn, k: 'push', suspect: a1 }), /still aboard/);
+  // With one alien left, a single ABORT saves the suspect again.
+  push(n, c2!, a2!);
+  assert.equal(pub(n).ballot!.saves, 1);
+  voteAll(n, id => id === c3 ? 'abort' : 'airlock');
+  at(n, 'verdict'); assert.equal(pub(n).verdict!.eject, false);
+  at(n, 'discuss');
+  for (const id of n.ids.filter(id => id !== a1)) n.send(id, { turn: pub(n).turn, k: 'ready' });
+  // The next test skips the spaced alien: no answer slot, never waited for.
+  at(n, 'test'); answerAll(n, n.ids.filter(id => id !== a1)); at(n, 'results');
+  assert.ok(!pub(n).board!.answers.some(a => a.player === a1));
+  at(n, 'discuss');
+  push(n, c3!, a2!); voteAll(n, 'airlock');
   at(n, 'end');
-  assert.deepEqual([pub(n).end!.winner, pub(n).end!.how], ['aliens', 'framed']);
-  assert.equal(pub(n).end!.by, undefined, 'a crew pusher who spaced a human earns nothing');
-  assert.equal(pub(n).scores[a1!], 1500); assert.equal(pub(n).scores[c1!], 0);
+  assert.deepEqual([pub(n).end!.winner, pub(n).end!.how, pub(n).end!.heroes], ['crew', 'caught', [c1, c3]]);
+  n.until(() => n.state.phase === 'podium');
+  const result = n.state.podium!.result;
+  assert.equal(result.headline, 'Both aliens got spaced!');
+  assert.deepEqual([result.scores[c1!], result.scores[c3!], result.scores[c2!], result.scores[a1!]], [1500, 1500, 1000, 0]);
+  assert.deepEqual(result.awards?.filter(a => a.title === 'Airlock Hero').map(a => a.playerId), [c1, c3]);
+});
+
+test('two aliens: spacing a human after an alien still hands the aliens the win, spaced alien included', () => {
+  const n = start(8), [a1, a2] = inner(n).aliens, [c1, c2] = crew(n);
+  toDiscuss(n);
+  push(n, c1!, a1!); voteAll(n, id => id === a2 ? 'abort' : 'airlock'); at(n, 'discuss');
+  push(n, a2!, c2!); voteAll(n, 'airlock');
+  at(n, 'end');
+  assert.deepEqual([pub(n).end!.winner, pub(n).end!.how, pub(n).end!.by], ['aliens', 'framed', a2]);
+  assert.equal(pub(n).scores[a1!], 1500); assert.equal(pub(n).scores[a2!], 2000); assert.equal(pub(n).scores[c1!], 0);
 });
 
 test('reaching Earth: seven tests without an ejection is an alien win worth 4500', () => {
@@ -238,7 +274,7 @@ test('reaching Earth: seven tests without an ejection is an alien win worth 4500
   assert.deepEqual([pub(n).end!.how, pub(n).end!.survived], ['arrived', TESTS]);
   n.until(() => n.state.phase === 'podium');
   const result = n.state.podium!.result;
-  assert.equal(result.scores[alien], 4500); assert.equal(result.headline, 'The aliens reached Earth!');
+  assert.equal(result.scores[alien], 4500); assert.equal(result.headline, 'The alien reached Earth!');
   assert.ok(result.awards?.some(a => a.title === 'Perfect Disguise' && a.playerId === alien));
 });
 
@@ -246,15 +282,15 @@ test('aborts: one abort or a missing vote saves the suspects, the discussion res
   const n = start(6), [p1, p2, p3] = crew(n);
   toDiscuss(n);
   n.advance(20_000);
-  push(n, p1!, [p2!]);
+  push(n, p1!, p2!);
   voteAll(n, id => id === p3 ? 'abort' : 'airlock');
   at(n, 'verdict');
   assert.equal(pub(n).verdict!.eject, false);
   at(n, 'discuss');
   assert.ok(pub(n).deadline - pub(n).at >= MIN_RESUME_MS, 'a failed push hands back at least ten seconds');
   assert.equal(pub(n).pushes[p1!], 1);
-  rejects(n.trySend(p1!, { turn: pub(n).turn, k: 'push', suspects: [p1] }), /yourself/);
-  push(n, p1!, [p3!]);
+  rejects(n.trySend(p1!, { turn: pub(n).turn, k: 'push', suspect: p1 }), /yourself/);
+  push(n, p1!, p3!);
   // Nobody else votes: missing votes count as abort at the buzzer.
   at(n, 'verdict');
   const v = pub(n).verdict!;
@@ -262,7 +298,7 @@ test('aborts: one abort or a missing vote saves the suspects, the discussion res
   assert.ok(v.votes.filter(x => x.player !== p1).every(x => x.vote === 'abort' && x.auto));
   at(n, 'discuss');
   assert.equal(pub(n).pushes[p1!], 0);
-  rejects(n.trySend(p1!, { turn: pub(n).turn, k: 'push', suspects: [p2] }), /both of your button pushes/);
+  rejects(n.trySend(p1!, { turn: pub(n).turn, k: 'push', suspect: p2 }), /both of your button pushes/);
   n.until(() => n.state.phase === 'podium' || pub(n).phase === 'test');
   assert.equal(pub(n).test, 2, 'the discussion timed out into the next test');
 });
@@ -279,15 +315,15 @@ test('validation: stale, duplicate and out-of-phase actions; strict fields and v
   rejects(n.trySend(p0!, { turn, k: 'draw', drawing: DOODLE }), /not this test/);
   rejects(n.trySend(p0!, { turn, k: 'dance' }), /Unknown move/);
   rejects(n.trySend(p0!, { turn, k: 'ready' }), /Talk it over/);
-  rejects(n.trySend(p0!, { turn, k: 'push', suspects: [p1] }), /only works during a discussion/);
+  rejects(n.trySend(p0!, { turn, k: 'push', suspect: p1 }), /only works during a discussion/);
   n.send(p0!, { turn, k: 'answer', value: '  Tabs\tand‮new\nlines ' });
   assert.equal(me(n, p0!).answer, 'Tabs and new lines');
   rejects(n.trySend(p0!, { turn, k: 'answer', value: 'again' }), /already locked/);
   answerAll(n, n.ids.slice(1)); at(n, 'discuss');
   n.send(p0!, { turn: pub(n).turn, k: 'ready' });
   rejects(n.trySend(p0!, { turn: pub(n).turn, k: 'ready' }), /already ready/);
-  rejects(n.trySend(p0!, { turn: pub(n).turn, k: 'push', suspects: [p1, p1] }), /one suspect/);
-  rejects(n.trySend(p0!, { turn: pub(n).turn, k: 'push', suspects: ['nobody'] }), /in the room/);
+  rejects(n.trySend(p0!, { turn: pub(n).turn, k: 'push', suspect: [p1] }), /still aboard/);
+  rejects(n.trySend(p0!, { turn: pub(n).turn, k: 'push', suspect: 'nobody' }), /still aboard/);
   for (const id of n.ids.slice(1)) n.send(id, { turn: pub(n).turn, k: 'ready' });
   at(n, 'test');
   for (const value of [0, 11, 2.5, '7']) rejects(n.trySend(p0!, { turn: pub(n).turn, k: 'answer', value }), /whole number from 1 to 10/);
@@ -326,7 +362,7 @@ test('missing answers and disconnects: nobody stalls the ship; absent voters are
   n.advance(1600);
   assert.equal(pub(n).phase, 'test', 'an offline player is not waited for in the discussion');
   answerAll(n, n.ids.filter(id => id !== off)); at(n, 'discuss');
-  push(n, p1!, [p2!]);
+  push(n, p1!, p2!);
   for (const id of n.ids) if (![p1, p2, off].includes(id)) n.send(id, { turn: pub(n).turn, k: 'vote', vote: 'abort' });
   n.advance(1300);
   assert.equal(pub(n).phase, 'verdict', 'the offline voter is not waited for');
@@ -375,4 +411,65 @@ test('night memory: a replay in the same night deals none of the first game’s 
   await n.playMini();
   const second = two.tests.map(t => pairKey(t.pair));
   assert.deepEqual(second.filter(k => first.includes(k)), []);
+});
+
+/**
+ * Table model for balance (also in output/hijinks/gaps/games/airlock-sim.ts): each test an answer "looks off" with a chance
+ * (aliens 45 %, humans 15 %), every crewmate perceives it with personal noise; the most confident crewmate pushes once their
+ * top suspect clearly stands out (bolder near Earth); an alien frames the most suspected human now and then; crew vote
+ * AIRLOCK on a suspect near the top of their own list; aliens always protect each other; a visible ABORT looks suspicious.
+ */
+function simulate(players: number, seed: number) {
+  const rng = { seed: mix(seed) }, r = () => random(rng), gauss = () => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r()), used = new Set<string>();
+  let now = 1000;
+  const api: MiniApi = {
+    get now() { return now; }, random: r, shuffle: items => shuffle(rng, items), pick: (items, n) => pickN(rng, items, n),
+    seconds: b => b * 1000, say: () => 0, sfx() {}, music() {}, speak() {}, media: { put() {}, remove() {} },
+    settings: { family: true, timers: 'standard', readAloud: false, tutorials: true, startWith: '' }, used: { has: k => used.has(k), add: k => void used.add(k) },
+  };
+  const roster: PackPlayer[] = Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `P${i}`, color: '#fff', avatar: i, connected: true }));
+  const s = server.create(roster, api), { ids, aliens } = s, team = ids.filter(id => !aliens.includes(id));
+  const susp = Object.fromEntries(ids.map(i => [i, Object.fromEntries(ids.map(p => [p, 0]))])) as Record<string, Record<string, number>>;
+  const act = (id: string, a: Record<string, unknown>) => { try { server.action(s, id, { turn: s.turn, ...a }, api); return true; } catch { return false; } };
+  const alive = () => ids.filter(id => !s.out.includes(id)), rank = (i: string) => alive().filter(p => p !== i).sort((a, b) => susp[i]![b]! - susp[i]![a]!);
+  const avg = (p: string) => team.filter(i => i !== p).reduce((t, i) => t + susp[i]![p]!, 0);
+  let pushes = 0, seen = 0;
+  while (!server.result(s)) {
+    const t = s.tests.length;
+    if (t !== seen) { seen = t; pushes = 0; }
+    if (s.phase === 'test') {
+      const kind = s.tests.at(-1)!.pair.kind;
+      for (const id of alive()) act(id, kind === 'draw' ? { k: 'draw', drawing: DOODLE } : { k: 'answer', value: kind === 'answer' ? 'toast' : kind === 'pick' ? id : 1 });
+      for (const p of alive()) { const off = r() < (aliens.includes(p) ? .45 : .15) ? 1 : 0; for (const i of team) if (i !== p) susp[i]![p]! += off + gauss() * .6; }
+    } else if (s.phase === 'discuss') {
+      let pushed = false;
+      if (pushes < 2) {
+        const best = team.filter(i => alive().includes(i) && s.pushes[i]! < 2).map(i => { const list = rank(i); return { i, top: list[0]!, z: susp[i]![list[0]!]! - list.reduce((x, p) => x + susp[i]![p]!, 0) / list.length }; }).sort((a, b) => b.z - a.z)[0];
+        if (best && t >= 2 && best.z >= 2.2 - .25 * (t - 1)) pushed = act(best.i, { k: 'push', suspect: best.top });
+        const framer = aliens.find(a => alive().includes(a) && s.pushes[a]! < 2);
+        if (!pushed && framer && r() < .12) pushed = act(framer, { k: 'push', suspect: team.filter(c => alive().includes(c)).sort((a, b) => avg(b) - avg(a))[0] });
+      }
+      if (pushed) { pushes++; continue; }
+      for (const id of ids) act(id, { k: 'ready' });
+    } else if (s.phase === 'vote') {
+      const b = s.ballot!;
+      for (const id of alive()) if (id !== b.suspect) act(id, { k: 'vote', vote: aliens.includes(id) ? (aliens.includes(b.suspect) ? 'abort' : 'airlock')
+        : rank(id).slice(0, b.saves + 1 + (t >= 6 ? 1 : 0)).includes(b.suspect) ? 'airlock' : 'abort' });
+    } else if (s.phase === 'verdict') {
+      const b = s.ballot!;
+      now = s.deadline; server.tick(s, api);
+      for (const [id, v] of Object.entries(b.votes)) if (v === 'abort') for (const i of team) if (i !== id) susp[i]![id]! += b.eject && aliens.includes(b.suspect) ? 1.5 : .4;
+      continue;
+    }
+    now = Math.max(now + 1600, ['brief', 'results', 'end'].includes(s.phase) ? s.deadline : 0); server.tick(s, api);
+  }
+  return s.ending!;
+}
+
+test('balance: seeded table-model games give the crew a fair shot with two aliens, as with one', t => {
+  const rate = (players: number) => Array.from({ length: 300 }, (_, k) => simulate(players, 1000 + k)).filter(e => e.winner === 'crew').length / 300;
+  const rates = Object.fromEntries([5, 7, 10].map(p => [p, rate(p)]));
+  t.diagnostic(`crew win rate: ${Object.entries(rates).map(([p, x]) => `${p}p ${Math.round(x * 100)}%`).join(', ')}`);
+  for (const p of [7, 10]) assert.ok(rates[p]! >= .25 && rates[p]! <= .6, `${p} players: crew win ${rates[p]}`);
+  assert.ok(Math.abs(rates[7]! - rates[5]!) < .15, 'two aliens at 7 play like one alien at 5');
 });

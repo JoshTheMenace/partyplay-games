@@ -27,7 +27,8 @@ Three rounds. Each round:
    answer, everyone twists exactly one) that avoids repeating a twister→author pair within the game; rounds 1–2 deal a different
    app to every post, preferring apps not seen yet.
 4. **Feed** (server-timed): each post scrolls in on the TV, context first, then the answer drops in under the author's name,
-   likes climb and two replies appear; the read-aloud voice (if on) reads the label, the context and the answer.
+   likes climb, the innocent question it answered pops up beside the author, and two replies appear; the read-aloud voice
+   (if on) reads the label, the context and the answer.
 5. **Vote** (25 s; 35 s in the final): all posts in a grid (letters A–J). One vote each, never your own twist. You may vote
    for the post made from your own answer.
 6. **Verdicts**: posts revealed fewest votes first (twister unmasked, votes, points), then the top post(s) get REPORTED.
@@ -57,9 +58,11 @@ verdict beats are fixed offsets from the phase start (`revealBeats`), so a reloa
 ## Content (`content.server.ts`, server only)
 
 - 171 family questions + 15 adult questions.
-- 98 format variants over 11 apps: 88 across the 10 feed apps (8–10 each) and 10 profile status variants; 6 are adult.
-- 110 house twists (10 per app) + 11 adult; 40 house answers; 40 replies for the reply chains.
-- 32 adult-tagged items in all, filtered when `settings.family`.
+- 102 format variants over 11 apps: 88 across the 10 feed apps (8–10 each) and 14 profile status variants (13 family, so a
+  10-player Final Feed never repeats one); 6 are adult.
+- 100 house twists (10 per feed app) + 10 adult, and 4 per status variant (56; status labels need different kinds of phrase,
+  so each brings its own); 40 house answers; 40 replies for the reply chains.
+- 31 adult-tagged items in all, filtered when `settings.family`.
 - Night memory: each dealt question and format is marked with `api.used`, and replays prefer unused ones (`dealFresh`).
 
 ## Narration (`narration.ts`, 219 characters)

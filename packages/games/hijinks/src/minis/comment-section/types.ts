@@ -22,8 +22,8 @@ export type Format = { kind: Kind; ask: string; label: string; meta: string };
 
 export type Phase = 'round' | 'answer' | 'twist' | 'feed' | 'vote' | 'results' | 'scores';
 export type Reply = { who: string; text: string };
-/** A twisted post. `author` wrote the answer (public attribution); the twister stays secret until the results. */
-export type Post = { id: string; author: string; kind: Kind; label: string; meta: string; twist: string; answer: string; likes: number; replies: Reply[] };
+/** A twisted post. `author` wrote the answer to `question` (both public from the feed on); the twister stays secret until the results. */
+export type Post = { id: string; author: string; question: string; kind: Kind; label: string; meta: string; twist: string; answer: string; likes: number; replies: Reply[] };
 /** One post's verdict. `house`: the author never answered (no consolation points); `auto`: a house twist (half points). */
 export type Verdict = { id: string; twister: string; votes: number; voters: string[]; points: number; authorPoints: number; auto?: true; house?: true };
 

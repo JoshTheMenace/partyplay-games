@@ -20,6 +20,10 @@ const ACCENT = '#ff2d55';
 const find = (players: readonly PackPlayer[], id: string | undefined) => players.find(p => p.id === id);
 const nameOf = (players: readonly PackPlayer[], id: string) => find(players, id)?.name ?? 'Somebody';
 const names = (list: string[]) => list.length > 1 ? `${list.slice(0, -1).join(', ')} & ${list.at(-1)}` : list[0] ?? '';
+/** Players still aboard (spaced aliens sit the rest of the trip out). */
+const aboard = (view: AirPublic, players: readonly PackPlayer[]) => players.filter(p => !view.out.includes(p.id));
+/** How many ABORT votes save a suspect, in words. */
+const saveLine = (saves: number, who: string) => saves > 1 ? `It takes two ABORT votes to save ${who}.` : `Every vote must say AIRLOCK. One ABORT saves ${who}.`;
 const LIGHTS = ['#ff5748', '#ffd24a', '#78d955', '#28c6e7', '#b58aff'];
 const kindOf = (view: AirPublic): Kind => view.kinds.at(-1) ?? 'answer';
 const promptText = (kind: Kind, prompt: string) => kind === 'draw' ? `Draw ${prompt}` : prompt;
@@ -81,9 +85,11 @@ function Bridge({ alert }: { alert: boolean }) {
 
 /** Ship → Earth progress: seven stops, the ship at the current test. */
 function Route({ view }: { view: AirPublic }) {
-  const left = view.phase === 'end' ? 0 : view.tests - Math.max(view.test, 1) + 1, at = Math.max(0, view.test - 1) / view.tests;
+  // Tests still to pass: the current one counts until its answers are in.
+  const passed = view.phase === 'brief' || view.phase === 'test' ? Math.max(view.test, 1) - 1 : view.test;
+  const left = view.phase === 'end' ? 0 : view.tests - passed, at = Math.max(0, view.test - 1) / view.tests;
   return <div className="al-route" aria-label={left ? `Earth in ${left} tests` : 'Arriving at Earth'}>
-    <span className="al-route-label">{view.phase === 'end' ? 'Mission over' : left === 1 ? 'Last test before Earth' : <>Earth in <b className="kp-numeral">{left}</b> tests</>}</span>
+    <span className="al-route-label">{view.phase === 'end' ? 'Mission over' : !left ? 'Earth ahead!' : left === 1 ? 'Last test before Earth' : <>Earth in <b className="kp-numeral">{left}</b> tests</>}</span>
     <span className="al-route-track">
       {Array.from({ length: view.tests }, (_, i) => <i key={i} data-on={i < view.test || undefined} />)}
       <span className="al-route-ship" style={{ '--at': at } as CSSProperties}><Ship /></span>
@@ -136,14 +142,14 @@ function BriefTV({ view, players }: P) {
       <ol className="al-steps">
         <li><b className="kp-numeral">1</b><span>Pass <b>{view.tests} tests</b> to reach Earth</span></li>
         <li><b className="kp-numeral">2</b><span>Aliens get a <b>slightly different</b> question</span></li>
-        <li><b className="kp-numeral">3</b><span>Push the <b>button</b> to space a suspect</span></li>
+        <li><b className="kp-numeral">3</b><span>{many ? <>Push the <b>button</b> to space them one by one</> : <>Push the <b>button</b> to space a suspect</>}</span></li>
       </ol>
     </div>
   </section>;
 }
 
-function TestTV({ view, players, vip, now }: P) {
-  const kind = kindOf(view), last = view.test === view.tests;
+function TestTV({ view, players: everyone, vip, now }: P) {
+  const kind = kindOf(view), last = view.test === view.tests, players = aboard(view, everyone);
   return <section className="al-test">
     <Head view={view}><Timer deadline={view.deadline} now={now} total={view.deadline - view.at} size={124} /></Head>
     <div className="al-test-main">
@@ -161,12 +167,13 @@ function TestTV({ view, players, vip, now }: P) {
 }
 
 function Card({ board, i, open, players, media, dense }: { board: Board; i: number; open: boolean; players: readonly PackPlayer[]; media: Record<string, unknown>; dense: boolean }) {
+  const few = board.answers.length <= 4;
   const a = board.answers[i]!, p = find(players, a.player)!, v = a.value;
   const body = !open ? <span className="al-wait" aria-label="Scanning"><i /><i /><i /></span>
     : v === undefined ? <em className="al-none">No answer</em>
     : board.kind === 'draw' ? (media[String(v)] ? <DrawingRenderer drawing={media[String(v)] as Drawing} label={`Doodle by ${p.name}`} /> : <em className="al-none">Loading…</em>)
     : board.kind === 'pick' ? <span className="al-picked">{find(players, String(v)) && <Avatar avatar={find(players, String(v))!.avatar} color={find(players, String(v))!.color} size={dense ? 64 : 84} />}<b>{String(v) === a.player ? 'Themself!' : nameOf(players, String(v))}</b></span>
-    : <p style={{ fontSize: fitText(String(v), dense ? 40 : 50) }}>{String(v)}</p>;
+    : <p style={{ fontSize: fitText(String(v), dense ? 40 : few ? 60 : 50) }}>{String(v)}</p>;
   return <li className="al-card" data-open={open || undefined} data-empty={(open && v === undefined) || undefined} style={{ '--c': p.color } as CSSProperties}>
     <AvatarBadge player={p} size={dense ? 44 : 60} />
     <div className="al-card-body">{body}</div>
@@ -206,7 +213,7 @@ function AnswerBoard({ board, shown, players, media }: { board: Board; shown: nu
 function BoardTV({ view, players, media, now }: P) {
   const board = view.board!, n = board.answers.length, plan = resultBeats(n), discuss = view.phase === 'discuss';
   const step = useTimeline(view.at, discuss ? [0] : [...plan.cards, plan.summary], now), shown = discuss ? n : Math.min(step, n), summed = discuss || step > n;
-  const online = players.filter(p => p.connected).length;
+  const online = aboard(view, players).filter(p => p.connected).length, left = view.aliens - view.out.length;
   return <section className="al-boardtv" data-phase={view.phase}>
     <Head view={view}>{discuss && <Timer deadline={view.deadline} now={now} total={view.deadline - view.at} size={116} />}</Head>
     <PromptCard className="al-prompt" eyebrow="The crew’s real test" size={56}>{promptText(board.kind, board.prompt)}</PromptCard>
@@ -214,9 +221,9 @@ function BoardTV({ view, players, media, now }: P) {
       <AnswerBoard board={board} shown={shown} players={players} media={media} />
       <aside className="al-side" data-discuss={discuss || undefined}>
         {discuss ? <>
-          <h2 className="kp-title">Who’s the alien?</h2>
+          <h2 className="kp-title">{left > 1 ? 'Who are the aliens?' : 'Who’s the alien?'}</h2>
           <BigButton className="al-side-button" />
-          <p><b>Push the button</b> on your phone to space a suspect.</p>
+          <p>{view.aliens < 2 ? <><b>Push the button</b> on your phone to space a suspect.</> : view.out.length ? <><b className="al-side-left">One alien spaced, one to go!</b> Push the button again.</> : <><b>Push the button</b> to space the aliens one by one.</>}</p>
           <p className="al-side-ready"><b className="kp-numeral">{view.done.length}/{online}</b> ready for the next test</p>
         </> : <>
           <div className="al-radar"><i /></div>
@@ -229,14 +236,15 @@ function BoardTV({ view, players, media, now }: P) {
   </section>;
 }
 
-/** Red alert: the suspects in the airlock, everyone else votes; then the votes flip, the doors open (or not) and the truth comes out. */
+/** Red alert: the suspect in the airlock, everyone else votes; then the votes flip, the doors open (or not) and the truth comes out. */
 function AlertTV({ view, players, now }: P) {
-  const v = view.verdict, ballot = v ?? view.ballot!, by = find(players, ballot.by), board = view.board;
-  const plan = v ? verdictBeats(v.votes.length, v.eject, v.suspects.length) : null;
+  const v = view.verdict, ballot = v ?? view.ballot!, by = find(players, ballot.by), board = view.board, suspect = find(players, ballot.suspect)!;
+  const plan = v ? verdictBeats(v.votes.length, v.eject) : null;
   const step = useTimeline(view.at, plan ? [...plan.votes, plan.outcome, ...plan.roles] : [Infinity], now);
-  const flipped = v ? Math.min(step, v.votes.length) : 0, decided = !!v && step > v.votes.length, open = decided && !!v?.eject, revealed = decided ? step - v!.votes.length - 1 : 0;
-  const voters = v ? v.votes : players.filter(p => !ballot.suspects.includes(p.id) && (p.connected || view.done.includes(p.id))).map(p => ({ player: p.id, vote: undefined, auto: undefined }));
-  const them = ballot.suspects.length > 1 ? 'them' : find(players, ballot.suspects[0])?.name ?? 'them', size = ballot.suspects.length > 1 ? 190 : 240;
+  const flipped = v ? Math.min(step, v.votes.length) : 0, decided = !!v && step > v.votes.length, open = decided && !!v?.eject, role = decided && step > v!.votes.length + 1 ? v!.role : undefined;
+  const voters = v ? v.votes : aboard(view, players).filter(p => p.id !== ballot.suspect && (p.connected || view.done.includes(p.id))).map(p => ({ player: p.id, vote: undefined, auto: undefined }));
+  const them = suspect.name, line = didLabel(board, suspect.id, players), left = view.aliens - view.out.length - (role === 'alien' ? 1 : 0);
+  const aborts = v ? v.votes.filter(x => x.vote === 'abort').length : 0;
   const title = !v ? 'Red alert!' : !decided ? 'The votes are in…' : v.eject ? 'Airlock open!' : 'Aborted!';
   return <section className="al-alert" data-phase={view.phase} data-open={open || undefined} data-abort={(decided && !v?.eject) || undefined}>
     <Head view={view}>{!v && <Timer deadline={view.deadline} now={now} total={view.deadline - view.at} size={116} />}</Head>
@@ -252,24 +260,23 @@ function AlertTV({ view, players, now }: P) {
       </div>
       <div className="al-lock">
         <h1 className="kp-title al-title" key={title}>{title}</h1>
-        <div className="al-chamber" data-count={ballot.suspects.length}>
+        <div className="al-chamber">
           <div className="al-space"><i className="al-stars al-stars-2" /><i className="al-stars al-stars-3" /></div>
           <i className="al-door al-door-l" /><i className="al-door al-door-r" />
-          <div className="al-inside">{ballot.suspects.map((id, i) => { const p = find(players, id)!, role = i < revealed ? v?.roles?.[id] : undefined, line = didLabel(board, id, players);
-            return <div key={id} className="al-suspect" data-out={open || undefined} data-role={role} style={{ '--i': i } as CSSProperties}>
-              <span className="al-float">{role === 'alien' && <Antennae />}<Avatar avatar={p.avatar} color={p.color} size={size} mood={role === 'alien' ? 'happy' : role ? 'sad' : open ? 'sad' : 'thinking'} /></span>
-              <b className="al-placard">{p.name}</b>
-              {!open && line && <small className="al-said">{line}</small>}
-              {role && <span className="al-stamp" data-role={role}>{role === 'alien' ? 'Alien!' : 'Human!'}</span>}
-            </div>; })}</div>
+          <div className="al-inside"><div className="al-suspect" data-out={open || undefined} data-role={role} style={{ '--i': 0 } as CSSProperties}>
+            <span className="al-float">{role === 'alien' && <Antennae />}<Avatar avatar={suspect.avatar} color={suspect.color} size={240} mood={role === 'alien' ? 'happy' : open ? 'sad' : 'thinking'} /></span>
+            <b className="al-placard">{suspect.name}</b>
+            {!open && line && <small className="al-said">{line}</small>}
+            {role && <span className="al-stamp" data-role={role}>{role === 'alien' ? 'Alien!' : 'Human!'}</span>}
+          </div></div>
           {decided && !v?.eject && <span className="al-stamp al-stamp-big" data-role="abort">Aborted</span>}
         </div>
       </div>
       <div className="al-alert-side">
         {by && <div className="al-pusher"><Avatar avatar={by.avatar} color={by.color} size={96} mood="happy" /><p><b>{by.name}</b> pushed the button!</p><BigButton pressed /></div>}
-        <p className="al-alert-copy">{!v ? <><b>Vote on your phone:</b> AIRLOCK or ABORT. Every vote must say AIRLOCK to space {them}.</>
-          : !decided ? 'Counting…' : v.eject ? (revealed < v.suspects.length ? 'Out they go! But were they really aliens…?' : v.suspects.every(id => v.roles?.[id] === 'alien') ? 'Got them! The ship is safe.' : 'A human was spaced. The aliens win!')
-          : <>One ABORT is all it takes. {them === 'them' ? 'They stay' : `${them} stays`} aboard… for now.</>}</p>
+        <p className="al-alert-copy">{!v ? <><b>Vote on your phone:</b> AIRLOCK or ABORT. {ballot.saves > 1 ? <>It takes <b>two ABORTs</b> to save {them}.</> : <>Every vote must say AIRLOCK to space {them}.</>}</>
+          : !decided ? 'Counting…' : v.eject ? (!role ? 'Out they go! But were they really an alien…?' : role === 'crew' ? 'A human was spaced. The aliens win!' : left ? 'Got one! But one more alien is still aboard…' : 'Got them! The ship is safe.')
+          : <>{aborts > 1 ? `${aborts} ABORT votes.` : 'One ABORT is all it takes.'} {them} stays aboard… for now.</>}</p>
       </div>
     </div>
   </section>;
@@ -279,9 +286,10 @@ function EndTV({ view, players, now }: P) {
   const e = view.end!, plan = endBeats(e.aliens.length), step = useTimeline(view.at, [...plan.unmask, plan.banner, plan.scores], now);
   const unmasked = Math.min(step, e.aliens.length), banner = step > e.aliens.length, scored = step > e.aliens.length + 1, crew = e.winner === 'crew';
   const by = e.by ? nameOf(players, e.by) : null, gains = players.map(p => e.gains[p.id] ?? 0), best = Math.max(0, ...gains);
-  const story = e.how === 'caught' ? <>{by ? <><b>{by}</b> pushed the button and the</> : 'The'} crew spaced {e.aliens.length > 1 ? 'both aliens' : 'the alien'}. Earth is safe!</>
-    : e.how === 'framed' ? <>The crew spaced a human. The aliens took over the ship after <b>{e.survived}</b> {e.survived === 1 ? 'test' : 'tests'}.</>
-    : <>The ship reached Earth with {e.aliens.length > 1 ? 'two aliens' : 'an alien'} still aboard. All <b>{e.survived}</b> tests survived!</>;
+  const heroes = names([...new Set(e.heroes)].map(id => nameOf(players, id))), left = e.aliens.length - view.out.length;
+  const story = e.how === 'caught' ? <>{heroes ? <><b>{heroes}</b> pushed the button and the</> : 'The'} crew spaced {e.aliens.length > 1 ? 'both aliens' : 'the alien'}. Earth is safe!</>
+    : e.how === 'framed' ? <>{by ? <><b>{by}</b> framed a human and the crew spaced them.</> : 'The crew spaced a human.'} The aliens took over the ship after <b>{e.survived}</b> {e.survived === 1 ? 'test' : 'tests'}.</>
+    : <>The ship reached Earth with {left > 1 ? 'two aliens' : 'an alien'} still aboard. All <b>{e.survived}</b> tests survived!</>;
   return <section className="al-end" data-winner={banner ? e.winner : undefined}>
     <Head view={view} />
     <div className="al-end-main">
@@ -319,16 +327,16 @@ const shellOf = ({ player, vip }: Phone) => ({ player, vip: vip === player.id, a
 const eyebrow = (view: AirPublic) => `Test ${view.test} of ${view.tests} · ${KIND[kindOf(view)].name}`;
 
 /** The secret ID. Crew and alien cards are identical until held, so a glance over the shoulder gives nothing away. */
-function IdCard({ view, me, players, big, compact }: { view: AirPublic; me: AirPrivate; players: readonly PackPlayer[]; big?: boolean; compact?: boolean }) {
+function IdCard({ view, me, players, big, compact, test }: { view: AirPublic; me: AirPrivate; players: readonly PackPlayer[]; big?: boolean; compact?: boolean; test?: boolean }) {
   const [peek, setPeek] = useState(false), on = () => setPeek(true), off = () => setPeek(false), alien = me.role === 'alien';
-  const allies = me.allies.map(id => nameOf(players, id));
+  const allies = me.allies.map(id => `${nameOf(players, id)}${view.out.includes(id) ? ' (spaced)' : ''}`);
   return <button type="button" className="al-id" data-big={big || undefined} data-compact={compact || undefined} data-peek={peek || undefined} aria-label="Secret ID card. Press and hold to read it."
     onPointerDown={on} onPointerUp={off} onPointerLeave={off} onPointerCancel={off} onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') on(); }} onKeyUp={off} onBlur={off} onContextMenu={e => e.preventDefault()}>
     <span className="al-id-tab">Crew ID · top secret</span>
     {peek ? <span className="al-id-text" role="status">
       <b className="kp-title">{alien ? 'Alien' : 'Human'}</b>
-      <span>{alien ? (allies.length ? `Fellow alien: ${names(allies)}` : 'The only alien. Blend in!') : view.aliens > 1 ? 'Find both aliens before Earth!' : 'Find the alien before Earth!'}</span>
-      <small>{alien ? 'Your scan hacks the crew’s real test.' : 'Your scan double-checks your test.'}</small>
+      <span>{alien ? (allies.length ? `Fellow alien: ${names(allies)}` : 'The only alien. Blend in!') : view.aliens > 1 ? (view.out.length ? 'One alien down! Find the other!' : 'Find both aliens before Earth!') : 'Find the alien before Earth!'}</span>
+      <small>{test && me.prompt ? `Your test: ${promptText(kindOf(view), me.prompt)}` : alien ? 'Your scan hacks the crew’s real test.' : 'Your scan double-checks your test.'}</small>
     </span> : <span className="al-id-text"><b className="kp-title">Hold to peek</b><span>Keep it hidden from your neighbours</span><small>Release to hide it again</small></span>}
   </button>;
 }
@@ -341,14 +349,13 @@ function ScanButton({ view, me, send }: Phone) {
   </div>;
 }
 
-/** Your version of the test, plus what your scan found. */
+/** Your version of the test, plus what your scan found (worded the same for both roles: crew simply see their own test again). */
 function MyPrompt({ view, me }: { view: AirPublic; me: AirPrivate }) {
   const kind = kindOf(view);
   return <div className="al-myprompt">
     <small>Your test</small>
     <p>{promptText(kind, me.prompt ?? '')}</p>
-    {me.intercepted && <p className="al-scanned"><b>Hacked!</b> The crew’s test: {promptText(kind, me.intercepted)}</p>}
-    {me.verified && <p className="al-scanned"><b>Scan clear.</b> This is the real test. Trust it.</p>}
+    {me.intercepted && <p className="al-scanned"><b>Ship computer:</b> the crew’s test is “{promptText(kind, me.intercepted)}”</p>}
   </div>;
 }
 
@@ -428,50 +435,48 @@ function BriefPhone(props: Phone) {
   const { view, me, players } = props;
   return <PhoneShell {...shellOf(props)} eyebrow="Mission briefing" title="Your secret ID">
     <IdCard view={view} me={me} players={players} big />
-    <ol className="al-phone-steps"><li>Hold the card to read it. <b>Don’t let anyone see!</b></li><li>Pass {view.tests} tests to reach Earth. Aliens get a slightly different question.</li><li>Spot an odd answer? <b>Push the button.</b></li></ol>
+    <ol className="al-phone-steps"><li>Hold the card to read it. <b>Never show anyone your phone!</b></li><li>Pass {view.tests} tests to reach Earth. Aliens get a slightly different question.</li><li>Spot an odd answer? <b>Push the button.</b>{view.aliens > 1 && ' Space both aliens, one at a time. Space a human and the aliens win!'}</li></ol>
   </PhoneShell>;
 }
 
 function ResultsPhone(props: Phone) {
   const { view, me, players } = props;
   return <PhoneShell {...shellOf(props)} eyebrow={eyebrow(view)} title="Answers incoming!">
-    <div className="al-tools"><IdCard view={view} me={me} players={players} /></div>
-    <MyPrompt view={view} me={me} /><MineValue {...props} />
+    <div className="al-tools"><IdCard view={view} me={me} players={players} test /></div>
+    <MineValue {...props} />
     <p className="al-tv-cue">Eyes on the TV! Compare every answer with the crew’s real test.</p>
   </PhoneShell>;
 }
 
-/** Who goes out the airlock: pick as many suspects as there are aliens, then push. */
+/** Who goes out the airlock: pick one suspect, then push. */
 function SuspectPicker(props: Phone & { onCancel(): void }) {
-  const { view, me, player, players, send, sessionKey, onCancel, now } = props, need = view.aliens, board = view.board;
-  const [draft, setDraft] = useDraft<string[]>(`${sessionKey}:${view.turn}:suspects`, []), [state, run] = useSend(), pending = state.status === 'pending';
-  const picks = draft.filter(id => id !== player.id && players.some(p => p.id === id)).slice(0, need);
-  const toggle = (id: string) => setDraft(picks.includes(id) ? picks.filter(x => x !== id) : need === 1 ? [id] : [...picks, id].slice(-need));
-  return <PhoneShell {...shellOf(props)} eyebrow={`Button push · ${view.pushes[player.id] ?? 0} of ${MAX_PUSHES} left`} title={need > 1 ? 'Pick 2 suspects' : 'Pick a suspect'} timer={{ ...span(view), now }}>
-    <p className="hj-note">Then everyone else votes. It takes <b>every</b> vote to open the airlock.</p>
-    <div className="al-opts" data-kind="suspect" role="group" aria-label="Suspects">{players.filter(p => p.id !== player.id).map(p => { const on = picks.includes(p.id);
-      return <button key={p.id} type="button" className="al-opt" data-value={p.id} data-on={on || undefined} aria-pressed={on} disabled={pending} onClick={() => toggle(p.id)}>
+  const { view, me, player, players, send, sessionKey, onCancel, now } = props, board = view.board, others = aboard(view, players).filter(p => p.id !== player.id);
+  const [draft, setDraft] = useDraft<string>(`${sessionKey}:${view.turn}:suspect`, ''), [state, run] = useSend(), pending = state.status === 'pending';
+  const pick = others.some(p => p.id === draft) ? draft : '';
+  return <PhoneShell {...shellOf(props)} eyebrow={`Button push · ${view.pushes[player.id] ?? 0} of ${MAX_PUSHES} left`} title="Pick a suspect" timer={{ ...span(view), now }}>
+    <p className="hj-note">Then everyone else votes. {view.aliens - view.out.length > 1 ? <>It takes <b>two</b> ABORT votes to save them.</> : <>It takes <b>every</b> vote to open the airlock.</>}</p>
+    <div className="al-opts" data-kind="suspect" role="radiogroup" aria-label="Suspects">{others.map(p => { const on = pick === p.id;
+      return <button key={p.id} type="button" role="radio" className="al-opt" data-value={p.id} data-on={on || undefined} aria-checked={on} disabled={pending} onClick={() => setDraft(on ? '' : p.id)}>
         <Avatar avatar={p.avatar} color={p.color} size={44} mood={on ? 'sad' : 'idle'} /><span>{p.name}<small>{didLabel(board, p.id, players) ?? 'drew a doodle'}</small></span>
       </button>; })}</div>
     {state.status === 'rejected' && <StatusNotice tone="error">{state.reason}</StatusNotice>}
     <div className="hj-sticky al-push-bar">
       <ArcadeButton tone="ghost" size="lg" disabled={pending} onClick={onCancel}>Cancel</ArcadeButton>
-      <ArcadeButton tone="coral" size="lg" disabled={picks.length < need || pending} onClick={() => void run(() => send({ turn: view.turn, k: 'push', suspects: picks }))}>{pending ? 'Pushing…' : `Push it! (${picks.length}/${need})`}</ArcadeButton>
+      <ArcadeButton tone="coral" size="lg" disabled={!pick || pending} onClick={() => void run(() => send({ turn: view.turn, k: 'push', suspect: pick }))}>{pending ? 'Pushing…' : 'Push it!'}</ArcadeButton>
     </div>
     {me.ready && <p className="hj-note">You were ready for the next test. Pushing still works.</p>}
   </PhoneShell>;
 }
 
 function DiscussPhone(props: Phone) {
-  const { view, me, player, players, send, sessionKey, now } = props, left = view.pushes[player.id] ?? 0, online = players.filter(p => p.connected).length;
+  const { view, me, player, players, send, sessionKey, now } = props, left = view.pushes[player.id] ?? 0, online = aboard(view, players).filter(p => p.connected).length;
   const [picking, setPicking] = useDraft(`${sessionKey}:${view.turn}:picking`, false), [state, run] = useSend();
   if (picking && left > 0) return <SuspectPicker {...props} onCancel={() => setPicking(false)} />;
-  return <PhoneShell {...shellOf(props)} eyebrow={eyebrow(view)} title="Who’s the alien?" timer={{ ...span(view), now }}>
-    <div className="al-tools"><IdCard view={view} me={me} players={players} /></div>
+  return <PhoneShell {...shellOf(props)} eyebrow={eyebrow(view)} title={view.aliens - view.out.length > 1 ? 'Who are the aliens?' : 'Who’s the alien?'} timer={{ ...span(view), now }}>
+    <div className="al-tools"><IdCard view={view} me={me} players={players} test /></div>
     <button type="button" className="al-push" disabled={!left} onClick={() => setPicking(true)}>
       <BigButton /><span className="kp-title">{left ? 'Push the button' : 'No pushes left'}</span><small>{left} of {MAX_PUSHES} pushes left</small>
     </button>
-    <MyPrompt view={view} me={me} />
     {me.ready ? <p className="al-ready" role="status"><span className="hj-done-stamp" aria-hidden="true">✓</span>Ready for the next test · {view.done.length}/{online}</p>
       : <div className="al-ready-btn">{state.status === 'rejected' && <StatusNotice tone="error">{state.reason}</StatusNotice>}
         <ArcadeButton tone="sky" size="lg" disabled={state.status === 'pending'} onClick={() => void run(() => send({ turn: view.turn, k: 'ready' }))}>Ready for the next test</ArcadeButton></div>}
@@ -480,11 +485,11 @@ function DiscussPhone(props: Phone) {
 
 function VotePhone(props: Phone) {
   const { view, me, player, players, send, now } = props, ballot = view.ballot!, [state, run] = useSend();
-  const suspects = ballot.suspects.map(id => find(players, id)!).filter(Boolean), who = suspects.length > 1 ? 'them' : suspects[0]?.name ?? 'them';
+  const suspect = find(players, ballot.suspect), who = suspect?.name ?? 'them';
   const shell = { ...shellOf(props), eyebrow: `${nameOf(players, ballot.by)} pushed the button!`, timer: { ...span(view), now } };
-  const lineup = <div className="al-lineup">{suspects.map(p => <AvatarBadge key={p.id} player={p} size={64} layout="column" mood="thinking" />)}</div>;
-  if (ballot.suspects.includes(player.id)) return <PhoneShell {...shell} title="You’re in the airlock!">
-    <div className="al-plead" data-alert=""><Avatar avatar={player.avatar} color={player.color} size={128} mood="sad" /><p>Plead your case. <b>Out loud. Right now!</b></p><small>One ABORT vote saves you.</small></div>
+  const lineup = suspect && <div className="al-lineup"><AvatarBadge player={suspect} size={64} layout="column" mood="thinking" /></div>;
+  if (ballot.suspect === player.id) return <PhoneShell {...shell} title="You’re in the airlock!">
+    <div className="al-plead" data-alert=""><Avatar avatar={player.avatar} color={player.color} size={128} mood="sad" /><p>Plead your case. <b>Out loud. Right now!</b></p><small>{ballot.saves > 1 ? 'Two ABORT votes save you.' : 'One ABORT vote saves you.'}</small></div>
   </PhoneShell>;
   if (me.vote) return <PhoneShell {...shell} title={me.vote === 'airlock' ? 'You voted AIRLOCK' : 'You voted ABORT'}>
     {lineup}<PhoneDone title="Vote locked in!" detail={ballot.by === player.id ? 'You pushed the button, so your vote is AIRLOCK.' : 'Eyes on the TV.'} />
@@ -497,22 +502,34 @@ function VotePhone(props: Phone) {
       <button type="button" className="al-vote" data-vote="abort" disabled={state.status === 'pending'} onClick={() => vote('abort')}><b className="kp-title">Abort</b><small>Keep {who} aboard</small></button>
     </div>
     {state.status === 'rejected' && <StatusNotice tone="error">{state.reason}</StatusNotice>}
-    <p className="hj-note">Every vote must say AIRLOCK. One ABORT saves {who}.</p>
+    <p className="hj-note">{saveLine(ballot.saves, who)}</p>
   </PhoneShell>;
 }
 
 function VerdictPhone(props: Phone) {
-  const { view, player, players, now } = props, v = view.verdict!, plan = verdictBeats(v.votes.length, v.eject, v.suspects.length);
-  const step = useTimeline(view.at, [plan.outcome, ...plan.roles], now), mine = v.suspects.includes(player.id), shown = Math.max(0, step - 1);
-  const known = v.suspects.slice(0, shown).map(id => ({ id, role: v.roles?.[id] }));
+  const { view, player, players, now } = props, v = view.verdict!, plan = verdictBeats(v.votes.length, v.eject);
+  const step = useTimeline(view.at, [plan.outcome, ...plan.roles], now), mine = v.suspect === player.id, known = step > 1 ? v.role : undefined, suspect = find(players, v.suspect);
   const title = !step ? 'The votes are in…' : !v.eject ? (mine ? 'Saved! You stay aboard.' : 'Aborted!') : mine ? 'You got spaced!' : 'Airlock open!';
   return <PhoneShell {...shellOf(props)} eyebrow={`${nameOf(players, v.by)} pushed the button`} title={title}>
-    <div className="al-lineup">{v.suspects.map(id => find(players, id)).filter(p => !!p).map(p => <AvatarBadge key={p.id} player={p} size={64} layout="column" mood={step && v.eject ? 'sad' : 'thinking'} />)}</div>
+    {suspect && <div className="al-lineup"><AvatarBadge player={suspect} size={64} layout="column" mood={step && v.eject ? 'sad' : 'thinking'} /></div>}
     <div className="al-phone-result" data-tone={step ? (v.eject ? 'eject' : 'abort') : undefined}>
       <Avatar avatar={player.avatar} color={player.color} size={120} mood={!step ? 'thinking' : mine && v.eject ? 'sad' : 'idle'} />
-      {known.map(k => <p key={k.id}><b>{nameOf(players, k.id)}</b> was {k.role === 'alien' ? <b className="al-is-alien">an alien!</b> : <b className="al-is-human">human!</b>}</p>)}
-      {(!step || (v.eject && shown < v.suspects.length)) && <p className="al-tv-cue">Eyes on the TV!</p>}
+      {known && <p><b>{nameOf(players, v.suspect)}</b> was {known === 'alien' ? <b className="al-is-alien">an alien!</b> : <b className="al-is-human">human!</b>}</p>}
+      {known === 'alien' && view.aliens - view.out.length > 1 && <p className="hj-note">One alien down, one to go!</p>}
+      {(!step || (v.eject && !known)) && <p className="al-tv-cue">Eyes on the TV!</p>}
       {step > 0 && !v.eject && <p className="hj-note">Back to the discussion…</p>}
+    </div>
+  </PhoneShell>;
+}
+
+/** A spaced alien sits the rest of the trip out, still on the aliens' team. */
+function SpacedPhone(props: Phone) {
+  const { view, me, player, players } = props, ally = names(me.allies.filter(id => !view.out.includes(id)).map(id => nameOf(players, id)));
+  return <PhoneShell {...shellOf(props)} eyebrow="Floating in space" title="You got spaced!">
+    <div className="al-phone-result">
+      <span className="al-float"><Antennae /><Avatar avatar={player.avatar} color={player.color} size={124} mood="sad" /></span>
+      <p>{ally ? <><b>{ally}</b> is still aboard.</> : 'Your team is still aboard.'} If the crew spaces a human or the ship reaches Earth, you win too!</p>
+      <p className="al-tv-cue">Watch the TV and cheer them on.</p>
     </div>
   </PhoneShell>;
 }
@@ -537,7 +554,8 @@ function Controller(props: P) {
   if (!me || !player || me.turn !== view.turn) return <PhoneShell player={player} accent={ACCENT}><PhoneWaiting title="Stand by, crew…" lines={WAIT_LINES} /></PhoneShell>;
   const phone: Phone = { ...props, me, player };
   return <div className="hj-airlock al-phone">
-    {view.phase === 'brief' ? <BriefPhone {...phone} />
+    {view.out.includes(player.id) && view.phase !== 'end' ? <SpacedPhone {...phone} />
+      : view.phase === 'brief' ? <BriefPhone {...phone} />
       : view.phase === 'test' ? <TestPhone {...phone} />
       : view.phase === 'results' ? <ResultsPhone {...phone} />
       : view.phase === 'discuss' ? <DiscussPhone {...phone} />

@@ -3,11 +3,11 @@ import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { ArcadeButton, StatusNotice } from '../../../../../party-ui/src/index';
 import type { MiniClient, MiniViewProps, PackPlayer } from '../../core/contract';
 import {
-  Avatar, AvatarBadge, AvatarStack, BigTitle, Callout, Confetti, PhoneDone, PhoneShell, PhoneWaiting, PlayerStrip, Scoreboard, Timer,
+  Avatar, AvatarBadge, AvatarStack, BigTitle, Callout, Confetti, PhoneDone, PhoneShell, PhoneWaiting, PlayerStrip, Scoreboard, StillWorking, Timer,
   fitText, ordinal, rankOf, useDraft, useNow, useSend, useTimeline,
 } from '../../core/ui';
 import {
-  AIM_MS, BETS, MUCH, REVEAL, ROUND_NAMES, TIERS, WANTED_PICKS, WANTED_POINTS, betCopy, possible, spring, wantedBeats, wins,
+  AIM_MS, BETS, BET_POINTS, MUCH, REVEAL, ROUND_NAMES, TIERS, WANTED_PICKS, WANTED_POINTS, betCopy, possible, spring, wantedBeats, wins,
   type BallparkPrivate, type BallparkPublic, type Bet, type Reveal,
 } from './types';
 import './styles.css';
@@ -121,23 +121,27 @@ function SurveyTV({ view, players, vip, now }: P) {
   </section>;
 }
 
-/** One side of the betting floor. Bets stay hidden until the reveal; then avatars drop in and the winners cash in. */
-function Booth({ zone, guess, bettors, step, r }: { zone: Bet; guess: number; bettors: PackPlayer[]; step: number; r?: Reveal }) {
-  const copy = betCopy(zone, guess), settled = step >= 4 && !!r, won = settled && wins(zone, r.guess, r.truth), dense = bettors.length > 4;
-  return <div className="bp-booth" data-bet={zone} data-win={(settled && won) || undefined} data-lose={(settled && !won) || undefined} style={{ flexGrow: 1 + (step >= 1 ? bettors.length : 0) }}>
+/** One side of the betting floor. Bets stay hidden until the reveal; then avatars drop in and a winning booth stamps its pay.
+    Everyone in a booth wins or loses together, so the pay shows once (a crowd of nine still fits). */
+function Booth({ zone, guess, bettors, step, r, shrink }: { zone: Bet; guess: number; bettors: PackPlayer[]; step: number; r?: Reveal; shrink?: boolean }) {
+  const copy = betCopy(zone, guess), settled = step >= 4 && !!r, won = settled && wins(zone, r.guess, r.truth), dense = bettors.length > 4, empty = step >= 1 && !!r && !bettors.length;
+  return <div className="bp-booth" data-bet={zone} data-win={(settled && won) || undefined} data-lose={(settled && !won) || undefined} style={empty && shrink ? { flex: 'none' } : { flexGrow: 1 + (step >= 1 ? bettors.length : 0) }}>
     <header><b className="kp-title">{zone.endsWith('higher') ? '▲' : '▼'} {copy.label}</b><small>{possible(zone, guess) ? copy.range : 'Off the scale'}{zone.startsWith('much') && <em>×2</em>}</small></header>
     {step >= 1 && r && <ul data-dense={dense || undefined}>{bettors.map((p, i) => <li key={p.id} style={{ animationDelay: `${i * 90}ms` }}>
-      <AvatarBadge player={p} size={dense ? 52 : 68} layout="column" mood={settled ? (r.gains[p.id]! > 0 ? 'happy' : 'sad') : 'thinking'} detail={settled && r.gains[p.id]! > 0 ? `+${r.gains[p.id]}` : undefined} />
+      <AvatarBadge player={p} size={dense ? 52 : 68} layout="column" mood={settled ? (won ? 'happy' : 'sad') : 'thinking'} />
     </li>)}</ul>}
-    {step >= 1 && r && !bettors.length && <p className="bp-booth-empty">Nobody</p>}
+    {settled && won && bettors.length > 0 && <span className="bp-stamp bp-booth-pay">+{zone.startsWith('much') ? BET_POINTS.much : BET_POINTS.plain}{bettors.length > 1 && <small> each</small>}</span>}
+    {empty && <p className="bp-booth-empty">Nobody</p>}
     {!r && <span className="bp-booth-sealed kp-title" aria-hidden="true">?</span>}
   </div>;
 }
 
 function Floor({ side, guess, much, view, players, step }: { side: 'lower' | 'higher'; guess: number; much: boolean; view: BallparkPublic; players: readonly PackPlayer[]; step: number }) {
   const r = view.result, list: Bet[] = side === 'lower' ? (much ? ['much-lower', 'lower'] : ['lower']) : (much ? ['much-higher', 'higher'] : ['higher']);
+  const crowds = list.map(zone => r ? players.filter(p => r.bets[p.id] === zone) : []);
+  // Round 2: an empty booth shrinks to its header when the booth beside it has bettors, so a crowd of nine still fits.
   return <div className="bp-floor" data-side={side}>
-    {list.map(zone => <Booth key={zone} zone={zone} guess={guess} step={r ? step : 0} r={r} bettors={r ? players.filter(p => r.bets[p.id] === zone) : []} />)}
+    {list.map((zone, i) => <Booth key={zone} zone={zone} guess={guess} step={r ? step : 0} r={r} bettors={crowds[i]!} shrink={crowds.some(c => c.length > 0)} />)}
   </div>;
 }
 
@@ -155,8 +159,9 @@ function DialTV({ view, players, now }: P) {
     <Printout className="bp-qstrip" eyebrow={<>What % of this room said <b>yes</b>?{q.respondents !== undefined && <> · {plural(q.respondents, 'answer')}</>}</>} text={q.text} size={58} />
     <div className="bp-dial-main">
       {phase === 'guess' ? <div className="bp-agent-card">
-        {agent && <AvatarBadge player={agent} size={168} layout="column" mood={q.locked ? 'done' : 'thinking'} detail={q.locked ? 'Locked in!' : 'is on the dial'} />}
+        {agent && <AvatarBadge player={agent} size={136} layout="column" mood={q.locked ? 'done' : 'thinking'} detail={q.locked ? 'Locked in!' : 'is on the dial'} />}
         <p>The agent knows their own answer. <b>Nobody else’s.</b></p>
+        <ol className="bp-ladder" aria-label="Agent points">{TIERS.map(t => <li key={t.within}>±{t.within}<b className="kp-numeral">{t.points}</b></li>)}</ol>
       </div> : guess !== null && <Floor side="lower" guess={guess} much={much} view={view} players={players} step={step} />}
       <div className="bp-dial-centre">
         <Meter dial={phase === 'guess' && !q.locked ? q.dial : guess} guess={phase === 'guess' ? null : guess} truth={truth} much={much} winning={winning} live={phase === 'guess' && !q.locked} />
@@ -172,13 +177,14 @@ function DialTV({ view, players, now }: P) {
       </div>
       {phase === 'guess' ? <div className="bp-hint">
         <p className="kp-title">Everyone else</p>
-        <p>Get ready to bet: will the truth be <b className="bp-up">▲ higher</b> or <b className="bp-down">▼ lower</b>?</p>
+        <p>Get ready to bet: will the truth be <b className="bp-up">▲ higher</b> or <b className="bp-down">▼ lower</b>? The right call pays <b className="bp-up">{BET_POINTS.plain}</b>.</p>
         {much && <p className="bp-hint-much"><b>Long shots:</b> more than {MUCH} points away pays <b>double</b>.</p>}
       </div> : guess !== null && <Floor side="higher" guess={guess} much={much} view={view} players={players} step={step} />}
     </div>
     <div className="bp-foot" role="status">{landed && r ? <Crowds r={r} players={players} /> : <p>
       {phase === 'guess' ? (q.locked ? <><b>{agent?.name}</b> locks in <b>{q.dial}%</b>!</> : <><b>{agent?.name}</b> is dialling in their estimate…</>)
-        : phase === 'bet' ? <><b>Bet on your phone:</b> higher or lower than {guess}%? <span className="bp-pill kp-numeral">{view.done.length}/{bettors(players, q.agent)} bets in</span></>
+        : phase === 'bet' ? <><b>Bet on your phone:</b> higher or lower than {guess}%? <span className="bp-pill kp-numeral">{view.done.length}/{bettors(players, q.agent)} bets in</span>
+          <StillWorking players={players.filter(p => p.connected && p.id !== q.agent && !view.done.includes(p.id))} label={null} /></>
         : step >= 2 ? 'Reading the room…' : 'The truth is…'}
     </p>}</div>
     {scored && r?.tier === 0 && <><Confetti burst={view.turn} count={120} /><div className="bp-bullseye"><Callout tone="lime">Bullseye!</Callout></div></>}

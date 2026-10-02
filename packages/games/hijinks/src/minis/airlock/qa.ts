@@ -29,9 +29,9 @@ export async function ui(page: Page, a: Record<string, unknown>): Promise<boolea
       await page.getByRole('button', { name: /send my doodle/i }).click(wait);
     } else if (a.k === 'scan') await page.getByRole('button', { name: /scan ship computer/i }).click(wait);
     else if (a.k === 'ready') await page.getByRole('button', { name: /ready for the next test/i }).click(wait);
-    else if (a.k === 'push' && Array.isArray(a.suspects)) {
+    else if (a.k === 'push' && typeof a.suspect === 'string') {
       await page.locator('.al-push').click(wait); await pause(500);
-      for (const id of a.suspects) await page.locator(`.al-opt[data-value="${String(id)}"]`).click(wait);
+      await page.locator(`.al-opt[data-value="${a.suspect}"]`).click(wait);
       await pause(700);
       await page.getByRole('button', { name: /push it/i }).click(wait);
     } else if (a.k === 'vote') await page.locator(`.al-vote[data-vote="${String(a.vote)}"]`).click(wait);

@@ -31,9 +31,9 @@ keeps it apart from Odd One In's teal interrogation room.
 There are **2 rounds of questions**, then **Most Wanted**.
 
 - **Round 1:** every player is the agent once, in random order.
-- **Round 2 ("Long shots"):** with 3–6 players everyone is the agent again (the first agent is never the previous
-  one). With 7 or more players, round 2 has 3 questions, and the agents are the three lowest connected scorers (lowest
-  first), as a comeback chance.
+- **Round 2 ("Long shots"):** with 3–6 players everyone is the agent again. With 7 or more players, round 2 has 3
+  questions, and the agents are the three lowest connected scorers (lowest first), as a comeback chance. Either way the
+  first agent is never the one who just had the dial.
 
 Each question:
 
@@ -44,7 +44,8 @@ Each question:
    every connected player has answered, or at the buzzer. The truth is the rounded percentage of answers that were yes.
    Players who didn't answer are not counted. With fewer than two answers the lab makes up a number (a lone answer
    would expose its author).
-2. **Guess** (25 s). The agent's phone shows a huge readout, a 0–100 slider (step 1), and −5 / −1 / +1 / +5 nudges.
+2. **Guess** (25 s). The TV shows the agent with the points ladder (±3 → 1000 … ±20 → 250) and tells everyone else
+   that the right call pays 500. The agent's phone shows a huge readout, a 0–100 slider (step 1), and −5 / −1 / +1 / +5 nudges.
    On short portrait phones only the ±1 nudges show, beside the readout; in short landscape the Lock button sits
    beside the slider. It streams the position to the server at most 4 times a second (`AIM_MS` 250 ms trailing throttle; the server
    ignores faster updates rather than rejecting them). The TV needle and LED band follow live. **Lock in** stamps
@@ -53,12 +54,14 @@ Each question:
 3. **Bet** (15 s). Everyone but the agent bets on the truth versus the guess: **Higher** or **Lower**. Round 2 adds
    **Much higher** / **Much lower** (more than 15 points away, double or nothing). The phone spells out each range
    ("58% or more"), and bets that can't win are disabled (no "lower" than 0 %). The meter shows the betting zones, with
-   ×2 marks at ±15 in round 2. Bets stay hidden until the reveal.
+   ×2 marks at ±15 in round 2. Bets stay hidden until the reveal; the TV footer shows how many are in and the faces of
+   everyone who still hasn't bet.
 4. **Reveal** (9.8 s, server-timed beats). At 0.3 s the bettors drop into their booths beside the meter (LOWER on the left,
    HIGHER on the right). At 1.6 s the amber truth needle springs from the guess to the truth, with a damped overshoot
    and a counting readout. At 4.4 s it lands, and the two crowds appear: anonymous trench-coat silhouettes, or real
-   avatars on the record. At 5.9 s the points arrive: a tier stamp, winning zones and booths glow, "+500" chips, and a
-   BULLSEYE callout with confetti.
+   avatars on the record. At 5.9 s the points arrive: a tier stamp, winning zones and booths glow, and each winning booth gets one
+   "+500 each" pay stamp (everyone in a booth wins or loses together). Bullseyes add a callout with confetti. In round 2
+   an empty booth shrinks to its header, so a booth holding all nine bettors still fits.
 
 After each round, a **Debrief** scoreboard shows for 7.5 s.
 
@@ -122,12 +125,14 @@ reloaded TV or phone lands on the same beat.
 
 | Bank | Count |
 | --- | --- |
-| Family yes/no questions | 228 (59 on the record) |
-| Adult yes/no questions (dating, nights out, work drama) | 47 |
+| Family yes/no questions | 268 (89 on the record) |
+| Adult yes/no questions (dating, nights out, work drama) | 54 |
 | Family Most Wanted sets (9 statements each) | 31 |
 | Adult Most Wanted sets | 6 |
 
-That is 275 questions and 37 × 9 = 333 statements, all original. Adult items are filtered when `settings.family` is on.
+That is 322 questions and 37 × 9 = 333 statements, all original. About 80 are not "have you ever" questions: opinions
+(*Is a hot dog a sandwich?*), hypotheticals, right-now checks and questions about this room, which split rooms less
+predictably. Adult items are filtered when `settings.family` is on.
 
 Every question and set has a stable id (a hash of its text). The game marks each dealt item with `api.used.add`, and
 decks deal unused items first (shuffled), so a replay in the same night starts with fresh questions and a fresh set.
@@ -186,16 +191,20 @@ decks deal unused items first (shuffled), so a replay in the same night starts w
   - missing input (house numbers, the default dial, a kept dial, no bets);
   - disconnects, validation and the dial throttle;
   - privacy (answers, ticks, on-the-record), the family filter, night memory (`api.used`) and content counts.
-- **Static checks:** whole-project `tsc` and `oxlint` are clean.
+- **Static checks:** `oxlint` is clean. In the review pass, whole-project `tsc` was OOM-killed on the shared 3 GB machine,
+  so a typecheck scoped to all Hijinks `src`, `tests` and `tools` was run instead; it is clean.
 - **Browser QA** (`tools/qa-driver.ts` with `--phone-viewports --tv-viewports --settled`; the phone plays through its real
   UI via `qa.ts`):
-  - `output/hijinks/ballpark/hj-b2-ballpark-2/p10/`: 10 players, full night to results, 0 page errors, 0 rejected
-    actions.
-  - `output/hijinks/ballpark/hj-b2-ballpark-3/p3/`: 3 players on the final build, the same outcome.
-  - Run 1 (`hj-b2-ballpark-1`) found the issues fixed in runs 2–3.
+  - `output/hijinks/ballpark/hj-b2-ballpark-2/p10/` and `hj-b2-ballpark-3/p3/`: the builder's full nights.
+  - Review pass (2026-10-02, `output/hijinks/ballpark/review-4/p10` and `review-4/p3`, build `hj-b2-ballpark-r4`): full
+    nights to results with 0 page errors, 0 overflow findings and 0 rejected actions. These runs used
+    `output/hijinks/ballpark/qa-bp.ts`, a copy of the driver that sweeps extra viewports once per phase kind, adds late
+    reveal and Most Wanted totals shots, and herds every round-2 bettor into one long-shot booth (the worst case for
+    the betting floor).
 
 ## Known gaps
 
 - Ballpark has no player-written text, so the bot cannot exercise maximum-length player text. The worst-case question
   (85 characters) and statement (54 characters) are enforced by the content tests.
 - With 3 players the truth can only be 0, 33, 67 or 100 %. That is honest, but easier to guess.
+- On-the-record crowds show avatars without names (the survey's player strip maps faces to names).

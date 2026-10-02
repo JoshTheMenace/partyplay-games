@@ -24,15 +24,15 @@ export const QUESTIONS: readonly string[] = [
   'How would you describe your fashion sense?', 'What’s your favourite snack?', 'How do you like to celebrate your birthday?',
   'What’s your favourite thing about winter?', 'What food could you never give up?', 'How do you feel about public speaking?',
   'What’s your favourite room in your house?', 'What’s your proudest cooking moment?', 'How do you feel about your phone?',
-  'What are you really good at?', 'What’s the first thing you do when you get home?', 'What’s your favourite holiday tradition?',
-  'How do you feel about spiders?', 'What do you love about where you live?', 'Describe your perfect pizza.',
+  'What are you really good at?', 'What’s the first thing you do when you get home?', 'What’s your technique for washing a car?',
+  'How do you feel about spiders?', 'What’s the best thing you’ve ever found on the ground?', 'Describe your perfect pizza.',
   'How do you organise your fridge?', 'What’s the best part of your day?', 'How do you feel about getting up early?',
   'What small thing makes your day better?', 'What’s your favourite thing to bake?', 'What’s the strangest thing in your bag right now?',
   'How do you feel about going to the dentist?', 'Describe your ideal pet.', 'What’s your favourite way to stay active?',
   'What song always cheers you up?', 'What do you do on a lazy day?', 'How do you feel about your handwriting?',
   'What’s your favourite sound?', 'What’s the best thing you’ve ever made with your hands?', 'How would you spend a surprise lottery win?',
   'What’s your favourite time of day, and why?', 'How do you feel about cold showers?', 'What do you think about while washing up?',
-  'What do you wear on a day off?', 'How do you get along with your alarm clock?', 'Describe your best friend in a few words.',
+  'What do you wear on a day off?', 'How do you get along with your alarm clock?', 'How do you end a phone call?',
   'What would your dream birthday cake look like?', 'What’s the most relaxing place you’ve ever been?', 'How do you feel about rollercoasters?',
   'What habit are you trying to build?', 'How do you get ready for a big day?', 'What’s your favourite thing about weekends?',
   'What’s your secret to a good night’s sleep?', 'What’s something you learned recently?', 'How do you feel about your daily commute?',
@@ -52,7 +52,7 @@ export const QUESTIONS: readonly string[] = [
   'What’s the best thing about your bed?', 'What do you think about when you’re stuck in traffic?', 'How do you feel about meeting new people?',
   'What’s your favourite fruit, and why?', 'What do you always forget to buy at the shops?', 'What’s your bedtime routine?',
   'What makes a perfect hot chocolate?', 'How do you feel about cleaning the bathroom?', 'What compliment would you love to hear more often?',
-  'What do you like doing when it rains?', 'Describe your ideal day off.', 'How do you feel about your family’s cooking?',
+  'How do you get a stubborn jar open?', 'What do you do with leftover pasta?', 'How do you feel about your family’s cooking?',
   'What do you love about your grandparents?', 'How do you feel about museums?', 'What’s your most-used emoji, and why?',
   'How do you feel about swimming in the sea?', 'How do you pass the time on a long train ride?', 'What do you think of your neighbour’s garden?',
   'How good are you at keeping secrets?', 'What’s your favourite thing about being you?', 'How do you feel about your teeth?',
@@ -71,7 +71,7 @@ export const ADULT_QUESTIONS: readonly string[] = [
 ];
 export const questionPool = (family: boolean): string[] => family ? [...QUESTIONS] : [...QUESTIONS, ...ADULT_QUESTIONS];
 
-export type FormatItem = Format & { id: string; adult?: true };
+export type FormatItem = Format & { id: string; adult?: true; house?: readonly string[] };
 type Row = [ask: string, label: string, meta: string, adult?: 'adult'];
 /** Format variants per fake app: [what the phone asks for, the label on the post, a decoration line]. */
 const ROWS: Record<Kind, Row[]> = {
@@ -134,12 +134,12 @@ const ROWS: Record<Kind, Row[]> = {
   dating: [
     ['Finish their dating profile: “Looking for…”', 'Looking for', '29 · 2 km away'],
     ['Finish their dating profile: “My dealbreaker is…”', 'Dealbreaker', '33 · Online now'],
-    ['Finish their dating profile: “Ideal first date…”', 'Ideal first date', '27 · 5 km away'],
-    ['Finish their dating profile: “My mum says I’m…”', 'My mum says I’m', '31 · Verified'],
+    ['Finish their dating profile: “Perfect match…”', 'Perfect match', '27 · 5 km away'],
+    ['Finish their dating profile: “Biggest red flag…”', 'Red flag', '31 · Verified'],
     ['Finish their dating profile: “Green flag…”', 'Green flag', '38 · 1 km away'],
     ['Finish their dating profile: “I’m weirdly into…”', 'Weirdly into', '26 · Active today'],
-    ['Finish their dating profile: “Swipe right if you…”', 'Swipe right if you', '35 · 12 km away'],
-    ['Finish their dating profile: “My hot take…”', 'Hot take', '30 · New here'],
+    ['Finish their dating profile: “Must have…”', 'Must have', '35 · 12 km away'],
+    ['Finish their dating profile: “My type is…”', 'My type', '30 · New here'],
   ],
   forum: [
     ['Write their thread title on the Home Repair board', 'Home Repair', '412 replies · Solved'],
@@ -193,14 +193,37 @@ const ROWS: Record<Kind, Row[]> = {
     ['What are they celebrating?', 'Celebrating', 'Public · 3 hrs ago'],
     ['Who did they tag in this post?', 'With', 'Public · 20 min ago'],
     ['Name the event they’re going to', 'Going to', 'Public · Yesterday'],
+    ['What are they wearing right now?', 'Wearing', 'Public · 9 min ago'],
+    ['What are they eating right now?', 'Eating', 'Public · 4 min ago'],
+    ['What are they thinking about?', 'Thinking about', 'Public · 1 min ago'],
+    ['What have they lost?', 'Lost', 'Public · 30 min ago'],
     ['What did they wake up next to?', 'Woke up next to', 'Public · 7:02 a.m.', 'adult'],
   ],
 };
-export const FORMATS: readonly FormatItem[] = (Object.keys(ROWS) as Kind[]).flatMap(kind => ROWS[kind].map(([ask, label, meta, adult], i) => ({ id: `${kind}-${i}`, kind, ask, label, meta, ...(adult ? { adult: true as const } : {}) })));
+/** Status labels need different kinds of phrase, so each status format brings its own house twists. */
+const STATUS_TWISTS: Record<string, readonly string[]> = {
+  'Checked in at': ['the bottom of a well', 'court, again', 'the back of a police car', 'the job centre in a ball gown'],
+  'Feeling': ['banned from the garden centre', 'legally obliged to apologise', 'like a raccoon in a bin', 'weirdly attracted to soup'],
+  'Life event': ['Adopted 14 geese', 'Became a full-time clown', 'Got barred from the village fete', 'Married a lighthouse'],
+  'In a relationship with': ['a very patient swan', 'the man from the bin lorry', 'my own reflection', 'a haunted wardrobe'],
+  'Joined the group': ['Recovering Karaoke Addicts', 'People Who Hate Their Neighbours', 'Seagull Revenge Society', 'Banned From Every Buffet'],
+  'Watching': ['my neighbour, through the hedge', 'a man fight a goose', 'my own wedding video, crying', '10 hours of a fridge humming'],
+  'Celebrating': ['my third divorce', 'getting out of the well', 'one week without biting anyone', 'the charges being dropped'],
+  'With': ['Nan and her lawyer', 'a stranger I met in a skip', '14 confused pigeons', 'the vicar (reluctantly)'],
+  'Going to': ['my ex’s wedding (uninvited)', 'Nan’s séance', 'a clown funeral', 'goat yoga, again'],
+  'Wearing': ['nothing but a bath mat', 'my dad’s wedding suit', 'a wetsuit, to the office', 'Grandma’s nightie'],
+  'Eating': ['a whole lemon, skin on', 'cold beans from the tin', 'the cake from the funeral', 'cereal with orange juice'],
+  'Thinking about': ['moving into the shed', 'the swan that bit me', 'faking my own death', 'what I did in 2009'],
+  'Lost': ['my teeth', 'whoever took my wheelie bin', 'the ferret. Again.', 'my dignity at the buffet'],
+  'Woke up next to': ['a traffic cone and regret', 'my boss, somehow', 'a stranger’s hen party', 'the walk of shame (day 3)'],
+};
+export const FORMATS: readonly FormatItem[] = (Object.keys(ROWS) as Kind[]).flatMap(kind => ROWS[kind].map(([ask, label, meta, adult], i) => ({
+  id: `${kind}-${i}`, kind, ask, label, meta, ...(adult ? { adult: true as const } : {}), ...(kind === 'status' ? { house: STATUS_TWISTS[label]! } : {}),
+})));
 export const formatPool = (family: boolean, kind: Kind) => FORMATS.filter(f => f.kind === kind && !(family && f.adult));
 
-/** House twists per app, for players who run out of time or tap “Write it for me” (half points). */
-export const HOUSE_TWISTS: Record<Kind, readonly string[]> = {
+/** House twists per app, for players who run out of time or tap “Let the house write it” (half points). Status updates use their format’s own. */
+export const HOUSE_TWISTS: Record<Exclude<Kind, 'status'>, readonly string[]> = {
   review: ['Industrial tub of glitter', 'Haunted porcelain doll', 'Self-heating underpants', 'Second-hand dentures', 'Inflatable church',
     'Clown shoes, size 19', 'Mystery meat sampler', 'Toddler-sized bagpipes', 'Talking bathroom scales', 'Extra-strong nose hair wax'],
   photo: ['Me hugging a very confused police horse', 'A goat wearing my wedding dress', 'My head stuck in the park railings', 'Twelve pigeons eating my lunch',
@@ -229,17 +252,20 @@ export const HOUSE_TWISTS: Record<Kind, readonly string[]> = {
   chat: ['Who left a fish in the airing cupboard?', 'Has anyone seen Grandad’s teeth?', 'Why is there a horse in the garden',
     'Reminder: the police are coming at 3', 'Who changed the Wi-Fi name to THAT', 'Did someone shave the dog??', 'I can see you from the window. Stop.',
     'Please return the ferret. No questions asked.', 'Whoever ate the birthday cake: confess', 'The vicar saw everything.'],
-  status: ['my ex’s wedding (uninvited)', 'the bottom of a well', 'court, again', 'the world’s saddest petting zoo', 'a goat yoga retreat',
-    'the back of a police car', 'Nan’s séance', 'a clown funeral', 'the hospital (it’s fine)', 'the job centre in a ball gown'],
 };
 /** Cheekier house twists, one per app: filtered in family mode. */
-export const ADULT_TWISTS: Record<Kind, string> = {
+export const ADULT_TWISTS: Record<Exclude<Kind, 'status'>, string> = {
   review: 'Edible underwear, family size', photo: 'Me, very drunk, hugging a lamp post', news: 'Couple caught “misbehaving” in showroom bed',
   search: 'how to explain a love bite to my boss', job: 'Hen party butler (no shirt)', dating: 'Someone to split my bail money',
   forum: 'Woke up at a stranger’s hen party', recipe: 'Hangover Kebab Lasagne', video: 'Stag Do Gone Wrong: Part 7',
-  chat: 'Who left their handcuffs at Nan’s?', status: 'the walk of shame (day 3)',
+  chat: 'Who left their handcuffs at Nan’s?',
 };
-export const twistPool = (family: boolean, kind: Kind): string[] => family ? [...HOUSE_TWISTS[kind]] : [...HOUSE_TWISTS[kind], ADULT_TWISTS[kind]];
+/** House twists for a dealt format: its own list for status updates, otherwise its app's pool. */
+export function twistPool(family: boolean, { kind, house }: FormatItem): string[] {
+  if (house) return [...house];
+  const app = kind as Exclude<Kind, 'status'>;
+  return family ? [...HOUSE_TWISTS[app]] : [...HOUSE_TWISTS[app], ADULT_TWISTS[app]];
+}
 
 /** House answers for players who never answered. Vague on purpose: they twist beautifully. */
 export const HOUSE_ANSWERS: readonly string[] = [

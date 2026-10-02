@@ -29,6 +29,10 @@ const TIPS = [
   'The perfect catch makes the room argue.', 'Voters on the losing side earn a Bold bonus.', 'Stuck? The machine will fill it, for half points.',
   'Think about who’s on the sofa tonight.', 'A tiny catch for a huge reward… or a huge catch for a tiny one?',
 ];
+const RATHER_TIPS = [
+  'Make A and B equally tempting. Or equally awful.', 'Everyone picks A? Zero points.', 'Two terrible options: a classic for a reason.',
+  'Voters on the smaller side earn a Bold bonus.', 'Stuck? The machine will fill a side, for half points.', 'Think about who’s on the sofa tonight.',
+];
 const WAIT_LINES = [
   'Practise your best “I would NEVER” face.', 'Decide now: yes or no to everything.', 'Somebody is about to start an argument.',
   'Balance a cushion on your head. For the vibes.', 'Picture the room split in half. Lovely.', 'Hum something cosmic.',
@@ -78,7 +82,7 @@ function Head({ view, children }: { view: SplitPublic; children?: ReactNode }) {
 // ---------- TV ----------
 
 function WriteTV({ view, players, vip, now }: P) {
-  const final = view.phase === 'final-write', rather = view.round === 2, t = useNow(now, 1000), tip = Math.floor(Math.max(0, t - view.at) / 6000) % TIPS.length;
+  const final = view.phase === 'final-write', rather = view.round === 2, t = useNow(now, 1000), tips = rather ? RATHER_TIPS : TIPS, tip = Math.floor(Math.max(0, t - view.at) / 6000) % tips.length;
   return <section className="sd-write" data-final={final || undefined}>
     <Head view={view}><Timer deadline={view.deadline} now={now} total={view.deadline - view.at} size={128} /></Head>
     <div className="sd-write-main">
@@ -96,7 +100,7 @@ function WriteTV({ view, players, vip, now }: P) {
           <span data-v="close"><b className="kp-numeral">75/25</b><small>{final ? '1500' : rather ? '1000' : '500'} pts</small></span>
           <span data-v="unanimous"><b className="kp-numeral">All agree</b><small>0 pts</small></span>
         </div>
-        <p className="sd-tip" key={tip}>{final ? 'Next: judge every take, yes or no. Fast!' : TIPS[tip]}</p>
+        <p className="sd-tip" key={tip}>{final ? 'Next: judge every take, yes or no. Fast!' : tips[tip]}</p>
       </div>
     </div>
     <PlayerStrip players={players} done={view.done} vip={vip} />
@@ -106,7 +110,7 @@ function WriteTV({ view, players, vip, now }: P) {
 /** Voter avatars: gathered in the portal, then sliding into their half. Positions are px offsets inside the arena. */
 function voterSpots(o: Outcome, step: number) {
   const all = [...o.sides[0], ...o.sides[1]], big = all.length <= 4, slot = big ? 200 : 154, spots = new Map<string, { x: number; pct: number; y: number }>();
-  if (step < 1) all.forEach((id, i) => { const a = i / Math.max(1, all.length) * Math.PI * 2 - Math.PI / 2, r = all.length > 1 ? (all.length > 5 ? 96 : 64) : 0; spots.set(id, { pct: 50, x: r * Math.cos(a), y: 186 + r * Math.sin(a) * .7 }); });
+  if (step < 1) all.forEach((id, i) => { const a = i / Math.max(1, all.length) * Math.PI * 2 + Math.PI, r = all.length > 1 ? (all.length > 5 ? 96 : 64) : 0; spots.set(id, { pct: 50, x: r * Math.cos(a), y: 186 + r * Math.sin(a) * .7 }); });
   else o.sides.forEach((ids, side) => {
     const cols = ids.length <= 4 ? ids.length : Math.ceil(ids.length / 2);
     // Half centres sit 32 px off the quarter lines (the beam gap); one row floats mid-panel, two rows stack.
@@ -117,7 +121,7 @@ function voterSpots(o: Outcome, step: number) {
 }
 
 function Half({ side, card, visible, count, step }: { side: Side; card: Card; visible: boolean; count?: number; step: number }) {
-  const rather = card.kind === 'rather', o = card.outcome, open = rather && (!o || step < 1), won = !!o && step >= 3 && o.verdict !== 'perfect' && o.sides[side].length > 0 && o.sides[side].length < o.sides[1 - side]!.length;
+  const rather = card.kind === 'rather', o = card.outcome, open = rather && (!o || step < 1), won = !!o && step >= 3 && o.bold > 0 && o.sides[side].length < o.sides[1 - side]!.length;
   return <div className="sd-half" data-side={side} data-rather={rather || undefined} data-open={open || undefined} data-hidden={!visible || undefined} data-bold={won || undefined}>
     <header>
       <b className="sd-half-label kp-title">{SIDE_NAMES[rather ? 1 : 0][side]}</b>
@@ -155,7 +159,7 @@ function CardTV({ view, card, players, now }: P & { card: Card }) {
       {o && step >= 2 && author && <div className="sd-author" data-verdict={step >= 3 ? o.verdict : undefined}>
         <AvatarBadge player={author} size={124} layout="column" mood={step < 3 ? 'idle' : o.points ? 'happy' : 'sad'} detail={rather ? 'asked this' : 'wrote this'} />
         {step >= 3 && <b className="sd-points kp-numeral" data-zero={!o.points || undefined}>+{o.points}</b>}
-        {step >= 3 && o.house && <span className="sd-house">Machine-filled · half points</span>}
+        {step >= 3 && o.house && <span className="sd-house">Machine-filled<br />half points</span>}
       </div>}
     </div>
     <div className="sd-foot" role="status">

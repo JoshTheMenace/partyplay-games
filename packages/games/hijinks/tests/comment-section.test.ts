@@ -3,9 +3,9 @@ import test from 'node:test';
 import { createNight, type Night, type NightOptions } from './harness';
 import { miniInfo } from '../src/minis/catalog';
 import { LINES } from '../src/minis/comment-section/narration';
-import { ADULT_QUESTIONS, ADULT_TWISTS, FORMATS, HOUSE_ANSWERS, HOUSE_TWISTS, QUESTIONS, REPLIES } from '../src/minis/comment-section/content.server';
+import { ADULT_QUESTIONS, ADULT_TWISTS, FORMATS, HOUSE_ANSWERS, HOUSE_TWISTS, QUESTIONS, REPLIES, twistPool } from '../src/minis/comment-section/content.server';
 import type { CommentState } from '../src/minis/comment-section/server';
-import { KINDS, MAX_ANSWER, MAX_TWIST, type CommentPrivate, type CommentPublic, type Kind } from '../src/minis/comment-section/types';
+import { KINDS, MAX_ANSWER, MAX_TWIST, type CommentPrivate, type CommentPublic } from '../src/minis/comment-section/types';
 
 const pub = (n: Night) => n.mini<CommentPublic>();
 const me = (n: Night, id: string) => n.miniMe<CommentPrivate>(id);
@@ -35,13 +35,18 @@ test('content banks, narration budget and catalog entry', () => {
   assert.equal(new Set(questions.map(q => q.toLowerCase())).size, questions.length, 'questions are unique');
   for (const q of questions) assert.equal(q, q.trim().replace(/\s+/g, ' '));
   assert.ok(FORMATS.filter(f => f.kind !== 'status').length >= 80, 'format variants');
-  for (const kind of [...KINDS, 'status'] as Kind[]) {
+  for (const kind of KINDS) {
     assert.ok(FORMATS.filter(f => f.kind === kind && !f.adult).length >= 8, `${kind} variants`);
     assert.ok(HOUSE_TWISTS[kind].length >= 10, `${kind} house twists`);
     for (const t of [...HOUSE_TWISTS[kind], ADULT_TWISTS[kind]]) assert.ok(t.length <= MAX_TWIST, t);
   }
+  // The Final Feed deals one status format per player, so ten players never share one; each brings house twists that fit its label.
+  const statuses = FORMATS.filter(f => f.kind === 'status');
+  assert.ok(statuses.filter(f => !f.adult).length >= 10, 'family status formats');
+  for (const f of statuses) { assert.ok(f.house!.length >= 3, f.label); for (const t of f.house!) assert.ok(t.length <= MAX_TWIST, t); }
+  for (const f of FORMATS) assert.deepEqual(twistPool(false, f), f.house ? [...f.house] : [...HOUSE_TWISTS[f.kind as typeof KINDS[number]], ADULT_TWISTS[f.kind as typeof KINDS[number]]]);
   assert.equal(new Set(FORMATS.map(f => f.id)).size, FORMATS.length);
-  assert.ok(Object.values(HOUSE_TWISTS).flat().length >= 100);
+  assert.ok(Object.values(HOUSE_TWISTS).flat().length + statuses.flatMap(f => f.house!).length >= 100);
   const adult = ADULT_QUESTIONS.length + FORMATS.filter(f => f.adult).length + Object.keys(ADULT_TWISTS).length;
   assert.ok(adult >= 28 && adult <= 40, `${adult} adult-tagged items`);
   for (const a of HOUSE_ANSWERS) assert.ok(a.length <= MAX_ANSWER, a);
@@ -83,6 +88,7 @@ test('dealing: everyone twists exactly one other answer; distinct apps; the Fina
       const kinds = entries.map(e => e.format.kind);
       if (round < 3) assert.equal(new Set(kinds).size, players, 'a different app each');
       else assert.ok(kinds.every(k => k === 'status'));
+      assert.equal(new Set(entries.map(e => e.format.id)).size, players, 'a different format each');
       for (const id of n.ids) assert.equal(me(n, id).question, entryBy(n, 'author', id).question);
       if (players >= 6) for (const e of entries) { assert.ok(!pairs.has(`${e.twister}>${e.author}`), 'no repeat twister→author pair'); pairs.add(`${e.twister}>${e.author}`); }
       if (round < 3) at(n, 'scores', round);
@@ -163,7 +169,7 @@ test('missing inputs become house answers and twists; timers follow the pace set
   for (const e of answers.filter(e => e.house)) assert.ok(HOUSE_ANSWERS.includes(e.answer!));
   assert.equal(new Set(answers.map(e => e.answer)).size, 3, 'house answers never repeat in a round');
   at(n, 'feed', 1);
-  for (const e of inner(n).entries) { assert.equal(e.auto, true); assert.ok(HOUSE_TWISTS[e.format.kind].includes(e.twist!)); }
+  for (const e of inner(n).entries) { assert.equal(e.auto, true); assert.ok(twistPool(true, e.format).includes(e.twist!)); }
   at(n, 'results', 1);
   assert.deepEqual(pub(n).result!.reported, [], 'nobody voted');
 });
@@ -197,7 +203,7 @@ test('validation: stale turns, phases, duplicates, lengths and strict fields', (
   const turn = pub(n).turn;
   rejects(n.trySend('p0', { turn: 'old', k: 'answer', text: 'hi' }), /moved on/);
   rejects(n.trySend('p0', { turn, k: 'answer', text: '   ' }), /Type an answer/);
-  rejects(n.trySend('p0', { turn, k: 'answer', text: 'x'.repeat(MAX_ANSWER + 1) }), /under 70/);
+  rejects(n.trySend('p0', { turn, k: 'answer', text: 'x'.repeat(MAX_ANSWER + 1) }), /to 70/);
   rejects(n.trySend('p0', { turn, k: 'answer', text: 'hi', extra: 1 }), /Unknown field/);
   rejects(n.trySend('p0', { turn, k: 'twist', text: 'hi' }), /closed/);
   rejects(n.trySend('p0', { turn, k: 'vote', posts: ['f0'] }), /after the feed/);
@@ -210,7 +216,7 @@ test('validation: stale turns, phases, duplicates, lengths and strict fields', (
   at(n, 'twist', 1);
   const twist = pub(n).turn;
   rejects(n.trySend('p1', { turn, k: 'twist', text: 'stale' }), /moved on/);
-  rejects(n.trySend('p1', { turn: twist, k: 'twist', text: 'y'.repeat(MAX_TWIST + 1) }), /under 50/);
+  rejects(n.trySend('p1', { turn: twist, k: 'twist', text: 'y'.repeat(MAX_TWIST + 1) }), /to 50/);
   rejects(n.trySend('p1', { turn: twist, k: 'auto', text: 'x' }), /Unknown field/);
   n.send('p1', { turn: twist, k: 'twist', text: 'Haunted canoe' });
   rejects(n.trySend('p1', { turn: twist, k: 'auto' }), /already posted/);
@@ -245,8 +251,10 @@ test('privacy: answers, twists and twisters stay secret until their moment', () 
   n.assertHidden('A very secret twist');
   for (const id of ['p0', 'p1', 'p3']) n.assertHiddenFrom(id, 'A very secret twist');
   twistAll(n, ['p0', 'p1', 'p3']);
+  for (const e of inner(n).entries) n.assertHidden(e.question);
   for (const phase of ['feed', 'vote'] as const) {
     at(n, phase, 1);
+    for (const p of pub(n).posts!) assert.equal(p.question, inner(n).entries.find(e => e.id === p.id)!.question, 'the innocent question is revealed with its post');
     n.assertHidden('twister');
     if (phase === 'feed') assert.ok((pub(n).posts?.length ?? 0) <= (pub(n).stage ?? 0), 'only started posts are public');
     for (const id of n.ids) { const mine = me(n, id); assert.equal(inner(n).entries.find(e => e.id === mine.mine)!.twister, id); }
@@ -282,4 +290,11 @@ test('night memory: a replay deals fresh questions and formats', async () => {
   at(n, 'answer', 1);
   for (const e of inner(n).entries) { assert.ok(!first.has(e.question), e.question); assert.ok(!firstFormats.has(e.format.id), e.format.id); }
   assert.ok([...first].every(q => n.state.used['comment-section']!.includes(q)), 'every dealt question is marked');
+});
+
+test('Final Feed house twists come from each status format’s own list', () => {
+  const n = start(10, { seed: 4 });
+  for (const round of [1, 2]) { toVote(n, round); at(n, 'scores', round); }
+  at(n, 'feed', 3);
+  for (const e of inner(n).entries) { assert.equal(e.format.kind, 'status'); assert.equal(e.auto, true); assert.ok(e.format.house!.includes(e.twist!), `${e.format.label}: ${e.twist}`); }
 });

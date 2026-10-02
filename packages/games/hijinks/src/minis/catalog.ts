@@ -54,7 +54,7 @@ export const MINIS: MiniInfo[] = [
   },
   {
     id: 'airlock', title: 'Airlock', tagline: 'Somebody aboard isn’t human. Push the button.',
-    howTo: ['Answer quick crew tests on your phone. Aliens get a slightly different question.', 'Compare everyone’s answers on the big screen. Who doesn’t quite fit?', 'Push the big red button. If every vote says AIRLOCK, out they go!'],
+    howTo: ['Answer quick crew tests on your phone. Aliens get a slightly different question.', 'Compare everyone’s answers on the big screen. Who doesn’t quite fit?', 'Push the red button on a suspect. Space every alien, but never a human!'],
     players: { min: 4, max: 10 }, minutes: '8–12', tags: ['social', 'bluffing', 'deduction'], accent: '#ff2d55', intro: ['airlock.intro'],
   },
 ];

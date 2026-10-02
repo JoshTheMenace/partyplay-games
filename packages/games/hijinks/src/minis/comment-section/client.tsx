@@ -154,7 +154,8 @@ function FeedTV({ view, players, now }: P) {
       </div>
       <aside className="cs-feed-cast">{author && <>
         <small>Originally said by</small>
-        <AvatarBadge player={author} size={130} layout="column" mood={step >= 1 ? 'sad' : 'idle'} />
+        <AvatarBadge player={author} size={112} layout="column" mood={step >= 1 ? 'sad' : 'idle'} />
+        {step >= 2 && <p className="cs-asked" key={post.id}><small>when asked</small>{post.question}</p>}
         <p className="cs-context-by"><small>Context added by</small><span className="cs-mystery kp-title" aria-label="Secret until the vote">?</span></p>
       </>}</aside>
     </div>

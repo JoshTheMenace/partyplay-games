@@ -19,7 +19,7 @@ export type CommentState = {
   stage: number; sub: number;
   /** This round's posts in display order; twister→author pairs and apps dealt earlier this game. */
   entries: Entry[]; pairs: string[]; kinds: Kind[];
-  houseAnswers: string[]; houseTwists: Partial<Record<Kind, string[]>>; replies: Reply[];
+  houseAnswers: string[]; houseTwists: Record<string, string[]>; replies: Reply[];
   feedAt: number[]; votes: Record<string, string[]>; verdicts: Verdict[]; reported: string[];
   scores: Record<string, number>; prev: Record<string, number>; stats: Record<Stat, Record<string, number>>; reportedTotal: number;
   done: boolean;
@@ -32,10 +32,10 @@ const twisterOf = (s: CommentState, id: string) => s.entries.find(e => e.twister
 
 /** Trims, collapses whitespace and drops control/bidi characters; 1–max characters. */
 function clean(raw: unknown, max: number, empty: string): string {
-  if (typeof raw !== 'string' || raw.length > max * 4) throw new Error(`Keep it under ${max} characters.`);
+  if (typeof raw !== 'string' || raw.length > max * 4) throw new Error(`Keep it to ${max} characters.`);
   const text = raw.replace(/[\p{Cc}‪-‮⁦-⁩]+/gu, ' ').replace(/\s+/g, ' ').trim();
   if (!text) throw new Error(empty);
-  if (text.length > max) throw new Error(`Keep it under ${max} characters.`);
+  if (text.length > max) throw new Error(`Keep it to ${max} characters.`);
   return text;
 }
 
@@ -45,7 +45,10 @@ function go(s: CommentState, api: MiniApi, phase: Phase, span: number) {
 /** Keeps the phase open long enough for narration that just started. */
 function hold(s: CommentState, api: MiniApi, spoken: number) { if (spoken) s.deadline = Math.max(s.deadline, api.now + spoken + 800); }
 
-function houseTwist(s: CommentState, api: MiniApi, kind: Kind) { return rotate(s.houseTwists[kind] ??= api.shuffle(twistPool(api.settings.family, kind))); }
+/** Rotates through a shuffled pool per app (or per status format, which has its own). */
+function houseTwist(s: CommentState, api: MiniApi, format: FormatItem) {
+  return rotate(s.houseTwists[format.house ? format.id : format.kind] ??= api.shuffle(twistPool(api.settings.family, format)));
+}
 
 /** Deals questions, twister→author pairs and a post format per answer. */
 function startRound(s: CommentState, api: MiniApi) {
@@ -84,7 +87,7 @@ function startFeed(s: CommentState, api: MiniApi) {
   let at = api.now + FEED_LEAD;
   s.feedAt = [];
   for (const e of s.entries) {
-    if (e.twist === null) { e.twist = houseTwist(s, api, e.format.kind); e.auto = true; }
+    if (e.twist === null) { e.twist = houseTwist(s, api, e.format); e.auto = true; }
     e.likes = Math.round(20 + api.random() ** 3 * 98_000); e.replies = [rotate(s.replies), rotate(s.replies)];
     s.feedAt.push(at); at += postMs({ twist: e.twist, answer: e.answer! });
   }
@@ -155,7 +158,7 @@ export const server: MiniServer<CommentState, CommentPublic, CommentPrivate> = {
         const e = twisterOf(s, id)!;
         if (e.twist !== null) throw new Error('Your twist is already posted.');
         if (a.k === 'twist') { e.twist = clean(a.text, MAX_TWIST, 'Write the missing context first.'); api.sfx('pop'); }
-        else { e.twist = houseTwist(s, api, e.format.kind); e.auto = true; s.stats.autos[id]!++; api.sfx('boing'); }
+        else { e.twist = houseTwist(s, api, e.format); e.auto = true; s.stats.autos[id]!++; api.sfx('boing'); }
         return;
       }
       case 'vote': {
@@ -226,7 +229,7 @@ export const server: MiniServer<CommentState, CommentPublic, CommentPrivate> = {
 
   publicView(s) {
     const pub: CommentPublic = { phase: s.phase, round: s.round, turn: s.turn, at: s.at, deadline: s.deadline, scores: { ...s.scores }, done: [] };
-    const post = (e: Entry): Post => ({ id: e.id, author: e.author, kind: e.format.kind, label: e.format.label, meta: e.format.meta, twist: e.twist!, answer: e.answer!, likes: e.likes, replies: e.replies.map(r => ({ ...r })) });
+    const post = (e: Entry): Post => ({ id: e.id, author: e.author, question: e.question, kind: e.format.kind, label: e.format.label, meta: e.format.meta, twist: e.twist!, answer: e.answer!, likes: e.likes, replies: e.replies.map(r => ({ ...r })) });
     if (s.phase === 'scores') pub.prev = { ...s.prev };
     if (s.phase === 'answer') pub.done = s.ids.filter(id => authorOf(s, id)!.answer !== null);
     if (s.phase === 'twist') pub.done = s.ids.filter(id => twisterOf(s, id)!.twist !== null);

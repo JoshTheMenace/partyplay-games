@@ -26,9 +26,9 @@ export function doodle(random: () => number, max = false): Drawing {
 }
 
 export const bot: MiniBot<AirPublic, AirPrivate> = ({ view, me, playerId, players, now, random }) => {
-  if (!me || me.turn !== view.turn) return null;
+  if (!me || me.turn !== view.turn || view.out.includes(playerId)) return null;
   const turn = view.turn, waited = (ms: number) => now - view.at >= ms, one = <T>(list: readonly T[]) => list[Math.floor(random() * list.length)]!;
-  const others = players.filter(p => p.id !== playerId).map(p => p.id), kind = view.kinds.at(-1);
+  const others = players.filter(p => p.id !== playerId && !view.out.includes(p.id)).map(p => p.id), kind = view.kinds.at(-1);
   if (view.phase === 'test' && me.answer === undefined && waited(THINK.test)) {
     if (me.role === 'alien' && me.scan && random() < .2) return { turn, k: 'scan' };
     if (kind === 'draw') return { turn, k: 'draw', drawing: doodle(random, random() < .2) };
@@ -43,12 +43,11 @@ export const bot: MiniBot<AirPublic, AirPrivate> = ({ view, me, playerId, player
   if (view.phase === 'discuss' && !me.ready) {
     // From the fourth test, about one bot in twenty-five pushes the button in a given discussion (aliens only frame humans).
     const pushes = view.pushes[playerId] ?? 0, suspects = others.filter(id => !me.allies.includes(id));
-    if (view.test > 3 && pushes > 0 && hash(`${turn}:${playerId}`) < 40 && suspects.length >= view.aliens && waited(THINK.push))
-      return { turn, k: 'push', suspects: [...suspects].sort(() => random() - .5).slice(0, view.aliens) };
+    if (view.test > 3 && pushes > 0 && hash(`${turn}:${playerId}`) < 40 && suspects.length && waited(THINK.push)) return { turn, k: 'push', suspect: one(suspects) };
     return waited(THINK.discuss) ? { turn, k: 'ready' } : null;
   }
-  if (view.phase === 'vote' && view.ballot && !me.vote && !view.ballot.suspects.includes(playerId) && waited(THINK.vote)) {
-    const protect = me.role === 'alien' && view.ballot.suspects.some(id => me.allies.includes(id));
+  if (view.phase === 'vote' && view.ballot && !me.vote && view.ballot.suspect !== playerId && waited(THINK.vote)) {
+    const protect = me.role === 'alien' && me.allies.includes(view.ballot.suspect);
     return { turn, k: 'vote', vote: protect || (me.role === 'crew' && random() < .25) ? 'abort' : 'airlock' };
   }
   return null;

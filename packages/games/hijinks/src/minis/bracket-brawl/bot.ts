@@ -4,16 +4,21 @@ import { MAX_ANSWER, showBeats, type BrawlPrivate, type BrawlPublic } from './ty
 
 const THINGS = ['A goose', 'My nan', 'Soup', 'A haunted kettle', 'Three llamas', 'A tiny wizard', 'Cold beans', 'Uncle Derek', 'A wet sock', 'Bagpipes', 'Glitter', 'A sad trombone'];
 const TAILS = [' with a grudge', ' in a tuxedo', ' on rollerskates', ' at 3 a.m.', ', but louder', ' from the future', ' that knows too much', ' in a hot tub'];
+/** Worst cases: realistic text at or near the 50-character limit. */
+const LONG = [
+  'My nan’s haunted kettle that screams every Tuesday', 'Seventeen raccoons running a very small hair salon', 'A goose in a tuxedo who knows too much about tax',
+  'Uncle Derek’s karaoke version of the shipping news', 'A wizard who only does birthday parties for cats', 'Forty soggy croissants and a strongly worded note',
+];
 /** Human-ish pauses (server ms into the phase) so live QA screenshots catch mid-phase states; the harness skips time anyway. */
-/** Worst cases: exactly 50 characters (and one 48) of realistic text. */
-const LONG = ['My nan’s haunted kettle that screams every Tuesday', 'Seventeen raccoons running a very small hair salon', 'A goose in a tuxedo who knows too much about tax'];
 const THINK = { write: 4000, second: 2500, predict: 2500, vote: 700 } as const;
 /** A stable per-seat, per-phase delay (0 to max ms), so bots finish at different moments like people do. */
 const stagger = (key: string, max: number) => [...key].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 9973, 7) % max;
 
 export const bot: MiniBot<BrawlPublic, BrawlPrivate> = ({ view, me, playerId, now, random }) => {
   if (!me || me.turn !== view.turn) return null;
-  const t = now - view.at, turn = view.turn, wait = (max: number) => stagger(playerId + turn, max), pick = <T,>(list: readonly T[]) => list[Math.floor(random() * list.length)]!;
+  const t = now - view.at, turn = view.turn, wait = (max: number) => stagger(playerId + turn, max), seat = stagger(playerId, 997);
+  // Offset by seat so QA bots sharing a random seed still write different answers.
+  const pick = <T,>(list: readonly T[]) => list[(Math.floor(random() * list.length) + seat) % list.length]!;
   const open = view.phase === 'write' ? me.answers.find(a => a.text === undefined) : undefined;
   if (open && t >= THINK.write + wait(9000) + open.slot * THINK.second) {
     // A third of answers run to the 50-character limit so QA screenshots show worst-case text.

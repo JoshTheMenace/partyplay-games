@@ -51,14 +51,17 @@
 .bb-lines { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .bb-lines path { fill: none; stroke: #7480c94d; stroke-width: 4; stroke-linejoin: round; stroke-linecap: round; }
 .bb-lines path[data-lit] { stroke: var(--bb-lime); stroke-width: 6; filter: drop-shadow(0 0 5px var(--bb-lime)) drop-shadow(0 0 14px #c8ff2e99); stroke-dasharray: 2000; animation: bb-surge .9s ease-out backwards; }
-.bb-slot { position: absolute; display: flex; align-items: center; padding: 8px 14px 8px 18px; border-radius: 14px; background: #0f1645f0; border: 3px solid #8d97d959; box-shadow: 0 6px 0 #05071a;
-  transition: border-color .35s, background .35s, box-shadow .35s, scale .35s; }
-[data-wing="1"] > .bb-slot { padding: 8px 18px 8px 14px; }
-.bb-slot:not([data-col="0"]) { padding: 8px 10px 8px 14px; } [data-wing="1"] > .bb-slot:not([data-col="0"]) { padding: 8px 14px 8px 10px; }
-.bb-slot p { margin: 0; width: 100%; font-weight: 800; line-height: 1.13; overflow: hidden; overflow-wrap: break-word; hyphens: auto; hyphenate-limit-chars: 9 4 4; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
-.bb-board[data-rounds="4"] .bb-slot:not([data-col="0"]) p { -webkit-line-clamp: 5; }
-.bb-seed { position: absolute; z-index: 1; top: -13px; left: -11px; display: grid; place-items: center; min-width: 32px; height: 32px; padding: 0 6px; border-radius: 10px; background: var(--kp-ink); border: 3px solid #8d97d9; color: var(--kp-cream); font-size: 18px; line-height: 1; }
-[data-wing="1"] > .bb-slot .bb-seed { left: auto; right: -11px; }
+.bb-slot { position: absolute; display: flex; align-items: center; padding: 6px 14px 6px 22px; border-radius: 14px; background: #0f1645f0; border: 3px solid #8d97d959; box-shadow: 0 6px 0 #05071a;
+  transition: border-color .35s, background .35s, box-shadow .35s, scale .35s, left .5s, top .5s, width .5s, height .5s; }
+[data-wing="1"] > .bb-slot { padding: 6px 22px 6px 14px; }
+.bb-slot p { margin: 0; width: 100%; font-weight: 800; line-height: 1.12; overflow-wrap: break-word; hyphens: manual; text-wrap: balance; }
+.bb-seed { position: absolute; z-index: 3; top: -14px; left: -17px; display: grid; place-items: center; min-width: 36px; height: 36px; padding: 0 6px; border-radius: 10px; background: var(--kp-ink); border: 3px solid #8d97d9; color: var(--kp-cream); font-size: 22px; line-height: 1; }
+[data-wing="1"] > .bb-slot .bb-seed { left: auto; right: -17px; }
+/* Collapsed rounds: a seed chip per entrant, so the bracket's shape stays without unreadable text. */
+.bb-slot[data-mini] { justify-content: center; padding: 0; border-radius: 50%; }
+.bb-slot[data-mini] .bb-seed, [data-wing="1"] > .bb-slot[data-mini] .bb-seed { position: static; min-width: 0; height: auto; padding: 0; border: 0; background: none; color: inherit; }
+.bb-slot[data-mini] .bb-slot-q { font-size: 24px; }
+.bb-slot[data-mini][data-state=out] { opacity: .45; }
 .bb-slot[data-state=empty] { justify-content: center; background: #05071a73; border-style: dashed; box-shadow: none; }
 .bb-slot-q { font-family: var(--font-display); font-size: 36px; color: #8d97d966; }
 .bb-slot[data-corner="0"] { --corner: var(--bb-blue); } .bb-slot[data-corner="1"] { --corner: var(--bb-red); }
@@ -95,7 +98,7 @@
 
 /* match */
 .bb-bout { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 48px; padding: 16px 6px 12px; }
-.bb-fighter { --corner: var(--bb-blue); position: relative; flex: 1 1 0; min-height: 0; max-height: 250px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 34px 28px 16px;
+.bb-fighter { --corner: var(--bb-blue); position: relative; flex: 1 1 0; min-height: 0; max-height: 250px; display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: 10px; padding: 34px 28px 16px;
   border-radius: 24px; background: #fff; color: var(--kp-ink); border: 6px solid var(--kp-ink); box-shadow: 0 0 0 5px var(--corner), 0 12px 0 5px #05071a;
   transition: scale .45s cubic-bezier(.2, 1.4, .4, 1), box-shadow .45s, background .45s; animation: hj-from-left .5s cubic-bezier(.2, 1.3, .4, 1) backwards; }
 .bb-fighter[data-corner="1"] { --corner: var(--bb-red); animation-name: hj-from-right; }
@@ -118,9 +121,9 @@
 .bb-unmask .hj-badge { max-width: 100%; } .bb-unmask .hj-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bb-unmask em { display: block; padding: 6px 12px; font-family: var(--font-display); font-style: normal; text-transform: uppercase; }
 .bb-vs { position: absolute; z-index: 2; left: 50%; top: 50%; translate: -50% -50%; rotate: -8deg; font-size: 78px; color: var(--kp-sun); animation: hj-pop .6s .3s cubic-bezier(.2, 1.6, .4, 1) backwards; }
-.bb-coin { position: absolute; z-index: 4; left: 50%; top: 50%; width: 176px; height: 176px; margin: -88px 0 0 -88px; transform-style: preserve-3d; --turns: 1800deg; animation: bb-flip 2.6s cubic-bezier(.2, .55, .25, 1) both; }
+.bb-coin { position: absolute; z-index: 4; left: 50%; top: 50%; width: 148px; height: 148px; margin: -74px 0 0 -74px; transform-style: preserve-3d; --turns: 1800deg; animation: bb-flip 2.6s cubic-bezier(.2, .55, .25, 1) both; }
 .bb-coin[data-side="1"] { --turns: 1980deg; }
-.bb-coin-face { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 50%; backface-visibility: hidden; font-family: var(--font-display); font-size: 96px; font-style: normal; line-height: 1; color: var(--bb-blue); -webkit-text-stroke: 4px var(--kp-ink);
+.bb-coin-face { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 50%; backface-visibility: hidden; font-family: var(--font-display); font-size: 84px; font-style: normal; line-height: 1; color: var(--bb-blue); -webkit-text-stroke: 4px var(--kp-ink);
   background: radial-gradient(circle at 35% 30%, #fff6c9, var(--kp-sun) 45%, #b8860b); border: 8px solid #8a6500; box-shadow: inset 0 0 0 7px #ffe58a, 0 0 50px #ffd24a; }
 .bb-coin-face[data-face="1"] { transform: rotateY(180deg); color: var(--bb-red); }
 .bb-bout:has(.bb-coin) .bb-vs { opacity: 0; }
@@ -132,7 +135,7 @@
 .bb-predict-cup { font-size: 190px; filter: drop-shadow(0 0 36px #ffd24a99); animation: bb-raise 1s cubic-bezier(.2, 1.3, .4, 1) backwards; }
 .bb-arrow { display: inline-block; margin: 0 18px; color: var(--bb-lime); font-size: .8em; text-shadow: 0 0 12px var(--bb-lime); animation: hj-throb 1.2s ease-in-out infinite; }
 .bb-picks-in { font-size: 28px; } .bb-screen-foot .bb-picks-in b { padding: 0; background: none; font-size: 40px; color: var(--bb-lime); font-weight: 400; }
-.bb-twist-hint { margin: 0; text-align: center; font-family: var(--font-display); font-size: 36px; text-transform: uppercase; letter-spacing: .04em; color: var(--bb-lime); animation: hj-rise .5s .4s backwards; }
+.bb-twist-hint { margin: 0; text-align: center; white-space: nowrap; font-family: var(--font-display); font-size: 32px; text-transform: uppercase; letter-spacing: .04em; color: var(--bb-lime); animation: hj-rise .5s .4s backwards; }
 .bb-twist { justify-content: center; gap: 26px; }
 .bb-twist-was { margin: 0; text-align: center; font-size: 30px; font-weight: 800; } .bb-twist-was b { font-family: var(--font-display); font-weight: 400; color: var(--kp-sun); }
 .bb-twist-real { position: relative; flex: none; padding: 38px 26px 24px; border-radius: 22px; background: var(--kp-cream); color: var(--kp-ink); border: 5px solid var(--kp-ink); box-shadow: 0 8px 0 var(--bb-red); text-align: center; animation: hj-zoom .6s backwards; }
@@ -243,7 +246,7 @@
 @keyframes bb-surge { from { stroke-dashoffset: 2000; } }
 @keyframes bb-pulse { 50% { box-shadow: 0 0 0 3px var(--corner), 0 0 12px var(--corner); } }
 @keyframes bb-fill { from { scale: 0 1; } }
-@keyframes bb-flip { 0% { transform: translateY(0) rotateY(0) scale(.5); } 45% { transform: translateY(-150px) rotateY(calc(var(--turns) * .6)) scale(1.15); } 100% { transform: translateY(0) rotateY(var(--turns)) scale(1); } }
+@keyframes bb-flip { 0% { transform: translateY(0) rotateY(0) scale(.5); } 45% { transform: translateY(-64px) rotateY(calc(var(--turns) * .6)) scale(1.15); } 100% { transform: translateY(0) rotateY(var(--turns)) scale(1); } }
 @keyframes bb-raise { from { translate: 0 120px; scale: .6; opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .bb-rays, .bb-grid, .bb-flashes i, .bb-ticker-track, .bb-slot[data-state=live], .bb-live i { animation: none; }

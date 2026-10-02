@@ -83,19 +83,25 @@ function tickerItems(view: BrawlPublic, players: readonly PackPlayer[]): string[
 
 // ---------- TV: the bracket ----------
 
-/** Wing geometry in stage px. Each wing holds half the bracket, round one on the outside, the finalist next to the centre. */
-const WING = { w: 540, h: 812 } as const;
-const COLS: Record<number, { w: readonly number[]; gap: number }> = { 3: { w: [200, 150, 130], gap: 30 }, 4: { w: [168, 124, 112, 100], gap: 12 } };
+/**
+ * Wing geometry in stage px. Each wing holds half the bracket, round one on the outside, the finalist next to the centre.
+ * Only the focus round shows its answers, large enough to read from a couch at 720p; every other round collapses to seed chips.
+ */
+const WING = { w: 540, h: 812, chip: 46, gap: 16 } as const;
+/** Focus slot height and type size by entrants per wing column (a 50-character answer fits without clipping). */
+const FOCUS: Record<number, { h: number; font: number }> = { 8: { h: 96, font: 24 }, 4: { h: 156, font: 30 }, 2: { h: 180, font: 34 }, 1: { h: 200, font: 36 } };
+/** The round whose answers are shown: the current one, and round one before the first match and at the crown (every author unmasked). */
+const focusOf = (view: BrawlPublic) => view.phase === 'champ' ? 0 : Math.max(0, view.round - 1);
 type Cell = { id: string | null; bout: Bout; side: 0 | 1; r: number; i: number };
-/** Entrants of round `r` (0-based) on one wing, top to bottom. */
-function column(view: BrawlPublic, wing: 0 | 1, r: number): Cell[] {
-  const list = view.bouts[r] ?? [];
-  if (r === view.rounds - 1) return list[0] ? [{ id: list[0].sides[wing], bout: list[0], side: wing, r, i: 0 }] : [];
-  const half = list.length / 2;
-  return list.slice(wing * half, (wing + 1) * half).flatMap((bout, k) => ([0, 1] as const).map(side => ({ id: bout.sides[side], bout, side, r, i: wing * half + k })));
-}
 /** How far the live match's reveal has got: 0 nothing, 1 the verdict is out, 2 the winner's line has lit up. */
 type Reveal = { r: number; i: number; level: number } | null;
+/** Entrants of round `r` (0-based) on one wing, top to bottom. The live match's winner moves up only when its line lights. */
+function column(view: BrawlPublic, wing: 0 | 1, r: number, reveal: Reveal): Cell[] {
+  const list = view.bouts[r] ?? [], half = list.length / 2;
+  const cell = (bout: Bout, side: 0 | 1, i: number): Cell => ({ id: reveal && reveal.level < 2 && reveal.r === r - 1 && reveal.i === 2 * i + side ? null : bout.sides[side], bout, side, r, i });
+  if (r === view.rounds - 1) return list[0] ? [cell(list[0], wing, 0)] : [];
+  return list.slice(wing * half, (wing + 1) * half).flatMap((bout, k) => ([0, 1] as const).map(side => cell(bout, side, wing * half + k)));
+}
 function cellState(view: BrawlPublic, c: Cell, reveal: Reveal): string {
   if (!c.id) return 'empty';
   if (view.champ?.entry === c.id) return 'champ';
@@ -105,8 +111,9 @@ function cellState(view: BrawlPublic, c: Cell, reveal: Reveal): string {
 }
 
 function Wing({ view, players, wing, reveal }: { view: BrawlPublic; players: readonly PackPlayer[]; wing: 0 | 1; reveal: Reveal }) {
-  const geo = COLS[view.rounds] ?? COLS[3]!, xs = geo.w.map((_, c) => geo.w.slice(0, c).reduce((a, b) => a + b, 0) + c * geo.gap);
-  const mx = (x: number) => wing ? WING.w - x : x, cols = Array.from({ length: view.rounds }, (_, r) => column(view, wing, r));
+  const focus = focusOf(view), widths = Array.from({ length: view.rounds }, (_, c) => c === focus ? WING.w - (view.rounds - 1) * (WING.chip + WING.gap) : WING.chip);
+  const geo = { w: widths, gap: WING.gap }, xs = widths.map((_, c) => widths.slice(0, c).reduce((a, b) => a + b, 0) + c * WING.gap);
+  const mx = (x: number) => wing ? WING.w - x : x, cols = Array.from({ length: view.rounds }, (_, r) => column(view, wing, r, reveal));
   const y = (k: number, n: number) => (k + .5) / n * WING.h;
   const lines: { d: string; lit: boolean; key: string }[] = [];
   cols.forEach((list, c) => list.forEach((cell, k) => {
@@ -122,14 +129,14 @@ function Wing({ view, players, wing, reveal }: { view: BrawlPublic; players: rea
       {lines.map(l => <path key={l.key} d={l.d} data-lit={l.lit || undefined} />)}
     </svg>
     {cols.map((list, c) => list.map((cell, k) => {
-      const slot = slotOf(view, cell.id), state = cellState(view, cell, reveal), w = geo.w[c]!, n = list.length, h = c === 0 && n >= 8 ? 86 : c === 0 ? 116 : 104;
+      const slot = slotOf(view, cell.id), state = cellState(view, cell, reveal), w = widths[c]!, n = list.length, big = c === focus, f = FOCUS[n] ?? FOCUS[8]!, h = big ? f.h : WING.chip;
       const author = find(players, slot?.by);
-      return <div key={`${c}-${k}`} className="bb-slot" data-state={state} data-col={c} data-corner={state === 'live' ? cell.side : undefined}
+      return <div key={`${c}-${k}`} className="bb-slot" data-state={state} data-mini={!big || undefined} data-corner={state === 'live' ? cell.side : undefined}
         style={{ left: wing ? WING.w - xs[c]! - w : xs[c], top: y(k, n) - h / 2, width: w, height: h } as CSSProperties}>
         {slot ? <>
           <b className="bb-seed kp-numeral">{seedOf(slot.id)}</b>
-          <p style={{ fontSize: c === 0 ? (n >= 8 ? 18 : 22) : view.rounds === 4 ? 15 : 17 }}>{slot.text}</p>
-          {(author || slot.house) && (state === 'out' || (!!view.champ && c === 0)) && <span className="bb-slot-by">{author ? <Avatar avatar={author.avatar} color={author.color} size={c === 0 && n < 8 ? 40 : 32} mood={state === 'out' ? 'sad' : 'happy'} /> : <em>House</em>}</span>}
+          {big && <p style={{ fontSize: f.font }}>{slot.text}</p>}
+          {big && (author || slot.house) && (state === 'out' || !!view.champ) && <span className="bb-slot-by">{author ? <Avatar avatar={author.avatar} color={author.color} size={n >= 8 ? 36 : 44} mood={state === 'out' ? 'sad' : 'happy'} /> : <em>House</em>}</span>}
         </> : <span className="bb-slot-q" aria-hidden="true">?</span>}
       </div>;
     }))}
@@ -170,14 +177,14 @@ function Question({ view, size = 34 }: { view: BrawlPublic; size?: number }) {
 
 /** Predictions: the wings already list every seeded answer, so the jumbotron sells the bet. */
 function PredictHero({ view, players, now }: P) {
-  const done = players.filter(p => view.done.includes(p.id)), per = PTS.oracle * weight(view.kind);
+  const done = players.filter(p => view.done.includes(p.id));
   return <Screen className="bb-predict">
     <header className="bb-screen-head"><span className="kp-title">Call the champion!</span><Timer deadline={view.deadline} now={now} total={view.deadline - view.at} size={92} /></header>
     <Question view={view} size={44} />
     <div className="bb-predict-main">
       <Trophy className="bb-predict-cup" />
       <p>{view.entries.length} answers. {plural(view.rounds, 'round')}. <b>One champion.</b></p>
-      <p className="bb-predict-pay">Pick it on your phone: <b>+{per}</b> every round it wins{view.kind === 'smackdown' && ' (×2)'}</p>
+      <p className="bb-predict-pay">Pick it on your phone: <b>+{PTS.oracle}</b> every round it wins</p>
     </div>
     <p className="bb-screen-foot"><span className="bb-picks-in"><b className="kp-numeral">{done.length}</b>/{players.length} picks in</span>{done.length > 0 && <AvatarStack players={done} size={44} max={10} mood="done" />}</p>
   </Screen>;
@@ -189,7 +196,7 @@ function TwistHero({ view, now }: P) {
     <p className="bb-twist-was">You were answering: <b>{view.hint}</b></p>
     {shown ? <div className="bb-twist-real" key="real"><span className="bb-stamp">Plot twist!</span><small>The real prompt</small><p style={{ fontSize: fitText(view.prompt ?? '', 64) }}>{view.prompt}</p></div>
       : <div className="bb-twist-real" data-hidden key="hidden"><span className="bb-classified">Classified</span></div>}
-    {shown && <p className="bb-twist-hint"><span className="bb-arrow" aria-hidden="true">◀</span>Now read your answers again<span className="bb-arrow" aria-hidden="true">▶</span></p>}
+    {shown && <p className="bb-twist-hint"><span className="bb-arrow" aria-hidden="true">◀</span>Now reread the bracket<span className="bb-arrow" aria-hidden="true">▶</span></p>}
   </Screen>;
 }
 
@@ -208,7 +215,7 @@ function Fighter({ slot, side, bout, tally, decided: done, players, visible }: {
   const total = (bout.votes?.[0] ?? 0) + (bout.votes?.[1] ?? 0);
   return <div className="bb-fighter" data-corner={side} data-state={decided ? won ? 'won' : 'out' : 'idle'} data-hidden={!visible || undefined}>
     <span className="bb-corner"><b className="bb-seed kp-numeral">{slot ? seedOf(slot.id) : '?'}</b>{CORNERS[side]}</span>
-    {visible && slot ? <p style={{ fontSize: fitText(slot.text, 46) }}>{slot.text}</p> : <p className="bb-dots" aria-label="Coming up"><i /><i /><i /></p>}
+    {visible && slot ? <p style={{ fontSize: fitText(slot.text, tally ? 38 : 46) }}>{slot.text}</p> : <p className="bb-dots" aria-label="Coming up"><i /><i /><i /></p>}
     {tally && <div className="bb-tally"><i style={{ '--f': total ? votes / total : 0 } as CSSProperties} /><b className="kp-numeral">{votes}</b><small>{votes === 1 ? 'vote' : 'votes'}</small></div>}
     {decided && <span className="bb-verdict kp-title">{won ? 'Advances!' : 'K.O.'}</span>}
     {won && bout.flip && <span className="bb-toss">Won the coin toss</span>}
@@ -314,8 +321,8 @@ function Display(props: P) {
 
 const Seed = ({ id }: { id: string }) => <b className="bb-seed kp-numeral">{seedOf(id)}</b>;
 
-function Earned({ me, kind }: { me: BrawlPrivate; kind: Kind }) {
-  return <p className="bb-earned"><span className="kp-numeral">+{me.earned}</span> this bracket{kind === 'smackdown' && ' (×2)'}<small>Only you can see this until the champion is crowned.</small></p>;
+function Earned({ me }: { me: BrawlPrivate }) {
+  return <p className="bb-earned"><span className="kp-numeral">+{me.earned}</span> this bracket<small>Only you can see this until the champion is crowned.</small></p>;
 }
 
 function WritePhone({ view, me, player, players, vip, now, send, sessionKey }: Phone) {
@@ -350,7 +357,7 @@ function TwistPhone({ view, me, player, vip, now }: Phone) {
 
 function PredictPhone({ view, me, player, vip, now, send }: Phone) {
   const shell = { player, vip: vip === player.id, accent: ACCENT, eyebrow: `Bracket ${view.bracket} · predictions`, timer: { deadline: view.deadline, now, total: view.deadline - view.at } };
-  const per = PTS.oracle * weight(view.kind);
+  const per = PTS.oracle;
   if (me.pick) return <PhoneShell {...shell} title="Pick locked!">
     <PhoneDone title="Your champion:" detail={`+${per} every round it wins.`}><p className="bb-pick"><Seed id={me.pick} />{slotOf(view, me.pick)?.text}</p></PhoneDone>
   </PhoneShell>;
@@ -418,15 +425,15 @@ function ResultPhone({ view, me, player, vip, now }: Phone) {
   const title = !out ? (bout.flip ? 'Coin flip!' : 'And the winner is…')
     : mine.length ? (mine.includes(won!) ? (mine.length > 1 ? 'You beat yourself!' : 'You advance!') : 'Knocked out!')
     : me.vote === undefined ? 'The room has spoken.' : me.vote === bout.winner ? 'Your side won!' : 'Upset!';
-  const gain = mine.includes(won!) ? PTS.win * view.round * weight(view.kind) : 0;
+  const gain = mine.includes(won!) ? PTS.win * weight(view.kind) : 0;
   return <PhoneShell player={player} vip={vip === player.id} accent={ACCENT} eyebrow={roundName(view.round, view.rounds)} title={title}>
     <div className="bb-phone-result" data-won={(out && gain > 0) || undefined}>
       <Avatar avatar={player.avatar} color={player.color} size={104} mood={!out ? 'thinking' : mine.length ? (gain ? 'happy' : 'sad') : 'idle'} />
       {out && gain > 0 && <b className="bb-phone-points kp-numeral">+{gain}</b>}
       {out ? <Recap view={view} bout={bout} me={me} /> : <p className="bb-tv-cue">Eyes on the TV!</p>}
-      {out && me.pick === won && <p className="bb-good">Your champion pick wins again! +{PTS.oracle * weight(view.kind)}</p>}
+      {out && me.pick === won && <p className="bb-good">Your champion pick wins again! +{PTS.oracle}</p>}
     </div>
-    {out && me.earned > 0 && <Earned me={me} kind={view.kind} />}
+    {out && me.earned > 0 && <Earned me={me} />}
   </PhoneShell>;
 }
 

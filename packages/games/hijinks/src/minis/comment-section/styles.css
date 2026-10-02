@@ -148,7 +148,7 @@
 
 /* ---------- the feed ---------- */
 .cs-feed-main { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px minmax(0, 1fr) 270px; gap: 30px; align-items: center; }
-.cs-history { align-self: stretch; min-height: 0; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+.cs-history { align-self: stretch; min-height: 0; display: flex; flex-direction: column; gap: 12px; overflow: hidden; mask-image: linear-gradient(#000 calc(100% - 110px), transparent); }
 .cs-history h3 { margin: 0; font-size: 26px; text-transform: uppercase; letter-spacing: .1em; color: var(--cs-muted); }
 .cs-history ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .cs-history li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 20px; background: #fff; box-shadow: 0 6px 16px #2a2f6a1f; font-size: 30px; animation: hj-drop .45s cubic-bezier(.2, 1.4, .4, 1) backwards; }
@@ -163,7 +163,11 @@
 .cs-feed-cast { display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center; }
 .cs-feed-cast > small, .cs-context-by small { text-wrap: balance; font-size: 24px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; color: var(--cs-muted); }
 .cs-feed-cast .hj-badge { font-size: 34px; max-width: 270px; animation: hj-pop .5s cubic-bezier(.2, 1.4, .4, 1) backwards; }
-.cs-context-by { margin: 22px 0 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+/* The innocent question behind the answer: the payoff once the post has landed. */
+.cs-asked { position: relative; margin: 0; padding: 14px 18px 16px; border-radius: 22px; background: #fff; box-shadow: 0 8px 20px #2a2f6a26; font-size: 25px; font-weight: 800; line-height: 1.2; text-wrap: balance; animation: hj-pop .5s cubic-bezier(.2, 1.4, .4, 1) backwards; }
+.cs-asked::before { content: ''; position: absolute; top: -12px; left: calc(50% - 12px); border: 12px solid transparent; border-top: 0; border-bottom-color: #fff; }
+.cs-asked small { display: block; margin-bottom: 4px; font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; color: var(--cs-violet); }
+.cs-context-by { margin: 8px 0 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .cs-mystery { display: grid; place-items: center; width: 116px; height: 116px; border-radius: 50%; background: var(--cs-ink); border: 5px dashed #fff; box-shadow: 0 0 0 5px var(--cs-ink); font-size: 74px; color: #fff; -webkit-text-stroke: 0; filter: none; animation: cs-wobble 2.4s ease-in-out infinite; }
 
 /* ---------- the vote board and verdicts ---------- */
@@ -183,9 +187,10 @@
 .cs-twister .cs-who { display: flex; flex-direction: column; min-width: 0; line-height: 1.05; } .cs-twister small { font-size: .72em; font-weight: 900; text-transform: uppercase; color: var(--cs-muted); } .cs-twister b { overflow-wrap: anywhere; }
 .cs-votes { display: flex; align-items: center; gap: .35em; font-weight: 800; color: var(--cs-muted); white-space: nowrap; } .cs-votes > b { font-size: 1.6em; line-height: 1; color: var(--cs-ink); font-weight: 400; }
 .cs-tags { display: flex; flex-wrap: wrap; gap: .3em; width: 100%; } .cs-tags em { font-style: normal; font-size: .8em; font-weight: 900; padding: .1em .55em; border-radius: 99px; background: #ffe1e8; color: #b0103a; }
-.cs-points { position: absolute; z-index: 3; top: -24px; right: -14px; rotate: 7deg; padding: 0 16px; border-radius: 16px; background: var(--kp-lime); color: var(--kp-ink); border: 4px solid var(--kp-ink); font-size: 38px; font-weight: 400; box-shadow: 0 5px 0 var(--kp-ink); animation: hj-stamp .5s cubic-bezier(.2, 1.6, .4, 1) backwards; }
-/* Centred on the post body as translucent ink, so the verdict footer (who twisted it) always stays readable. */
-.cs-stamp { position: absolute; z-index: 4; left: 50%; top: 48%; translate: -50% -50%; rotate: -9deg; padding: .05em .35em; border: .1em solid var(--cs-red); border-radius: .14em; background: #ffffff8c; color: var(--cs-red); font-family: var(--font-display); font-size: calc(var(--fs, 24px) * 2.2); font-weight: 400; line-height: 1; text-transform: uppercase; letter-spacing: .04em; box-shadow: inset 0 0 0 .05em #fff, 0 .1em .4em #ff2d5555; animation: cs-thunk .5s cubic-bezier(.2, 1.6, .4, 1) backwards; pointer-events: none; }
+.cs-points { position: absolute; z-index: 3; top: -24px; right: -14px; rotate: 7deg; padding: 0 .4em; border-radius: 16px; background: var(--kp-lime); color: var(--kp-ink); border: 4px solid var(--kp-ink); font-size: max(30px, calc(var(--fs, 24px) * 1.2)); font-weight: 400; box-shadow: 0 5px 0 var(--kp-ink); animation: hj-stamp .5s cubic-bezier(.2, 1.6, .4, 1) backwards; }
+/* Slammed onto the post's app bar (top left, clear of the points sticker and the headline above the grid), so the twist,
+   the answer and the verdict footer all stay readable. */
+.cs-stamp { position: absolute; z-index: 4; left: .5em; top: .15em; rotate: -5deg; padding: .05em .35em; border: .1em solid var(--cs-red); border-radius: .14em; background: #fff; color: var(--cs-red); font-family: var(--font-display); font-size: calc(var(--fs, 24px) * 1.25); font-weight: 400; line-height: 1; text-transform: uppercase; letter-spacing: .04em; box-shadow: inset 0 0 0 .05em #fff, 0 .1em .4em #ff2d5555; animation: cs-thunk .5s cubic-bezier(.2, 1.6, .4, 1) backwards; pointer-events: none; }
 .cs-strip { flex: none; }
 .hj-comment-section .cs-strip-dense { gap: 6px; } .hj-comment-section .cs-strip-dense li { flex-direction: row; gap: 6px; padding: 5px 6px 5px 4px; }
 /* The kit sizes names for a stacked tile; beside the avatar they get ~115 px, enough for an 11-letter word at 17 px. */
@@ -226,8 +231,8 @@
 .cs-voted li { display: flex; align-items: center; gap: .6rem; padding: .6rem .8rem; border-radius: .9rem; background: #fff6e514; overflow-wrap: break-word; } .cs-voted b { min-width: 0; }
 .cs-voted .cs-who { display: flex; flex-direction: column; min-width: 0; } .cs-voted small { font-size: .8rem; font-weight: 800; opacity: .75; }
 
-/* Short screens: the input comes straight after the instruction; the live preview follows it. */
-@media (max-height: 640px) { .cs-entry .hj-entry-label { font-size: 1.1rem; padding: .55rem .85rem; } .cs-entry .cs-post { order: 1; font-size: .9rem; } .cs-entry .hj-sticky { order: 2; } }
+/* Short screens: a compact preview stays above the input, so the answer being twisted is always on screen before typing. */
+@media (max-height: 640px) { .cs-entry .hj-entry-label { font-size: 1.1rem; padding: .55rem .85rem; } .cs-entry .cs-post { font-size: .8rem; } }
 @media (max-height: 500px) and (orientation: landscape) { .cs-phone .cs-phone-card > .hj-avatar { width: 72px !important; height: 72px !important; } .cs-phone-card { padding: .7rem 1rem; gap: .5rem; } }
 
 @keyframes cs-marquee { to { translate: -50% 0; } }

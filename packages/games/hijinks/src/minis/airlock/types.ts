@@ -38,13 +38,14 @@ export type Value = string | number;
 export type Answer = { player: string; value?: Value };
 /** The test as the crew saw it, with everyone's answers in roster order. */
 export type Board = { kind: Kind; prompt: string; icons?: IconId[]; answers: Answer[] };
-export type Ballot = { by: string; suspects: string[] };
+/** A push names one suspect. It takes as many ABORT votes as there are aliens aboard to save them. */
+export type Ballot = { by: string; suspect: string; saves: number };
 export type Verdict = Ballot & {
   /** Every eligible voter in roster order; `auto` = didn't vote, counted as abort. */
   votes: { player: string; vote: Vote; auto?: true }[];
   eject: boolean;
-  /** The ejected suspects' true roles (eject only). */
-  roles?: Record<string, Role>;
+  /** The spaced suspect's true role (eject only). */
+  role?: Role;
 };
 export type Ending = {
   winner: 'crew' | 'aliens'; how: 'caught' | 'framed' | 'arrived';
@@ -53,6 +54,8 @@ export type Ending = {
   survived: number;
   /** The pusher whose ejection ended the game. */
   by?: string;
+  /** Crewmates who pushed an alien out, one entry per alien. */
+  heroes: string[];
   gains: Record<string, number>;
 };
 
@@ -62,8 +65,8 @@ export type AirPublic = {
   at: number; deadline: number;
   /** Current test (1–7; 0 during the briefing) and the kind of each test so far. */
   test: number; tests: number; kinds: Kind[];
-  /** How many aliens are aboard (never who). */
-  aliens: number;
+  /** How many aliens this game has (never who) and the aliens already spaced (public once their role is revealed). */
+  aliens: number; out: string[];
   /** Test: answered. Discuss: ready. Vote: voted. Otherwise empty. */
   done: string[];
   /** Button pushes left per player. */
@@ -71,7 +74,7 @@ export type AirPublic = {
   scores: Record<string, number>;
   /** Results to verdict: the crew's prompt and everyone's answers. */
   board?: Board;
-  /** Vote: who pushed and who is in the airlock. */
+  /** Vote: who pushed, who is in the airlock and how many ABORTs save them. */
   ballot?: Ballot;
   verdict?: Verdict;
   end?: Ending;
@@ -85,10 +88,8 @@ export type AirPrivate = {
   allies: string[];
   /** Your version of the current test (aliens get the near-miss prompt) and, for an Icon Test, its four pictures. */
   prompt?: string; icons?: IconId[];
-  /** Alien hack this test: the crew's real prompt. */
+  /** Scanned this test (an alien's team hack or a crewmate's own scan): the crew's real prompt. Same field for both roles. */
   intercepted?: string;
-  /** Crew scan this test: your prompt is the genuine one. */
-  verified?: true;
   /** Scan button available (crew: your own one scan; aliens: the team's one hack). */
   scan: boolean;
   answer?: Value;
@@ -100,7 +101,7 @@ export type AirAction =
   | { turn: string; k: 'draw'; drawing: unknown }
   | { turn: string; k: 'scan' }
   | { turn: string; k: 'ready' }
-  | { turn: string; k: 'push'; suspects: string[] }
+  | { turn: string; k: 'push'; suspect: string }
   | { turn: string; k: 'vote'; vote: Vote };
 
 /** Media key for a drawing: test number and seat. */
@@ -113,11 +114,11 @@ export function resultBeats(n: number) {
   const step = n > 6 ? 420 : 620, cards = Array.from({ length: n }, (_, i) => 1600 + i * step), summary = cards.at(-1)! + 900;
   return { cards, summary, end: summary + 2600 };
 }
-/** Verdict: votes flip one by one, the outcome, then each ejected suspect's true role. */
-export function verdictBeats(voters: number, eject: boolean, suspects: number) {
+/** Verdict: votes flip one by one, the outcome, then (eject only) the spaced suspect's true role. */
+export function verdictBeats(voters: number, eject: boolean) {
   const votes = Array.from({ length: voters }, (_, i) => 900 + i * 380), outcome = votes.at(-1)! + 1000;
-  const roles = eject ? Array.from({ length: suspects }, (_, i) => outcome + 3000 + i * 2200) : [];
-  return { votes, outcome, roles, end: eject ? roles.at(-1)! + 4200 : outcome + 3800 };
+  const roles = eject ? [outcome + 3000] : [];
+  return { votes, outcome, roles, end: eject ? roles[0]! + 4200 : outcome + 3800 };
 }
 /** Ending: the aliens are unmasked one by one, the winners banner, then the scores. */
 export function endBeats(aliens: number) {

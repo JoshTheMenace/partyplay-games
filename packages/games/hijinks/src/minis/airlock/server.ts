@@ -1,5 +1,5 @@
 /* Airlock rules: up to seven crew tests on the way to Earth. Hidden aliens get a near-miss prompt; anyone can push the airlock
-   button to space suspects on a unanimous vote. Server only. */
+   button to space one suspect, and a vote with fewer ABORTs than aliens aboard opens the doors. Server only. */
 import { parseDrawing, type Drawing } from '../../../../../party-contract/src/index';
 import type { MiniApi, MiniResult, MiniServer } from '../../core/contract';
 import { variant } from '../../core/narration';
@@ -12,9 +12,10 @@ import {
 } from './types';
 
 type Test = { pair: Pair; answers: Record<string, Value>; arts: Record<string, Drawing>; hacked: boolean; scanned: string[]; ready: string[] };
-type Ballot = { by: string; suspects: string[]; votes: Record<string, Vote>; voters: string[]; eject: boolean; resume: number };
+type Ballot = { by: string; suspect: string; saves: number; votes: Record<string, Vote>; voters: string[]; eject: boolean; resume: number };
 export type AirState = {
-  ids: string[]; online: Record<string, boolean>; aliens: string[];
+  /** `out`: aliens already spaced (they sit the rest of the trip out); `heroes`: the crew pusher behind each of them. */
+  ids: string[]; online: Record<string, boolean>; aliens: string[]; out: string[]; heroes: string[];
   phase: Phase; turn: string; seq: number; at: number; deadline: number; stage: number; hurried: boolean;
   /** The kind of each of the seven tests, the undealt pairs per kind (unused tonight first) and the tests so far. */
   order: Kind[]; decks: Record<Kind, Pair[]>; tests: Test[];
@@ -28,6 +29,8 @@ export type AirState = {
 const own = <T>(rec: Record<string, T>, key: string): T | undefined => Object.hasOwn(rec, key) ? rec[key] : undefined;
 const test = (s: AirState) => s.tests.at(-1)!;
 const isAlien = (s: AirState, id: string) => s.aliens.includes(id);
+/** Players still aboard (everyone but spaced aliens). */
+const aboard = (s: AirState) => s.ids.filter(id => !s.out.includes(id));
 
 /** Trims, collapses whitespace and drops control/bidi characters; 1–40 characters. */
 function clean(raw: unknown): string {
@@ -74,7 +77,7 @@ function endTest(s: AirState, api: MiniApi) {
   const t = test(s);
   for (const [id, drawing] of Object.entries(t.arts)) api.media.put(artKey(s.tests.length, s.ids.indexOf(id)), drawing);
   api.music('reveal'); api.sfx('whoosh'); api.speak(t.pair.crew);
-  go(s, api, 'results', resultBeats(s.ids.length).end);
+  go(s, api, 'results', resultBeats(aboard(s).length).end);
 }
 
 function discuss(s: AirState, api: MiniApi, span: number) {
@@ -84,20 +87,21 @@ function discuss(s: AirState, api: MiniApi, span: number) {
 
 function tally(s: AirState, api: MiniApi) {
   const b = s.ballot!;
-  b.voters = s.ids.filter(id => !b.suspects.includes(id) && (s.online[id] || own(b.votes, id)));
-  b.eject = b.voters.every(id => own(b.votes, id) === 'airlock');
+  b.voters = aboard(s).filter(id => id !== b.suspect && (s.online[id] || own(b.votes, id)));
+  b.eject = b.voters.filter(id => own(b.votes, id) !== 'airlock').length < b.saves;
   api.sfx('drumroll'); api.say(variant('host.votes-in', api.random));
-  go(s, api, 'verdict', verdictBeats(b.voters.length, b.eject, b.suspects.length).end);
+  go(s, api, 'verdict', verdictBeats(b.voters.length, b.eject).end);
 }
 
 /** Crew win by spacing every alien; aliens win by spacing a human or reaching Earth (+500 per test survived). */
 function finish(s: AirState, api: MiniApi, how: Ending['how'], by?: string) {
   const winner = how === 'caught' ? 'crew' : 'aliens', team = s.ids.filter(id => isAlien(s, id) === (winner === 'aliens'));
-  const survived = s.tests.length, gains = Object.fromEntries(s.ids.map(id => [id, !team.includes(id) ? 0
-    : POINTS.win + (winner === 'aliens' ? survived * POINTS.survive : 0) + (id === by ? POINTS.push : 0)]));
+  // Each crew push that spaced an alien pays +500 on a crew win; a framing alien pusher +500 on an alien win.
+  const survived = s.tests.length, pushed = (id: string) => winner === 'crew' ? s.heroes.filter(x => x === id).length : id === by ? 1 : 0;
+  const gains = Object.fromEntries(s.ids.map(id => [id, !team.includes(id) ? 0 : POINTS.win + (winner === 'aliens' ? survived * POINTS.survive : 0) + pushed(id) * POINTS.push]));
   s.prev = { ...s.scores };
   for (const id of s.ids) s.scores[id]! += gains[id]!;
-  s.ending = { winner, how, aliens: [...s.aliens], survived, gains, ...(by && team.includes(by) ? { by } : {}) };
+  s.ending = { winner, how, aliens: [...s.aliens], survived, gains, heroes: [...s.heroes], ...(by && team.includes(by) ? { by } : {}) };
   api.music('reveal');
   go(s, api, 'end', endBeats(s.aliens.length).end);
 }
@@ -109,7 +113,7 @@ export const server: MiniServer<AirState, AirPublic, AirPrivate> = {
     // Aliens come from the connected players when there are enough of them.
     const count = aliensFor(ids.length), aliens = api.pick(online.length > count ? online : ids, count);
     const s: AirState = {
-      ids, online: Object.fromEntries(players.map(p => [p.id, p.connected])), aliens: ids.filter(id => aliens.includes(id)),
+      ids, online: Object.fromEntries(players.map(p => [p.id, p.connected])), aliens: ids.filter(id => aliens.includes(id)), out: [], heroes: [],
       phase: 'brief', turn: '', seq: 0, at: api.now, deadline: api.now, stage: 0, hurried: false,
       order: testOrder(api), decks: Object.fromEntries(KINDS.map(k => [k, freshDeck(api, pairPool(k, api.settings.family), pairKey)])) as Record<Kind, Pair[]>, tests: [],
       pushes: zero(), hacker: null, scans: [], ballot: null, ending: null,
@@ -124,6 +128,7 @@ export const server: MiniServer<AirState, AirPublic, AirPrivate> = {
     if (!s.ids.includes(id)) throw new Error('You are watching this one.');
     const a = record(raw);
     if (a.turn !== s.turn) throw new Error('Too late! The ship has moved on.');
+    if (s.out.includes(id)) throw new Error('You’ve been spaced! Watch from out there.');
     const t = s.tests.at(-1);
     switch (a.k) {
       case 'answer': case 'draw': {
@@ -164,17 +169,16 @@ export const server: MiniServer<AirState, AirPublic, AirPrivate> = {
         return;
       }
       case 'push': {
-        record(a, ['turn', 'k', 'suspects']);
+        record(a, ['turn', 'k', 'suspect']);
         if (s.phase !== 'discuss') throw new Error('The button only works during a discussion.');
         if (s.pushes[id]! >= MAX_PUSHES) throw new Error('You’ve used both of your button pushes.');
-        const suspects = a.suspects, need = s.aliens.length;
-        if (!Array.isArray(suspects) || suspects.length !== need) throw new Error(need > 1 ? `Pick ${need} suspects.` : 'Pick one suspect.');
-        if (suspects.some(x => typeof x !== 'string' || !s.ids.includes(x))) throw new Error('Pick crewmates in the room.');
-        if (new Set(suspects).size !== suspects.length) throw new Error('Pick different suspects.');
-        if (suspects.includes(id)) throw new Error('You can’t space yourself!');
-        s.pushes[id]!++;
-        for (const x of suspects as string[]) s.suspected[x]!++;
-        s.ballot = { by: id, suspects: s.ids.filter(x => suspects.includes(x)), votes: { [id]: 'airlock' }, voters: [], eject: false, resume: Math.max(MIN_RESUME_MS, s.deadline - api.now) };
+        const suspect = a.suspect;
+        if (typeof suspect !== 'string' || !aboard(s).includes(suspect)) throw new Error('Pick a crewmate who is still aboard.');
+        if (suspect === id) throw new Error('You can’t space yourself!');
+        s.pushes[id]!++; s.suspected[suspect]!++;
+        // One alien can't veto alone: it takes as many ABORTs as there are aliens aboard to save the suspect.
+        const saves = s.aliens.length - s.out.length;
+        s.ballot = { by: id, suspect, saves, votes: { [id]: 'airlock' }, voters: [], eject: false, resume: Math.max(MIN_RESUME_MS, s.deadline - api.now) };
         api.music('vote'); api.sfx('alarm');
         go(s, api, 'vote', api.seconds(VOTE_S));
         hold(s, api, api.say('airlock.button'));
@@ -184,7 +188,7 @@ export const server: MiniServer<AirState, AirPublic, AirPrivate> = {
         record(a, ['turn', 'k', 'vote']);
         const b = s.ballot;
         if (s.phase !== 'vote' || !b) throw new Error('No vote right now.');
-        if (b.suspects.includes(id)) throw new Error('You’re in the airlock! Plead your case.');
+        if (b.suspect === id) throw new Error('You’re in the airlock! Plead your case.');
         if (own(b.votes, id)) throw new Error('Your vote is already in.');
         if (a.vote !== 'airlock' && a.vote !== 'abort') throw new Error('Vote airlock or abort.');
         b.votes[id] = a.vote; api.sfx('vote');
@@ -195,7 +199,7 @@ export const server: MiniServer<AirState, AirPublic, AirPrivate> = {
   },
 
   tick(s, api) {
-    const now = api.now, t = now - s.at, online = s.ids.filter(id => s.online[id]), cur = s.tests.at(-1);
+    const now = api.now, t = now - s.at, online = aboard(s).filter(id => s.online[id]), cur = s.tests.at(-1);
     const all = (has: (id: string) => boolean, ids = online, min = MIN_READ_MS) => ids.length > 0 && ids.every(has) && t >= min;
     switch (s.phase) {
       case 'brief':
@@ -208,7 +212,7 @@ export const server: MiniServer<AirState, AirPublic, AirPrivate> = {
         return;
       }
       case 'results': {
-        const plan = resultBeats(s.ids.length);
+        const plan = resultBeats(aboard(s).length);
         beats(s, api, [...plan.cards, plan.summary], stage => api.sfx(stage < plan.cards.length ? 'pop' : 'ding'));
         if (now >= s.deadline) { api.sfx('sting'); discuss(s, api, api.seconds(DISCUSS_S)); }
         return;
@@ -219,21 +223,24 @@ export const server: MiniServer<AirState, AirPublic, AirPrivate> = {
         return s.tests.length < TESTS ? startTest(s, api) : finish(s, api, 'arrived');
       case 'vote': {
         const b = s.ballot!;
-        if (all(id => !!own(b.votes, id), online.filter(id => !b.suspects.includes(id)), 1200) || now >= s.deadline) tally(s, api);
+        if (all(id => !!own(b.votes, id), online.filter(id => id !== b.suspect), 1200) || now >= s.deadline) tally(s, api);
         return;
       }
       case 'verdict': {
-        const b = s.ballot!, plan = verdictBeats(b.voters.length, b.eject, b.suspects.length);
+        const b = s.ballot!, plan = verdictBeats(b.voters.length, b.eject), alien = isAlien(s, b.suspect);
         beats(s, api, [...plan.votes, plan.outcome, ...plan.roles], stage => {
           if (stage < plan.votes.length) return api.sfx(own(b.votes, b.voters[stage]!) === 'airlock' ? 'stamp' : 'tap');
           if (stage === plan.votes.length) { if (b.eject) { api.sfx('alarm'); api.sfx('whoosh'); } else { api.sfx('buzzer'); api.sfx('aww'); } return; }
-          const alien = isAlien(s, b.suspects[stage - plan.votes.length - 1]!);
           api.sfx(alien ? 'glitch' : 'gasp'); api.sfx(alien ? 'cheer' : 'aww');
           hold(s, api, api.say(alien ? 'airlock.alien' : 'airlock.human'));
         });
         if (now < s.deadline) return;
         if (!b.eject) return discuss(s, api, b.resume);
-        return finish(s, api, b.suspects.every(id => isAlien(s, id)) ? 'caught' : 'framed', b.by);
+        if (!alien) return finish(s, api, 'framed', b.by);
+        // An alien is out: the crew wins once every alien is; otherwise the hunt goes on.
+        s.out.push(b.suspect);
+        if (!isAlien(s, b.by)) s.heroes.push(b.by);
+        return s.out.length === s.aliens.length ? finish(s, api, 'caught', b.by) : discuss(s, api, b.resume);
       }
       case 'end': {
         const e = s.ending!, plan = endBeats(s.aliens.length);
@@ -256,32 +263,31 @@ export const server: MiniServer<AirState, AirPublic, AirPrivate> = {
     const t = s.tests.at(-1), b = s.ballot;
     const pub: AirPublic = {
       phase: s.phase, turn: s.turn, at: s.at, deadline: s.deadline, test: s.tests.length, tests: TESTS, kinds: s.tests.map(x => x.pair.kind),
-      aliens: s.aliens.length, done: [], pushes: Object.fromEntries(s.ids.map(id => [id, MAX_PUSHES - s.pushes[id]!])), scores: { ...s.scores },
+      aliens: s.aliens.length, out: [...s.out], done: [], pushes: Object.fromEntries(s.ids.map(id => [id, MAX_PUSHES - s.pushes[id]!])), scores: { ...s.scores },
     };
     if (t && s.phase === 'test') pub.done = s.ids.filter(id => own(t.answers, id) !== undefined);
     if (t && s.phase === 'discuss') pub.done = s.ids.filter(id => t.ready.includes(id));
     if (t && ['results', 'discuss', 'vote', 'verdict'].includes(s.phase)) pub.board = {
       kind: t.pair.kind, prompt: t.pair.crew, ...(t.pair.icons ? { icons: [...t.pair.icons] } : {}),
-      answers: s.ids.map(id => { const value = own(t.answers, id); return value === undefined ? { player: id } : { player: id, value }; }),
+      answers: aboard(s).map(id => { const value = own(t.answers, id); return value === undefined ? { player: id } : { player: id, value }; }),
     };
-    if (b && s.phase === 'vote') { pub.ballot = { by: b.by, suspects: [...b.suspects] }; pub.done = s.ids.filter(id => !!own(b.votes, id)); }
+    if (b && s.phase === 'vote') { pub.ballot = { by: b.by, suspect: b.suspect, saves: b.saves }; pub.done = s.ids.filter(id => !!own(b.votes, id)); }
     if (b && s.phase === 'verdict') pub.verdict = {
-      by: b.by, suspects: [...b.suspects], eject: b.eject,
+      by: b.by, suspect: b.suspect, saves: b.saves, eject: b.eject,
       votes: b.voters.map(id => { const vote = own(b.votes, id); return vote ? { player: id, vote } : { player: id, vote: 'abort' as const, auto: true as const }; }),
-      ...(b.eject ? { roles: Object.fromEntries(b.suspects.map(id => [id, isAlien(s, id) ? 'alien' as const : 'crew' as const])) } : {}),
+      ...(b.eject ? { role: isAlien(s, b.suspect) ? 'alien' as const : 'crew' as const } : {}),
     };
-    if (s.ending && s.phase === 'end') { const e = s.ending; Object.assign(pub, { end: { ...e, aliens: [...e.aliens], gains: { ...e.gains } }, prev: { ...s.prev } }); }
+    if (s.ending && s.phase === 'end') { const e = s.ending; Object.assign(pub, { end: { ...e, aliens: [...e.aliens], heroes: [...e.heroes], gains: { ...e.gains } }, prev: { ...s.prev } }); }
     return pub;
   },
 
   playerView(s, id) {
     const t = s.tests.at(-1), alien = isAlien(s, id);
     const me: AirPrivate = { turn: s.turn, role: alien ? 'alien' : 'crew', allies: alien ? s.aliens.filter(x => x !== id) : [], scan: alien ? !s.hacker : !s.scans.includes(id) };
-    if (!t || s.phase === 'brief' || s.phase === 'end') return me;
+    if (!t || s.phase === 'brief' || s.phase === 'end' || s.out.includes(id)) return me;
     me.prompt = alien ? t.pair.alien : t.pair.crew;
     if (t.pair.icons) me.icons = [...t.pair.icons];
-    if (alien && t.hacked) me.intercepted = t.pair.crew;
-    if (!alien && t.scanned.includes(id)) me.verified = true;
+    if (alien ? t.hacked : t.scanned.includes(id)) me.intercepted = t.pair.crew;
     const answer = own(t.answers, id), vote = s.ballot && own(s.ballot.votes, id);
     if (answer !== undefined) me.answer = answer;
     if (t.ready.includes(id)) me.ready = true;
@@ -292,14 +298,15 @@ export const server: MiniServer<AirState, AirPublic, AirPrivate> = {
   result(s): MiniResult | null {
     if (!s.done || !s.ending) return null;
     const e = s.ending, winners = s.ids.filter(id => isAlien(s, id) === (e.winner === 'aliens')), awards: { title: string; playerId: string }[] = [];
-    if (e.by) awards.push({ title: e.winner === 'crew' ? 'Airlock Hero' : 'Master Framer', playerId: e.by });
+    if (e.winner === 'crew') for (const id of new Set(e.heroes)) awards.push({ title: 'Airlock Hero', playerId: id });
+    else if (e.by) awards.push({ title: 'Master Framer', playerId: e.by });
     const most = Math.max(...s.ids.map(id => s.suspected[id]!)), usual = s.ids.filter(id => s.suspected[id] === most);
     if (most >= 2 && usual.length === 1) awards.push({ title: 'Most Suspicious', playerId: usual[0]! });
     const ghosts = s.aliens.filter(id => !s.suspected[id]);
     if (ghosts.length === 1 && e.winner === 'aliens') awards.push({ title: 'Perfect Disguise', playerId: ghosts[0]! });
     if (s.hacker) awards.push({ title: 'Sneaky Hacker', playerId: s.hacker });
     const headline = e.how === 'caught' ? (s.aliens.length > 1 ? 'Both aliens got spaced!' : 'The alien got spaced!')
-      : e.how === 'framed' ? 'A human got spaced. Aliens win!' : 'The aliens reached Earth!';
+      : e.how === 'framed' ? 'A human got spaced. Aliens win!' : s.aliens.length - s.out.length > 1 ? 'The aliens reached Earth!' : 'The alien reached Earth!';
     return { scores: { ...s.scores }, winners, headline, ...(awards.length ? { awards } : {}) };
   },
 };

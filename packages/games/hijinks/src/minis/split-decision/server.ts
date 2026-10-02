@@ -36,16 +36,29 @@ const written = (s: SplitState, id: string) => taskOf(s, id)?.fills.every(f => f
 /** Takes a judge still owes in The Big Split (every take but their own). */
 const owed = (s: SplitState, id: string) => s.cards.filter(c => c.author !== id && !Object.hasOwn(c.votes, id));
 
-/** Trims, collapses whitespace and drops control/bidi characters and the trailing full stop; 1–60 characters. */
-function clean(raw: unknown): string {
+/** Words that start a catch but never a name: a phone's automatic capital on them is lowered. */
+const STARTERS = /^(?:You|Your|Yours|A|An|The|Every\w*|All|It|Its|There|They|Their|People|No|Nobody|Someone|Somebody|My|We|Our|Only|Half|One|Each|Some\w*|Any\w*|This|That|After|When|If|Never|Always)\b/;
+/**
+ * Trims, collapses whitespace and drops control/bidi characters and the trailing full stop; 1–60 characters. Every blank
+ * sits mid-sentence, so a dilemma loses a repeated leading "but" and the phone keyboard's automatic capital is lowered
+ * (rather options always start with a verb; a dilemma catch keeps capitals that may start a name).
+ */
+function clean(raw: unknown, kind: Kind): string {
   if (typeof raw !== 'string' || raw.length > MAX_FILL * 4) throw new Error(`Keep it under ${MAX_FILL} characters.`);
-  const text = raw.replace(/[\p{Cc}‪-‮⁦-⁩]+/gu, ' ').replace(/\s+/g, ' ').trim().replace(/[.!?]+$/, '');
+  let text = raw.replace(/[\p{Cc}‪-‮⁦-⁩]+/gu, ' ').replace(/\s+/g, ' ').trim().replace(/[.!?]+$/, '');
+  if (kind === 'dilemma') text = text.replace(/^but\s+/i, '');
+  if (kind === 'rather' ? /^[A-Z][a-z]/.test(text) : STARTERS.test(text)) text = text[0]!.toLowerCase() + text.slice(1);
   if (!text) throw new Error('Fill in the blank first.');
   if (text.length > MAX_FILL) throw new Error(`Keep it under ${MAX_FILL} characters.`);
   return text;
 }
-/** The next house blank for a kind (rotating, so consecutive fills never repeat). */
-function house(s: SplitState, kind: Kind) { const bank = kind === 'rather' ? s.options : s.clauses, text = bank.shift()!; bank.push(text); return text; }
+/** The next house blank for a scenario: rotating, so consecutive fills never repeat, and never one of its other blanks. */
+function house(s: SplitState, c: Scenario) {
+  const bank = c.kind === 'rather' ? s.options : s.clauses;
+  let text: string;
+  do { text = bank.shift()!; bank.push(text); } while (c.fills.some(f => f.text?.toLowerCase() === text.toLowerCase()));
+  return text;
+}
 
 function go(s: SplitState, api: MiniApi, phase: Phase, span: number) {
   Object.assign(s, { phase, at: api.now, deadline: api.now + span, turn: `t${++s.seq}`, stage: 0, hurried: false });
@@ -78,7 +91,7 @@ function startRound(s: SplitState, api: MiniApi) {
 /** Time's up or everyone is in: offline players who wrote nothing sit out, house blanks fill the gaps, then the cards play. */
 function endWrite(s: SplitState, api: MiniApi) {
   s.cards = s.cards.filter(c => s.online[c.author] || c.fills.some(f => f.text !== null));
-  for (const c of s.cards) for (const f of c.fills) if (f.text === null) Object.assign(f, { text: house(s, c.kind), house: true });
+  for (const c of s.cards) for (const f of c.fills) if (f.text === null) Object.assign(f, { text: house(s, c), house: true });
   if (s.phase === 'final-write') {
     s.cards = api.shuffle(s.cards).map((c, i) => ({ ...c, id: `e${i}` }));
     api.music('vote'); api.sfx('whoosh'); api.speak(sentence(s.finalParts, ['blank']));
@@ -166,14 +179,10 @@ export const server: MiniServer<SplitState, SplitPublic, SplitPrivate> = {
         const slot = task.fills[integer(a.slot, 0, task.fills.length - 1)]!;
         if (slot.text !== null) throw new Error('That blank is already locked in.');
         if (a.k === 'fill') {
-          const text = clean(a.text);
+          const text = clean(a.text, task.kind);
           if (task.fills.some(f => f.text?.toLowerCase() === text.toLowerCase())) throw new Error('Make the two options different!');
           slot.text = text; api.sfx('submit');
-        } else {
-          let text = house(s, task.kind);
-          if (task.fills.some(f => f.text === text)) text = house(s, task.kind);
-          Object.assign(slot, { text, house: true }); api.sfx('glitch');
-        }
+        } else { Object.assign(slot, { text: house(s, task), house: true }); api.sfx('glitch'); }
         return;
       }
       case 'vote': {

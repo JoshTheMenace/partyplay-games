@@ -5,7 +5,7 @@ export const KINDS = ['standard', 'blind', 'smackdown'] as const;
 export type Kind = typeof KINDS[number];
 export const KIND_NAMES: Record<Kind, string> = { standard: 'Standard', blind: 'Blind', smackdown: 'Smackdown' };
 /** Base seconds before the pack's pace setting. Early bracket rounds vote faster; semifinals and the final get longer. */
-export const WRITE_S = 60, PREDICT_S = 15, VOTE_S = 10, QUICK_VOTE_S = 8;
+export const WRITE_S = 60, PREDICT_S = 20, VOTE_S = 10, QUICK_VOTE_S = 8;
 /** Readable minimum before an all-submitted phase advances. */
 export const MIN_READ_MS = 1500;
 /** Answers each player writes: two in small rooms, so the bracket isn't mostly house answers. */
@@ -20,10 +20,11 @@ export function roundName(r: number, rounds: number) {
 }
 export const voteSeconds = (r: number, rounds: number) => r >= rounds - 1 ? VOTE_S : QUICK_VOTE_S;
 /**
- * Points. A matchup win pays `win × bracket round` to its author; every round your predicted champion wins pays `oracle`;
- * the bracket champion's author gets `champ × bracket number`. Smackdown votes weigh double: wins and predictions ×2.
+ * Points (rebalanced 2026-10-02 so earlier brackets still matter). A matchup win pays `win` to its author (Smackdown votes
+ * count double: wins ×2); every round your predicted champion wins pays `oracle`; the bracket champion's author gets
+ * `champ × bracket rounds` (300 for 8 slots, 400 for 16), the same in every bracket.
  */
-export const PTS = { win: 100, oracle: 50, champ: 500 } as const;
+export const PTS = { win: 100, oracle: 100, champ: 100 } as const;
 export const weight = (kind: Kind) => kind === 'smackdown' ? 2 : 1;
 /** Entries are numbered by bracket position: e0 is the top seed line of the left wing. */
 export const seedOf = (id: string) => Number(id.slice(1)) + 1;

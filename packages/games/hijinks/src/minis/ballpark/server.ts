@@ -2,6 +2,7 @@
    everyone else bets higher or lower; two rounds, then the Most Wanted final. Server only. */
 import type { MiniApi, MiniResult, MiniServer } from '../../core/contract';
 import { variant } from '../../core/narration';
+import { freshDeck } from '../../core/server/deck';
 import { bool, integer, record } from '../../core/server/validate';
 import { questionPool, wantedPool, type Question, type WantedSet } from './content.server';
 import {
@@ -35,9 +36,7 @@ const own = <T>(rec: Record<string, T>, key: string): T | undefined => Object.ha
 const ROUND_PHASES: readonly Phase[] = ['survey', 'guess', 'bet', 'reveal'];
 
 /** Unused content first (shuffled), then the rest, so a second game in one night feels fresh. */
-function deal<T extends { id: string }>(pool: readonly T[], api: MiniApi): T[] {
-  return [...api.shuffle(pool.filter(x => !api.used.has(x.id))), ...api.shuffle(pool.filter(x => api.used.has(x.id)))];
-}
+const deal = <T extends { id: string }>(pool: readonly T[], api: MiniApi) => freshDeck(api, pool, x => x.id);
 function go(s: BallparkState, api: MiniApi, phase: Phase, span: number) {
   Object.assign(s, { phase, at: api.now, deadline: api.now + span, turn: `t${++s.seq}`, stage: 0, hurried: false });
 }
@@ -48,7 +47,8 @@ function beats(s: BallparkState, api: MiniApi, at: readonly number[], play: (sta
   while (s.stage < at.length && api.now - s.at >= at[s.stage]!) play(s.stage++);
 }
 
-/** Round 1: everyone in random order. Round 2: everyone again (≤ 6 players) or the three lowest scorers. Round 3: Most Wanted. */
+/** Round 1: everyone in random order. Round 2: everyone again (≤ 6 players) or the three lowest scorers (lowest first, unless
+    they just had the dial). Round 3: Most Wanted. */
 function startRound(s: BallparkState, api: MiniApi) {
   s.round++; s.prev = { ...s.scores }; s.asked = 0;
   if (s.round === 3) return startWanted(s, api);
@@ -56,7 +56,8 @@ function startRound(s: BallparkState, api: MiniApi) {
   if (s.round === 2) {
     api.sfx('gong');
     if (s.ids.length >= 7) queue = queue.filter(id => s.online[id]).sort((a, b) => s.scores[a]! - s.scores[b]!).slice(0, 3);
-    else if (queue[0] === s.last) queue.push(queue.shift()!);
+    // Nobody takes the dial twice in a row.
+    if (queue.length > 1 && queue[0] === s.last) queue.push(queue.shift()!);
   }
   s.queue = queue;
   startQuestion(s, api);

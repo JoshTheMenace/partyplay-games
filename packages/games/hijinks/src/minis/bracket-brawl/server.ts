@@ -25,7 +25,8 @@ export type BrawlState = {
 };
 
 const own = <T>(rec: Record<string, T>, key: string): T | undefined => Object.hasOwn(rec, key) ? rec[key] : undefined;
-const norm = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim() || text.toLowerCase();
+/** Comparison key: case, punctuation and a leading article don't count (“A sloth” is “sloth”). */
+const norm = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/^(?:a|an|the) (?=.)/, '') || text.toLowerCase();
 const card = (s: BrawlState) => s.cards[s.bracket - 1]!;
 const bout = (s: BrawlState) => s.bouts[s.round - 1]![s.index]!;
 const entry = (s: BrawlState, id: string | null) => s.entries.find(e => e.id === id)!;
@@ -143,9 +144,9 @@ function decide(s: BrawlState, api: MiniApi) {
   b.counts = counts; b.flip = counts[0] === counts[1];
   b.winner = b.flip ? (api.random() < .5 ? 0 : 1) : counts[0] > counts[1] ? 0 : 1;
   const won = entry(s, b.sides[b.winner]);
-  if (won.by) { s.earned[won.by]! += PTS.win * s.round * w; s.stats.wins[won.by]!++; }
+  if (won.by) { s.earned[won.by]! += PTS.win * w; s.stats.wins[won.by]!++; }
   b.sides.forEach((id, side) => { const by = entry(s, id).by; if (by) s.stats.votes[by]! += counts[side]!; });
-  for (const id of s.ids) if (own(s.picks, id) === won.id) s.earned[id]! += PTS.oracle * w;
+  for (const id of s.ids) if (own(s.picks, id) === won.id) s.earned[id]! += PTS.oracle;
   if (s.round < s.rounds) s.bouts[s.round]![s.index >> 1]!.sides[s.index & 1] = won.id;
   if (b.flip) api.sfx('drumroll');
   go(s, api, 'result', resultBeats(b.flip, s.round === s.rounds).end);
@@ -169,11 +170,11 @@ function beat(s: BrawlState, api: MiniApi) {
 
 /** The final is decided: crown the champion, pay the author and the oracles, and bank the bracket's points. */
 function crown(s: BrawlState, api: MiniApi) {
-  const final = s.bouts[s.rounds - 1]![0]!, champ = entry(s, final.sides[final.winner!]), bonus = champ.by ? PTS.champ * s.bracket : 0;
+  const final = s.bouts[s.rounds - 1]![0]!, champ = entry(s, final.sides[final.winner!]), bonus = champ.by ? PTS.champ * s.rounds : 0;
   if (champ.by) { s.earned[champ.by]! += bonus; s.stats.crowns[champ.by]!++; } else s.houseWins++;
   const oracles = s.ids.filter(id => own(s.picks, id) === champ.id);
   for (const id of oracles) s.stats.oracle[id]!++;
-  s.champ = { entry: champ.id, bonus, oracles, oracle: PTS.oracle * s.rounds * weight(card(s).kind) };
+  s.champ = { entry: champ.id, bonus, oracles, oracle: PTS.oracle * s.rounds };
   for (const id of s.ids) s.scores[id]! += s.earned[id]!;
   api.sfx('fanfare'); api.sfx('applause');
   go(s, api, 'champ', CHAMP.end);

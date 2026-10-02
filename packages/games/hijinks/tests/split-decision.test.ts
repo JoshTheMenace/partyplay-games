@@ -46,7 +46,7 @@ test('scoring table: perfect, scaled, floor, unanimous, odd rooms and the minori
 });
 
 test('content banks, narration budget and catalog entry', () => {
-  for (const [bank, min, holes] of [[DILEMMAS, 125, 1], [DILEMMAS_ADULT, 22, 1], [RATHERS, 54, 2], [RATHERS_ADULT, 8, 2], [FINALS, 30, 1], [FINALS_ADULT, 5, 1]] as const) {
+  for (const [bank, min, holes] of [[DILEMMAS, 150, 1], [DILEMMAS_ADULT, 22, 1], [RATHERS, 60, 2], [RATHERS_ADULT, 8, 2], [FINALS, 30, 1], [FINALS_ADULT, 5, 1]] as const) {
     assert.ok(bank.length >= min, `bank of ${bank.length} < ${min}`);
     for (const t of bank) { assert.equal(blanks(t), holes, t); assert.ok(t.endsWith('?'), t); assert.equal(t, t.trim().replace(/\s+/g, ' '), t); }
   }
@@ -143,7 +143,7 @@ test('round 2: would-you-rather with two blanks, both filled by the author, doub
   n.send('p0', { turn, k: 'fill', slot: 0, text: 'Juggle Chainsaws' });
   rejects(n.trySend('p0', { turn, k: 'fill', slot: 1, text: 'juggle chainsaws.' }), /different/);
   n.send('p0', { turn, k: 'fill', slot: 1, text: 'Eat a cold sock' });
-  assert.deepEqual(me(n, 'p0').task!.slots.map(s => s.text), ['Juggle Chainsaws', 'Eat a cold sock']);
+  assert.deepEqual(me(n, 'p0').task!.slots.map(s => s.text), ['juggle Chainsaws', 'eat a cold sock'], 'phone capitals lowered');
   n.send('p1', { turn, k: 'house', slot: 1 });
   assert.ok(HOUSE_OPTIONS.includes(me(n, 'p1').task!.slots[1]!.text!));
   // p2 writes nothing: both blanks become two different house options at the buzzer.
@@ -153,7 +153,7 @@ test('round 2: would-you-rather with two blanks, both filled by the author, doub
   assert.ok(p2.fills.every(f => f.house && HOUSE_OPTIONS.includes(f.text!)));
   assert.notEqual(p2.fills[0]!.text, p2.fills[1]!.text);
   n.until(() => pub(n).phase === 'vote' && card(n).author === 'p0');
-  assert.deepEqual(pub(n).card!.fills, ['Juggle Chainsaws', 'Eat a cold sock']);
+  assert.deepEqual(pub(n).card!.fills, ['juggle Chainsaws', 'eat a cold sock']);
   const before = pub(n).scores.p0!;
   n.send('p1', { turn: pub(n).turn, k: 'vote', side: 0 }); n.send('p2', { turn: pub(n).turn, k: 'vote', side: 1 });
   at(n, 'result');
@@ -270,6 +270,24 @@ test('validation: stale turns, ownership, duplicates, lengths, strict fields and
   at(n, 'result');
   rejects(n.trySend(voter, { turn: vote, k: 'vote', side: 0 }), /moved on/);
   rejects(n.trySend(voter, { turn: pub(n).turn, k: 'vote', side: 0 }), /opens in a moment/);
+});
+
+test('fills read mid-sentence: phone capitals lowered, a repeated "but" dropped, names kept', () => {
+  const n = start(4), turn = pub(n).turn;
+  const fill = (id: string, text: string, slot = 0) => { n.send(id, { turn: pub(n).turn, k: 'fill', slot, text }); return me(n, id).task!.slots[slot]!.text; };
+  assert.equal(fill('p0', 'But You sneeze every ten minutes'), 'you sneeze every ten minutes');
+  assert.equal(fill('p1', 'Gary moves into your shed'), 'Gary moves into your shed');
+  assert.equal(fill('p2', 'Everyone hears your thoughts!'), 'everyone hears your thoughts');
+  assert.equal(fill('p3', 'NASA calls you daily'), 'NASA calls you daily');
+  n.until(() => pub(n).phase === 'write' && pub(n).round === 2);
+  assert.notEqual(pub(n).turn, turn);
+  assert.equal(fill('p0', 'Eat soup with a fork'), 'eat soup with a fork');
+  assert.equal(fill('p0', 'I juggle eggs', 1), 'I juggle eggs');
+  // A machine fill never repeats the author's other option, whatever its capitals.
+  const next = inner(n).options[0]!;
+  assert.equal(fill('p1', next.toUpperCase()), next.toUpperCase());
+  n.send('p1', { turn: pub(n).turn, k: 'house', slot: 1 });
+  assert.notEqual(me(n, 'p1').task!.slots[1]!.text!.toLowerCase(), next.toLowerCase());
 });
 
 test('privacy: fills stay private while writing; authors and votes stay hidden until the reveal', () => {
