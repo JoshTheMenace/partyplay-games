@@ -5,7 +5,9 @@ import { SFX_IDS, type PackPublicView, type SfxId } from '../contract';
 import { VO } from '../vo-manifest';
 import { TRACKS } from './tracks';
 
-const BASE = manifest.assetBase, LEVEL = { music: .35, sfx: .7, vo: 1 }, DUCK = 10 ** (-9 / 20), STALE_MS = 4000, FADE_OUT = 1.2, FADE_IN = .6;
+const BASE = manifest.assetBase, LEVEL = { music: .35, sfx: .7, vo: 1 }, DUCK = 10 ** (-9 / 20), STALE_MS = 4000, FADE_OUT = 1.2, FADE_IN = .6, RESUME_S = 90;
+/** After the limiter: its automatic makeup gain lets stacked effects reach -0.3 dBFS; this keeps true peaks under -1 dBTP. */
+const TRIM = 10 ** (-2 / 20);
 /** Minimum ms between two plays of one effect; crowd beds and stingers must not stack. */
 const COOLDOWN: Partial<Record<SfxId, number>> = { tick: 150, 'tick-fast': 90, applause: 1500, cheer: 1500, laugh: 1200, boo: 1500, aww: 1200, ooh: 1200, gasp: 700, drumroll: 1500, fanfare: 1500, thunder: 1500, gong: 1200 };
 const SFX_SET = new Set<string>(SFX_IDS);
@@ -55,19 +57,21 @@ export class PackMixer {
   private abort = new AbortController();
   private musicBus: GainNode; private musicDuck: GainNode; private voBus: GainNode; private limiter: DynamicsCompressorNode;
   private sfx: SfxPlayer; private music: Buffers; private vo: Buffers;
-  private deck: { id: string; source: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private deck: { id: string; source: AudioBufferSourceNode; gain: GainNode; offset: number; started: number } | null = null;
+  /** Where each faded-out track was, so a bed that returns within RESUME_S continues instead of replaying its opening bars. */
+  private playheads = new Map<string, { offset: number; at: number }>();
   private wanted: string | null = null;
   private queue: Spoken[] = []; private speaking: (() => void) | null = null; private unduckTimer = 0;
-  private lastSeq = 0; private seeded = false; private round: string | null = null; private readAloud = false;
+  private lastSeq = 0; private seeded = false; private round: string | null = null; private readAloud = false; private packPhase: string | null = null;
   private muted = isMuted(); private disposed = false; private voice: SpeechSynthesisVoice | null | undefined;
 
   constructor() {
-    const ctx = this.ctx = new AudioContext(), master = ctx.createGain(), music = ctx.createGain(), sfx = ctx.createGain();
+    const ctx = this.ctx = new AudioContext(), master = ctx.createGain(), music = ctx.createGain(), sfx = ctx.createGain(), trim = ctx.createGain();
     this.musicBus = music; this.limiter = ctx.createDynamicsCompressor(); this.musicDuck = ctx.createGain(); this.voBus = ctx.createGain();
     const l = this.limiter;
     l.threshold.value = -8; l.knee.value = 6; l.ratio.value = 12; l.attack.value = .003; l.release.value = .25;
-    music.gain.value = LEVEL.music; sfx.gain.value = LEVEL.sfx; this.voBus.gain.value = LEVEL.vo;
-    music.connect(this.musicDuck).connect(master); sfx.connect(master); this.voBus.connect(master); master.connect(l).connect(ctx.destination);
+    music.gain.value = LEVEL.music; sfx.gain.value = LEVEL.sfx; this.voBus.gain.value = LEVEL.vo; trim.gain.value = TRIM;
+    music.connect(this.musicDuck).connect(master); sfx.connect(master); this.voBus.connect(master); master.connect(l).connect(trim).connect(ctx.destination);
     const signal = this.abort.signal;
     this.sfx = new SfxPlayer(ctx, sfx, signal); this.music = new Buffers(ctx, signal, 3); this.vo = new Buffers(ctx, signal, 12);
     this.sfx.preload();
@@ -88,10 +92,14 @@ export class PackMixer {
   update({ phase, roundId, view, connected, now }: MixerInput) {
     if (this.disposed) return;
     this.readAloud = !!view?.settings.readAloud;
-    this.setMusic(!connected || phase === 'picker' ? null : phase === 'lobby' || phase === 'preparing' ? 'menu' : view?.music ?? (phase === 'results' ? 'finale' : null));
+    // The first moments of a round have no view yet: keep the lobby's theme playing instead of fading it out and restarting it.
+    this.setMusic(!connected || phase === 'picker' ? null : phase === 'lobby' || phase === 'preparing' ? 'menu' : !view && phase === 'playing' ? this.wanted : view?.music ?? (phase === 'results' ? 'finale' : null));
     // Cues: the first snapshot after mounting mid-round is history; a new round starts counting afresh.
     const cues = view?.cues ?? [], max = cues.reduce((m, c) => Math.max(m, c.seq), 0);
     if (!view) { this.seeded = true; return; }
+    // Narration belongs to its phase: lines still queued when the night moves on (a quick lock-in during the welcome) would
+    // talk over the next card, so they are dropped; the line already playing finishes.
+    if (view.phase !== this.packPhase) { this.packPhase = view.phase; this.queue = []; }
     if (!this.seeded) { this.seeded = true; this.round = roundId; this.lastSeq = max; return; }
     if (roundId !== this.round || max < this.lastSeq) { this.round = roundId; this.lastSeq = 0; }
     for (const cue of [...cues].sort((a, b) => a.seq - b.seq)) {
@@ -110,15 +118,19 @@ export class PackMixer {
     void (info ? this.music.get(info.file) : Promise.resolve(null)).then(buffer => {
       if (this.disposed || this.wanted !== id) return;
       const t = this.ctx.currentTime, old = this.deck;
-      if (old) { const g = old.gain.gain; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(0, t + FADE_OUT); old.source.stop(t + FADE_OUT + .05); }
+      if (old) {
+        const g = old.gain.gain; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(0, t + FADE_OUT); old.source.stop(t + FADE_OUT + .05);
+        this.playheads.set(old.id, { offset: old.offset + t - old.started, at: t });
+      }
       this.deck = null;
       if (!buffer || !info || !id) return;
-      const source = this.ctx.createBufferSource(), gain = this.ctx.createGain();
+      const source = this.ctx.createBufferSource(), gain = this.ctx.createGain(), loopEnd = Math.min(buffer.duration, info.loopStart + info.loopSeconds), saved = this.playheads.get(id);
       // Files carry one wrapped extra second; export.ts picks the loop start where the seam is cleanest.
-      source.buffer = buffer; source.loop = true; source.loopStart = info.loopStart; source.loopEnd = Math.min(buffer.duration, info.loopStart + info.loopSeconds);
+      source.buffer = buffer; source.loop = true; source.loopStart = info.loopStart; source.loopEnd = loopEnd;
+      const offset = saved && t - saved.at < RESUME_S ? info.loopStart + (saved.offset - info.loopStart) % (loopEnd - info.loopStart) : info.loopStart;
       gain.gain.setValueAtTime(0, t); gain.gain.linearRampToValueAtTime(1, t + FADE_IN);
       source.connect(gain).connect(this.musicBus); source.onended = () => { source.disconnect(); gain.disconnect(); };
-      source.start(t, info.loopStart); this.deck = { id, source, gain };
+      source.start(t, offset); this.deck = { id, source, gain, offset, started: t };
     });
   }
 
