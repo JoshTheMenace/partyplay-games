@@ -1,0 +1,310 @@
+{
+  "host.welcome": {
+    "hash": "02b6bee0c81cb25e",
+    "ms": 4598
+  },
+  "host.pick": {
+    "hash": "c4d496f525d47b7e",
+    "ms": 4702
+  },
+  "host.pick.2": {
+    "hash": "5ec0caf7fe510652",
+    "ms": 4441
+  },
+  "host.locked": {
+    "hash": "c4fdaa830c783dcc",
+    "ms": 1985
+  },
+  "host.intro": {
+    "hash": "4de1b647ec58a6ef",
+    "ms": 1724
+  },
+  "host.intro.2": {
+    "hash": "bbec122e6f3e3fcc",
+    "ms": 2273
+  },
+  "host.everyone-in": {
+    "hash": "6eda81289470d572",
+    "ms": 3187
+  },
+  "host.hurry.1": {
+    "hash": "e482a1d98828f6da",
+    "ms": 2664
+  },
+  "host.hurry.2": {
+    "hash": "26bcd3517d7df62c",
+    "ms": 3109
+  },
+  "host.timeup.1": {
+    "hash": "9b3ee949a1dfc3bb",
+    "ms": 653
+  },
+  "host.timeup.2": {
+    "hash": "8ec3fb7fae2a56b1",
+    "ms": 967
+  },
+  "host.pencils-down": {
+    "hash": "9bb07be62b952fae",
+    "ms": 2926
+  },
+  "host.vote.1": {
+    "hash": "8dfb42f0ee416383",
+    "ms": 3474
+  },
+  "host.vote.2": {
+    "hash": "a3a46f6548f26073",
+    "ms": 3422
+  },
+  "host.votes-in.1": {
+    "hash": "f75ffd6a0011380f",
+    "ms": 940
+  },
+  "host.votes-in.2": {
+    "hash": "63772587324d7f99",
+    "ms": 2090
+  },
+  "host.reveal.1": {
+    "hash": "988384eecb1dd828",
+    "ms": 1123
+  },
+  "host.reveal.2": {
+    "hash": "9a80d5bd0fcf034e",
+    "ms": 1097
+  },
+  "host.winner.1": {
+    "hash": "8412db5b6a50e59e",
+    "ms": 888
+  },
+  "host.winner.2": {
+    "hash": "0e36b571706ca230",
+    "ms": 1411
+  },
+  "host.tie": {
+    "hash": "462e15f7f7ee02b3",
+    "ms": 3448
+  },
+  "host.no-votes": {
+    "hash": "80133786429728f1",
+    "ms": 2168
+  },
+  "host.close": {
+    "hash": "bedb9bfffe527f56",
+    "ms": 2508
+  },
+  "host.landslide": {
+    "hash": "89d03bbfba68ef83",
+    "ms": 3187
+  },
+  "host.final-round": {
+    "hash": "483d0c95beddea86",
+    "ms": 2821
+  },
+  "host.scores": {
+    "hash": "09596478b27f92c5",
+    "ms": 1254
+  },
+  "host.podium": {
+    "hash": "5bc8cfeb2d2b164b",
+    "ms": 4754
+  },
+  "host.night-over": {
+    "hash": "bac213a2a42a4e17",
+    "ms": 4676
+  },
+  "host.quip.1": {
+    "hash": "c657966474e50bc8",
+    "ms": 1411
+  },
+  "host.quip.2": {
+    "hash": "aee033e650e2475b",
+    "ms": 2247
+  },
+  "host.quip.3": {
+    "hash": "cb93a1a674767158",
+    "ms": 1384
+  },
+  "host.quip.4": {
+    "hash": "d7d26f0c86b8fb59",
+    "ms": 1489
+  },
+  "quip-clash.intro": {
+    "hash": "213aa90043222a94",
+    "ms": 5904
+  },
+  "quip-clash.last-laugh": {
+    "hash": "7922e741808f1b60",
+    "ms": 5016
+  },
+  "quip-clash.quipwipe": {
+    "hash": "1f51700d93ecae91",
+    "ms": 1698
+  },
+  "quip-clash.jinx": {
+    "hash": "7733812bb8558242",
+    "ms": 2638
+  },
+  "odd-one-in.intro": {
+    "hash": "ddc9323f037a783c",
+    "ms": 7236
+  },
+  "odd-one-in.caught": {
+    "hash": "2394f65570c75ec2",
+    "ms": 2717
+  },
+  "odd-one-in.framed": {
+    "hash": "03fac81f57c92f07",
+    "ms": 2612
+  },
+  "odd-one-in.escaped": {
+    "hash": "18503364ec015a83",
+    "ms": 2560
+  },
+  "quiz-panic.intro": {
+    "hash": "aaad79418bc0b5a3",
+    "ms": 6661
+  },
+  "quiz-panic.panic": {
+    "hash": "e008d4fba5570225",
+    "ms": 2743
+  },
+  "quiz-panic.ghost": {
+    "hash": "ca7c740f5db1c0b2",
+    "ms": 2325
+  },
+  "quiz-panic.escape": {
+    "hash": "e2615345763b08ac",
+    "ms": 3814
+  },
+  "shirt-show.intro": {
+    "hash": "d25b05e57ef10831",
+    "ms": 6504
+  },
+  "shirt-show.bell": {
+    "hash": "7b8de7f93d34908a",
+    "ms": 2952
+  },
+  "shirt-show.streak": {
+    "hash": "4273ee43f44923b4",
+    "ms": 2403
+  },
+  "shirt-show.main-event": {
+    "hash": "e435863a1bc430f6",
+    "ms": 2926
+  },
+  "sketch-bluff.intro": {
+    "hash": "8925335f7c44f455",
+    "ms": 7889
+  },
+  "sketch-bluff.unveil": {
+    "hash": "cda889df7a2f5e47",
+    "ms": 2299
+  },
+  "sketch-bluff.truth": {
+    "hash": "93e85fbb7f6058b0",
+    "ms": 1306
+  },
+  "sketch-bluff.nobody": {
+    "hash": "2d0be8e7f0331182",
+    "ms": 2377
+  },
+  "tall-tales.intro": {
+    "hash": "04febb54ac3c68f2",
+    "ms": 7367
+  },
+  "tall-tales.fooled": {
+    "hash": "c421a578eff5d9da",
+    "ms": 1437
+  },
+  "tall-tales.nobody": {
+    "hash": "7f924c3109b6833d",
+    "ms": 1907
+  },
+  "tall-tales.final": {
+    "hash": "1e6dd406cbfc95eb",
+    "ms": 2299
+  },
+  "airlock.intro": {
+    "hash": "23313929e81877c6",
+    "ms": 7837
+  },
+  "airlock.button": {
+    "hash": "85529967f2fa8644",
+    "ms": 1358
+  },
+  "airlock.alien": {
+    "hash": "8d2f7fcc5497ca70",
+    "ms": 1384
+  },
+  "airlock.human": {
+    "hash": "e0d447840a1dd303",
+    "ms": 1698
+  },
+  "airlock.earth": {
+    "hash": "501f4a1db48ab96a",
+    "ms": 2664
+  },
+  "ballpark.intro": {
+    "hash": "9abc4df796f9e6e0",
+    "ms": 8385
+  },
+  "ballpark.bullseye": {
+    "hash": "ddc5a42189bae959",
+    "ms": 2116
+  },
+  "ballpark.way-off": {
+    "hash": "0102fb308426306e",
+    "ms": 2038
+  },
+  "ballpark.wanted": {
+    "hash": "25f0bfe7cd03129b",
+    "ms": 4963
+  },
+  "bracket-brawl.intro": {
+    "hash": "ccc8bd3ab5e7ab12",
+    "ms": 6165
+  },
+  "bracket-brawl.blind": {
+    "hash": "51eee19b03800b4d",
+    "ms": 3500
+  },
+  "bracket-brawl.smackdown": {
+    "hash": "766b984852697869",
+    "ms": 3631
+  },
+  "bracket-brawl.coin": {
+    "hash": "920a43952d37b186",
+    "ms": 1332
+  },
+  "comment-section.intro": {
+    "hash": "c8964d18609a875e",
+    "ms": 5851
+  },
+  "comment-section.twist": {
+    "hash": "aee29648e3770dad",
+    "ms": 3109
+  },
+  "comment-section.reported": {
+    "hash": "ccbe884a73ae1055",
+    "ms": 2090
+  },
+  "comment-section.final": {
+    "hash": "0cf2befdbda6a9b2",
+    "ms": 2821
+  },
+  "split-decision.intro": {
+    "hash": "447e469513dc783f",
+    "ms": 7471
+  },
+  "split-decision.rather": {
+    "hash": "98cabe1c3f127b3b",
+    "ms": 2612
+  },
+  "split-decision.perfect": {
+    "hash": "955f93bfc9e087b5",
+    "ms": 1776
+  },
+  "split-decision.unanimous": {
+    "hash": "cca3be9528e106d7",
+    "ms": 2247
+  }
+}

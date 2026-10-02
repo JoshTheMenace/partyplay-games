@@ -4,7 +4,7 @@ Josh's game collection, versioned separately from the [Party Place platform](htt
 
 ## Contents
 
-- `packages/games/`: Kart Party, Blockwild, Kitchen Rush, Quip Clash, Sketch Bluff, Tall Tales, Shirt Show, Odd One In and Quiz Panic. Scene Lab is a development-only fixture.
+- `packages/games/`: Kart Party, Blockwild, Kitchen Rush, Night Job, Starship Scramble, Phonedig, Hotpot, Ichi, Island Settlers, Sky Clash and the Hijinks party pack. Scene Lab is a development-only fixture.
 - `packages/games/kart-party/src/engine/`: Kart’s racing engine, alongside its shared-room adapter and tests in the same game directory.
 - `packages/party-*`: the shared contracts, UI/controller components, client session, simulation and 3D helpers that these games use.
 - `packages/games/kart-party/public/`: Kart assets, music and font license notices. `public/games/kart-party` links here to preserve the served asset paths.
