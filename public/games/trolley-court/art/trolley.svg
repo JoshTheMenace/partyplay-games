@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 230 150" width="230" height="150">
+  <!-- Trolley Court: the trolley. Original art. Side view facing right, wheels on y≈140. -->
+  <g stroke="#05071a" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M128 30 L92 6" stroke-width="5" fill="none"/>
+    <circle cx="90" cy="6" r="5" fill="#ffd24a" stroke-width="3"/>
+    <rect x="112" y="24" width="34" height="9" rx="3" fill="#3a3f63" stroke-width="4"/>
+    <rect x="16" y="28" width="186" height="16" rx="8" fill="#ff5748" stroke-width="5"/>
+    <path d="M10 46 Q10 36 22 36 H196 Q214 36 216 52 L220 104 Q220 116 208 116 H22 Q10 116 10 104 Z" fill="#ffd24a" stroke-width="6"/>
+    <rect x="24" y="48" width="34" height="34" rx="7" fill="#9fe3f5" stroke-width="4"/>
+    <rect x="66" y="48" width="34" height="34" rx="7" fill="#9fe3f5" stroke-width="4"/>
+    <rect x="108" y="48" width="30" height="58" rx="6" fill="#ffb84a" stroke-width="4"/>
+    <circle cx="132" cy="80" r="3" fill="#05071a" stroke="none"/>
+    <path d="M148 48 H190 Q206 48 208 64 L209 80 H148 Z" fill="#fff6e5" stroke-width="4"/>
+    <circle cx="164" cy="64" r="11" fill="#fff" stroke-width="3"/>
+    <circle cx="190" cy="64" r="11" fill="#fff" stroke-width="3"/>
+    <circle cx="168" cy="66" r="5" fill="#05071a" stroke="none"/>
+    <circle cx="194" cy="66" r="5" fill="#05071a" stroke="none"/>
+    <path d="M150 50 L176 57 M180 57 L204 50" stroke-width="5" fill="none"/>
+    <path d="M152 92 Q180 110 212 92" fill="#fff6e5" stroke-width="4"/>
+    <path d="M162 95 V101 M174 98 V105 M186 99 V105 M198 97 V102" stroke-width="2.5"/>
+    <rect x="10" y="98" width="98" height="12" rx="4" fill="#ff5748" stroke-width="4"/>
+    <circle cx="212" cy="74" r="6" fill="#fff6e5" stroke-width="3"/>
+    <path d="M206 116 L226 140 H192 Z" fill="#c3c9e4" stroke-width="5"/>
+    <path d="M200 124 L212 140 M208 120 L220 138" stroke-width="2.5"/>
+    <rect x="24" y="114" width="168" height="14" rx="5" fill="#3a3f63" stroke-width="5"/>
+    <circle cx="56" cy="130" r="15" fill="#262a4a" stroke-width="5"/>
+    <circle cx="160" cy="130" r="15" fill="#262a4a" stroke-width="5"/>
+    <circle cx="56" cy="130" r="5" fill="#ffd24a" stroke-width="3"/>
+    <circle cx="160" cy="130" r="5" fill="#ffd24a" stroke-width="3"/>
+  </g>
+  <g fill="#05071a" opacity=".22"><rect x="28" y="52" width="10" height="26" rx="4" fill="#fff"/><rect x="70" y="52" width="10" height="26" rx="4" fill="#fff"/></g>
+</svg>

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" preserveAspectRatio="xMidYMid slice">
+  <!-- Trolley Court: TV backdrop. Original art. Dusk over a hilltop courthouse and a railway junction. Kept dim so cards read. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0d1238"/>
+      <stop offset=".45" stop-color="#2a2466"/>
+      <stop offset=".68" stop-color="#6b3a72"/>
+      <stop offset=".8" stop-color="#b8566a"/>
+    </linearGradient>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a2a52"/>
+      <stop offset="1" stop-color="#0b1030"/>
+    </linearGradient>
+    <clipPath id="sun"><circle cx="1480" cy="760" r="230"/></clipPath>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#sky)"/>
+  <g fill="#fff6e5" opacity=".55">
+    <circle cx="140" cy="70" r="2"/><circle cx="420" cy="40" r="1.6"/><circle cx="760" cy="90" r="2.2"/><circle cx="980" cy="36" r="1.5"/><circle cx="1220" cy="80" r="2"/><circle cx="1500" cy="30" r="1.7"/><circle cx="1760" cy="96" r="2.3"/><circle cx="1880" cy="40" r="1.5"/><circle cx="620" cy="150" r="1.4"/><circle cx="1360" cy="160" r="1.6"/><circle cx="300" cy="200" r="1.3"/><circle cx="1640" cy="200" r="1.4"/>
+  </g>
+  <g clip-path="url(#sun)" opacity=".75">
+    <rect x="1200" y="520" width="560" height="500" fill="#ffb35c"/>
+    <rect x="1200" y="700" width="560" height="14" fill="#b8566a"/><rect x="1200" y="740" width="560" height="18" fill="#b8566a"/><rect x="1200" y="782" width="560" height="22" fill="#b8566a"/>
+  </g>
+  <path d="M0 720 L160 640 L330 700 L520 610 L700 690 L900 630 L1080 700 L1290 640 L1500 710 L1700 650 L1920 700 V1080 H0 Z" fill="#33285e" opacity=".9"/>
+  <!-- courthouse on the hill -->
+  <path d="M940 780 Q1180 640 1420 780 Z" fill="#241f4d"/>
+  <g fill="#1a1a44" transform="translate(1180 650)">
+    <path d="M-120 0 L0 -64 L120 0 Z"/>
+    <rect x="-112" y="0" width="224" height="14"/>
+    <rect x="-100" y="14" width="18" height="86"/><rect x="-60" y="14" width="18" height="86"/><rect x="-20" y="14" width="18" height="86"/><rect x="20" y="14" width="18" height="86"/><rect x="60" y="14" width="18" height="86"/>
+    <rect x="-120" y="100" width="240" height="18"/>
+  </g>
+  <rect x="0" y="770" width="1920" height="310" fill="url(#ground)"/>
+  <!-- telegraph poles and wire -->
+  <g stroke="#14163a" stroke-width="8" stroke-linecap="round" fill="none" opacity=".9">
+    <path d="M1180 780 V560 M1150 580 H1210 M1640 790 V540 M1606 562 H1674"/>
+  </g>
+  <path d="M1150 580 Q1400 640 1606 562 M1210 580 Q1440 650 1674 562" stroke="#14163a" stroke-width="2.5" fill="none" opacity=".8"/>
+  <!-- grass tufts -->
+  <g fill="#1b2a4a" opacity=".9">
+    <path d="M40 1000 l14 -40 l6 40 l10 -30 l4 30z"/><path d="M380 1060 l12 -36 l6 36 l10 -26 l4 26z"/><path d="M1020 990 l14 -40 l6 40 l10 -30 l4 30z"/><path d="M1460 1050 l12 -36 l6 36 l10 -26 l4 26z"/><path d="M1820 1000 l14 -40 l6 40 l10 -30 l4 30z"/>
+  </g>
+</svg>
