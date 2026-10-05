@@ -7,7 +7,8 @@ import { BLIND, CATEGORIES, GENERIC, SMACKDOWN, STANDARD } from '../src/minis/br
 import { server, type BrawlState } from '../src/minis/bracket-brawl/server';
 import { mix, pick as pickN, random, shuffle } from '../src/core/server/rng';
 import type { MiniApi, PackPlayer } from '../src/core/contract';
-import { MAX_ANSWER, PTS, type BrawlPrivate, type BrawlPublic } from '../src/minis/bracket-brawl/types';
+import { PACE } from '../src/server';
+import { MAX_ANSWER, PTS, WRITE_S, type BrawlPrivate, type BrawlPublic } from '../src/minis/bracket-brawl/types';
 
 const pub = (n: Night) => n.mini<BrawlPublic>();
 const me = (n: Night, id: string) => n.miniMe<BrawlPrivate>(id);
@@ -166,7 +167,7 @@ test('ties go to an animated coin flip; a matchup nobody can vote on flips too',
 
 test('missing answers: the House fills in, uncredited; timers follow the pace setting', () => {
   const n = start(5, { settings: { timers: 'speedy' } });
-  assert.equal(pub(n).deadline - pub(n).at, 42_000);
+  assert.equal(pub(n).deadline - pub(n).at, Math.round(WRITE_S * 1000 * PACE.speedy));
   writeAll(n, ['p0', 'p1', 'p2', 'p3']);
   at(n, 'predict');
   assert.equal(inner(n).entries.filter(e => e.by === null).length, 4);

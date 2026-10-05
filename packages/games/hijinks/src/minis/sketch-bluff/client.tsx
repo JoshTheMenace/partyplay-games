@@ -21,7 +21,7 @@ const art = (media: Record<string, unknown>, key?: string) => key ? media[key] a
 /** Sub-steps of a beat that have started (0 before it, then 1–3). */
 const sub = (beat: Shown, t: number) => (beat.kind === 'real' ? REAL_SUB : FAKE_SUB).filter(ms => t - beat.at >= ms).length;
 
-const MEDIUMS = ['Thumb on glass', 'Panic on touchscreen', 'Mixed media: sweat, pixels', 'Digital crayon and regret', 'Fingertip, 80 seconds', 'Oil on phone, sort of', 'Smudge on smartphone'];
+const MEDIUMS = ['Thumb on glass', 'Panic on touchscreen', 'Mixed media: sweat, pixels', 'Digital crayon and regret', 'Fingertip, two minutes', 'Oil on phone, sort of', 'Smudge on smartphone'];
 const STUDIO_LINES = ['Every artist has a different prompt.', 'No words allowed. Only pictures!', 'Bold lines read best from the sofa.', 'Big shapes. Fewer details. More genius.'];
 const WAIT_LINES = [
   'Adjust your monocle. Look unimpressed.', 'Practise saying “derivative” with a sniff.', 'Hold your champagne flute higher.', 'Nod slowly at a blank wall.',

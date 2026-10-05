@@ -5,7 +5,8 @@ import { miniInfo } from '../src/minis/catalog';
 import { LINES } from '../src/minis/quiz-panic/narration';
 import { CATEGORIES, TRIVIA, WORDS } from '../src/minis/quiz-panic/content.server';
 import type { QuizState } from '../src/minis/quiz-panic/server';
-import { EXIT, FINAL_TURNS, LONE_PRIZE, PRIZE, QUESTIONS, ROOMS, SEQUENCE, type Kind, type QuizPrivate, type QuizPublic } from '../src/minis/quiz-panic/types';
+import { PACE } from '../src/server';
+import { EXIT, FINAL_TURNS, LONE_PRIZE, PRIZE, QUESTIONS, QUESTION_S, ROOMS, SEQUENCE, type Kind, type QuizPrivate, type QuizPublic } from '../src/minis/quiz-panic/types';
 
 const pub = (n: Night) => n.mini<QuizPublic>();
 const me = (n: Night, id: string) => n.miniMe<QuizPrivate>(id);
@@ -157,7 +158,7 @@ test('a room that drops entirely waits for deadlines instead of racing through q
 
 test('timers follow the pace setting', () => {
   const n = start(3, { settings: { timers: 'speedy' } });
-  assert.equal(pub(n).deadline - pub(n).at, 10_500);
+  assert.equal(pub(n).deadline - pub(n).at, Math.round(QUESTION_S * 1000 * PACE.speedy));
 });
 
 test('Poison Punch: survivors spike cups secretly; at least one cup stays safe; poisoned drinkers become ghosts', () => {

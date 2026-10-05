@@ -6,7 +6,8 @@ import { LINES } from '../src/minis/odd-one-in/narration';
 import { TASKS } from '../src/minis/odd-one-in/content.server';
 import { bot } from '../src/minis/odd-one-in/bot';
 import type { OddState } from '../src/minis/odd-one-in/server';
-import { CATEGORIES, FACES, FAKER_BRIEF, NUMBERS, type Category, type OddPrivate, type OddPublic } from '../src/minis/odd-one-in/types';
+import { PACE } from '../src/server';
+import { CATEGORIES, FACES, FAKER_BRIEF, NUMBERS, TASK_S, type Category, type OddPrivate, type OddPublic } from '../src/minis/odd-one-in/types';
 
 const pub = (n: Night) => n.mini<OddPublic>();
 const me = (n: Night, id: string) => n.miniMe<OddPrivate>(id);
@@ -137,7 +138,7 @@ test('a tie at the top that includes the faker is a hung jury; surviving three t
 test('missing answers become flagged random picks; nobody voting is a hung jury', () => {
   const n = start(3, { settings: { timers: 'speedy' } });
   at(n, 'task');
-  assert.equal(pub(n).deadline - pub(n).at, 14_000, 'task timer follows the pace');
+  assert.equal(pub(n).deadline - pub(n).at, Math.round(TASK_S * 1000 * PACE.speedy), 'task timer follows the pace');
   const cat = pub(n).category;
   n.send('p0', { turn: pub(n).turn, k: 'answer', value: valid(n, cat)[1]! });
   at(n, 'reveal');

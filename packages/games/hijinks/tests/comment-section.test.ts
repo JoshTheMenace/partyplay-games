@@ -5,7 +5,8 @@ import { miniInfo } from '../src/minis/catalog';
 import { LINES } from '../src/minis/comment-section/narration';
 import { ADULT_QUESTIONS, ADULT_TWISTS, FORMATS, HOUSE_ANSWERS, HOUSE_TWISTS, QUESTIONS, REPLIES, twistPool } from '../src/minis/comment-section/content.server';
 import type { CommentState } from '../src/minis/comment-section/server';
-import { KINDS, MAX_ANSWER, MAX_TWIST, type CommentPrivate, type CommentPublic } from '../src/minis/comment-section/types';
+import { PACE } from '../src/server';
+import { ANSWER_S, KINDS, MAX_ANSWER, MAX_TWIST, type CommentPrivate, type CommentPublic } from '../src/minis/comment-section/types';
 
 const pub = (n: Night) => n.mini<CommentPublic>();
 const me = (n: Night, id: string) => n.miniMe<CommentPrivate>(id);
@@ -161,7 +162,7 @@ test('Final Feed: up to two distinct votes, never your own twist, triple points'
 test('missing inputs become house answers and twists; timers follow the pace setting', () => {
   const n = start(3, { settings: { timers: 'speedy' } });
   at(n, 'answer', 1);
-  assert.equal(pub(n).deadline - pub(n).at, 31_500);
+  assert.equal(pub(n).deadline - pub(n).at, Math.round(ANSWER_S * 1000 * PACE.speedy));
   n.send('p0', { turn: pub(n).turn, k: 'answer', text: 'Only mine is real' });
   at(n, 'twist', 1);
   const answers = inner(n).entries;

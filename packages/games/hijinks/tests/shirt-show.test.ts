@@ -6,7 +6,8 @@ import { miniInfo } from '../src/minis/catalog';
 import { LINES } from '../src/minis/shirt-show/narration';
 import { ADULT_HINTS, ADULT_SLOGANS, HINTS, HOUSE_DESIGNS, SLOGANS, SPARKS } from '../src/minis/shirt-show/content.server';
 import type { ShirtState } from '../src/minis/shirt-show/server';
-import { MAX_DESIGNS, MAX_SLOGAN, MAX_SLOGANS, PTS, type ShirtPrivate, type ShirtPublic } from '../src/minis/shirt-show/types';
+import { PACE } from '../src/server';
+import { DRAW_S, MAX_DESIGNS, MAX_SLOGAN, MAX_SLOGANS, PTS, type ShirtPrivate, type ShirtPublic } from '../src/minis/shirt-show/types';
 
 const pub = (n: Night) => n.mini<ShirtPublic>();
 const me = (n: Night, id: string) => n.miniMe<ShirtPrivate>(id);
@@ -168,7 +169,7 @@ test('scoring: maker 100 a vote, borrowed parts 50 a vote, own and house parts n
   n.until(() => pub(n).phase === 'vote');
   const holder = inner(n).clash!.sides[0], tied = voters(n).slice(0, 2), wins = inner(n).wins[holder.id];
   n.send(tied[0]!, { turn: pub(n).turn, k: 'vote', side: 0 }); n.send(tied[1]!, { turn: pub(n).turn, k: 'vote', side: 1 });
-  n.advance(13_000);
+  n.advance(pub(n).deadline - n.now);
   const t = pub(n).bout!.result!;
   assert.equal(t.tie, true); assert.equal(t.winner, 0);
   assert.equal(t.points[0].maker, 100); assert.equal(t.points[1].maker, 100);
@@ -227,7 +228,7 @@ function sumParts(r: { credits: { maker: string; artist: string | null; writer: 
 
 test('missing input: house designs and slogans fill the hands; missing shirts are auto-stitched; pace scales timers', () => {
   const n = start(4, { settings: { timers: 'speedy' } });
-  assert.equal(pub(n).deadline - pub(n).at, Math.round(75_000 * .7));
+  assert.equal(pub(n).deadline - pub(n).at, Math.round(DRAW_S * 1000 * PACE.speedy));
   at(n, 'write'); at(n, 'make');
   const s = inner(n);
   assert.ok(s.designs.length >= 12 && s.designs.every(d => d.by === null), 'nobody drew: house designs only');

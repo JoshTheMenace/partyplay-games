@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { manifest } from '../src/manifest';
-import { CUE_LIMIT, createRules, miniApi, rules as realRules } from '../src/server';
+import { CUE_LIMIT, PACE, createRules, miniApi, rules as realRules } from '../src/server';
 import { MINIS, eligible, miniInfo } from '../src/minis/catalog';
 import { validateSnapshotCache } from '../../../party-contract/src/snapshot-cache';
 import { dealFresh, freshDeck } from '../src/core/server/deck';
@@ -212,9 +212,8 @@ test('cues: monotonic seq, bounded log, read-aloud only when enabled', () => {
   miniApi(quiet.state).speak('  hello  '); miniApi(loud.state).speak('  hello  ');
   assert.equal(quiet.view().cues.some(c => c.kind === 'speak'), false);
   assert.deepEqual(loud.view().cues.at(-1), { seq: loud.view().cues.at(-1)!.seq, at: loud.now, kind: 'speak', id: 'hello' });
-  assert.equal(miniApi(loud.state).seconds(10), 10_000);
-  assert.equal(miniApi(night({ settings: { timers: 'speedy' } }).state).seconds(10), 7000);
-  assert.equal(miniApi(night({ settings: { timers: 'relaxed' } }).state).seconds(10), 15_000);
+  assert.equal(miniApi(loud.state).seconds(10), Math.round(10_000 * PACE.standard), 'standard is the default pace');
+  for (const timers of ['relaxed', 'standard', 'speedy'] as const) assert.equal(miniApi(night({ settings: { timers } }).state).seconds(10), Math.round(10_000 * PACE[timers]));
   assert.equal(miniApi(loud.state).say('host.unknown-line'), 0);
 });
 

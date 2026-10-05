@@ -5,7 +5,8 @@ import { miniInfo } from '../src/minis/catalog';
 import { LINES } from '../src/minis/split-decision/narration';
 import { DILEMMAS, DILEMMAS_ADULT, FINALS, FINALS_ADULT, HOUSE_CLAUSES, HOUSE_OPTIONS, RATHERS, RATHERS_ADULT } from '../src/minis/split-decision/content.server';
 import type { SplitState } from '../src/minis/split-decision/server';
-import { BLANK, MAX_FILL, RESULT, carousel, minority, splitPoints, verdictOf, type Side, type SplitPrivate, type SplitPublic } from '../src/minis/split-decision/types';
+import { PACE } from '../src/server';
+import { BLANK, MAX_FILL, RESULT, WRITE_S, carousel, minority, splitPoints, verdictOf, type Side, type SplitPrivate, type SplitPublic } from '../src/minis/split-decision/types';
 
 const pub = (n: Night) => n.mini<SplitPublic>();
 const me = (n: Night, id: string) => n.miniMe<SplitPrivate>(id);
@@ -218,7 +219,7 @@ test('The Big Split Bold bonus: minority judges earn 150 per take', () => {
 
 test('missing input defaults: house blanks for silent writers; timers follow the pace setting', () => {
   const n = start(3, { settings: { timers: 'relaxed' } });
-  assert.equal(pub(n).deadline - pub(n).at, 90_000);
+  assert.equal(pub(n).deadline - pub(n).at, Math.round(WRITE_S * 1000 * PACE.relaxed));
   n.send('p0', { turn: pub(n).turn, k: 'fill', slot: 0, text: 'Only one from me' });
   at(n, 'show');
   const fills = inner(n).cards.flatMap(c => c.fills);

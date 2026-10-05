@@ -5,7 +5,8 @@ import { miniInfo } from '../src/minis/catalog';
 import { LINES } from '../src/minis/tall-tales/narration';
 import { ADULT, FAMILY } from '../src/minis/tall-tales/content.server';
 import type { TallState } from '../src/minis/tall-tales/server';
-import { MAX_LIE, MIN_OPTIONS, QUESTIONS, same, tokens, type Beat, type TallPrivate, type TallPublic } from '../src/minis/tall-tales/types';
+import { PACE } from '../src/server';
+import { MAX_LIE, MIN_OPTIONS, QUESTIONS, WRITE_S, same, tokens, type Beat, type TallPrivate, type TallPublic } from '../src/minis/tall-tales/types';
 
 const pub = (n: Night) => n.mini<TallPublic>();
 const me = (n: Night, id: string) => n.miniMe<TallPrivate>(id);
@@ -88,7 +89,7 @@ test('flow: round cards, a chooser per story, seven stories, scores after rounds
     n.send(pub(n).chooser!, { turn: pub(n).turn, k: 'pick', index: q % 4 });
     assert.equal(pub(n).picked, q % 4);
     at(n, 'write');
-    if (q === 0) assert.equal(pub(n).deadline - pub(n).at, 31_500);
+    if (q === 0) assert.equal(pub(n).deadline - pub(n).at, Math.round(WRITE_S * 1000 * PACE.speedy));
     seen.push(inner(n).fact!.text);
     n.until(() => pub(n).phase !== 'write' && pub(n).phase !== 'choose' && pub(n).phase !== 'reveal');
     phases.add(`${q}:${pub(n).phase}`);

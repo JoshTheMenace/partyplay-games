@@ -38,16 +38,16 @@ export type Laps = 'auto' | 1 | 2;
 export type Settings = {
   laps: Laps;
   /** Innocent and Guilty pick timers. */
-  pickSeconds: 20 | 30 | 45 | 60;
-  modifierSeconds: 30 | 45 | 60 | 90;
+  pickSeconds: 30 | 50 | 75 | 90;
+  modifierSeconds: 45 | 75 | 90 | 120;
   /** Each team's turn on the floor during pleading. */
-  floorSeconds: 20 | 30 | 45 | 60;
+  floorSeconds: 30 | 50 | 75 | 90;
   /** The Conductor's final decision window after both floors. */
-  leverSeconds: 10 | 15 | 20 | 30;
+  leverSeconds: 15 | 30 | 45 | 60;
   accomplices: boolean; catchUp: boolean; blanks: boolean; family: boolean; readAloud: boolean;
 };
-export const defaults: Settings = { laps: 'auto', pickSeconds: 30, modifierSeconds: 45, floorSeconds: 30, leverSeconds: 20, accomplices: false, catchUp: false, blanks: true, family: false, readAloud: true };
-export const options = { laps: ['auto', 1, 2], pickSeconds: [20, 30, 45, 60], modifierSeconds: [30, 45, 60, 90], floorSeconds: [20, 30, 45, 60], leverSeconds: [10, 15, 20, 30] } as const;
+export const defaults: Settings = { laps: 'auto', pickSeconds: 50, modifierSeconds: 75, floorSeconds: 50, leverSeconds: 30, accomplices: false, catchUp: false, blanks: true, family: false, readAloud: true };
+export const options = { laps: ['auto', 1, 2], pickSeconds: [30, 50, 75, 90], modifierSeconds: [45, 75, 90, 120], floorSeconds: [30, 50, 75, 90], leverSeconds: [15, 30, 45, 60] } as const;
 export const toggles = {
   accomplices: ['Accomplices', 'Every teammate plays a twist each round, not just the extras.'],
   catchUp: ['Underdog', 'Whoever has the most deaths gives their team one extra twist.'],

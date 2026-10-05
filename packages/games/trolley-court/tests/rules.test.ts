@@ -76,7 +76,7 @@ function finished(s: State, n: number, laps: Settings['laps'] = 'auto') {
 
 test('settings: defaults, merging and strict rejection', () => {
   assert.deepEqual(rules.validateSettings({}), defaults);
-  assert.deepEqual(rules.validateSettings({ laps: 2, blanks: false, leverSeconds: 10 }), { ...defaults, laps: 2, blanks: false, leverSeconds: 10 });
+  assert.deepEqual(rules.validateSettings({ laps: 2, blanks: false, leverSeconds: 15 }), { ...defaults, laps: 2, blanks: false, leverSeconds: 15 });
   for (const raw of [null, undefined, [], 'x', 5, { bogus: 1 }, { laps: 3 }, { laps: '1' }, { pickSeconds: 25 }, { modifierSeconds: NaN }, { floorSeconds: null }, { leverSeconds: '20' }, { blanks: 'yes' }, { family: 1 }, { toString: true }])
     assert.throws(() => rules.validateSettings(raw), /./, JSON.stringify(raw));
   assert.throws(() => rules.create(ctx(4), { ...defaults, laps: 5 } as unknown as Settings));
@@ -307,7 +307,7 @@ test('early advance after everyone locks, and a disconnected team is auto-picked
   const s = game(4); to(s, 'innocent');
   const start = s.startedAt;
   act(s, 'p1', { kind: 'lock', slot: 0, cardId: stock(s, 'north', 'innocent')[0].id }, start + 500);
-  assert.equal(s.deadline, start + 30000);
+  assert.equal(s.deadline, start + defaults.pickSeconds * 1000);
   act(s, 'p3', { kind: 'lock', slot: 0, cardId: stock(s, 'south', 'innocent')[0].id }, start + 1000);
   assert.equal(s.deadline, start + TIMING.minPickMs); assert.equal(s.cues.at(-1)!.id, 'all-locked');
   to(s, 'guilty');
@@ -327,7 +327,7 @@ test('early advance after everyone locks, and a disconnected team is auto-picked
 
   const e = game(4); to(e, 'innocent');
   rules.onPresenceChange(e, 'p1', false, e.now + 10); rules.onPresenceChange(e, 'p2', false, e.now + 10);
-  assert.equal(e.deadline, e.startedAt + 30000);
+  assert.equal(e.deadline, e.startedAt + defaults.pickSeconds * 1000);
   rules.onPresenceChange(e, 'p3', false, e.now + 10); assert.equal(e.deadline, e.startedAt + TIMING.minPickMs);
   assert.ok(!e.cues.some(c => c.id === 'all-locked'));
   to(e, 'guilty'); assert.equal(e.deadline, e.startedAt + TIMING.minPickMs);
@@ -449,7 +449,7 @@ test('a 10-player two-lap game reshuffles every deck and never repeats a card in
 });
 
 for (const n of [3, 10]) test(`no input at all still completes a ${n}-player game on timeouts`, () => {
-  const { s, accepted } = play(n, { pickSeconds: 20, modifierSeconds: 30, floorSeconds: 20, leverSeconds: 10 }, 2, false);
+  const { s, accepted } = play(n, { pickSeconds: 30, modifierSeconds: 45, floorSeconds: 30, leverSeconds: 15 }, 2, false);
   assert.equal(accepted, 0); finished(s, n);
   assert.ok(s.history.every(h => h.timedOut && !h.pulled && h.struck === h.defaultSide));
 });

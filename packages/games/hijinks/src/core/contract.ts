@@ -11,7 +11,7 @@ export type TimerPace = 'relaxed' | 'standard' | 'speedy';
 export type PackSettings = {
   /** Filters content tagged adult. On by default. */
   family: boolean;
-  /** Scales every minigame timer: relaxed 1.5×, standard 1×, speedy 0.7×. */
+  /** Scales every minigame decision timer (api.seconds): relaxed 2.4×, standard 1.6×, speedy 1.1×. */
   timers: TimerPace;
   /** Host display reads player-written text with the browser's speech voice. */
   readAloud: boolean;

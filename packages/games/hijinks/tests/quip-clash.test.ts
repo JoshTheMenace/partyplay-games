@@ -5,7 +5,8 @@ import { miniInfo } from '../src/minis/catalog';
 import { LINES } from '../src/minis/quip-clash/narration';
 import { ADULT, FAMILY, FINAL_ADULT, FINAL_FAMILY, SAFETY } from '../src/minis/quip-clash/content.server';
 import type { QuipState } from '../src/minis/quip-clash/server';
-import { MAX_ANSWER, RESULT, type QuipPrivate, type QuipPublic } from '../src/minis/quip-clash/types';
+import { PACE } from '../src/server';
+import { MAX_ANSWER, RESULT, WRITE_S, type QuipPrivate, type QuipPublic } from '../src/minis/quip-clash/types';
 
 const pub = (n: Night) => n.mini<QuipPublic>();
 const me = (n: Night, id: string) => n.miniMe<QuipPrivate>(id);
@@ -133,7 +134,7 @@ test('jinx: identical answers skip the vote and score nothing', () => {
 
 test('missing answers become house safety quips; timers follow the pace setting', () => {
   const n = start(3, { settings: { timers: 'speedy' } });
-  assert.equal(pub(n).deadline - pub(n).at, 52_500);
+  assert.equal(pub(n).deadline - pub(n).at, Math.round(WRITE_S * 1000 * PACE.speedy));
   n.send('p0', { turn: pub(n).turn, k: 'answer', slot: 0, text: 'Only one from me' });
   at(n, 'show');
   const answers = inner(n).duels.flatMap(d => d.sides);

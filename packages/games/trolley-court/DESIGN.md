@@ -96,10 +96,10 @@ above.
 | Key | Values | Default | Meaning |
 |---|---|---|---|
 | `laps` | `'auto'`, 1, 2 | `'auto'` | conductor laps (auto: 2 laps with 3–4 players, else 1) |
-| `pickSeconds` | 20/30/45/60 | 30 | Innocent and Guilty pick timers |
-| `modifierSeconds` | 30/45/60/90 | 45 | Twist pick timer |
-| `floorSeconds` | 20/30/45/60 | 30 | each team's floor |
-| `leverSeconds` | 10/15/20/30 | 20 | the Conductor's decision window |
+| `pickSeconds` | 30/50/75/90 | 50 | Innocent and Guilty pick timers |
+| `modifierSeconds` | 45/75/90/120 | 75 | Twist pick timer |
+| `floorSeconds` | 30/50/75/90 | 50 | each team's floor |
+| `leverSeconds` | 15/30/45/60 | 30 | the Conductor's decision window |
 | `accomplices` | bool | off | every teammate plays a twist |
 | `catchUp` | bool | off | Underdog: +1 twist for the team of the most-killed player(s) |
 | `blanks` | bool | on | write-in cards |

@@ -5,7 +5,8 @@ import { miniInfo } from '../src/minis/catalog';
 import { LINES } from '../src/minis/sketch-bluff/narration';
 import { ADULT, ADULT_DECOYS, DECOYS, PROMPTS } from '../src/minis/sketch-bluff/content.server';
 import type { SketchState } from '../src/minis/sketch-bluff/server';
-import { FAKE_SUB, MAX_TITLE, artKey, revealPlan, roundsFor, titleKey, type Beat, type SketchPrivate, type SketchPublic } from '../src/minis/sketch-bluff/types';
+import { PACE } from '../src/server';
+import { DRAW_S, FAKE_SUB, MAX_TITLE, TITLE_S, artKey, revealPlan, roundsFor, titleKey, type Beat, type SketchPrivate, type SketchPublic } from '../src/minis/sketch-bluff/types';
 
 const pub = (n: Night) => n.mini<SketchPublic>();
 const me = (n: Night, id: string) => n.miniMe<SketchPrivate>(id);
@@ -179,12 +180,12 @@ test('missing drawings skip that artist; an empty studio skips the gallery', () 
 
 test('timers follow the pace setting; everyone-in advances early; disconnects are not waited for', () => {
   const n = start(5, { settings: { timers: 'speedy' } });
-  assert.equal(pub(n).deadline - pub(n).at, 56_000);
+  assert.equal(pub(n).deadline - pub(n).at, Math.round(DRAW_S * 1000 * PACE.speedy));
   n.connect('p4', false);
   drawAll(n, ['p0', 'p1', 'p2', 'p3']);
   n.advance(1600);
   assert.equal(pub(n).phase, 'title', 'advanced without p4 after the readable minimum');
-  assert.equal(pub(n).deadline - pub(n).at, 24_500);
+  assert.equal(pub(n).deadline - pub(n).at, Math.round(TITLE_S * 1000 * PACE.speedy));
   titleAll(n, ['p0', 'p1', 'p2', 'p3']);
   n.advance(1600);
   assert.equal(pub(n).phase, 'guess');

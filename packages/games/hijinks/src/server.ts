@@ -8,7 +8,8 @@ import { bool, integer, record, text } from './core/server/validate';
 import { MINIS, eligible } from './minis/catalog';
 import { SERVERS } from './minis/registry.server';
 
-export const PACE: Record<TimerPace, number> = { relaxed: 1.5, standard: 1, speedy: 0.7 };
+/** Decision-timer scale. Standard gives phones 60% more than each minigame's base seconds; reveals are never scaled. */
+export const PACE: Record<TimerPace, number> = { relaxed: 2.4, standard: 1.6, speedy: 1.1 };
 export const CUE_LIMIT = 24, LOCK_MS = 4000, PODIUM_MS = 12000, MAX_MINI_ACTION = 24 * 1024;
 
 type Running = { server: MiniServer; state: unknown; crashed: boolean };

@@ -7,7 +7,8 @@ import { miniInfo } from '../src/minis/catalog';
 import { LINES } from '../src/minis/airlock/narration';
 import { PAIRS, pairKey } from '../src/minis/airlock/content.server';
 import { server, type AirState } from '../src/minis/airlock/server';
-import { ICONS, KINDS, MAX_ANSWER, MIN_RESUME_MS, TESTS, artKey, type AirPrivate, type AirPublic, type Kind } from '../src/minis/airlock/types';
+import { PACE } from '../src/server';
+import { ICONS, KINDS, MAX_ANSWER, MIN_RESUME_MS, TESTS, TEST_S, artKey, type AirPrivate, type AirPublic, type Kind } from '../src/minis/airlock/types';
 
 const pub = (n: Night) => n.mini<AirPublic>();
 const me = (n: Night, id: string) => n.miniMe<AirPrivate>(id);
@@ -390,7 +391,7 @@ test('drawings: published to media only once the answers flip, removed for the n
 test('timers follow the pace setting; the family filter keeps adult pairs out', () => {
   const n = start(4, { settings: { timers: 'speedy' }, order: ['answer', 'rating', 'pick', 'choice', 'draw', 'answer', 'rating'] });
   at(n, 'test');
-  assert.equal(pub(n).deadline - pub(n).at, Math.round(35_000 * .7));
+  assert.equal(pub(n).deadline - pub(n).at, Math.round(TEST_S.answer * 1000 * PACE.speedy));
   let seen = 0;
   for (let seed = 1; seed <= 6; seed++) {
     const family = start(10, { seed }), open = start(10, { seed, settings: { family: false } });
