@@ -28,7 +28,7 @@ export function LobbyView({ players, playerId, connected, error, onChoice, onRea
     </ul>
   </section>;
   const locked = me.ready || !connected;
-  return <section className="hj-lobby-phone" style={{ '--c': me.color } as CSSProperties}>
+  return <section className="hj-lobby-phone hj-fit" style={{ '--c': me.color } as CSSProperties}>
     <header><p className="hj-kicker">Hijinks</p><h2>{me.ready ? `Ready, ${me.name}!` : 'Pick your character'}</h2></header>
     {error && <StatusNotice tone="error">{error}</StatusNotice>}
     <div className="hj-avatar-grid" role="radiogroup" aria-label="Character">{CHARACTERS.map((c, i) => { const taken = owner(i);
@@ -59,7 +59,7 @@ export function SettingsView({ settings, onChange, disabled }: SettingsViewProps
 }
 
 export function InstructionsView({ role }: InstructionsViewProps) {
-  return <div className="hj-instructions">
+  return <div className="hj-instructions hj-fit">
     <h2>A whole party night in one box</h2>
     <ol>
       <li><b>Vote</b> for a game on your phone. The VIP (crown) can lock it in early.</li>
@@ -73,7 +73,7 @@ export function InstructionsView({ role }: InstructionsViewProps) {
 export function ResultsView({ outcome, publicView }: ResultsViewProps<PackPublicView>) {
   const players = publicView?.players ?? [], find = (id: string) => players.find(p => p.id === id);
   const champs = outcome.winners.map(find).filter(p => !!p), played = publicView?.played ?? [];
-  return <section className="hj-results">
+  return <section className="hj-results hj-fit">
     <p className="hj-kicker">That’s a wrap!</p>
     <h1 className="kp-title">{champs.length ? champs.length === 1 ? `${champs[0]!.name} rules the night!` : 'Shared glory tonight!' : 'What a night!'}</h1>
     {champs.length > 0 && <div className="hj-results-champs">{champs.map(p => <span key={p.id}><Trophy /><Avatar avatar={p.avatar} color={p.color} size={120} mood="happy" /></span>)}</div>}

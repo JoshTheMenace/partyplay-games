@@ -3,7 +3,7 @@
  *
  *   node --import tsx packages/games/hijinks/tools/qa-driver.ts --port 4421 --players 4 [--game quip-clash]
  *     [--shots output/playwright/hijinks/<run>] [--host localhost] [--keep-open] [--phone-viewports] [--tv-viewports] [--settled]
- *     [--stress-podium] [--audio <file.wav>] [--read-aloud] [--max-minutes 30]
+ *     [--stress-podium] [--audio <file.wav>] [--video <dir>] [--read-aloud] [--max-minutes 30]
  *
  * - TV (headless Chromium, 1920×1080) opens /?game=hijinks, adds it to the library, taps Play on this screen and reads the code.
  * - Phone (390×844, touch) joins through the real form, keeps its auto-picked avatar and taps I’m ready!. It joins first, so it
@@ -25,6 +25,7 @@
  *   Each phone shot also checks for horizontal overflow and pinch zoom (log.json `overflow`).
  * - --stress-podium rewrites the TV's podium snapshots to a worst case (long names, three-way ties, six long awards, a long
  *   headline) to check the layout; the server and the phones are untouched.
+ * - --video <dir> records the TV page as 1280×720 WebM and writes sync.json (audio start offset) for muxing with --audio.
  * - --audio <file.wav> records the TV's host-display audio (see AUDIO_TAP) to a float WAV, music/sfx/vo stems to
  *   <file>.stems.wav and the cue, source-start, speech and phase log to <file>.cues.json, all on the recording's clock.
  *   It lets the intro and the podium play out instead of skipping them. Frames the recorder skipped are written as silence
@@ -35,7 +36,7 @@
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { createWriteStream, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { WebSocket } from 'ws';
 import type { MiniBot, PackAction, PackPrivateView, PackPublicView } from '../src/core/contract';
@@ -44,7 +45,7 @@ import { MINIS, eligible } from '../src/minis/catalog';
 const { values: args } = parseArgs({ options: {
   port: { type: 'string' }, host: { type: 'string', default: 'localhost' }, players: { type: 'string', default: '4' }, game: { type: 'string' },
   shots: { type: 'string' }, 'keep-open': { type: 'boolean', default: false }, 'phone-viewports': { type: 'boolean', default: false }, 'tv-viewports': { type: 'boolean', default: false }, settled: { type: 'boolean', default: false }, 'stress-podium': { type: 'boolean', default: false }, 'max-minutes': { type: 'string', default: '30' },
-  audio: { type: 'string' }, 'read-aloud': { type: 'boolean', default: false },
+  audio: { type: 'string' }, video: { type: 'string' }, 'read-aloud': { type: 'boolean', default: false },
 } });
 const count = Number(args.players), game = args.game, base = `http://${args.host}:${args.port}`, t0 = Date.now();
 if (!args.port || !Number.isInteger(count) || count < 2 || count > 10) throw new Error('Usage: qa-driver.ts --port <port> --players <2-10> [--game <miniId>] [--shots <dir>] [--keep-open] [--phone-viewports] [--tv-viewports] [--settled] [--stress-podium] [--audio <file.wav>] [--read-aloud]');
@@ -203,7 +204,8 @@ async function tapTv(page: Page, l: Lens, edit: ((view: PackPublicView) => void)
 }
 
 async function newPage(viewport: { width: number; height: number }, label: string, mobile: boolean): Promise<Page> {
-  const page = await (await browser!.newContext({ viewport, isMobile: mobile, hasTouch: mobile, deviceScaleFactor: 1, reducedMotion: 'no-preference' })).newPage();
+  const video = label === 'tv' && args.video ? { recordVideo: { dir: args.video, size: { width: 1280, height: 720 } } } : {};
+  const page = await (await browser!.newContext({ viewport, isMobile: mobile, hasTouch: mobile, deviceScaleFactor: 1, reducedMotion: 'no-preference', ...video })).newPage();
   page.on('console', (m: Page) => { if (m.type() === 'error') report.errors.push(`${label} console: ${m.text()}`); });
   page.on('pageerror', (e: Error) => { report.errors.push(`${label} pageerror: ${e.message}`); log(`${label} pageerror: ${e.message}`); });
   return page;
@@ -497,6 +499,8 @@ const loop = setInterval(() => { for (const a of agents) void step(a, a === you 
 const tap = (work: () => Promise<unknown>) => hold(phoneLens, work);
 try {
   browser = await chromium.launch({ headless: true, args: args.audio ? ['--autoplay-policy=no-user-gesture-required'] : [] });
+  if (args.video) mkdirSync(args.video, { recursive: true });
+  const videoStart = Date.now();
   tv = await newPage({ width: 1920, height: 1080 }, 'tv', false);
   tvLens = await lens('tv', tv, [1920, 1080]);
   await tapTv(tv, tvLens, args['stress-podium'] ? stressPodium : null);
@@ -514,6 +518,8 @@ try {
   if (recorder) {
     await tv.locator('.kp-code').first().click(); // A real gesture, so the mixer would unlock even without the autoplay flag.
     await until(() => recorder!.frames() > 0, 15000, 'TV audio to start recording');
+    // --video: the TV recording starts with its page; the audio tap starts at the first gesture. Mux with this offset.
+    if (args.video) writeFileSync(join(args.video, 'sync.json'), JSON.stringify({ audioOffsetMs: Date.now() - videoStart }));
   }
 
   phone = await newPage({ width: 390, height: 844 }, 'phone', true);

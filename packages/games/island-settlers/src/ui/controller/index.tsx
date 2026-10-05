@@ -105,7 +105,7 @@ function Frame({ ctl }: { ctl: ReturnType<typeof useController> }) {
   const wide = useLandscape(), [slot, setSlot] = useState<HTMLElement | null>(null);
   const main = useRef<HTMLDivElement>(null), task = `${ctl.me.task.kind}:${ctl.me.task.prompt}`;
   // Short landscape: each new task starts with the column at the top, hand fully below the sticky header.
-  useEffect(() => { if (wide) main.current?.scrollIntoView({ block: 'start' }); }, [wide, task]);
+  useEffect(() => { if (wide && main.current) { main.current.scrollIntoView({ block: 'start' }); main.current.scrollTop = 0; } }, [wide, task]);
   return <CtlContext.Provider value={ctl}>
     <MapHost.Provider value={wide ? slot : null}>
       <div className="island-settlers-ctl" data-landscape={wide || undefined} data-task={ctl.me.task.kind}>

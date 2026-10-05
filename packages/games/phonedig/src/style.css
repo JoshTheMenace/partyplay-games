@@ -185,3 +185,34 @@
 .pd-hud > .pd-crew .pd-crew-row { flex: 0 1 260px; border: 1px solid #ffffff26; padding: 6px 10px; }
 
 @media (orientation: landscape) { .kp-scene-stage:has(.pd-hud) .pd-controller-status { top: auto; bottom: 12px; } }
+
+/* immersivePhone: the shell is pinned to the visible viewport (browser bars, full screen) under a compact header.
+ * The landscape controller fills what the header leaves instead of guessing its height; the lobby and results
+ * scroll inside the area below the header. Scoped to this game's roots so no other game is affected. */
+.kp-shell-immersive:has(.pd-canvas, .pd-howto, .pd-results) {
+  position: fixed; inset: var(--phone-top, 0px) 0 auto; height: var(--phone-height, 100dvh);
+  display: flex; flex-direction: column; padding: max(.5rem, var(--safe-top)) 0 max(.4rem, var(--safe-bottom));
+}
+.kp-shell-immersive:has(.pd-canvas, .pd-howto, .pd-results) > :not(dialog) {
+  flex: none; margin-inline: max(.75rem, var(--safe-left)) max(.75rem, var(--safe-right));
+}
+.kp-shell-immersive:has(.pd-canvas, .pd-howto, .pd-results) > .kp-header { flex-wrap: nowrap; margin-bottom: .5rem; }
+.kp-shell-immersive:has(.pd-canvas, .pd-howto, .pd-results) .kp-header-brand { display: none; }
+.kp-shell-immersive:has(.pd-canvas, .pd-howto, .pd-results) .kp-header-actions {
+  flex: 1; min-width: 0; flex-wrap: nowrap; justify-content: flex-end; gap: .4rem;
+}
+.kp-shell-immersive:has(.pd-canvas, .pd-howto, .pd-results) .kp-header .kp-btn {
+  min-height: 44px; padding: .4rem .6rem; font-size: .75rem; white-space: nowrap;
+}
+.kp-shell-immersive:has(.pd-canvas, .pd-howto, .pd-results) .kp-session-pill { margin-right: auto; white-space: nowrap; }
+/* Narrow phones keep the room code; the name would push the buttons onto two lines. */
+@media (max-width: 480px) {
+  .kp-shell-immersive:has(.pd-canvas, .pd-howto, .pd-results) .kp-session-pill { font-size: 0; gap: 0; }
+  .kp-shell-immersive:has(.pd-canvas, .pd-howto, .pd-results) .kp-session-pill b { font-size: .9rem; }
+}
+.kp-shell-immersive:has(.pd-canvas, .pd-howto, .pd-results) > :is(.kp-room-layout, div:not([class])) {
+  flex: 1; min-height: 0; margin-inline: 0; padding-inline: max(.75rem, var(--safe-left)) max(.75rem, var(--safe-right));
+  overflow-y: auto; overscroll-behavior: contain;
+}
+.kp-shell-immersive:has(.pd-canvas) > .kp-landscape-controller { position: relative; inset: auto; flex: 1; min-height: 0; }
+.kp-shell-immersive:has(.pd-canvas) > .kp-landscape-prompt { position: absolute; inset: calc(max(.5rem, var(--safe-top)) + 44px + .5rem) 0 0; }

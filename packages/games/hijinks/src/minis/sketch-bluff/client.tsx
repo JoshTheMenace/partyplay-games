@@ -252,13 +252,7 @@ function Standing({ view, players, player }: { view: SketchPublic; players: read
 function DrawPhone({ view, me, player, players, vip, now, send, sessionKey }: Phone) {
   const key = `${sessionKey}:${view.turn}:art`, [drawing, setDrawing] = useDraft<Drawing>(key, { strokes: [] }), [state, run] = useSend(), t = useNow(now, 500), auto = useRef(false);
   const submit = () => run(() => send({ turn: view.turn, k: 'draw', drawing }));
-  const late = view.deadline - t < 1800, pad = useRef<HTMLDivElement>(null);
-  // Short landscape phones: centre the pad (now and after rotating) so the whole canvas is under the thumb.
-  useEffect(() => {
-    const query = matchMedia('(orientation: landscape) and (max-height: 500px)'), fit = () => { if (query.matches) pad.current?.querySelector('.kp-drawing-surface')?.scrollIntoView({ block: 'center' }); };
-    fit(); query.addEventListener('change', fit);
-    return () => query.removeEventListener('change', fit);
-  }, [me.drawn]);
+  const late = view.deadline - t < 1800;
   useEffect(() => { if (late && !me.drawn && drawing.strokes.length && !auto.current) { auto.current = true; void submit(); } });
   const shell = shellOf(view, player, vip, now);
   if (me.drawn) {
@@ -270,12 +264,12 @@ function DrawPhone({ view, me, player, players, vip, now, send, sessionKey }: Ph
   }
   const pending = state.status === 'pending';
   return <PhoneShell {...shell}>
-    <div className="sb-pad" ref={pad}>
+    <div className="sb-pad">
       <p className="sb-prompt"><small>{view.round > 1 ? 'Round 2 · double points' : 'Draw in secret'}</small>{me.prompt}</p>
       <DrawingPad value={drawing} onChange={setDrawing} disabled={pending} label="Your drawing" />
       <p className="sb-rule">No words or letters. Only pictures!</p>
       {state.status === 'rejected' && <StatusNotice tone="error">{state.reason}</StatusNotice>}
-      <div className="sb-pad-send"><ArcadeButton tone="lime" size="lg" disabled={pending || !drawing.strokes.length} onClick={() => void submit()}>{pending ? 'Hanging…' : 'Hang it in the gallery'}</ArcadeButton></div>
+      <div className="hj-sticky sb-pad-send"><ArcadeButton tone="lime" size="lg" disabled={pending || !drawing.strokes.length} onClick={() => void submit()}>{pending ? 'Hanging…' : 'Hang it in the gallery'}</ArcadeButton></div>
     </div>
   </PhoneShell>;
 }

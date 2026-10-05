@@ -356,3 +356,21 @@
 .ichi-tally{animation-name:ichi-rise}
 @keyframes ichi-rise{from{opacity:0;transform:translateY(1em)}}
 @media (prefers-reduced-motion:reduce){.ichi-bubble,.ichi-splash,.ichi-window,.ichi-stack,.ichi-land,.ichi-ouch,.ichi-wash,.ichi-overlay-late,.ichi-card-button[data-arrive="true"] .ichi-card{animation:none}.ichi-orbit span{animation:none}}
+
+/* immersivePhone: the shell is pinned to the visible viewport (browser bars, full screen, keyboard) under a compact header; only the area below it scrolls. */
+.kp-shell-immersive:has(.ichi){position:fixed;inset:var(--phone-top,0px) 0 auto;height:var(--phone-height,100dvh);display:flex;flex-direction:column;padding:max(.5rem,var(--safe-top)) 0 max(.4rem,var(--safe-bottom))}
+.kp-shell-immersive:has(.ichi)>:not(dialog){flex:none;margin-inline:max(.75rem,var(--safe-left)) max(.75rem,var(--safe-right))}
+.kp-shell-immersive:has(.ichi)>.kp-header{flex-wrap:nowrap;margin-bottom:.5rem}
+.kp-shell-immersive:has(.ichi) .kp-header-brand{display:none}
+.kp-shell-immersive:has(.ichi) .kp-header-actions{flex:1;min-width:0;flex-wrap:nowrap;justify-content:flex-end;gap:.4rem}
+.kp-shell-immersive:has(.ichi) .kp-header .kp-btn{min-height:44px;padding:.4rem .6rem;font-size:.75rem;white-space:nowrap}
+.kp-shell-immersive:has(.ichi) .kp-session-pill{margin-right:auto;white-space:nowrap}
+/* Narrow phones keep the room code; the name would push the buttons onto two lines. */
+@media (max-width:480px){.kp-shell-immersive:has(.ichi) .kp-session-pill{font-size:0;gap:0}.kp-shell-immersive:has(.ichi) .kp-session-pill b{font-size:.9rem}}
+.kp-shell-immersive:has(.ichi)>:is(.kp-room-layout,div:not([class])){flex:1;min-height:0;display:flex;flex-direction:column;margin-inline:0;padding-inline:max(.75rem,var(--safe-left)) max(.75rem,var(--safe-right));overflow-y:auto;overscroll-behavior:contain}
+.kp-shell-immersive:has(.ichi) .kp-game-viewport{flex:1 0 auto;display:flex;flex-direction:column}
+.kp-shell-immersive .ichi-phone{flex:1 0 auto;min-height:0}
+/* A two-row hand needs the room too: the top card moves back into the strip, as it does for a shout. */
+@media (orientation:portrait) and (min-height:700px){.kp-shell-immersive .ichi-phone:has(.ichi-hand-row+.ichi-hand-row) .ichi-peek{display:none}.kp-shell-immersive .ichi-phone:has(.ichi-hand-row+.ichi-hand-row) .ichi-strip-top{display:block}.kp-shell-immersive .ichi-phone:has(.ichi-hand-row+.ichi-hand-row) .ichi-strip{grid-template-columns:auto minmax(0,1fr) auto}}
+@media (orientation:landscape) and (max-height:500px){.kp-shell-immersive .ichi-phone[data-phase="playing"]{height:auto;min-height:260px}
+  .kp-shell-immersive .ichi-hand-row{font-size:max(13px,min(var(--card),(100cqw - 1rem) / (3.4 + 1.6 * var(--cols)),(var(--phone-height,100dvh) - 210px) / (8.3 + 3.4 * (var(--rows) - 1))))}}

@@ -28,8 +28,14 @@ function DisplayView(ctx: PackProps) {
 function ControllerView(ctx: PackProps) {
   const view = ctx.publicView, me = view.players.find(p => p.id === ctx.playerId), id = view.current?.id ?? '';
   useEffect(() => { if (view.phase === 'intro' && id) preloadMini(id); }, [view.phase, id]);
+  // A keyboard shrinks the visual viewport after focus: once the fitted layout has followed (next frame), keep the field in view.
+  useEffect(() => {
+    const vv = window.visualViewport, keep = () => requestAnimationFrame(() => { const el = document.activeElement; if (el instanceof HTMLElement && el.matches('input, textarea')) el.scrollIntoView({ block: 'nearest' }); });
+    vv?.addEventListener('resize', keep);
+    return () => vv?.removeEventListener('resize', keep);
+  }, []);
   const props = me && { view, now: ctx.serverNowMs, me, send: (action: PackAction) => ctx.sendAction(action) };
-  return <div className="hj-phone-root">
+  return <div className="hj-phone-root hj-fit">
     <p className="hj-sr" aria-live="polite">{view.phase === 'menu' ? PHASE_NAMES.menu : `${PHASE_NAMES[view.phase]}${miniInfo(id)?.title ?? 'the next game'}.`}</p>
     {!props ? <p className="hj-note">You’re watching this round. You’ll get a seat after the host starts a new one.</p>
       : view.phase === 'menu' ? <MenuController {...props} vote={ctx.privateView?.vote ?? null} />
@@ -40,7 +46,7 @@ function ControllerView(ctx: PackProps) {
 }
 
 export const client: GameClientModule<null, PackAction, PackSettings, PackPublicView, PackPrivateView> = {
-  DisplayView, ControllerView, LobbyView, SettingsView, InstructionsView, ResultsView, AudioView,
+  DisplayView, ControllerView, LobbyView, SettingsView, InstructionsView, ResultsView, AudioView, immersivePhone: true,
   async prepare({ signal }) {
     const fonts = document.fonts ? Promise.all(['64px "Lilita One"', '600 24px Nunito', '900 24px Nunito'].map(font => document.fonts.load(font))).catch(() => undefined) : undefined;
     await Promise.race([fonts, new Promise(done => { const id = setTimeout(done, 2500); signal.addEventListener('abort', () => { clearTimeout(id); done(undefined); }); })]);

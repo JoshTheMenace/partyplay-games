@@ -463,7 +463,7 @@ function InstructionsView({ role }: InstructionsViewProps) {
   // watching screen's — they are the one holding the stick.
   if (role === 'display') {
     return (
-      <div>
+      <div className="pd-howto">
         <p>You are paid for what you dig, not what you kill.</p>
         <p>Clear every monster to descend, which banks the haul. Go down and a
           teammate can harpoon you back up; nobody reaching you in time costs the
@@ -472,7 +472,7 @@ function InstructionsView({ role }: InstructionsViewProps) {
     );
   }
   return (
-    <div>
+    <div className="pd-howto">
       <p><strong>Stick to dig</strong>, or <strong>WASD</strong> on a keyboard. It snaps to the four directions.</p>
       <p><strong>Pump to fight</strong> — the button, or <strong>space</strong>. The first tap throws the harpoon; every tap after it lands inflates.</p>
       <p><strong>Pump a fallen teammate too.</strong> Harpoon them and pump to pull
@@ -536,6 +536,7 @@ export const client: GameClientModule<NetInput, Action, Settings, PublicView, Pr
   SettingsView,
   InstructionsView,
   ResultsView,
+  immersivePhone: true,
   /* The sprite atlas — 166 KB, one file, and the only asset this game has.
    *
    * Loaded here rather than on the first frame because `prepare` is what the

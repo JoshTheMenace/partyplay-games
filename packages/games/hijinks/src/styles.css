@@ -105,6 +105,43 @@
 .hj-dots { display: flex; gap: 12px; } .hj-dots i { width: 18px; height: 18px; border-radius: 50%; background: var(--kp-sun); animation: hj-hop .9s infinite; }
 .hj-dots i:nth-child(2) { animation-delay: .15s; } .hj-dots i:nth-child(3) { animation-delay: .3s; }
 
+/* ---------- immersive phone (client `immersivePhone`) ---------- */
+/* The shell is pinned to the visual viewport (--phone-height/--phone-top follow browser chrome, full screen and the keyboard):
+   a compact header, then the screen. Only the screen's content area scrolls, so the page never does and the action stays put. */
+.kp-shell-phone.kp-shell-immersive:has(.hj-fit) {
+  position: fixed; top: var(--phone-top, 0px); left: 0; right: 0; height: var(--phone-height, 100dvh); max-width: none; margin: 0; display: flex; flex-direction: column;
+  padding: 0 max(.75rem, var(--safe-right)) 0 max(.75rem, var(--safe-left)); }
+/* Higher specificity than other games' unscoped immersive rules (Sky Clash pins its header), which stay loaded after a game switch. */
+.kp-shell-phone.kp-shell-immersive:has(.hj-fit) > .kp-header { position: static; flex: none; height: auto; min-height: calc(52px + var(--safe-top)); margin: 0; padding: var(--safe-top) 0 0; flex-wrap: nowrap; background: none; border: 0; }
+.kp-shell-phone.kp-shell-immersive:has(.hj-fit) .kp-header-brand { display: none; }
+.kp-shell-phone.kp-shell-immersive:has(.hj-fit) .kp-header-actions { width: 100%; justify-content: space-between; gap: 4px; flex-wrap: nowrap; }
+.kp-shell-phone.kp-shell-immersive:has(.hj-fit) .kp-session-pill { font-size: 0; padding: 4px 8px; } .kp-shell-phone.kp-shell-immersive:has(.hj-fit) .kp-session-pill b { font-size: .95rem; }
+.kp-shell-phone.kp-shell-immersive:has(.hj-fit) .kp-header .kp-btn { min-height: 44px; padding: 6px 10px; font-size: .8rem; white-space: nowrap; }
+.kp-shell-phone.kp-shell-immersive:has(.hj-fit) > .kp-notice { flex: none; margin: 0 0 .4rem; }
+/* Every box from the shell down to the screen (including a minigame's own wrapper) passes the remaining height on. */
+.kp-shell-phone.kp-shell-immersive:has(.hj-fit) :has(.hj-fit), .kp-shell-phone.kp-shell-immersive:has(.hj-fit) :is(.hj-phone-root, .hj-lobby-phone), .kp-shell-phone.kp-shell-immersive:has(.hj-fit) .hj-phone-root :has(.hj-phone) { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; align-items: stretch; }
+.kp-shell-phone.kp-shell-immersive:has(.hj-fit) :is(.hj-phone, .hj-lobby-phone) { flex: 1 1 0; width: 100%; min-height: 0; }
+/* Only the scroller gives: fixed rows and scrolled content keep their height (an overflow:hidden child would otherwise shrink to nothing). */
+.kp-shell-phone.kp-shell-immersive:has(.hj-fit) :is(.hj-phone > :not(.hj-phone-main), .hj-lobby-phone > :not(.hj-avatar-grid), .hj-phone-main > *, .kp-round-results > *, .kp-preparing > *) { flex-shrink: 0; }
+.kp-shell-phone.kp-shell-immersive:has(.hj-fit) :is(.hj-phone-main, .hj-avatar-grid, .kp-round-results, .kp-preparing) { overflow-y: auto; overscroll-behavior: contain; }
+/* Room for focus rings and corner badges inside the scroller; the bottom padding keeps a focused field clear of a sticky button. */
+.kp-shell-phone.kp-shell-immersive:has(.hj-fit) :is(.hj-phone-main, .hj-avatar-grid) { flex: 1 1 0; min-height: 0; margin-inline: -.45rem; padding: .45rem; scroll-padding-bottom: 6rem; }
+.kp-shell-phone.kp-shell-immersive:has(.hj-fit) .hj-avatar-grid { align-content: start; }
+/* A size container: drawing pads size their square from the content height that is really left (cqh; outside it, the small viewport). */
+.kp-shell-phone.kp-shell-immersive:has(.hj-fit) .hj-phone-main { container-type: size; }
+.kp-shell-phone.kp-shell-immersive:has(.hj-fit) :is(.kp-round-results, .kp-preparing) { margin: 0 0 max(.5rem, var(--safe-bottom)); }
+/* Short landscape: the player/timer row and the title share one line and an in-content submit stays pinned to the bottom of
+   the content area; the lobby puts its title and Ready button on the left and the whole character grid on the right. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .kp-shell-phone.kp-shell-immersive:has(.hj-fit) .hj-phone-main .hj-sticky { position: sticky; padding-top: .5rem; background: linear-gradient(#05071a00, #05071af2 30%); }
+  .kp-shell-phone.kp-shell-immersive:has(.hj-fit) .hj-phone { display: grid; grid-template: auto minmax(0, 1fr) auto / auto minmax(0, 1fr); column-gap: .9rem; }
+  .kp-shell-phone.kp-shell-immersive:has(.hj-fit) .hj-phone > * { grid-column: 1 / -1; } .kp-shell-phone.kp-shell-immersive:has(.hj-fit) .hj-phone > .hj-phone-head { grid-area: 1 / 1; } .kp-shell-phone.kp-shell-immersive:has(.hj-fit) .hj-phone > .hj-phone-title { grid-area: 1 / 2; align-self: center; }
+  .kp-shell-phone.kp-shell-immersive:has(.hj-fit) .hj-phone > .hj-phone-main { grid-row: 2; } .kp-shell-phone.kp-shell-immersive:has(.hj-fit) .hj-phone > .hj-phone-action { grid-row: 3; }
+  .kp-shell-phone.kp-shell-immersive:has(.hj-fit) .hj-lobby-phone { display: grid; grid-template: auto auto minmax(0, 1fr) / minmax(13rem, 17rem) minmax(0, 1fr); gap: 0 1rem; max-width: none; }
+  .kp-shell-phone.kp-shell-immersive:has(.hj-fit) .hj-lobby-phone > header { grid-area: 1 / 1; } .kp-shell-phone.kp-shell-immersive:has(.hj-fit) .hj-lobby-phone > .kp-notice { grid-area: 2 / 1; margin-top: .5rem; }
+  .kp-shell-phone.kp-shell-immersive:has(.hj-fit) .hj-lobby-phone > .hj-sticky { grid-area: 3 / 1; align-self: end; } .kp-shell-phone.kp-shell-immersive:has(.hj-fit) .hj-lobby-phone > .hj-avatar-grid { grid-area: 1 / 2 / 4 / 3; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); margin: 0; }
+}
+
 /* ---------- phone pack screens ---------- */
 /* Clip sideways overflow: wider content makes mobile browsers zoom the whole page out (and misplace taps). */
 .hj-phone-root { padding-bottom: .25rem; overflow-x: clip; }

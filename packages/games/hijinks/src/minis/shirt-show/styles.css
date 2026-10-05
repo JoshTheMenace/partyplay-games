@@ -170,7 +170,8 @@
 .ss-new-idea { align-self: flex-end; margin-bottom: -.3rem; }
 .ss-idea button, .ss-reroll { min-height: 44px; padding: .3rem .9rem; border-radius: 99px; background: #fff6e51a; border: 2px solid #fff6e566; color: var(--kp-cream); font-weight: 800; font-size: .92rem; }
 .ss-reroll:disabled { opacity: .45; }
-.ss-draw-shell .kp-drawing-surface { width: min(100%, 50dvh); margin: .2rem auto; scroll-margin-bottom: 9.5rem; }
+/* With the content area's 6rem scroll padding, the bottom margin keeps a scrolled-to pad clear of the sticky buttons. */
+.ss-draw-shell .kp-drawing-surface { width: min(100%, max(220px, 100cqh - 13rem)); margin: .2rem auto; scroll-margin-bottom: 3.5rem; }
 .ss-draw-shell .kp-drawing-pad > .kp-row:first-child { justify-content: space-between; gap: .3rem; }
 .ss-actions .kp-btn-md { min-height: 48px; }
 .ss-mine { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .4rem; }
@@ -227,9 +228,8 @@
   /* Drawing: the pad fills the height on the left; inks, tools and buttons stack on the right. */
   .ss-draw-shell .hj-phone-main { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: repeat(5, auto) 1fr; align-items: start; gap: .5rem .9rem; }
   .ss-draw-shell .hj-phone-main > *, .ss-draw-shell .kp-drawing-pad > * { grid-column: 2; }
-  .ss-draw-shell .ss-idea { grid-column: 1 / -1; }
   .ss-draw-shell .ss-pad, .ss-draw-shell .kp-drawing-pad { display: contents; }
-  .ss-draw-shell .kp-drawing-pad > .kp-drawing-surface { grid-column: 1; grid-row: 2 / -1; width: min(calc(100dvh - 1.5rem), 50vw); margin: 0; scroll-margin: .75rem; }
+  .ss-draw-shell .kp-drawing-pad > .kp-drawing-surface { grid-column: 1; grid-row: 1 / -1; width: min(100cqh, 50vw); margin: 0; scroll-margin: .75rem; position: sticky; top: 0; }
   .ss-draw-shell .kp-drawing { max-height: none; }
   .ss-draw-shell .kp-drawing-pad > .kp-row:first-child { display: grid; grid-template-columns: repeat(3, 44px); justify-content: start; gap: .5rem .9rem; }
   /* Sewing: the live preview stays pinned on the left while the picks scroll on the right. */

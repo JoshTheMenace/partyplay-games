@@ -111,3 +111,33 @@ button.hotpot-card:focus-visible { outline: 3px solid var(--kp-sun); outline-off
 button.hotpot-card { min-width: 44px; min-height: 44px; }
 button.hotpot-card:disabled { cursor: wait; opacity: .65; }
 .hotpot-rows small, .hotpot-rows .hotpot-name, .hotpot-phone .hotpot-log { font-size: max(.8rem, 13px); }
+
+/* immersivePhone: the shell is pinned to the visible viewport (browser bars, full screen, keyboard) under a compact header; only the area below it scrolls. */
+.kp-shell-immersive:has(.hotpot) { position: fixed; inset: var(--phone-top, 0px) 0 auto; height: var(--phone-height, 100dvh); display: flex; flex-direction: column; padding: max(.5rem, var(--safe-top)) 0 max(.4rem, var(--safe-bottom)); }
+.kp-shell-immersive:has(.hotpot) > :not(dialog) { flex: none; margin-inline: max(.75rem, var(--safe-left)) max(.75rem, var(--safe-right)); }
+.kp-shell-immersive:has(.hotpot) > .kp-header { flex-wrap: nowrap; margin-bottom: .5rem; }
+.kp-shell-immersive:has(.hotpot) .kp-header-brand { display: none; }
+.kp-shell-immersive:has(.hotpot) .kp-header-actions { flex: 1; min-width: 0; flex-wrap: nowrap; justify-content: flex-end; gap: .4rem; }
+.kp-shell-immersive:has(.hotpot) .kp-header .kp-btn { min-height: 44px; padding: .4rem .6rem; font-size: .75rem; white-space: nowrap; }
+.kp-shell-immersive:has(.hotpot) .kp-session-pill { margin-right: auto; white-space: nowrap; }
+/* Narrow phones keep the room code; the name would push the buttons onto two lines. */
+@media (max-width: 480px) {
+  .kp-shell-immersive:has(.hotpot) .kp-session-pill { font-size: 0; gap: 0; }
+  .kp-shell-immersive:has(.hotpot) .kp-session-pill b { font-size: .9rem; }
+}
+.kp-shell-immersive:has(.hotpot) > :is(.kp-room-layout, div:not([class])) { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-inline: 0; padding-inline: max(.75rem, var(--safe-left)) max(.75rem, var(--safe-right)); overflow-y: auto; overscroll-behavior: contain; }
+.kp-shell-immersive:has(.hotpot) .kp-game-viewport { flex: 1 0 auto; display: flex; flex-direction: column; }
+.kp-shell-immersive .hotpot-phone { flex: 1 0 auto; align-content: start; width: 100%; margin: 0 auto; padding: 0; }
+/* Five cards a row keeps the hand and the drawn card to two rows, so every pile you can draw from stays on screen. */
+.kp-shell-immersive .hotpot-phone .hotpot-hand { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (orientation: portrait) and (max-height: 700px) {
+  .kp-shell-immersive .hotpot-phone-hand > .hotpot-name, .kp-shell-immersive .hotpot-phone-pot p { display: none; }
+  .kp-shell-immersive .hotpot-phone-pot { padding: .35rem; }
+  .kp-shell-immersive .hotpot-phone-pot .hotpot-card { --w: 44px; }
+}
+/* Short landscape: the hand column takes the cards' width, the other players get the rest, the log keeps its newest line. */
+@media (orientation: landscape) and (max-height: 600px) {
+  .kp-shell-immersive .hotpot-phone { grid-template-columns: auto minmax(0, 1fr); }
+  .kp-shell-immersive .hotpot-phone-hand { align-content: start; }
+  .kp-shell-immersive .hotpot-phone .hotpot-log li:not(:last-child) { display: none; }
+}

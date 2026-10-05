@@ -63,7 +63,7 @@ const load = (src: string, signal: AbortSignal) => new Promise<boolean>(resolve 
   image.decode().then(() => resolve(true), () => resolve(false));
 });
 export const client: GameClientModule<null, Action, Settings, PublicView, PrivateView> = {
-  DisplayView, ControllerView, SettingsView, InstructionsView, ResultsView, AudioView, settingsWide: true,
+  DisplayView, ControllerView, SettingsView, InstructionsView, ResultsView, AudioView, settingsWide: true, immersivePhone: true,
   async prepare({ assetBase, signal, role }: PrepareContext) {
     art.base = assetBase;
     const [back, table] = await Promise.all([load(`${assetBase}card-back.webp`, signal), load(`${assetBase}${role === 'display' ? 'table' : 'table-portrait'}.webp`, signal)]);

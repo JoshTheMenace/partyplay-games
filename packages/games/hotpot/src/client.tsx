@@ -141,7 +141,7 @@ function InstructionsView() {
   </Panel>;
 }
 export const client: GameClientModule<null, Action, Settings, PublicView, PrivateView> = {
-  DisplayView: Table, ControllerView: Phone, PersonalView: Personal, SettingsView, InstructionsView, ResultsView,
+  DisplayView: Table, ControllerView: Phone, PersonalView: Personal, SettingsView, InstructionsView, ResultsView, immersivePhone: true,
   async prepare({ assetBase, signal }: PrepareContext) {
     await Promise.all([null, ...Array.from({ length: 24 }, (_, i) => i + 1)].map(id => { const image = new Image(); image.src = src(id, assetBase); return image.decode().catch(() => {}); }));
     signal.throwIfAborted();

@@ -194,7 +194,7 @@ html[data-hj-idle]:not(:has(.kp-header :focus-visible, .hj-fullscreen:focus-visi
 .hj-choice small { font-size: .92rem; font-weight: 700; opacity: .9; }
 .hj-choice em { font-style: normal; font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; background: var(--kp-ink); color: var(--kp-sun); padding: .15rem .55rem; border-radius: 99px; }
 .hj-choice-label { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
-.hj-draw .kp-drawing-surface { width: min(100%, 56dvh); margin: .2rem auto; }
+.hj-draw .kp-drawing-surface { width: min(100%, max(240px, 100cqh - 15rem)); margin: .2rem auto; }
 /* Narrow phones: keep 16-character names whole next to the timer. Short landscape: compact chrome so choices stay above the fold. */
 @media (max-width: 360px) { .hj-phone-head .hj-badge { font-size: .95rem; } .hj-ptimer { min-width: 0; padding: .3rem .6rem; } .hj-ptimer i { min-width: 1.6rem; } }
 @media (max-height: 500px) and (orientation: landscape) {

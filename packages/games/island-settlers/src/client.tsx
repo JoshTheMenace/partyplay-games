@@ -14,7 +14,7 @@ function lazyView<P extends object>(load: () => Promise<ComponentType<P>>): Comp
 }
 
 export const client: GameClientModule<null, Action, Settings, PublicView, PrivateView> = {
-  AudioView,
+  AudioView, immersivePhone: true,
   settingsWide: true,
   SceneView: lazyView(async () => (await import('./ui/scene/index')).SceneView),
   DisplayView: lazyView(async () => (await import('./ui/display/index')).DisplayView),

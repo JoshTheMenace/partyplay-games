@@ -478,7 +478,7 @@ function DiscussPhone(props: Phone) {
       <BigButton /><span className="kp-title">{left ? 'Push the button' : 'No pushes left'}</span><small>{left} of {MAX_PUSHES} pushes left</small>
     </button>
     {me.ready ? <p className="al-ready" role="status"><span className="hj-done-stamp" aria-hidden="true">✓</span>Ready for the next test · {view.done.length}/{online}</p>
-      : <div className="al-ready-btn">{state.status === 'rejected' && <StatusNotice tone="error">{state.reason}</StatusNotice>}
+      : <div className="hj-sticky al-ready-btn">{state.status === 'rejected' && <StatusNotice tone="error">{state.reason}</StatusNotice>}
         <ArcadeButton tone="sky" size="lg" disabled={state.status === 'pending'} onClick={() => void run(() => send({ turn: view.turn, k: 'ready' }))}>Ready for the next test</ArcadeButton></div>}
   </PhoneShell>;
 }
