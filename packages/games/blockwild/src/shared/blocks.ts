@@ -3,7 +3,8 @@ import { B, I, type BlockName } from './ids';
 export { B, I, type BlockName };
 
 export type Shape = 'air' | 'cube' | 'cross' | 'crop' | 'torch' | 'slab' | 'stairs' | 'ladder' | 'door' | 'bed' | 'cactus' | 'lantern' | 'farmland' | 'liquid'
-  | 'portal' | 'fire' | 'fence' | 'cage' | 'wire' | 'lever' | 'button' | 'plate' | 'repeater' | 'piston' | 'piston_head';
+  | 'portal' | 'fire' | 'fence' | 'cage' | 'wire' | 'lever' | 'button' | 'plate' | 'repeater' | 'piston' | 'piston_head'
+  | 'end_frame' | 'end_portal' | 'egg' | 'pane' | 'observer' | 'daylight';
 /** 'none' is never drawn (air, barrier); 'cutout' has alpha-tested holes; 'translucent' is blended and sorted. */
 export type RenderMode = 'none' | 'opaque' | 'cutout' | 'translucent';
 export type ToolKind = 'pickaxe' | 'axe' | 'shovel' | 'hoe' | 'shears' | 'sword';
@@ -80,8 +81,8 @@ const faces = (texture: string | Faces) => typeof texture === 'string' ? tex(tex
 const slab = (name: BlockName, texture: string | Faces, base: Props) =>
   def(name, { ...base, shape: 'slab', tex: faces(texture), drops: state => (state & 3) === 2 ? [drop(B[name], 2)] : [drop(B[name])] });
 const stairs = (name: BlockName, texture: string | Faces, base: Props) => def(name, { ...base, shape: 'stairs', state: 'facing', tex: faces(texture) });
-const crop = (name: BlockName, ripe: readonly Drop[], young: readonly Drop[]) =>
-  def(name, { shape: 'crop', solid: false, render: 'cutout', hardness: 0, sound: 'grass', drops: state => state >= 7 ? ripe : young });
+const crop = (name: BlockName, ripe: readonly Drop[], young: readonly Drop[], mature = 7) =>
+  def(name, { shape: 'crop', solid: false, render: 'cutout', hardness: 0, sound: 'grass', drops: state => state >= mature ? ripe : young });
 const wool = (name: BlockName) => def(name, { hardness: 0.8, tool: 'shears', sound: 'wool', flammable: true });
 const metal = (name: BlockName, tier: number) => rock(name, 5, { tier, sound: 'metal' });
 
@@ -213,9 +214,38 @@ def('piston_head', { ...piston, shape: 'piston_head', tex: tex('piston_side', 'p
 rock('iron_door', 5, { shape: 'door', render: 'cutout', sound: 'metal', tex: tex('iron_door_bottom', 'iron_door_top'), drops: [drop(I.iron_door)] });
 def('tnt', { hardness: 0, sound: 'grass', flammable: true, tex: tex('tnt_side', 'tnt_top', 'tnt_bottom') });
 rock('redstone_block', 5, { sound: 'metal' });
+// Endgame: fortresses, strongholds, the End and quartz building.
+const netherBrick: Props = { hardness: 2, tool: 'pickaxe', tier: 1 }, quartz: Props = { hardness: 0.8, tool: 'pickaxe', tier: 1 }, quartzFaces = tex('quartz_block_side', 'quartz_block_top');
+def('nether_brick_fence', { ...netherBrick, shape: 'fence', state: 'custom', tex: tex('nether_bricks') });
+stairs('nether_brick_stairs', 'nether_bricks', netherBrick);
+slab('nether_brick_slab', 'nether_bricks', netherBrick);
+crop('nether_wart', [drop(I.nether_wart, 2, 4)], [drop(I.nether_wart)], 3);
+rock('end_stone', 3);
+rock('end_stone_bricks', 3);
+def('end_portal_frame', { shape: 'end_frame', state: 'custom', opaque: false, light: 1, hardness: -1, sound: 'glass', drops: NONE,
+  tex: tex('end_portal_frame_side', 'end_portal_frame_top', 'end_stone') });
+def('end_portal', { shape: 'end_portal', state: 'none', solid: false, opaque: false, light: 15, hardness: -1, targetable: false, sound: 'glass', drops: NONE });
+def('dragon_egg', { shape: 'egg', opaque: false, light: 1, hardness: 3 });
+rock('iron_bars', 5, { shape: 'pane', state: 'custom', render: 'cutout', opaque: false, sound: 'metal' });
+rock('quartz_pillar', 0.8, { state: 'axis', tex: tex('quartz_pillar', 'quartz_pillar_top') });
+rock('chiseled_quartz_block', 0.8, { tex: tex('chiseled_quartz_block', 'chiseled_quartz_block_top') });
+stairs('quartz_stairs', quartzFaces, quartz);
+slab('quartz_slab', quartzFaces, quartz);
+rock('smooth_quartz', 2, { tex: tex('quartz_block_top') });
+rock('quartz_bricks', 0.8);
+rock('observer', 3, { shape: 'observer', state: 'face', opaque: true, tex: tex('observer_side', 'observer_top', 'observer_top', 'observer_front') });
+wood('daylight_detector', { shape: 'daylight', state: 'custom', hardness: 0.2, tex: tex('daylight_detector_side', 'daylight_detector_top', 'oak_planks') });
+rock('purpur_block', 1.5);
+rock('purpur_pillar', 1.5, { state: 'axis', tex: tex('purpur_pillar', 'purpur_pillar_top') });
+// Infested stone bricks: indistinguishable from stone bricks, but they crumble fast and release a silverfish.
+def('silverfish_stone', { hardness: 0.3, tex: tex('stone_bricks'), drops: NONE });
+rock('cracked_end_stone_bricks', 3);
+def('soul_torch', { shape: 'torch', solid: false, render: 'cutout', light: 10, hardness: 0, sound: 'wood' });
+rock('soul_lantern', 3.5, { shape: 'lantern', render: 'cutout', light: 10, sound: 'metal' });
+rock('chiseled_stone_bricks', 1.5);
 def('barrier', { render: 'none', opaque: false, hardness: -1, targetable: false, drops: NONE });
 const LABELS: [number, string][] = [[B.jack_o_lantern, "Jack o'Lantern"], [B.tnt, 'TNT'], [B.redstone_wire, 'Redstone Dust'], [B.redstone_torch_off, 'Redstone Torch'],
-  [B.redstone_lamp_lit, 'Redstone Lamp'], [B.repeater, 'Redstone Repeater']];
+  [B.redstone_lamp_lit, 'Redstone Lamp'], [B.repeater, 'Redstone Repeater'], [B.end_portal_frame, 'End Portal Frame'], [B.silverfish_stone, 'Infested Stone Bricks']];
 for (const [id, label] of LABELS) table[id]!.label = label;
 
 /** Block definitions indexed by id (holes for unused ids). Use `blockOf(cell)` for safe access. */
@@ -235,12 +265,14 @@ export const isOpaque = (cell: number) => {
   const block = blockOf(cell), state = cell >> 8;
   return block.opaque || block.shape === 'slab' && (state & 3) === 2 || block.shape === 'piston' && !(state & PISTON_EXTENDED);
 };
-/** Full-size collision cube (supports torches, doors, beds): opaque cubes, glass, leaves, ice, spawners, double slabs, retracted pistons. */
+/** Full-size collision cube (supports torches, doors, beds): opaque cubes, glass, leaves, ice, spawners, observers, double slabs, retracted pistons. */
 export const isFullCube = (cell: number) => {
   const block = blockOf(cell), state = cell >> 8;
-  return block.solid && (block.shape === 'cube' || block.shape === 'cage') || block.shape === 'slab' && (state & 3) === 2 || block.shape === 'piston' && !(state & PISTON_EXTENDED);
+  return block.solid && (block.shape === 'cube' || block.shape === 'cage' || block.shape === 'observer') || block.shape === 'slab' && (state & 3) === 2
+    || block.shape === 'piston' && !(state & PISTON_EXTENDED);
 };
-export const lightOf = (cell: number) => blockOf(cell).light;
+/** Light emission of a cell: the block's, except an end portal frame glows brighter (3) with an eye in it. */
+export const lightOf = (cell: number) => (cell & 255) === B.end_portal_frame && cell >> 8 & FRAME_EYE ? 3 : blockOf(cell).light;
 export const lightFilter = (cell: number) => isOpaque(cell) ? 15 : blockOf(cell).filter;
 export const isWater = (cell: number) => (cell & 255) === B.water;
 export const isLava = (cell: number) => (cell & 255) === B.lava;
@@ -256,11 +288,24 @@ export const SLAB_BOTTOM = 0, SLAB_TOP = 1, SLAB_DOUBLE = 2;
 /** Torch states: 0 floor, 1..4 on a wall pointing N,E,S,W (attached to the block on the opposite side). Redstone torches too. */
 export const TORCH_FLOOR = 0;
 
-/** Chest bits 2–4: the generated loot table to roll on first open/break (0 = none). Only worldgen writes nonzero loot. */
-export const CHEST_LOOT = { none: 0, village_house: 1, village_smith: 2, desert_temple: 3, mineshaft: 4, dungeon: 5 } as const;
-export const chestLoot = (state: number) => state >> 2 & 7;
-/** Fence bits 0–3: connected towards N, E, S, W (FACING order, 1 << dir). */
+/** Chest bits 2–5: the generated loot table to roll on first open/break (0 = none). Only worldgen writes nonzero loot. */
+export const CHEST_LOOT = {
+  none: 0, village_house: 1, village_smith: 2, desert_temple: 3, mineshaft: 4, dungeon: 5, nether_fortress: 6, stronghold_corridor: 7, stronghold_library: 8,
+} as const;
+export const chestLoot = (state: number) => state >> 2 & 15;
+/** Fence and pane bits 0–3 (oak and nether brick fences, iron bars): connected towards N, E, S, W (FACING order, 1 << dir). */
 export const fenceConnects = (state: number, dir: number) => (state >> dir & 1) === 1;
+/** End portal frames: bits 0–1 facing (towards the portal's centre), bit 2 = holds an eye of ender. */
+export const FRAME_EYE = 4;
+export const frameFacing = (state: number) => state & 3;
+/** Observers: bits 0–2 = the face 0..5 that watches (its front), bit 3 = pulsing (the back powers the block behind it). */
+export const observerFacing = (state: number) => Math.min(state & 7, 5);
+export const OBSERVER_POWERED = 8;
+/** Daylight detectors: bits 0–3 = current power 0..15, bit 4 = inverted (night sensor). */
+export const daylightPower = (state: number) => state & 15;
+export const DAYLIGHT_INVERTED = 16;
+/** Nether wart ages 0..3 (3 = mature). */
+export const WART_MATURE = 3;
 /**
  * Levers and buttons: bits 0–2 = the face of the supporting block they sit on (0..5; 3 = on top of the block below),
  * so the support is at `position − FACES[face]`. Bit 3 = on / pressed. Lever bits 4–5: facing 0..3 of floor/ceiling levers.
@@ -288,6 +333,16 @@ export function faceTexture(cell: number, face: number): string {
   const block = blockOf(cell), state = cell >> 8, t = block.tex;
   switch (block.id) {
     case B.wheat: return `wheat_stage${Math.min(state, 7)}`;
+    case B.nether_wart: return `nether_wart_stage${Math.min(state, WART_MATURE)}`;
+    case B.end_portal_frame: return face === 3 ? (state & FRAME_EYE ? 'end_portal_frame_top_eye' : t.top) : face === 2 ? t.bottom : t.side;
+    case B.daylight_detector: return face === 3 ? (state & DAYLIGHT_INVERTED ? 'daylight_detector_inverted_top' : t.top) : face === 2 ? t.bottom : t.side;
+    case B.observer: {
+      const facing = observerFacing(state);
+      if (face === facing) return t.front!;
+      if (face === (facing ^ 1)) return state & OBSERVER_POWERED ? 'observer_back_on' : 'observer_back';
+      // The top texture's arrow runs along the watch axis: it sits on the faces parallel to it.
+      return facing >= 2 && facing <= 3 ? (face >= 4 ? t.top : t.side) : face === 2 || face === 3 ? t.top : t.side;
+    }
     case B.carrots: case B.potatoes: return `${block.name}_stage${Math.min(state, 7) >> 1}`;
     case B.farmland: return face === 3 ? (state & 1 ? 'farmland_moist' : 'farmland') : 'dirt';
     case B.oak_door: case B.iron_door: return state & DOOR_UPPER ? t.top : t.side;

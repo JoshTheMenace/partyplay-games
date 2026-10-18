@@ -39,7 +39,7 @@ test('the worst legal save stays under 256 KiB and loads back', () => {
     furnaces: new Map(indices.slice(MAX_CHESTS, MAX_CHESTS + MAX_FURNACES).map(i => [i, { slots: [{ id: B.iron_ore, n: 64 }, { id: B.coal_block, n: 64 }, { id: I.iron_ingot, n: 64 }], burn: 799.99, burnMax: 800, cook: 9.99 }])),
     animals: Array.from({ length: 48 }, (_, i) => ({ t: MOB.sheep, x: 4095.99 - i, y: 127.99, z: 4095.99, s: 3 })),
     villagers: Array.from({ length: MAX_SAVED_VILLAGERS }, (_, i) => ({ x: 4095.99 - i, y: 127.99, z: 4095.99, p: 4, home: [4095, 127, 4095 - i] as [number, number, number], uses: Array(8).fill(999999), seed: 2 ** 31 - 1 - i })),
-    populated: new Set(Array.from({ length: 65536 }, (_, i) => i)), stats: { mined: 999999999, placed: 999999999, crafted: 999999999, mobs: 999999999, deaths: 999999999, days: 999999999 },
+    populated: new Set(Array.from({ length: 65536 }, (_, i) => i)), stats: { mined: 999999999, placed: 999999999, crafted: 999999999, mobs: 999999999, deaths: 999999999, days: 999999999, dragons: 999999999 },
   };
   const save = exportSave(source), json = JSON.stringify(save), bytes = Buffer.byteLength(json);
   console.log(`worst-case save: ${(bytes / 1024).toFixed(1)} KiB`);
@@ -154,7 +154,7 @@ test('old, foreign, future and damaged saves are rejected with clear messages', 
   assert.equal(OLD_SAVE_MESSAGE, 'This world was made with the previous version of Blockwild and cannot be loaded.');
   assert.throws(load({ format: 'kart', version: 8 }), /not a Blockwild world/);
   assert.throws(load(null), /not a Blockwild world/);
-  assert.throws(load({ format: 'blockwild', version: 10 }), /newer version/);
+  assert.throws(load({ format: 'blockwild', version: 11 }), /newer version/);
   const good = rules.exportSave!(playedWorld()) as Record<string, unknown>;
   const broken = (patch: Record<string, unknown>) => load({ ...good, ...patch });
   assert.throws(broken({ edits: 'AAAA' }), /damaged \(edits\)/);

@@ -1,6 +1,6 @@
 /** World size in blocks along X and Z (coordinates 0..WORLD-1). */
 export const WORLD = 4096;
-/** World height in blocks (y 0..HEIGHT-1). Above is air, below is bedrock. */
+/** World height in blocks (y 0..HEIGHT-1). Above is air, below is bedrock (air in the End). */
 export const HEIGHT = 128;
 /** Chunk edge length in blocks; chunks are full-height 16×16×128 columns. */
 export const CHUNK = 16;
@@ -16,6 +16,16 @@ export const SPAWN_Z = 2048;
 export const NETHER = { x0: 3584, z0: 0, size: 512 } as const;
 /** True for columns inside the Nether region; "dimension" is always derived from position. */
 export const inNether = (x: number, z: number) => x >= NETHER.x0 && x < NETHER.x0 + NETHER.size && z >= NETHER.z0 && z < NETHER.z0 + NETHER.size;
+/** The End: another sealed corner (x, z ∈ [3584, 4096)), an island over the void. Below y = 0 is air here, not bedrock. */
+export const END = { x0: 3584, z0: 3584, size: 512 } as const;
+export const inEnd = (x: number, z: number) => x >= END.x0 && x < END.x0 + END.size && z >= END.z0 && z < END.z0 + END.size;
+export type Dimension = 'overworld' | 'nether' | 'end';
+export const dimensionAt = (x: number, z: number): Dimension => inNether(x, z) ? 'nether' : inEnd(x, z) ? 'end' : 'overworld';
+/** Centre of the End's main island (the exit portal) and the player arrival platform's centre cell (floor at y 48). */
+export const END_CENTER = { x: 3840, z: 3840 } as const;
+export const END_ARRIVAL = { x: 3940, y: 48, z: 3840 } as const;
+/** Bodies below this height are out of the world: players take void damage, everything else is removed. */
+export const VOID_Y = -64;
 
 /** Server simulation rate and day length (20 minutes). 0 sunrise, 6000 noon, 12000 sunset, 13000–23000 night. */
 export const TICK_HZ = 20;

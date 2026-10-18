@@ -3,8 +3,10 @@
  * clouds; `setTime`/`update` write it once per frame.
  */
 import { Color, ShaderMaterial, Vector3, Vector4, type DataArrayTexture, type IUniform } from 'three';
-import { AMBIENT, NETHER_AMBIENT, NETHER_FOG_DENSITY, NETHER_FOG_FAR, NETHER_FOG_NEAR, SKY_GLSL, TORCH_LIGHT, type Rgb } from './environment';
-import { VF_FIRE, VF_LAVA, VF_LEAVES, VF_PLANT, VF_PORTAL, VF_SURFACE, VF_WATER, VF_WIRE } from './types';
+import {
+  AMBIENT, END_AMBIENT, END_FLAT_SKY, END_FOG_DENSITY, END_FOG_FAR, END_FOG_NEAR, NETHER_AMBIENT, NETHER_FOG_DENSITY, NETHER_FOG_FAR, NETHER_FOG_NEAR, SKY_GLSL, TORCH_LIGHT, type Rgb,
+} from './environment';
+import { VF_END, VF_FIRE, VF_LAVA, VF_LEAVES, VF_PLANT, VF_PORTAL, VF_SURFACE, VF_WATER, VF_WIRE } from './types';
 
 /** Point glows (fireballs, primed TNT) that add warm light to nearby terrain. */
 export const GLOWS = 4;
@@ -33,6 +35,8 @@ export type WorldUniforms = {
   uWaterFog: IUniform<Color>;
   /** 0 overworld … 1 Nether (eased while travelling). */
   uNether: IUniform<number>;
+  /** 0 overworld … 1 the End (eased while travelling). */
+  uEnd: IUniform<number>;
   /** xyz position, w radius (0 = off) and colour of each glow. */
   uGlow: IUniform<Vector4[]>;
   uGlowColor: IUniform<Color[]>;
@@ -43,7 +47,7 @@ export const createUniforms = (atlas: DataArrayTexture): WorldUniforms => ({
   uZenith: { value: new Color() }, uHorizon: { value: new Color() }, uDuskColor: { value: new Color(1, 0.36, 0.1) }, uDusk: { value: 0 },
   uDay: { value: 1 }, uStars: { value: 0 }, uAngle: { value: 0 }, uSkyLight: { value: new Color(1, 1, 1) }, uTorch: { value: new Color(...TORCH_LIGHT) },
   uWaterLayer: { value: 0 }, uLavaLayer: { value: 0 }, uPortalLayer: { value: 0 }, uFireLayer: { value: 0 },
-  uFogNear: { value: 60 }, uFogFar: { value: 96 }, uUnderwater: { value: 0 }, uWaterFog: { value: new Color(0.02, 0.07, 0.18) }, uNether: { value: 0 },
+  uFogNear: { value: 60 }, uFogFar: { value: 96 }, uUnderwater: { value: 0 }, uWaterFog: { value: new Color(0.02, 0.07, 0.18) }, uNether: { value: 0 }, uEnd: { value: 0 },
   uGlow: { value: Array.from({ length: GLOWS }, () => new Vector4(0, -100, 0, 0)) }, uGlowColor: { value: Array.from({ length: GLOWS }, () => new Color(0, 0, 0)) },
 });
 
@@ -111,6 +115,26 @@ in vec3 vWorld;
 flat in int vFlags;
 ${SKY_GLSL}
 
+float endHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+/**
+ * The End portal: a screen-space shimmer of its texture over layers of stars that sit deeper and deeper below the
+ * surface (parallax with the view), each layer turning and drifting at its own pace in its own teal-to-violet hue.
+ */
+vec3 endPortal(vec3 view) {
+  vec3 color = textureLod(uAtlas, vec3(fract(gl_FragCoord.xy / 220.0 + vec2(0.0, uTime * 0.012)), vTex.z), 0.0).rgb * 0.35;
+  float down = max(-view.y, 0.12);
+  for (int k = 1; k <= 7; k++) {
+    float f = float(k), depth = f * f * 0.35, a = f * 1.9 + uTime * 0.015 * f;
+    vec2 p = vWorld.xz + view.xz / down * depth;
+    p = mat2(cos(a), -sin(a), sin(a), cos(a)) * p * (0.55 + f * 0.12) + vec2(uTime * 0.03, f * 13.7);
+    vec2 cell = floor(p * 3.0), local = fract(p * 3.0) - 0.5;
+    float h = endHash(cell + f * 17.0), star = step(0.9, h) * smoothstep(0.32, 0.0, length(local + (vec2(endHash(cell + 3.1), endHash(cell + 5.7)) - 0.5) * 0.5));
+    vec3 hue = mix(vec3(0.15, 0.75, 0.65), vec3(0.55, 0.3, 0.95), fract(f * 0.37 + h * 0.3));
+    color += hue * star * (1.25 - f * 0.13);
+  }
+  return color;
+}
+
 void main() {
   vec4 tex;
   if ((vFlags & ${VF_PORTAL}) != 0) {
@@ -124,8 +148,9 @@ void main() {
   float lod = max(0.0, log2(max(footprint.x, footprint.y)));
   if (tex.a * (1.0 + lod * 0.4) < 0.5) discard;
 #endif
-  float skyLevel = lightCurve(vLight.x);
-  vec3 light = max(skyLevel * uSkyLight, lightCurve(vLight.y) * uTorch) + mix(vec3(${AMBIENT}), ${vec3(NETHER_AMBIENT)}, uNether);
+  // The End's light is flat: no sky reaches it, so caves and the island's underside stay as readable as its top.
+  float skyLevel = lightCurve(mix(vLight.x, max(vLight.x, ${END_FLAT_SKY.toFixed(3)}), uEnd));
+  vec3 light = max(skyLevel * uSkyLight, lightCurve(vLight.y) * uTorch) + mix(mix(vec3(${AMBIENT}), ${vec3(NETHER_AMBIENT)}, uNether), ${vec3(END_AMBIENT)}, uEnd);
   for (int k = 0; k < ${GLOWS}; k++) {
     vec3 d = vWorld - uGlow[k].xyz;
     float f = max(0.0, 1.0 - dot(d, d) / max(uGlow[k].w * uGlow[k].w, 1e-4));
@@ -152,10 +177,10 @@ void main() {
       shade *= (0.9 + 0.1 * sin(vWorld.x * 1.3 + uTime * 0.9) * sin(vWorld.z * 1.7 - uTime * 0.7)) * (0.7 + 0.3 * crust);
     }
   }
-  vec3 color = tex.rgb * light * shade;
-  float alpha = 1.0;
   vec3 toFrag = vWorld - cameraPosition;
   vec3 view = normalize(toFrag);
+  vec3 color = (vFlags & ${VF_END}) != 0 ? endPortal(view) : tex.rgb * light * shade;
+  float alpha = 1.0;
 #ifdef TRANSLUCENT
   alpha = tex.a * ((vFlags & ${VF_PORTAL}) != 0 ? 0.78 : 0.82);
   vec3 normal = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
@@ -169,7 +194,7 @@ void main() {
     vec3 sky = skyColor(reflected) * (0.25 + 0.75 * skyLevel);
     color = mix(color, sky, fresnel * 0.85);
     alpha = mix(alpha, 1.0, fresnel * 0.7);
-    color += vec3(1.0, 0.9, 0.7) * pow(max(dot(reflected, uSunDir), 0.0), 350.0) * 5.0 * uDay * skyLevel;
+    color += vec3(1.0, 0.9, 0.7) * pow(max(dot(reflected, uSunDir), 0.0), 350.0) * 5.0 * uDay * skyLevel * (1.0 - uEnd);
   }
 #endif
   float fog;
@@ -186,6 +211,12 @@ void main() {
       float thick = max(fog, 1.0 - exp(-length(toFrag) * ${NETHER_FOG_DENSITY}));
       fog = mix(fog, thick, uNether);
       haze = mix(haze, mix(${vec3(NETHER_FOG_NEAR)}, ${vec3(NETHER_FOG_FAR)}, thick), uNether);
+    }
+    if (uEnd > 0.0) {
+      // The End: a thin violet haze in every direction (the void below included), darker near, lighter far.
+      float thick = max(fog, 1.0 - exp(-length(toFrag) * ${END_FOG_DENSITY}));
+      fog = mix(fog, thick, uEnd);
+      haze = mix(haze, mix(${vec3(END_FOG_NEAR)}, ${vec3(END_FOG_FAR)}, thick), uEnd);
     }
   }
   gl_FragColor = vec4(mix(color, haze, fog), alpha);

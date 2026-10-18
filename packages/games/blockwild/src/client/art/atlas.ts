@@ -21,7 +21,7 @@ import { ANIMATIONS, ATLAS_KEYS, CRACK_LAYER, CRACK_STAGES, frameLayers, layerOf
 import { TILE } from './pixels';
 import { paintTexture } from './textures';
 
-export { ANIMATION_FRAMES, ANIMATIONS, ATLAS_KEYS, CRACK_LAYER, CRACK_STAGES, faceLayer, frameKey, frameLayers, layerOf, MISSING_LAYER, WATER_FRAMES, WATER_LAYER } from './keys';
+export { ANIMATION_FRAMES, ANIMATIONS, ATLAS_KEYS, CRACK_LAYER, CRACK_STAGES, EXTRA_KEYS, faceLayer, frameKey, frameLayers, layerOf, MISSING_LAYER, WATER_FRAMES, WATER_LAYER } from './keys';
 export { ARMOR_BOXES, ARMOR_SHEET, armorGeometry, armorSheet, RIG_SCALE, type ArmorBox, type ArmorMaterial, type ArmorPivot } from './armor';
 export { GHAST_TENTACLES, VILLAGER_MODELS } from './models';
 export { redstoneTint } from './textures';

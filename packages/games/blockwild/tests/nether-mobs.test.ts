@@ -25,6 +25,8 @@ function game(x: number, z: number): State {
   const ctx = { roomId: 'room', roundId: 'round', seed: 7, nowMs: 0, players: [{ id: 'p0', name: 'Ada', color: '#ff5748' }] };
   const state = createState(ctx, validateSettings({ seed: 11, difficulty: 'normal' }), { source: flat, spawn: [x, 64, z] });
   Object.assign(state.players[0]!, { protectedUntil: 0, x: x + 0.5, y: 64, z: z + 0.5 });
+  // Load every chunk in reach up front: streaming is time-budgeted, so a busy machine would load fewer.
+  for (let dz = -4; dz <= 4; dz++) for (let dx = -4; dx <= 4; dx++) state.world.cache.get((x >> 4) + dx, (z >> 4) + dz);
   tickState(state, new Map(), 0.05);
   return state;
 }

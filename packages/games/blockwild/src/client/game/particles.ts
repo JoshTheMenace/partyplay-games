@@ -1,7 +1,7 @@
 /**
  * Pooled camera-facing particles in one instanced draw call: block chips (textured from the sprite sheet),
  * footstep dust, smoke and explosion puffs, torch flames, crit sparks, splashes, redstone dust, portal motes,
- * lava pops and villager sparkles. State lives in one
+ * lava pops, villager sparkles, soul flames, ender motes, projectile trails, acid clouds and bursts. State lives in one
  * Float32Array (no per-frame allocation); fading uses screen-door dithering so no sorting is needed.
  * Smoke is a "soft" particle: a round 8×8-texel pixel puff whose rim and fade-out dissolve, instead of a textured square.
  */
@@ -21,8 +21,10 @@ varying vec2 vUv; varying vec2 vQuad; varying vec4 vCol; varying float vSoft;
 void main() {
   vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
   vec3 up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
-  // A negative size marks a soft puff.
-  vec3 p = aPos.xyz + (right * position.x + up * position.y) * abs(aPos.w);
+  // A negative size marks a soft puff. Particles right at the eye shrink (at most ~5° across), so a trail or puff
+  // spawned at the camera never fills the view.
+  float depth = max(0.0, -(viewMatrix * vec4(aPos.xyz, 1.0)).z);
+  vec3 p = aPos.xyz + (right * position.x + up * position.y) * min(abs(aPos.w), depth * 0.08);
   vSoft = aPos.w < 0.0 ? 1.0 : 0.0;
   vQuad = uv;
   vUv = mix(aUv.xy, aUv.zw, uv);
@@ -54,6 +56,7 @@ export type Tint = readonly [number, number, number];
 export const TINTS = {
   smoke: [0.62, 0.62, 0.62], dark: [0.07, 0.07, 0.075], poof: [0.9, 0.9, 0.9], flame: [1, 0.62, 0.18], spark: [1, 0.95, 0.55], splash: [0.35, 0.55, 1], white: [1, 1, 1], heart: [1, 0.3, 0.35],
   redstone: [1, 0.12, 0.08], portal: [0.62, 0.3, 1], lava: [1, 0.45, 0.08], happy: [0.35, 1, 0.45],
+  soul: [0.3, 0.85, 1], ender: [0.78, 0.36, 1], acid: [0.66, 0.22, 0.9], beam: [1, 0.82, 1],
 } as const satisfies Record<string, Tint>;
 
 export class Particles {
@@ -137,9 +140,31 @@ export class Particles {
       big ? 0.7 + Math.random() * 0.7 : 0.6 + Math.random() * 0.5, size, big ? -0.3 : -0.15, big ? TINTS.smoke : kind === 'poof' ? TINTS.poof : TINTS.dark, Math.max(0.35, light),
       this.white, big ? 0.5 : 0.03, 2.5, false, true);
   }
-  /** A small round flame licking up from a torch tip. */
-  flame(x: number, y: number, z: number) {
-    this.spawn(x + (Math.random() - 0.5) * 0.04, y, z + (Math.random() - 0.5) * 0.04, 0, 0.06 + Math.random() * 0.08, 0, 0.3 + Math.random() * 0.2, 0.06, 0, TINTS.flame, 1.4, this.white, -0.1, 0, false, true);
+  /** A small round flame licking up from a torch tip (blue from a soul torch). */
+  flame(x: number, y: number, z: number, tint: Tint = TINTS.flame) {
+    this.spawn(x + (Math.random() - 0.5) * 0.04, y, z + (Math.random() - 0.5) * 0.04, 0, 0.06 + Math.random() * 0.08, 0, 0.3 + Math.random() * 0.2, 0.06, 0, tint, 1.4, this.white, -0.1, 0, false, true);
+  }
+  /** An ender mote: a purple speck drifting out and down around endermen, portals and the dragon egg. */
+  mote(x: number, y: number, z: number, tint: Tint = TINTS.ender) {
+    this.spawn(x, y, z, (Math.random() - 0.5) * 0.9, -0.3 - Math.random() * 0.5, (Math.random() - 0.5) * 0.9, 0.6 + Math.random() * 0.6, 0.05 + Math.random() * 0.03, 0, tint, 1.3, this.white, -0.03, 0.8, false);
+  }
+  /** One glowing speck left behind by a flying projectile (eyes of ender, pearls, dragon fireballs). */
+  trail(x: number, y: number, z: number, tint: Tint, size = 0.07) {
+    this.spawn(x + (Math.random() - 0.5) * 0.15, y + (Math.random() - 0.5) * 0.15, z + (Math.random() - 0.5) * 0.15, (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3,
+      0.5 + Math.random() * 0.4, size, 0, tint, 1.4, this.white, -size * 0.8, 1, false, true);
+  }
+  /** One soft, slowly rising puff of an acid cloud somewhere within `radius` of (x, y, z). */
+  cloud(x: number, y: number, z: number, radius: number) {
+    const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * radius;
+    this.spawn(x + Math.cos(a) * r, y + Math.random() * 0.6, z + Math.sin(a) * r, (Math.random() - 0.5) * 0.2, 0.15 + Math.random() * 0.25, (Math.random() - 0.5) * 0.2,
+      0.9 + Math.random() * 0.6, 0.25 + Math.random() * 0.25, -0.05, TINTS.acid, 1.2, this.white, 0.25, 1, false, true);
+  }
+  /** Specks bursting out of a point in every direction (teleports, eyes shattering, crystals, the dragon's last breath). */
+  burst(x: number, y: number, z: number, tint: Tint, amount: number, speed: number, size = 0.07) {
+    for (let i = 0; i < amount; i++) {
+      const u = Math.random() * 2 - 1, a = Math.random() * Math.PI * 2, r = Math.sqrt(1 - u * u), v = speed * (0.4 + Math.random() * 0.6);
+      this.spawn(x, y, z, Math.cos(a) * r * v, u * v, Math.sin(a) * r * v, 0.5 + Math.random() * 0.7, size * (0.7 + Math.random() * 0.6), 0, tint, 1.4, this.white, -size * 0.5, 1.2, false);
+    }
   }
   sparks(x: number, y: number, z: number, amount = 10) {
     for (let i = 0; i < amount; i++) {

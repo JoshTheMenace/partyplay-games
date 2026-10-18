@@ -66,7 +66,7 @@ test('ids: existing ids unchanged, new ids fixed and unique', () => {
   items.forEach((name, i) => assert.equal(I[name], 322 + i, name));
   assert.equal(new Set(Object.values(B)).size, Object.keys(B).length);
   assert.equal(new Set(Object.values(I)).size, Object.keys(I).length);
-  assert.deepEqual(MOB_TYPES.slice(8).map(m => [m.key, MOB[m.key]]), [['villager', 8], ['zombified_piglin', 9], ['ghast', 10], ['tnt', 11]]);
+  assert.deepEqual(MOB_TYPES.slice(8, 12).map(m => [m.key, MOB[m.key]]), [['villager', 8], ['zombified_piglin', 9], ['ghast', 10], ['tnt', 11]]);
 });
 
 // Blocks and shapes -------------------------------------------------------------------------------------------------
@@ -396,7 +396,7 @@ test('save v9 round-trips armor and villagers; v8 saves still load', () => {
   const villager = Object.assign(newMob(state, MOB.villager, X + 4.5, 64, Z + 1.5), { p: 2, home: [X + 6, 64, Z] as [number, number, number], uses: [1, 0, 3], seed: 12345 });
   state.mobs.push(villager, Object.assign(newMob(state, MOB.villager, X + 1.5, 64, Z + 1.5), { p: 0, seed: 7 }), newMob(state, MOB.tnt, X, 64, Z), newMob(state, MOB.ghast, X, 80, Z));
   const save = exportSave(saveSource(state)), json = JSON.stringify(save);
-  assert.equal(save.version, 9);
+  assert.equal(save.version, 10);
   assert.equal(save.animals.length, 0, 'villagers, TNT and ghasts are not animals');
   assert.deepEqual(save.villagers, [{ x: X + 4.5, y: 64, z: Z + 1.5, p: 2, uses: [1, 0, 3], seed: 12345, home: [X + 6, 64, Z] }, { x: X + 1.5, y: 64, z: Z + 1.5, p: 0, uses: [], seed: 7 }]);
   const ctx = { roomId: 'room', roundId: 'r2', seed: 7, nowMs: 0, players: [{ id: 'q', name: 'Ada', color: '#fff' }] };

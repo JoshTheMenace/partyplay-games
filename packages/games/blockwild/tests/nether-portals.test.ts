@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { B, cellId, cellState, isFullCube, PORTAL_Z } from '../src/shared/blocks';
 import { CHUNK_CELLS, type ChunkSource } from '../src/shared/chunk';
-import { inNether, NETHER } from '../src/shared/constants';
+import { dimensionAt, END, inNether, NETHER } from '../src/shared/constants';
 import { localIndex } from '../src/shared/coords';
 import { I } from '../src/shared/ids';
 import { IF, validateSettings, type CmdBody, type Input, type Mode } from '../src/shared/protocol';
@@ -126,6 +126,22 @@ test('8:1 links: overworld to Nether and back, clamped inside each dimension and
   assert.deepEqual(portalTarget(NETHER.x0 + 8, 8), [64, 64]);
   const [x, z] = portalTarget(NETHER.x0 + 506, 20);
   assert.ok(!inNether(x, z) && !inNether(x, z - 16), `${x},${z} leads out of the Nether's corner`);
+  // Playtest P0: the Nether's far corner mapped into the End (portalTarget(4064, 480) was the island centre).
+  for (let nx = NETHER.x0 + 400; nx < NETHER.x0 + NETHER.size; nx += 7) for (let nz = 400; nz < NETHER.size; nz += 7) {
+    const [tx, tz] = portalTarget(nx, nz);
+    assert.equal(dimensionAt(tx, tz), 'overworld', `${nx},${nz} → ${tx},${tz}`);
+    assert.ok([-1, 4].every(d => dimensionAt(tx + d, tz + d) === 'overworld'), `${nx},${nz}: the arrival portal fits outside the End`);
+  }
+});
+
+test('Nether portal cells in the End (old saves) never carry anyone', () => {
+  const state = game();
+  const [x, y, z] = [END.x0 + 200, 64, END.z0 + 200], player = state.players[0]!;
+  frame((fx, fy, fz, cell) => writeCell(state, fx, fy, fz, cell), x, y, z, 2, 3, 0);
+  for (let j = 0; j < 3; j++) for (let i = 0; i < 2; i++) writeCell(state, x + i, y + j, z, B.nether_portal);
+  place(state, x + 1, y, z + 0.5, player);
+  run(state, 100);
+  assert.ok(Math.abs(player.x - x - 1) < 1e-9 && player.portal === 0, 'still in the End');
 });
 
 test('travel takes 4 s (1 s in creative), builds a safe arrival portal and never ping-pongs', () => {

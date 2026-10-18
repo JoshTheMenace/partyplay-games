@@ -1,22 +1,26 @@
 /** Command queue execution: every command with n > ack runs once, in order; rejected ones still advance ack. */
-import { B, blockOf, cellId, cellState, chestLoot, DOOR_OPEN, DOOR_UPPER, isAir, isLiquid, makeCell } from '../shared/blocks';
+import { B, blockOf, cellId, cellState, chestLoot, DAYLIGHT_INVERTED, DOOR_OPEN, DOOR_UPPER, isAir, isLiquid, makeCell } from '../shared/blocks';
 import { EDIT_LIMIT_TOAST, EYE_HEIGHT, MAX_FOOD, REACH, SNEAK_EYE_HEIGHT } from '../shared/constants';
 import { cellIndex, FACES, lookVector, type Vec3 } from '../shared/coords';
 import { addItem, removeItem, takeOne } from '../shared/inventory';
 import { armorOf, attackDamage, durabilityOf, I, isItem, itemOf, maxStack, placesBlock } from '../shared/items';
-import { breakTime, drops as miningDrops } from '../shared/mining';
+import { breakTime, isBreakable, drops as miningDrops } from '../shared/mining';
 import { bodyBox } from '../shared/physics';
-import { BOW_MIN_SECONDS, bowPower, bucketTarget, bucketUse, canSurvive, EAT_SECONDS, isHoe, isPathable, isShovel, isTillable, placementFor } from '../shared/placement';
+import {
+  BOW_MIN_SECONDS, bowPower, bucketTarget, bucketUse, canSurvive, EAT_SECONDS, isCrystalBase, isHoe, isPathable, isShovel, isTillable, placementFor,
+} from '../shared/placement';
 import { IF, MOB, mobBox, type Cmd, type Input } from '../shared/protocol';
 import { craftFromInventory, recipeById } from '../shared/recipes';
 import { collisionBoxes } from '../shared/shapes';
 import { equip } from './armor';
-import { damageMob, exhaust, mobState, spawnArrow } from './combat';
+import { damageMob, exhaust, mobHitBoxes, mobState, spawnArrow } from './combat';
 import { celebrate, chestSlots, click, closeScreen, furnaceAt, MAX_CHESTS, MAX_FURNACES, openScreen } from './containers';
+import { throwEye, useEndFrame } from './ender-eyes';
 import { spawnItem } from './entities';
 import { applyBoneMeal } from './growth';
-import { foodFor } from './mobs';
+import { foodFor, newMob } from './mobs';
 import { deflectFireball } from './nether-mobs';
+import { throwPearl } from './pearls';
 import { respawn, useBed, wake } from './players';
 import { tryIgnite } from './portals';
 import { primeTnt, useRedstoneBlock } from './redstone';
@@ -70,7 +74,7 @@ export function runCommand(state: State, player: Player, cmd: Cmd): boolean {
     case 'place': return placeCommand(state, player, cmd);
     case 'use': return useCommand(state, player, cmd.x, cmd.y, cmd.z, cmd.face);
     case 'useItem': return useItemCommand(state, player, cmd.slot);
-    case 'attack': return attackCommand(state, player, cmd.id);
+    case 'attack': return attackCommand(state, player, cmd.id, cmd.part);
     case 'interact': return interactCommand(state, player, cmd.id);
     case 'click': return click(state, player, cmd.w, cmd.i, cmd.b);
     case 'craft': return craftCommand(state, player, cmd.r, cmd.max === true);
@@ -91,7 +95,7 @@ export function runCommand(state: State, player: Player, cmd: Cmd): boolean {
  */
 function breakCommand(state: State, player: Player, x: number, y: number, z: number): boolean {
   const cell = state.get(x, y, z), block = blockOf(cell);
-  if (!block.targetable || block.hardness < 0 || !reachesBlock(state, player, x, y, z)) return false;
+  if (!block.targetable || !isBreakable(cell, !survival(state)) || !reachesBlock(state, player, x, y, z)) return false;
   const held = player.inv[player.slot]?.id ?? 0;
   if (!survival(state)) {
     if (player.breakTokens < 1) return false;
@@ -180,10 +184,26 @@ function strike(state: State, player: Player, x: number, y: number, z: number, f
   return true;
 }
 
-/** Right-click on a block: open stations, sleep, toggle doors, redstone controls, till, paths, bone meal, fire, buckets. */
+/** An end crystal on top of obsidian or bedrock (the caller checks) with two free cells above, not on another crystal. */
+function placeCrystal(state: State, player: Player, x: number, y: number, z: number): boolean {
+  if (!isAir(state.get(x, y + 1, z)) || !isAir(state.get(x, y + 2, z))) return false;
+  if (state.mobs.some(mob => mob.t === MOB.end_crystal && mob.health > 0 && Math.abs(mob.x - x - 0.5) < 1 && Math.abs(mob.z - z - 0.5) < 1 && Math.abs(mob.y - y - 1) < 1)) return false;
+  state.mobs.push(newMob(state, MOB.end_crystal, x + 0.5, y + 1, z + 0.5));
+  consume(state, player, player.slot);
+  addFx(state, 'place', x + 0.5, y + 1, z + 0.5, B.glass);
+  player.swing++;
+  return true;
+}
+
+/**
+ * Right-click on a block: open stations, sleep, toggle doors, redstone controls, till, paths, bone meal, fire, buckets,
+ * eyes into end portal frames and end crystals onto obsidian or bedrock.
+ */
 function useCommand(state: State, player: Player, x: number, y: number, z: number, face: number): boolean {
   if (!reachesBlock(state, player, x, y, z)) return false;
   const cell = state.get(x, y, z), id = cellId(cell), held = player.inv[player.slot]?.id ?? 0;
+  if (id === B.end_portal_frame) return useEndFrame(state, player, x, y, z);
+  if (held === I.end_crystal && isCrystalBase(cell)) return placeCrystal(state, player, x, y, z);
   if (!player.sneaking || !held) {
     switch (id) {
       case B.crafting_table: openScreen(state, player, 'table', x, y, z); return true;
@@ -193,6 +213,11 @@ function useCommand(state: State, player: Player, x: number, y: number, z: numbe
         openScreen(state, player, 'chest', x, y, z);
         return true;
       case B.lever: case B.stone_button: case B.oak_button: case B.repeater: return useRedstoneBlock(state, player, x, y, z);
+      case B.daylight_detector:
+        // Flip to night sensing (or back); the redstone tick recomputes its power from the new mode.
+        if (!writeCell(state, x, y, z, cell ^ DAYLIGHT_INVERTED << 8)) return limitReached(player);
+        addFx(state, 'button', x + 0.5, y + 0.4, z + 0.5, 1);
+        return true;
       case B.bed: return useBed(state, player, x, y, z);
       case B.oak_door: {
         const lowerY = cellState(cell) & DOOR_UPPER ? y - 1 : y, lower = state.get(x, lowerY, z), upper = state.get(x, lowerY + 1, z);
@@ -269,19 +294,27 @@ function useItemCommand(state: State, player: Player, slot: number): boolean {
     const liquid = liquidInSight(state, player);
     return !!liquid && useBucket(state, player, slot, ...liquid);
   }
+  if (stack.id === I.ender_eye) return throwEye(state, player, slot);
+  if (stack.id === I.ender_pearl) return throwPearl(state, player, slot);
   if (armorOf(stack.id)) return equip(state, player, slot);
   return false;
 }
 
-function attackCommand(state: State, player: Player, id: number): boolean {
+/**
+ * Melee a mob. `part` is the hit box the client aimed at (the dragon's parts); it counts only if that box is in reach of
+ * the server's own pose, else the nearest box does.
+ */
+function attackCommand(state: State, player: Player, id: number, part?: number): boolean {
   const mob = state.mobs.find(m => m.id === id && m.health > 0);
   if (!mob) return deflectFireball(state, player, id);
   if (state.clock - player.attackAt < ATTACK_GAP) return false;
-  if (!inReach(state, player, mobBox({ t: mob.t, x: mob.x, y: mob.y, z: mob.z, s: mobState(mob) }))) return false;
+  const boxes = mobHitBoxes(mob), [ex, ey, ez] = eyeOf(player), gaps = boxes.map(box => boxDist2(ex, ey, ez, box));
+  const struck = part !== undefined && part < boxes.length && inReach(state, player, boxes[part]!) ? part : gaps.indexOf(Math.min(...gaps));
+  if (!inReach(state, player, boxes[struck]!)) return false;
   const held = player.inv[player.slot]?.id ?? 0, crit = !player.onGround && player.fallPeak > player.y + 0.1;
   const damage = attackDamage(held) * (crit ? 1.5 : 1);
   player.attackAt = state.clock;
-  damageMob(state, mob, damage, player, { x: player.x, z: player.z, strength: 6, up: 4.5 });
+  damageMob(state, mob, damage, player, { x: player.x, z: player.z, strength: 6, up: 4.5 }, { part: struck });
   if (itemOf(held)?.tool) wearTool(state, player, player.slot, itemOf(held)!.tool!.kind === 'sword' ? 1 : 2);
   exhaust(player, 0.1);
   player.swing++;

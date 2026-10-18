@@ -1,8 +1,8 @@
 /**
  * Atlas layer order, importable from the meshing worker (no painting, no three.js).
  * Layers: every block texture key (sorted), each animated key directly followed by its extra frames
- * (`water_1`.., `lava_1`.., `nether_portal_1`.., `fire_1`..), then the ten crack stages, then a magenta 'missing'
- * layer returned for unknown keys.
+ * (`water_1`.., `lava_1`.., `nether_portal_1`.., `fire_1`..), the art-only `EXTRA_KEYS`, then the ten crack stages,
+ * then a magenta 'missing' layer returned for unknown keys.
  */
 import { faceTexture, TEXTURE_KEYS } from '../../shared/blocks';
 
@@ -22,8 +22,15 @@ export const WATER_FRAMES = ANIMATIONS.water!.frames, CRACK_STAGES = 10;
 /** Atlas key of frame f (0-based) of an animated key: frame 0 is the key itself. */
 export const frameKey = (key: string, frame: number) => frame ? `${key}_${frame}` : key;
 const range = <T>(n: number, item: (i: number) => T) => Array.from({ length: n }, (_, i) => item(i));
+/**
+ * Layers no block face names: 'end_portal_frame_eye' skins the inserted eye's knob (sample it positionally: rows 0–2
+ * are its rim, cols/rows 4–11 its top, matching `end_portal_frame_top_eye`); 'end_sky' is a still starfield for the
+ * End's sky dome.
+ */
+export const EXTRA_KEYS = ['end_portal_frame_eye', 'end_sky'] as const;
 export const ATLAS_KEYS: readonly string[] = [
   ...TEXTURE_KEYS.flatMap(key => range(ANIMATIONS[key]?.frames ?? 1, f => frameKey(key, f))),
+  ...EXTRA_KEYS,
   ...range(CRACK_STAGES, i => `crack_${i}`),
   'missing',
 ];

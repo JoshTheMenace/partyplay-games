@@ -1,5 +1,5 @@
 import { B } from './blocks';
-import { CHUNK, EDIT_LIMIT, HEIGHT, WORLD } from './constants';
+import { CHUNK, EDIT_LIMIT, END, HEIGHT, inEnd, WORLD } from './constants';
 import { cellIndex, chunkKey, localIndex } from './coords';
 
 /** Cells in one column chunk (16 × 16 × 128). */
@@ -10,12 +10,16 @@ export type CellReader = (x: number, y: number, z: number) => number;
 /** Generates the untouched terrain for one column chunk; must be pure. */
 export type ChunkSource = (cx: number, cz: number) => Uint16Array;
 
-/** Value outside the world: bedrock below, air above, invisible barrier beyond the horizontal edge. */
+/**
+ * Value outside the world: bedrock below, air above, invisible barrier beyond the horizontal edge. Below the End is the
+ * void (air). The End's inside faces (x = END.x0 and z = END.z0) stay barriers below and above the world too, so nobody
+ * can walk over or under the seal.
+ */
 export function outsideCell(x: number, y: number, z: number): number | null {
   if (x < 0 || z < 0 || x >= WORLD || z >= WORLD) return B.barrier;
-  if (y < 0) return B.bedrock;
-  if (y >= HEIGHT) return B.air;
-  return null;
+  if (y >= 0 && y < HEIGHT) return null;
+  if (inEnd(x, z) && (x === END.x0 || z === END.z0)) return B.barrier;
+  return y < 0 && !inEnd(x, z) ? B.bedrock : B.air;
 }
 
 /** Small LRU cache of generated chunks (Map insertion order = recency). */

@@ -13,7 +13,7 @@ export const SMELTING: ReadonlyMap<number, number> = new Map<number, number>([
   [B.oak_log, I.charcoal], [B.birch_log, I.charcoal], [B.spruce_log, I.charcoal], [I.beef, I.cooked_beef], [I.porkchop, I.cooked_porkchop],
   [I.chicken, I.cooked_chicken], [I.mutton, I.cooked_mutton], [I.potato, I.baked_potato], [B.diamond_ore, I.diamond], [B.coal_ore, I.coal],
   [B.nether_quartz_ore, I.quartz], [B.nether_gold_ore, I.gold_ingot], [B.netherrack, I.nether_brick], [B.stone_bricks, B.cracked_stone_bricks],
-  [B.redstone_ore, I.redstone], [B.emerald_ore, I.emerald],
+  [B.redstone_ore, I.redstone], [B.emerald_ore, I.emerald], [B.quartz_block, B.smooth_quartz], [B.end_stone_bricks, B.cracked_end_stone_bricks],
 ]);
 export const SMELT_SECONDS = 10;
 /** Furnace burn seconds for an item (0 = not a fuel). */

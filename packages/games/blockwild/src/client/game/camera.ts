@@ -13,18 +13,22 @@ export type ViewState = {
   portal: number;
 };
 
-/** View bob, sprint FOV kick, hurt tilt, portal wobble, death and sleep camera. Allocation-free. */
+/** View bob, sprint FOV kick, hurt tilt, portal wobble, screen shake, death and sleep camera. Allocation-free. */
 export class ViewEffects {
   bobPhase = 0;
   bobAmount = 0;
   private fov = 75;
   private hurtT = 1;
+  /** Screen-shake strength 0..1 (squared for the offset, so small shakes stay subtle), decaying over about a second. */
+  private trauma = 0;
   private deathT = 0;
   private wobble = 0;
   private time = 0;
   private readonly still = reducedMotion();
 
   hurt() { if (!this.still) this.hurtT = 0; }
+  /** Shake the view (a wing buffet, the dragon landing nearby, its death): strength 0..1, the strongest shake wins. */
+  shake(strength: number) { if (!this.still) this.trauma = Math.min(1, Math.max(this.trauma, strength)); }
 
   /** Place the camera at the eye with yaw/pitch plus effects. */
   apply(camera: PerspectiveCamera, x: number, eyeY: number, z: number, feetY: number, yaw: number, pitch: number, s: ViewState, dt: number) {
@@ -34,14 +38,16 @@ export class ViewEffects {
     this.deathT = s.dead ? Math.min(1, this.deathT + dt / 0.8) : 0;
     this.time += dt;
     this.wobble += ((this.still ? 0 : s.portal) - this.wobble) * damp(4, dt);
+    this.trauma = Math.max(0, this.trauma - dt * 1.1);
+    const t = this.time, quake = this.trauma * this.trauma, qx = Math.sin(t * 37.1) * Math.sin(t * 13.3) * quake, qy = Math.sin(t * 41.7 + 1.3) * Math.sin(t * 11.9) * quake;
     const wobble = this.wobble * this.wobble, sway = Math.sin(this.time * 2.3) * 0.07 * wobble;
     const bob = this.still ? 0 : this.bobAmount, bx = Math.sin(this.bobPhase) * 0.045 * bob, by = -Math.abs(Math.cos(this.bobPhase)) * 0.07 * bob;
     const cos = Math.cos(yaw), sin = Math.sin(yaw), death = this.deathT * this.deathT;
     const y = s.sleeping ? feetY + 0.35 : eyeY + (feetY + 0.25 - eyeY) * death;
-    camera.position.set(x + cos * bx, y + by, z - sin * bx);
+    camera.position.set(x + cos * bx + qx * 0.12, y + by + qy * 0.12, z - sin * bx);
     const hurtRoll = this.hurtT < 1 ? Math.sin(this.hurtT * Math.PI) * 0.22 * (1 - this.hurtT) : 0;
-    camera.rotation.set(s.sleeping ? 0.25 : pitch + Math.abs(Math.cos(this.bobPhase)) * 0.008 * bob + Math.cos(this.time * 1.7) * 0.03 * wobble, yaw,
-      Math.sin(this.bobPhase) * 0.006 * bob + hurtRoll + death * 0.6 + sway, 'YXZ');
+    camera.rotation.set(s.sleeping ? 0.25 : pitch + Math.abs(Math.cos(this.bobPhase)) * 0.008 * bob + Math.cos(this.time * 1.7) * 0.03 * wobble + qy * 0.035, yaw + qx * 0.03,
+      Math.sin(this.bobPhase) * 0.006 * bob + hurtRoll + death * 0.6 + sway + qx * 0.04, 'YXZ');
     const target = this.still ? s.baseFov : s.baseFov * (s.sprinting ? (s.flying ? 1.2 : 1.12) : 1) * (s.underwater ? 0.92 : 1) * (1 + 0.16 * wobble + Math.sin(this.time * 3.1) * 0.03 * wobble);
     this.fov += (target - this.fov) * damp(9, dt);
     if (Math.abs(camera.fov - this.fov) > 0.01) {
@@ -80,7 +86,8 @@ export function shotPose(shot: Shot, s: Subject, time: number, getCell: CellRead
  * across long distances), or drifts in a slow flyover when nobody is playing.
  */
 export class Spectator {
-  private focus: string | null = null;
+  /** The followed subject's key. */
+  focus: string | null = null;
   private shotIndex = 0;
   private shotTime = 0;
   private time = 0;

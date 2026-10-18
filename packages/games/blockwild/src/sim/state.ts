@@ -4,8 +4,14 @@ import type { CellReader, ChunkSource, VoxelWorld } from '../shared/chunk';
 import type { Vec3 } from '../shared/coords';
 import type { Slot } from '../shared/items';
 import { q2, type Fx, type FxKind, type ScreenKind, type Settings, type Stats } from '../shared/protocol';
+import type { BlazeState } from './blaze';
+import type { DragonState } from './dragon';
+import type { EndState } from './end';
+import type { EyeState } from './ender-eyes';
+import type { EndermanState } from './enderman';
 import type { FireState } from './fire';
 import type { NetherState } from './nether-mobs';
+import type { PearlState } from './pearls';
 import type { PortalState } from './portals';
 import type { RedstoneState } from './redstone';
 import type { StructureState } from './structures';
@@ -14,8 +20,11 @@ import type { VillageState } from './villagers';
 export type PlayerStats = { mined: number; placed: number; crafted: number; mobs: number; deaths: number; distance: number };
 /** An open screen at a block (or, for 'trade', at the villager's cell with its mob id). */
 export type OpenScreen = { kind: ScreenKind; x: number; y: number; z: number; villager?: number };
-/** Why a player takes damage: armor reduces the combat and heat causes (see sim/armor.ts), never fall/drown/starve/magma. */
-export type DamageCause = 'mob' | 'arrow' | 'fireball' | 'explosion' | 'cactus' | 'fire' | 'lava' | 'fall' | 'drown' | 'starve' | 'magma' | 'other';
+/**
+ * Why a player takes damage: armor reduces the combat and heat causes (see sim/armor.ts), never fall/drown/starve/magma.
+ * 'void' (falling out of the End) also ignores spawn protection; only creative is immune.
+ */
+export type DamageCause = 'mob' | 'arrow' | 'fireball' | 'explosion' | 'cactus' | 'fire' | 'lava' | 'fall' | 'drown' | 'starve' | 'magma' | 'void' | 'other';
 
 export type Player = {
   id: string; name: string; color: string; connected: boolean;
@@ -90,6 +99,8 @@ export type Mob = {
   p: number; home: Vec3 | null; uses: number[];
   /** A mob this monster hunts when it has no player target (zombies chasing villagers), by id. */
   prey: number | null;
+  /** Flyers' pitch (PubMob.pt, radians, nose up > 0) and the dragon's phase (PubMob.ph, DRAGON_PHASE). */
+  pt: number; ph: number;
 };
 
 export type ItemEntity = {
@@ -99,7 +110,10 @@ export type ItemEntity = {
 export type Arrow = {
   id: number; x: number; y: number; z: number; vx: number; vy: number; vz: number; age: number; stuck: boolean;
   damage: number; shooter: string | number | null; pickup: boolean;
-  /** 0 arrow, 1 ghast fireball (moved by nether-mobs.ts tickFireballs, skipped by tickArrows). */
+  /**
+   * PK kind: 0 arrow, 1 ghast fireball (nether-mobs.tickFireballs), 2 blaze fireball (blaze.tickBlazeFireballs), 3 eye of ender
+   * (ender-eyes.tickEyes), 4 dragon fireball (dragon.tickAcid), 5 ender pearl (pearls.tickPearls). tickArrows moves only arrows.
+   */
   k: number;
 };
 export type Furnace = { slots: (Slot | null)[]; burn: number; burnMax: number; cook: number };
@@ -139,6 +153,11 @@ export type State = {
   absent: SavedPlayerState[];
   /** Per-feature server state, each owned and shaped by its module (created with the world, not saved unless noted there). */
   structures: StructureState; portals: PortalState; fire: FireState; nether: NetherState; redstone: RedstoneState; villages: VillageState;
+  blaze: BlazeState; eyes: EyeState; dragon: DragonState; endermen: EndermanState; pearls: PearlState;
+  /** The End's saved progress and the victory (sim/end.ts). */
+  end: EndState;
+  /** Player enderman kills in a row without an ender pearl (saved): the third such kill always drops one. */
+  pearlPity: number;
 };
 /** A player as stored in a save, in live shapes. */
 export type SavedPlayerState = {

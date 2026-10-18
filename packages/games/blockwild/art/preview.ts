@@ -1,12 +1,12 @@
 /**
  * Art preview: draws every atlas layer (single and 3×3 tiled to check seams) and every item icon into an HTML page,
- * plus an expansion page (new textures beside a few existing ones, animation strips, new icons and armor sheets),
- * then screenshots both with headless Chromium.
- * Run: node --import tsx packages/games/blockwild/art/preview.ts   → output/art-preview/{atlas,expansion}.{html,png}
+ * plus expansion and endgame pages (new textures beside a few existing ones, animation strips, new icons and armor
+ * sheets), then screenshots them with headless Chromium.
+ * Run: node --import tsx packages/games/blockwild/art/preview.ts   → output/art-preview/{atlas,expansion,endgame}.{html,png}
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { ANIMATIONS, ARMOR_SHEET, armorSheet, ATLAS_KEYS, frameLayers, itemIcon, texturePixels } from '../src/client/art/atlas';
+import { ANIMATIONS, ARMOR_SHEET, armorSheet, ATLAS_KEYS, EXTRA_KEYS, frameLayers, itemIcon, texturePixels } from '../src/client/art/atlas';
 import { pngDataUrl } from '../src/client/art/png';
 import { BLOCK_LIST, faceTexture, makeCell } from '../src/shared/blocks';
 import { ARMOR_MATERIALS, ITEM_LIST } from '../src/shared/items';
@@ -39,9 +39,11 @@ figcaption{max-width:160px;overflow:hidden;white-space:nowrap}
 writeFileSync(`${out}/atlas.html`, page('Atlas', `<h2>Atlas (${ATLAS_KEYS.length} layers)</h2><section>${ATLAS_KEYS.map(tile).join('')}</section>
 <h2>Item icons (${ITEM_LIST.length})</h2><section>${ITEM_LIST.map(icon).join('')}</section>`));
 
-// Expansion: blocks from id 78 on, items from id 322 on (plus the new block items).
+// New textures for blocks from id `block` on, in order.
 const keysOf = (blocks: typeof BLOCK_LIST) => new Set(blocks.filter(b => b.render !== 'none').flatMap(b => Array.from({ length: 32 * 6 }, (_, i) => faceTexture(makeCell(b.id, i / 6 | 0), i % 6))));
-const old = keysOf(BLOCK_LIST.filter(b => b.id < 78)), fresh = [...keysOf(BLOCK_LIST.filter(b => b.id >= 78))].filter(k => !old.has(k)).sort();
+const freshSince = (block: number) => { const old = keysOf(BLOCK_LIST.filter(b => b.id < block)); return [...keysOf(BLOCK_LIST.filter(b => b.id >= block))].filter(k => !old.has(k)).sort(); };
+// Expansion: blocks from id 78 on, items from id 322 on (plus the new block items).
+const fresh = freshSince(78);
 const reference = ['stone', 'cobblestone', 'oak_planks', 'dirt', 'grass_block_side', 'sand', 'sandstone', 'stone_bricks', 'gold_ore', 'obsidian', 'torch', 'oak_door_top'];
 const strip = (key: string) => {
   const layers = frameLayers(key), px = new Uint8Array(16 * 16 * 4 * layers.length);
@@ -56,11 +58,18 @@ writeFileSync(`${out}/expansion.html`, page('Expansion art', `<h2>New textures (
 <h2>New item icons (${items.length})</h2><section>${items.map(icon).join('')}</section>
 <h2>Armor layer sheets</h2><section>${sheets}</section>`));
 
+// Endgame: blocks from id 121 on, items from id 348 on, the art-only layers and the nearby palettes they must sit with.
+const endKeys = [...freshSince(121), ...EXTRA_KEYS], endItems = ITEM_LIST.filter(item => item.id >= 348 || (item.id >= 121 && item.id < 256));
+const endReference = ['stone_bricks', 'nether_bricks', 'quartz_block_side', 'quartz_block_top', 'obsidian', 'bedrock', 'cobblestone', 'oak_planks', 'torch', 'lantern', 'soul_sand', 'glass'];
+writeFileSync(`${out}/endgame.html`, page('Endgame art', `<h2>Endgame textures (${endKeys.length})</h2><section>${endKeys.map(tile).join('')}</section>
+<h2>Existing reference</h2><section>${endReference.map(tile).join('')}</section>
+<h2>Endgame item icons (${endItems.length})</h2><section>${endItems.map(icon).join('')}</section>`));
+
 type Page = { goto(url: string): Promise<unknown>; screenshot(o: { path: string; fullPage: boolean }): Promise<unknown> };
 type Chromium = { launch(): Promise<{ newPage(o: { viewport: { width: number; height: number } }): Promise<Page>; close(): Promise<void> }> };
 const { chromium } = await import(PLAYWRIGHT) as { chromium: Chromium };
 const browser = await chromium.launch();
-for (const name of ['atlas', 'expansion']) {
+for (const name of ['atlas', 'expansion', 'endgame']) {
   const view = await browser.newPage({ viewport: { width: 1800, height: 1000 } });
   await view.goto(`file://${out}/${name}.html`);
   await view.screenshot({ path: `${out}/${name}.png`, fullPage: true });

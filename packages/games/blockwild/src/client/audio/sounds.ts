@@ -10,7 +10,8 @@ export const SAMPLES = ['bow', 'chest-close', 'chest-open', 'chicken', 'close', 
 export const SOUND_FILES: readonly string[] = [...SAMPLES, ...SAMPLE_FAMILIES.flatMap(family => [0, 1, 2].map(i => `${family}-${i}`))];
 
 /** Sounds that are synthesized because no sample exists. */
-export type SynthSound = 'eat' | 'burp' | 'levelup' | 'click' | 'hurt' | 'fizz' | 'piston' | 'portal' | 'travel' | 'scrape' | 'villager' | 'ghast' | 'shriek';
+export type SynthSound = 'eat' | 'burp' | 'levelup' | 'click' | 'hurt' | 'fizz' | 'piston' | 'portal' | 'travel' | 'scrape' | 'villager' | 'ghast' | 'shriek'
+  | 'eye' | 'roar' | 'flap' | 'scream' | 'vwoop' | 'blaze' | 'blazeShoot' | 'silverfish' | 'portalOpen' | 'dragonDeath';
 
 const STEP: Record<SoundGroup, string> = { stone: 'step-stone', metal: 'step-stone', glass: 'step-stone', wood: 'step-wood', grass: 'step-grass', gravel: 'step-snow', sand: 'step-snow', snow: 'step-snow', wool: 'step-cloth' };
 const IMPACT: Record<SoundGroup, string> = { stone: 'impact-stone', metal: 'impact-metal', glass: 'impact-glass', wood: 'impact-wood', grass: 'impact-soft', gravel: 'impact-soft', sand: 'impact-soft', snow: 'impact-soft', wool: 'impact-soft' };
@@ -29,7 +30,10 @@ export function mobVoice(key: string, pick: number): string | null {
   if (key === 'cow' || key === 'pig' || key === 'sheep' || key === 'chicken') return key;
   return null;
 }
-/** Synthesized voices for mobs without samples (villager hums, ghast wails), played like mobVoice. */
-export const mobSynth = (key: string): SynthSound | null => key === 'villager' ? 'villager' : key === 'ghast' ? 'ghast' : null;
+/** Synthesized voices for mobs without samples (villager hums, ghast wails, blaze breaths, enderman vwoops...), played like mobVoice. */
+const MOB_SYNTHS: Partial<Record<string, SynthSound>> = { villager: 'villager', ghast: 'ghast', blaze: 'blaze', enderman: 'vwoop', silverfish: 'silverfish', ender_dragon: 'roar' };
+export const mobSynth = (key: string): SynthSound | null => MOB_SYNTHS[key] ?? null;
+/** Hearing distance (blocks) of a mob's voice when it carries further than the default 24. */
+export const mobRange = (key: string) => key === 'ender_dragon' ? 128 : key === 'ghast' ? 48 : undefined;
 /** Pitch per mob voice (zombified piglins sound lower and rougher than zombies). */
 export const mobPitch = (key: string) => key === 'zombified_piglin' ? 0.72 : 1;

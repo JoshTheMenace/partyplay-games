@@ -7,7 +7,7 @@
  * positions. Small details (plants, torches, lever handles, redstone dust) take the flat light of their own cell.
  */
 import {
-  attachedFace, B, faceTexture, fenceConnects, LEVER_ON, leverFacing, pistonFacing, PISTON_EXTENDED, PORTAL_Z, REPEATER_POWERED, repeaterDelay, repeaterFacing,
+  attachedFace, B, faceTexture, fenceConnects, FRAME_EYE, LEVER_ON, leverFacing, pistonFacing, PISTON_EXTENDED, PORTAL_Z, REPEATER_POWERED, repeaterDelay, repeaterFacing,
   STAIRS_TOP, wirePower,
 } from '../../shared/blocks';
 import type { CellReader } from '../../shared/chunk';
@@ -17,10 +17,10 @@ import { WIRE_UP, wireShape } from '../../shared/redstone';
 import { onFace, selectionBoxes, type Box } from '../../shared/shapes';
 import { PA, PX, volumeIndex, type Volume } from './light';
 import {
-  OPAQUE_CELL, RENDER, S_BED, S_BUTTON, S_CACTUS, S_CAGE, S_CROP, S_CROSS, S_CUBE, S_DOOR, S_FARMLAND, S_FENCE, S_FIRE, S_LADDER, S_LANTERN, S_LEVER, S_LIQUID,
-  S_PISTON, S_PISTON_HEAD, S_PLATE, S_PORTAL, S_REPEATER, S_SLAB, S_STAIRS, S_TORCH, S_WIRE, SHAPE,
+  OPAQUE_CELL, RENDER, S_BED, S_BUTTON, S_CACTUS, S_CAGE, S_CROP, S_CROSS, S_CUBE, S_DAYLIGHT, S_DOOR, S_EGG, S_END_FRAME, S_END_PORTAL, S_FARMLAND, S_FENCE, S_FIRE,
+  S_LADDER, S_LANTERN, S_LEVER, S_LIQUID, S_OBSERVER, S_PANE, S_PISTON, S_PISTON_HEAD, S_PLATE, S_PORTAL, S_REPEATER, S_SLAB, S_STAIRS, S_TORCH, S_WIRE, SHAPE,
 } from './tables';
-import { VF_FIRE, VF_LAVA, VF_LEAVES, VF_PLANT, VF_PORTAL, VF_SURFACE, VF_WATER, VF_WIRE, type LayerMesh, type Layers } from './types';
+import { VF_END, VF_FIRE, VF_LAVA, VF_LEAVES, VF_PLANT, VF_PORTAL, VF_SURFACE, VF_WATER, VF_WIRE, type LayerMesh, type Layers } from './types';
 
 type V3 = readonly [number, number, number];
 /** Full-face corners p0..p3 per face (0..5 = -X,+X,-Y,+Y,-Z,+Z), counter-clockwise seen from outside. */
@@ -111,6 +111,20 @@ const FENCE_PARTS: readonly (readonly Part[])[] = Array.from({ length: 16 }, (_,
   }
   return parts;
 });
+/** Iron bars: a 2 px post and a full-height 2 px pane towards every connected side (N, E, S, W), its joint to the post hidden. */
+const PANE_PARTS: readonly (readonly Part[])[] = Array.from({ length: 16 }, (_, state) => {
+  const a = px(7), b = px(9), parts: Part[] = [[[a, 0, a, b, 1, b], ALL]];
+  const arms: Box[] = [[a, 0, 0, b, 1, a], [b, 0, a, 1, 1, b], [a, 0, b, b, 1, 1], [0, 0, a, a, 1, b]];
+  for (let dir = 0; dir < 4; dir++) if (fenceConnects(state, dir)) parts.push([arms[dir]!, ALL & ~(1 << FACING_FACE[(dir + 2) % 4])]);
+  return parts;
+});
+/** End portal frame: a 13/16 slab, and the eye of ender's 8 × 3 × 8 px knob on top once one sits in it. */
+const FRAME_PARTS: readonly Part[] = [[[0, 0, 0, 1, px(13), 1], ALL]], EYE_BOX: Box = [px(4), px(13), px(4), px(12), 1, px(12)];
+/** The End portal's surface height (MC: 12/16). */
+const END_PORTAL_Y = px(12);
+/** MC's dragon egg: eight stacked boxes swelling from a narrow foot to the widest band and tapering to the tip. */
+const EGG_PARTS: readonly Part[] = ([[6, 15, 10, 16], [5, 14, 11, 15], [4, 13, 12, 14], [3, 11, 13, 13], [2, 8, 14, 11], [1, 3, 15, 8], [2, 1, 14, 3], [3, 0, 13, 1]] as const)
+  .map(([a, y0, b, y1]): Part => [[px(a), px(y0), px(a), px(b), px(y1), px(b)], ALL]);
 /** Nether portal slabs by axis (state bit 0: the plane spans Z). */
 const PORTAL_BOXES: readonly Box[] = [[0, 0, px(6), 1, 1, px(10)], [px(6), 0, 0, px(10), 1, 1]];
 const REPEATER_BASE: Box = [0, 0, 0, 1, px(2), 1];
@@ -217,6 +231,8 @@ export class Mesher {
   private readonly torchOn: number;
   private readonly torchOff: number;
   private readonly leverStyle: Style;
+  /** The inserted eye's texture (its own key, or the frame's top-with-eye while an atlas lacks it). */
+  private readonly eyeStyle: Style;
   /** The volume being meshed, read in chunk-local coordinates (for the shared redstone dust rules). */
   private volume: Volume | null = null;
   private readonly read: CellReader = (x, y, z) => this.volume!.cells[volumeIndex(x, y, z)]!;
@@ -226,6 +242,8 @@ export class Mesher {
     this.torchOn = layerOf('redstone_torch');
     this.torchOff = layerOf('redstone_torch_off');
     this.leverStyle = style(0, -1, 0, layerOf('cobblestone'));
+    const eye = layerOf('end_portal_frame_eye');
+    this.eyeStyle = style(0, -1, 0, eye !== layerOf('missing') ? eye : layerOf('end_portal_frame_top_eye'));
   }
 
   /** Texture layer of a cell face (memoised per cell value). */
@@ -249,7 +267,7 @@ export class Mesher {
         if (!render) continue;
         const out = builders[render - 1]!, state = cell >> 8;
         switch (SHAPE[id]) {
-          case S_CUBE: this.cube(volume, i, cell, x, y, z, out); break;
+          case S_CUBE: case S_OBSERVER: this.cube(volume, i, cell, x, y, z, out); break;
           case S_LIQUID: this.liquid(volume, i, id, x, y, z, out); break;
           case S_CROSS: this.cross(volume, i, cell, x, y, z, out, JITTER[id] ? wx + x : null, wz + z); break;
           case S_CROP: this.crop(volume, i, cell, x, y, z, out); break;
@@ -257,12 +275,19 @@ export class Mesher {
           case S_SLAB: this.parts(volume, i, cell, x, y, z, SLAB_PARTS[state & 3]!, out); break;
           case S_STAIRS: this.parts(volume, i, cell, x, y, z, STAIR_PARTS[state & 7]!, out); break;
           case S_LADDER: this.parts(volume, i, cell, x, y, z, LADDER_PARTS[state & 3]!, out); break;
-          case S_DOOR: case S_BUTTON: case S_PLATE: this.box(volume, i, cell, x, y, z, selectionBoxes(cell)[0]!, ALL, out); break;
+          case S_DOOR: case S_BUTTON: case S_PLATE: case S_DAYLIGHT: this.box(volume, i, cell, x, y, z, selectionBoxes(cell)[0]!, ALL, out); break;
           case S_BED: this.parts(volume, i, cell, x, y, z, BED_PARTS, out, TOP_TURN[state & 3]); break;
           case S_CACTUS: this.parts(volume, i, cell, x, y, z, CACTUS_PARTS, out); break;
           case S_LANTERN: this.parts(volume, i, cell, x, y, z, LANTERN_PARTS, out); break;
           case S_FARMLAND: this.parts(volume, i, cell, x, y, z, FARMLAND_PARTS, out); break;
           case S_FENCE: this.parts(volume, i, cell, x, y, z, FENCE_PARTS[state & 15]!, out); break;
+          case S_PANE: this.parts(volume, i, cell, x, y, z, PANE_PARTS[state & 15]!, out); break;
+          case S_EGG: this.parts(volume, i, cell, x, y, z, EGG_PARTS, out); break;
+          case S_END_FRAME:
+            this.parts(volume, i, cell, x, y, z, FRAME_PARTS, out);
+            if (state & FRAME_EYE) this.box(volume, i, cell, x, y, z, EYE_BOX, NO_BOTTOM, out, this.eyeStyle);
+            break;
+          case S_END_PORTAL: this.endPortal(volume, i, cell, x, y, z, out); break;
           case S_PORTAL: this.box(volume, i, cell, x, y, z, PORTAL_BOXES[state & PORTAL_Z]!, ALL, out, PORTAL_STYLE); break;
           case S_CAGE: this.box(volume, i, cell, x, y, z, FULL, ALL, out, CAGE_STYLE); break;
           case S_FIRE: this.fire(volume, i, cell, x, y, z, out); break;
@@ -286,9 +311,9 @@ export class Mesher {
     const vertical = face === 2 || face === 3;
     switch (SHAPE[id]) {
       case S_CUBE: return !LEAVES[id];
-      case S_LIQUID: case S_FENCE: case S_PORTAL: return true;
+      case S_LIQUID: case S_FENCE: case S_PANE: case S_PORTAL: return true;
       case S_SLAB: return !vertical && ((cell ^ n) >> 8 & 3) === 0;
-      case S_BED: case S_FARMLAND: return !vertical;
+      case S_BED: case S_FARMLAND: case S_END_FRAME: return !vertical;
       case S_DOOR: return vertical && ((cell ^ n) >> 8 & 7) === 0;
       case S_CACTUS: return vertical;
     }
@@ -526,6 +551,24 @@ export class Mesher {
     }
     this.box(volume, i, cell, x, y, z, boxes[0]!, ALL, out, look);
     if (state & PISTON_EXTENDED) this.box(volume, i, cell, x, y, z, ROD_IN[face]!, ROD_MASK[face]!, out, look);
+  }
+
+  /** The End portal: one level surface at 12/16, seen from both sides, drawn by the shader's starfield (VF_END). */
+  private endPortal(volume: Volume, i: number, cell: number, x: number, y: number, z: number, out: Builder) {
+    for (let k = 0; k < 4; k++) {
+      QX[k] = x + DU[k]!;
+      QY[k] = y + END_PORTAL_Y;
+      QZ[k] = z + 1 - DV[k]!;
+      QU[k] = DU[k]!;
+      QV[k] = DV[k]!;
+      QS[k] = volume.sky[i]!;
+      QB[k] = volume.block[i]!;
+      QA[k] = 1;
+      QF[k] = VF_END;
+    }
+    const layer = this.texture(cell, 3);
+    out.add(layer, false);
+    out.add(layer, true);
   }
 
   /** Stages a flat quad on top of the cell at height h over [x0, x1] × [z0, z1]; the image's u runs along X, or along Z unless `alongX`. */

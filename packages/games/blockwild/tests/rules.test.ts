@@ -276,6 +276,8 @@ test('mining: MC break times, tool tiers and drops', () => {
   assert.deepEqual(drops(B.grass_block, 0, always), [{ id: B.dirt, n: 1 }]);
   assert.deepEqual(drops(B.diamond_ore, I.iron_pickaxe, always), [{ id: I.diamond, n: 1 }]);
   assert.deepEqual(drops(B.glass, 0, always), []);
+  assert.deepEqual(drops(B.gravel, 0, () => 0.05), [{ id: I.flint, n: 1 }], "gravel sometimes gives flint, so the Nether is reachable");
+  assert.deepEqual(drops(B.gravel, 0, () => 0.5), [{ id: B.gravel, n: 1 }]);
   assert.deepEqual(drops(B.oak_leaves, I.shears, always), [{ id: B.oak_leaves, n: 1 }]);
   assert.deepEqual(drops(B.short_grass, 0, () => 0.99), []);
   assert.deepEqual(drops(makeCell(B.wheat, 7), 0, always).map(d => d.id).sort(), [I.wheat, I.wheat_seeds].sort());

@@ -4,7 +4,7 @@
  */
 import { B, blockOf, cellId, cellState, isFullCube, isLiquid, isReplaceable, makeCell, PORTAL_Z } from '../shared/blocks';
 import type { CellReader } from '../shared/chunk';
-import { EDIT_LIMIT_TOAST, HEIGHT, inNether, NETHER, WORLD } from '../shared/constants';
+import { dimensionAt, EDIT_LIMIT_TOAST, END, HEIGHT, inEnd, inNether, NETHER, WORLD } from '../shared/constants';
 import { cellIndex, cellXYZ, FACES, type Vec3 } from '../shared/coords';
 import { LAVA_SEA } from '../shared/nether';
 import { bodyBox, regionTouches } from '../shared/physics';
@@ -72,8 +72,10 @@ function light(state: State, f: Frame): boolean {
 /**
  * Called when a player uses flint and steel, with (x, y, z) = the cell across the clicked face (where fire would go).
  * If that cell is inside an empty, valid obsidian frame (X plane first, like MC), light it and return true.
+ * Nether portals never light in the End: the only ways home are the exit portal and dying.
  */
 export function tryIgnite(state: State, x: number, y: number, z: number): boolean {
+  if (inEnd(x, z)) return false;
   const frame = findFrame(state.get, x, y, z, 0) ?? findFrame(state.get, x, y, z, 1);
   return !!frame && light(state, frame);
 }
@@ -119,15 +121,17 @@ export function onBlockChanged(state: State, x: number, y: number, z: number, ol
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 /**
  * Where a portal at (x, z) leads (8:1): overworld → (3584 + x / 8, z / 8) inside the Nether's margin, Nether →
- * (8·(x − 3584), 8·z) inside the world's margin, nudged out of the Nether's own corner of the overworld.
+ * (8·(x − 3584), 8·z) inside the world's margin, nudged out of the Nether's and the End's corners of the overworld
+ * (a Nether portal must never lead into the End).
  */
 export function portalTarget(x: number, z: number): [number, number] {
   x = Math.floor(x);
   z = Math.floor(z);
   if (!inNether(x, z)) return [clamp(NETHER.x0 + Math.floor(x / 8), NETHER.x0 + 8, NETHER.x0 + 503), clamp(Math.floor(z / 8), 8, 503)];
   const tx = clamp(8 * (x - NETHER.x0), 16, WORLD - 17), tz = clamp(8 * z, 16, WORLD - 17);
-  if (!inNether(tx, tz)) return [tx, tz];
-  return tx - NETHER.x0 < NETHER.z0 + NETHER.size - tz ? [NETHER.x0 - 16, tz] : [tx, NETHER.z0 + NETHER.size + 16];
+  if (inNether(tx, tz)) return tx - NETHER.x0 < NETHER.z0 + NETHER.size - tz ? [NETHER.x0 - 16, tz] : [tx, NETHER.z0 + NETHER.size + 16];
+  if (inEnd(tx, tz)) return tx - END.x0 < tz - END.z0 ? [END.x0 - 16, tz] : [tx, END.z0 - 16];
+  return [tx, tz];
 }
 
 /** Where an arriving player stands (feet, inside the portal) and the yaw that faces out of it. */
@@ -163,11 +167,11 @@ function arrivalIn(get: CellReader, x: number, y: number, z: number): Arrival {
 
 /** The nearest indexed portal within `radius` (horizontally) of (tx, tz) in the same dimension, lowest first on ties. */
 export function findPortal(state: State, tx: number, tz: number, radius: number): Vec3 | null {
-  const nether = inNether(tx, tz);
+  const dimension = dimensionAt(tx, tz);
   let best: Vec3 | null = null, bestD = radius * radius;
   for (const index of state.portals.cells) {
     const [x, y, z] = cellXYZ(index), d = (x - tx) ** 2 + (z - tz) ** 2;
-    if (inNether(x, z) !== nether || d > bestD || d === bestD && best && y >= best[1]) continue;
+    if (dimensionAt(x, z) !== dimension || d > bestD || d === bestD && best && y >= best[1]) continue;
     best = [x, y, z];
     bestD = d;
   }
@@ -221,14 +225,14 @@ function surfaceAbove(get: CellReader, x: number, z: number): number {
  * the preferred height with an obsidian platform. Null when the edit limit is in the way.
  */
 function buildPortal(state: State, tx: number, tz: number, preferredY: number): Arrival | null {
-  const get = state.get, nether = inNether(tx, tz), low = nether ? LAVA_SEA + 2 : 6, high = nether ? 118 : HEIGHT - 8;
+  const get = state.get, dimension = dimensionAt(tx, tz), nether = dimension === 'nether', low = nether ? LAVA_SEA + 2 : 6, high = nether ? 118 : HEIGHT - 8;
   let spot: [number, number, number, 0 | 1] | null = null;
   for (const need of [4, 0]) for (let r = 0; r <= BUILD_RADIUS && !spot; r++) {
     let bestD = Infinity;
     for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
       if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
       const x = tx + dx, z = tz + dz;
-      if (inNether(x - 1, z - 1) !== nether || inNether(x + 3, z + 3) !== nether) continue;
+      if (![-1, 3].every(a => dimensionAt(x + a, z - 1) === dimension && dimensionAt(x + a, z + 3) === dimension)) continue;
       for (let y = high; y >= low; y--) {
         if (!isFullCube(get(x, y - 1, z)) || !clear(get(x, y, z)) || Math.abs(y - preferredY) >= bestD) continue;
         const [axis, score] = ([0, 1] as const).filter(a => fits(get, x, y, z, a)).map(a => [a, need ? roominess(get, x, y, z, a) : 0] as const).sort((a, b) => b[1] - a[1])[0] ?? [null, 0];
@@ -275,7 +279,8 @@ export function tickPortals(state: State, dt: number): void {
   }
   const seconds = PORTAL_SECONDS[state.settings.mode];
   for (const player of state.players) {
-    if (!player.connected || player.dead || player.sleeping) {
+    // Nether portal cells in the End (only from old saves) lead nowhere: the End's ways out are the exit portal and dying.
+    if (!player.connected || player.dead || player.sleeping || inEnd(player.x, player.z)) {
       player.portal = 0;
       continue;
     }

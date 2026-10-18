@@ -80,7 +80,8 @@ export function tickSpawners(state: State, _dt: number): void {
 
 /**
  * One spawn cycle of the spawner at (x, y, z) for mob type `t`. Dungeon mobs ignore daylight and the first-day safe
- * zone, but a spawner only wakes for a player who is not under spawn protection. False when it stayed asleep.
+ * zone, but a spawner only wakes for a player who is not under spawn protection. False when nothing spawned (like MC,
+ * it retries shortly instead of waiting a full delay).
  */
 function runSpawner(state: State, x: number, y: number, z: number, t: number): boolean {
   const cx = x + 0.5, cy = y + 0.5, cz = z + 0.5;
@@ -98,5 +99,5 @@ function runSpawner(state: State, x: number, y: number, z: number, t: number): b
     crowd++;
   }
   if (spawned) addFx(state, 'spawner', cx, cy, cz, t);
-  return true;
+  return spawned > 0;
 }

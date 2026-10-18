@@ -2,7 +2,7 @@
 Blockwild entity models: blocky, MC-proportioned rigs with procedurally painted pixel-art skins.
 
 Run:  /Applications/Blender.app/Contents/MacOS/Blender -b --python packages/games/blockwild/art/build_models.py
-Out:  public/games/blockwild/models/<key>.glb  and  art/lineup.png
+Out:  public/games/blockwild/models/<key>.glb, art/lineup.png and art/lineup_dragon.png
 
 Conventions (glTF / three.js space):
   - meters; origin at the feet centre; +Y up.
@@ -21,6 +21,16 @@ Conventions (glTF / three.js space):
       ghast.glb: 'body' (4 m cube, y 0..4) with tentacle_0..8 (children of body at its underside, hanging -Y) and
         'face_shoot' (open-eyed face panel just in front of the calm face; the client shows it only while shooting).
       tnt.glb: 'body' (0.98 m TNT cube, material 'tnt').
+  - Endgame mobs (also mirrored in src/client/art/models.ts). Materials 'eyes' and 'glow' carry an emissive texture
+    (draw them unlit/full-bright); 'wing' and 'crystal_glass' use alpha cut-outs and are double-sided.
+      blaze.glb: 'head', 'body', rods_ring_0..2 (children of body on the +Y axis, top to bottom; spin them about +Y).
+      enderman.glb: humanoid pivots (2.9 m, 30 px limbs) plus 'jaw' (child of head, hinged at its back; drop it when
+        angry) and eye strips in material 'eyes'.
+      silverfish.glb: seg_0 (head) .. seg_3 (tail), siblings along +Z, each pivoting about +Y at its centre.
+      end_crystal.glb: 'base' (slab at the feet) and 'frame_outer', 'frame_inner', 'core' all centred 1.5 m up.
+      ender_dragon.glb (1/8 m per px): 'body' (centred 2 m up), neck_0..4 chained forward -> 'head' -> 'jaw', tail_0..9
+        chained backwards, wing_l/wing_r at the shoulders with wingtip_l/wingtip_r at the elbows, leg_fl..leg_br.
+      villager_mason.glb: villager pivots, brown robe with a stone-grey apron.
 Models are authored in pixel units: x = character right, y up, front = -z; `scale` converts pixels to meters.
 """
 import math
@@ -124,6 +134,7 @@ PROFESSIONS = [
     ('_armorer', [0x3A3A40, 0x46464E, 0x52525A, 0x5E5E68, 0x6A6A74], (168, 174, 182), [0x1C1C20, 0x26262B, 0x303036], 'patch'),
     ('_toolsmith', [0x3E4A5A, 0x4A5668, 0x566276, 0x626E82, 0x6E7A8E], (196, 156, 96), [0x5A3A1E, 0x6A4626, 0x7A522E], ''),
     ('_cleric', [0x4A2A5E, 0x5A346E, 0x6A3E7E, 0x7A488E, 0x8A549E], (232, 192, 72), None, 'pendant'),
+    ('_mason', [0x4A3420, 0x5A4028, 0x6A4C30, 0x7A5838, 0x886440], (178, 58, 44), [0x6E6E72, 0x828286, 0x96969A, 0xAAAAAE], ''),
 ]
 
 # ---------------------------------------------------------------- painters (f, u, v, w, h) -> rgb | rgba | None
@@ -630,6 +641,156 @@ def tnt_skin(f, u, v, w, h):
     return pick(TNT_RED, (0.1 if u % 4 == 3 else 0.75 if u % 4 == 0 else 0.5) + (hsh(u, v, 153) - 0.5) * 0.25)
 
 
+# Endgame palettes.
+BLAZE = [0x8A4A08, 0xB86A10, 0xDC9018, 0xF2B428, 0xFCD450, 0xFFF0A0]
+SOOT = [0x2A1E16, 0x3A2A1C, 0x4E3622]
+ENDER = [0x08070A, 0x0D0B10, 0x131018, 0x1A1620, 0x221C2A]
+EYE_GLOW = [0x8A2ADC, 0xB450F4, 0xD890FF, 0xF4D8FF]
+SILVER = [0x5E6268, 0x6E7278, 0x80848A, 0x92969C, 0xA6AAAE]
+SCALE = [0x0C0A10, 0x131019, 0x1A1622, 0x221C2C, 0x2C2438, 0x382E46]
+BELLY = [0x2A2632, 0x363140, 0x433C4E, 0x51495E]
+HORN = [0x55505E, 0x6B6676, 0x847E90, 0xA09AAC]
+MEMBRANE = [0x15111C, 0x1C1626, 0x241C30, 0x2E243C]
+CRYSTAL = [0x8A2A9A, 0xB842C0, 0xDC66DA, 0xF29AEE, 0xFFD8FC]
+OBSIDIAN = [0x0C0A14, 0x14101E, 0x1C1628, 0x2A2038, 0x3A2C4C]
+
+
+def blaze_head(f, u, v, w, h):
+    c = grain(BLAZE, 201, 0.6, 0.18, 0.25)(f, u, v)
+    if f == 'top':
+        return pick(SOOT, hsh(u, v, 202)) if vnoise(u, v, 203, 2) < 0.4 else c
+    if f == 'bottom' or f == 'back':
+        return shade(c, 0.85)
+    if f != 'front':
+        return c
+    if v == 2 and 1 <= u <= 6:
+        return pick(BLAZE, 0.95)  # bright brow
+    if v == 3 and u in (1, 2, 5, 6):
+        return BLACK if u in (2, 5) else (64, 36, 12)
+    if v in (4, 5) and 2 <= u <= 5:
+        return pick(SOOT, 0.3 + hsh(u, v, 204) * 0.7)  # smoky jaw shadow
+    if v == 6 and u in (2, 3, 4, 5):
+        return (40, 22, 10) if u in (3, 4) else shade(c, 0.7)
+    return c
+
+
+def blaze_rod_paint(f, u, v, w, h):
+    t = 0.95 - v / h * 0.55 + (hsh(u, v, 211 + FI[f]) - 0.5) * 0.25
+    if f in ('top', 'bottom'):
+        return pick(BLAZE, 0.9 if f == 'top' else 0.3)
+    if v == h - 1 or (v == h - 2 and hsh(u, FI[f], 212) < 0.5):
+        return pick(SOOT, hsh(u, v, 213))  # charred ends trail smoke
+    return pick(BLAZE, t)
+
+
+def ender_skin(seed):
+    return lambda f, u, v, w, h: pick(ENDER, 0.45 + (hsh(u, v, seed + FI[f]) - 0.5) * 0.5 + (vnoise(u, v, seed + 7, 3) - 0.5) * 0.4)
+
+
+def ender_eyes(f, u, v, w, h):
+    """Glowing eye strips (material 'eyes'): lilac centre, violet rim."""
+    return pick(EYE_GLOW, 0.95 if f == 'front' and 0 < u < w - 1 else 0.5)
+
+
+def silverfish_skin(seed):
+    def paint(f, u, v, w, h):
+        c = grain(SILVER, seed, 0.5, 0.2, 0.2, 2.0)(f, u, v)
+        if f in ('left', 'right', 'front', 'back') and v == h - 1:
+            return shade(c, 0.7)
+        if f == 'top' and v % 2 == 0:
+            return shade(c, 1.12)  # plate ridges
+        return c
+    return paint
+
+
+def silverfish_head(f, u, v, w, h):
+    c = silverfish_skin(221)(f, u, v, w, h)
+    if f == 'front' and v == 0 and u in (0, w - 1):
+        return BLACK
+    return c
+
+
+def crystal_base(f, u, v, w, h):
+    c = pick(OBSIDIAN, 0.45 + (hsh(u, v, 231 + FI[f]) - 0.5) * 0.5)
+    if f == 'top':
+        d = max(abs(u - (w - 1) / 2), abs(v - (h - 1) / 2))
+        return pick(CRYSTAL, 0.3) if d >= (w - 1) / 2 - 0.5 else c
+    if v == 0:
+        return pick(CRYSTAL, 0.15)
+    return c
+
+
+def crystal_glass(seed, ramp_t):
+    """Mostly clear glass: a pale rim on every face and a few sparkling panes."""
+    def paint(f, u, v, w, h):
+        rim = u in (0, w - 1) or v in (0, h - 1)
+        if rim:
+            return (*mixc(hexc(CRYSTAL[4]), (220, 228, 240), 0.5), 255)
+        if (u + v) % 4 == 0 and hsh(u, v, seed + FI[f]) < 0.5:
+            return (*pick(CRYSTAL, ramp_t), 255)
+        return None
+    return paint
+
+
+def crystal_core(f, u, v, w, h):
+    d = math.hypot(u - (w - 1) / 2, v - (h - 1) / 2)
+    return pick(CRYSTAL, 1.0 - d / w * 1.1 + (hsh(u, v, 241 + FI[f]) - 0.5) * 0.2)
+
+
+def dragon_hide(seed, belly=False):
+    """Overlapping dark scales (brick-offset rows of 2x2 with a lit upper edge); purple-grey belly underneath."""
+    def paint(f, u, v, w, h):
+        if belly and f == 'bottom':
+            return pick(BELLY, 0.5 + (0.3 if v % 3 == 0 else 0) + (hsh(u, v, seed) - 0.5) * 0.3)
+        su = (u + (v // 2) % 2) % 3
+        t = 0.45 + (0.35 if su == 0 and v % 2 == 0 else -0.1 if su == 2 else 0) + (vnoise(u, v, seed + FI[f], 4) - 0.5) * 0.35
+        return pick(SCALE, t - (0.15 if f == 'bottom' else 0))
+    return paint
+
+
+def dragon_head(f, u, v, w, h):
+    c = dragon_hide(251)(f, u, v, w, h)
+    if f == 'front' and v == h - 1:
+        return pick(HORN, 0.4)
+    return c
+
+
+def dragon_snout(f, u, v, w, h):
+    c = dragon_hide(252)(f, u, v, w, h)
+    if f == 'top' and v < 3 and u in (2, 3, w - 4, w - 3):
+        return (10, 8, 12)  # nostrils
+    if f in ('left', 'right', 'front') and v == h - 1:
+        return pick(HORN, 0.7) if (u % 2) else shade(c, 0.8)  # teeth
+    return c
+
+
+def dragon_jaw(f, u, v, w, h):
+    c = dragon_hide(253)(f, u, v, w, h)
+    if f == 'top':
+        return (70, 20, 40) if 1 <= u <= w - 2 and v >= 2 else pick(HORN, 0.7)  # mouth
+    if f in ('left', 'right', 'front') and v == 0:
+        return pick(HORN, 0.7) if u % 2 == 0 else shade(c, 0.8)
+    return c
+
+
+def horn_paint(f, u, v, w, h):
+    return pick(HORN, 0.8 - v / max(1, h) * 0.6 + (hsh(u, v, 254 + FI[f]) - 0.5) * 0.2)
+
+
+def membrane(seed, ribs):
+    """Wing skin: dark membrane with lighter bones fanning from the leading edge (top/bottom faces, u along the span)."""
+    def paint(f, u, v, w, h):
+        if f not in ('top', 'bottom'):
+            return pick(MEMBRANE, 0.3)
+        back = v if f == 'top' else h - 1 - v  # rows from the trailing edge (the top face's v runs back to front)
+        if back < 3 * math.sin(math.pi * (u % ribs) / ribs):
+            return None  # scalloped trailing edge between the bones
+        if u % ribs == 0 or back == h - 1:
+            return pick(HORN, 0.35 if f == 'top' else 0.2)
+        return pick(MEMBRANE, 0.5 + (vnoise(u, v, seed, 5) - 0.5) * 0.6 - (0.2 if f == 'bottom' else 0))
+    return paint
+
+
 # ---------------------------------------------------------------- model specs
 
 
@@ -765,7 +926,111 @@ def models():
     ghast = dict(key='ghast', scale=4 / 16, pivots=ghast_pivots, boxes=ghast_boxes)
 
     tnt = dict(key='tnt', scale=0.98 / 16, pivots=[('body', (0, 8, 0))], boxes=[Box('body', 'tnt', (-8, -8, -8), (16, 16, 16), tnt_skin)])
-    return [player, zombie, skeleton, creeper, spider, cow, pig, sheep, chicken, *villagers, piglin, ghast, tnt]
+    return [player, zombie, skeleton, creeper, spider, cow, pig, sheep, chicken, *villagers, piglin, ghast, tnt,
+            blaze(), enderman(), silverfish(), end_crystal(), ender_dragon()]
+
+
+def blaze():
+    """Head over three rings of four glowing rods (rods_ring_0 top .. 2 bottom); spin each ring about +Y."""
+    pivots = [('body', (0, 12, 0)), ('head', (0, 20, 0))]
+    boxes = [Box('head', 'blaze', (-4, 0, -4), (8, 8, 8), blaze_head)]
+    for ring, (y, radius, phase) in enumerate(((18, 8, 0.0), (11, 6.5, math.pi / 4), (4, 4.5, 0.0))):
+        pivots.append((f'rods_ring_{ring}', (0, y, 0), 'body'))
+        for k in range(4):
+            a = phase + k * math.pi / 2
+            x, z = round(math.cos(a) * radius * 2) / 2, round(math.sin(a) * radius * 2) / 2
+            boxes.append(Box(f'rods_ring_{ring}', 'glow', (x - 1, -4, z - 1), (2, 8, 2), blaze_rod_paint))
+    return dict(key='blaze', scale=1.8 / 28, pivots=pivots, boxes=boxes)
+
+
+def enderman():
+    """Very tall and thin: a small body on long arms and legs; the jaw (child of head, hinged at its back) drops when angry."""
+    m = 'enderman'
+    pivots = [('body', (0, 30, 0)), ('head', (0, 42, 0)), ('jaw', (0, 44, 4), 'head'),
+              ('arm_l', (-5, 41, 0)), ('arm_r', (5, 41, 0)), ('leg_l', (-2, 30, 0)), ('leg_r', (2, 30, 0))]
+    boxes = [
+        Box('body', m, (-4, 0, -2), (8, 12, 4), ender_skin(261)),
+        Box('head', m, (-4, 2, -4), (8, 6, 8), ender_skin(262)),
+        Box('jaw', m, (-4, -2, -8), (8, 2, 8), ender_skin(263), inflate=0.05),
+        Box('head', 'eyes', (-3.5, 3.5, -4.3), (3, 1, 0.5), ender_eyes),
+        Box('head', 'eyes', (0.5, 3.5, -4.3), (3, 1, 0.5), ender_eyes),
+        Box('arm_l', m, (-1, -29, -1), (2, 30, 2), ender_skin(264)),
+        Box('arm_r', m, (-1, -29, -1), (2, 30, 2), ender_skin(265)),
+        Box('leg_l', m, (-1, -30, -1), (2, 30, 2), ender_skin(266)),
+        Box('leg_r', m, (-1, -30, -1), (2, 30, 2), ender_skin(267)),
+    ]
+    return dict(key='enderman', scale=2.9 / 50, pivots=pivots, boxes=boxes)
+
+
+def silverfish():
+    """Four plated segments head to tail (seg_0 front); each pivots about +Y at its centre for the scurry wiggle."""
+    segments = [(4, 3, 2, -6), (6, 4, 3, -3.5), (5, 3.5, 3, -0.5), (3, 2, 3, 2.5)]  # width, height, depth, centre z
+    pivots, boxes = [], []
+    for i, (w, h, d, z) in enumerate(segments):
+        pivots.append((f'seg_{i}', (0, 0, z)))
+        boxes.append(Box(f'seg_{i}', 'silverfish', (-w / 2, 0, -d / 2), (w, h, d), silverfish_head if i == 0 else silverfish_skin(222 + i)))
+    boxes += [Box('seg_1', 'silverfish', (-4, 4, -1), (8, 1, 2), silverfish_skin(227)),  # bristly back plates
+              Box('seg_2', 'silverfish', (-3, 3.5, -1), (6, 1, 2), silverfish_skin(228)),
+              Box('seg_3', 'silverfish', (-0.5, 0, 1.5), (1, 1, 2), silverfish_skin(229))]
+    return dict(key='silverfish', scale=0.3 / 5, pivots=pivots, boxes=boxes)
+
+
+def end_crystal():
+    """Base slab plus three nested cubes centred 1.5 m up: frame_outer and frame_inner (clear glass), core (glowing)."""
+    pivots = [('base', (0, 0, 0)), ('frame_outer', (0, 24, 0)), ('frame_inner', (0, 24, 0)), ('core', (0, 24, 0))]
+    boxes = [Box('base', 'end_crystal', (-6, 0, -6), (12, 3, 12), crystal_base),
+             Box('frame_outer', 'crystal_glass', (-6, -6, -6), (12, 12, 12), crystal_glass(232, 0.7)),
+             Box('frame_inner', 'crystal_glass', (-4.5, -4.5, -4.5), (9, 9, 9), crystal_glass(233, 0.5)),
+             Box('core', 'glow', (-3, -3, -3), (6, 6, 6), crystal_core)]
+    return dict(key='end_crystal', scale=2 / 32, pivots=pivots, boxes=boxes)
+
+
+DRAGON_NECK, DRAGON_TAIL = 5, 10
+
+
+def ender_dragon():
+    """
+    The boss, at 1/8 m per pixel. Body centred 2 m up (DRAGON_PARTS), head ~10 m forward at the end of a five-segment
+    neck chain (neck_0 .. neck_4 -> head -> jaw), ten tail segments chained backwards (tail_0 .. tail_9), wings
+    (wing_l / wing_r at the shoulders, wingtip_l / wingtip_r at the elbows, spanning +-12.5 m), four legs.
+    """
+    m, pivots, boxes = 'ender_dragon', [('body', (0, 16, 0))], []
+    boxes += [Box('body', m, (-12, -10, -32), (24, 20, 64), dragon_hide(271, belly=True))]
+    boxes += [Box('body', m, (-1, 10, z), (2, 3, 4), horn_paint) for z in (-26, -14, -2, 10, 22)]  # spine ridge
+    parent, z = 'body', -32
+    for i in range(DRAGON_NECK):
+        pivots.append((f'neck_{i}', (0, 20, z), parent))
+        boxes += [Box(f'neck_{i}', m, (-5, -5, -7), (10, 10, 7), dragon_hide(272 + i, belly=True)),
+                  Box(f'neck_{i}', m, (-1, 5, -5), (2, 2, 3), horn_paint)]
+        parent, z = f'neck_{i}', z - 7
+    pivots += [('head', (0, 20, z), parent), ('jaw', (0, 16, z - 12), 'head')]
+    boxes += [
+        Box('head', m, (-8, -5, -16), (16, 12, 16), dragon_head),
+        Box('head', m, (-6, -3, -32), (12, 5, 16), dragon_snout),
+        Box('head', m, (-6, 7, -4), (2, 4, 6), horn_paint), Box('head', m, (4, 7, -4), (2, 4, 6), horn_paint),
+        Box('head', m, (-5, 2, -32.5), (2, 2, 1), dragon_snout), Box('head', m, (3, 2, -32.5), (2, 2, 1), dragon_snout),
+        Box('head', 'eyes', (-7, 3, -16.5), (3, 2, 1), ender_eyes), Box('head', 'eyes', (4, 3, -16.5), (3, 2, 1), ender_eyes),
+        Box('jaw', m, (-6, -3, -20), (12, 3, 20), dragon_jaw),
+    ]
+    for side, s in (('l', -1), ('r', 1)):
+        lo = lambda x0, w: x0 if s > 0 else -x0 - w  # mirror an x span to the left side
+        pivots += [(f'wing_{side}', (s * 12, 24, -16), 'body'), (f'wingtip_{side}', (s * 60, 24, -16), f'wing_{side}')]
+        boxes += [Box(f'wing_{side}', m, (lo(0, 48), -2, -2), (48, 4, 4), horn_paint),
+                  Box(f'wing_{side}', 'wing', (lo(0, 48), -0.5, 2), (48, 1, 40), membrane(281, 12)),
+                  Box(f'wingtip_{side}', m, (lo(0, 40), -1.5, -1.5), (40, 3, 3), horn_paint),
+                  Box(f'wingtip_{side}', 'wing', (lo(0, 40), -0.5, 1.5), (40, 1, 32), membrane(282, 10))]
+    parent, z = 'body', 32
+    for i in range(DRAGON_TAIL):
+        w = 10 - i * 0.7
+        pivots.append((f'tail_{i}', (0, 18, z), parent))
+        boxes += [Box(f'tail_{i}', m, (-w / 2, -w / 2, 0), (w, w, 6), dragon_hide(291 + i)),
+                  Box(f'tail_{i}', m, (-1, w / 2, 1), (2, 2, 3), horn_paint)]
+        parent, z = f'tail_{i}', z + 6
+    for name, x, zl, size in (('leg_fl', -10, -22, 6), ('leg_fr', 10, -22, 6), ('leg_bl', -11, 20, 8), ('leg_br', 11, 20, 8)):
+        pivots.append((name, (x, 8, zl), 'body'))
+        boxes += [Box(name, m, (-size / 2, -6, -size / 2), (size, 12, size), dragon_hide(301)),
+                  Box(name, m, (-size / 2 - 1, -8, -size / 2 - 3), (size + 2, 2, size + 3), horn_paint)]
+    return dict(key='ender_dragon', scale=1 / 8, pivots=pivots, boxes=boxes)
 
 
 def villager(suffix, ramp, trim, apron, extra):
@@ -791,7 +1056,8 @@ def villager(suffix, ramp, trim, apron, extra):
     return dict(key='villager' + suffix, scale=1.95 / 34, pivots=pivots, boxes=boxes)
 
 
-MATERIALS = {'hair': dict(alpha=True), 'bone': dict(alpha=True, double=True)}
+MATERIALS = {'hair': dict(alpha=True), 'bone': dict(alpha=True, double=True), 'wing': dict(alpha=True, double=True),
+             'crystal_glass': dict(alpha=True, double=True), 'eyes': dict(glow=True), 'glow': dict(glow=True)}
 
 # ---------------------------------------------------------------- texture packing and painting
 
@@ -882,6 +1148,10 @@ def make_material(kind, image, name=None):
         clip.operation = 'ROUND'
         links.new(tex.outputs['Alpha'], clip.inputs[0])
         links.new(clip.outputs[0], bsdf.inputs['Alpha'])
+    if opts.get('glow'):  # exported as an emissive texture
+        links.new(tex.outputs['Color'], bsdf.inputs['Emission Color' if 'Emission Color' in bsdf.inputs else 'Emission'])
+        if 'Emission Strength' in bsdf.inputs:
+            bsdf.inputs['Emission Strength'].default_value = 1.0
     mat.use_backface_culling = not opts.get('double', False)
     return mat
 
@@ -1001,6 +1271,36 @@ def pose(key, pivots, variant):
             child.hide_render = variant != 'shoot'
     elif key == 'tnt':
         pass
+    elif key == 'blaze':
+        for i, yaw in enumerate((0.3, -0.4, 0.6)):
+            rot(f'rods_ring_{i}', 0, yaw)
+        rot('head', 0, 0.25)
+    elif key == 'enderman':
+        rot('leg_l', 0.2)
+        rot('leg_r', -0.2)
+        rot('arm_l', -0.2)
+        rot('arm_r', 0.25)
+        rot('jaw', -0.3)
+    elif key == 'silverfish':
+        for i, yaw in enumerate((0.25, -0.1, 0.2, -0.35)):
+            rot(f'seg_{i}', 0, yaw)
+    elif key == 'end_crystal':
+        rot('frame_outer', 0.62, 0.79, 0.3)
+        rot('frame_inner', -0.4, 0.3, 0.9)
+        rot('core', 0.79, 0.79)
+    elif key == 'ender_dragon':
+        for i in range(5):
+            rot(f'neck_{i}', 0.1, 0.06)
+        rot('head', -0.35, 0.05)
+        rot('jaw', -0.3)
+        rot('wing_l', 0, 0, -0.3)
+        rot('wing_r', 0, 0, 0.3)
+        rot('wingtip_l', 0, 0, 0.55)
+        rot('wingtip_r', 0, 0, -0.55)
+        for i in range(10):
+            rot(f'tail_{i}', 0.03, -0.1 if i > 2 else 0)
+        for leg, x in (('leg_fl', 0.4), ('leg_fr', 0.2), ('leg_bl', 0.5), ('leg_br', 0.35)):
+            rot(leg, x)
     elif key in ('player', 'zombie', 'skeleton', 'zombified_piglin'):
         rot('leg_l', 0.35)
         rot('leg_r', -0.35)
@@ -1036,11 +1336,12 @@ def pose(key, pivots, variant):
 
 def render_lineup(specs):
     clear_scene()
-    scene = bpy.context.scene
     by_key = {spec['key']: spec for spec in specs}
     row = ['player', 'zombie', 'skeleton', 'creeper', 'spider', 'cow', 'pig', 'sheep', 'sheep', 'chicken',
-           'villager', 'villager_librarian', 'villager_armorer', 'villager_toolsmith', 'villager_cleric', 'zombified_piglin', 'tnt']
-    widths = {'player': 1.0, 'zombie': 1.0, 'skeleton': 0.9, 'creeper': 0.9, 'spider': 2.1, 'cow': 1.4, 'pig': 1.2, 'sheep': 1.3, 'chicken': 0.7, 'tnt': 1.0, 'zombified_piglin': 1.2}
+           'villager', 'villager_librarian', 'villager_armorer', 'villager_toolsmith', 'villager_cleric', 'villager_mason', 'zombified_piglin', 'tnt',
+           'blaze', 'enderman', 'silverfish', 'end_crystal']
+    widths = {'player': 1.0, 'zombie': 1.0, 'skeleton': 0.9, 'creeper': 0.9, 'spider': 2.1, 'cow': 1.4, 'pig': 1.2, 'sheep': 1.3, 'chicken': 0.7, 'tnt': 1.0,
+              'zombified_piglin': 1.2, 'blaze': 1.3, 'silverfish': 0.8, 'end_crystal': 1.1}
     x = 0.0
     for i, key in enumerate(row):
         x += widths.get(key, 1.0) / 2
@@ -1063,11 +1364,28 @@ def render_lineup(specs):
         root, pivots, _ = build(by_key['ghast'], (-width * gx, -7, 3.2), f'.g{i}')
         root.rotation_euler = (0, 0, math.radians(-15 if i else 15))
         pose('ghast', pivots, variant)
-    bpy.ops.mesh.primitive_plane_add(size=80, location=(-width / 2, 0, 0))
+    stage((-width / 2, width * 0.88, 6), (-width / 2, 0, 3), (0.09, 0.2, 0.05), (0.52, 0.7, 0.95), 'lineup.png', (3600, 1000))
+
+
+def render_dragon(specs):
+    """The boss in its own framed shot: the dragon over end stone with a crystal and an enderman for scale."""
+    clear_scene()
+    by_key = {spec['key']: spec for spec in specs}
+    for key, at, yaw in (('ender_dragon', (0, -2, 4), -62), ('end_crystal', (12, -9, 0), 0), ('enderman', (-11, -4, 0), 25)):
+        root, pivots, _ = build(by_key[key], at, '.d')
+        root.rotation_euler = (0, 0, math.radians(yaw))
+        pose(key, pivots, '')
+    stage((1, 27, 10), (0, -2, 4.5), (0.62, 0.6, 0.38), (0.06, 0.03, 0.09), 'lineup_dragon.png', (2000, 1100))
+
+
+def stage(camera, target, ground_rgb, sky_rgb, filename, resolution):
+    """Ground plane, camera, a key and a fill sun, a flat sky, then render to art/<filename>."""
+    scene = bpy.context.scene
+    bpy.ops.mesh.primitive_plane_add(size=120, location=(target[0], 0, 0))
     ground = bpy.context.active_object
     gmat = bpy.data.materials.new('ground')
     gbsdf = next(n for n in gmat.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
-    gbsdf.inputs['Base Color'].default_value = (0.09, 0.2, 0.05, 1)
+    gbsdf.inputs['Base Color'].default_value = (*ground_rgb, 1)
     gbsdf.inputs['Roughness'].default_value = 1
     ground.data.materials.append(gmat)
 
@@ -1075,8 +1393,7 @@ def render_lineup(specs):
     cam_data.lens = 30
     cam = bpy.data.objects.new('camera', cam_data)
     scene.collection.objects.link(cam)
-    cam.location = (-width / 2, 24, 5.2)
-    target = (-width / 2, 0, 2.6)
+    cam.location = camera
     direction = tuple(target[i] - cam.location[i] for i in range(3))
     from mathutils import Vector
     cam.rotation_euler = Vector(direction).to_track_quat('-Z', 'Y').to_euler()
@@ -1097,7 +1414,7 @@ def render_lineup(specs):
     if hasattr(world, 'use_nodes') and not world.use_nodes:
         world.use_nodes = True
     bg = next(n for n in world.node_tree.nodes if n.type == 'BACKGROUND')
-    bg.inputs['Color'].default_value = (0.52, 0.7, 0.95, 1)
+    bg.inputs['Color'].default_value = (*sky_rgb, 1)
     bg.inputs['Strength'].default_value = 0.9
 
     for engine in ('BLENDER_EEVEE_NEXT', 'BLENDER_EEVEE', 'CYCLES'):
@@ -1109,8 +1426,8 @@ def render_lineup(specs):
     if scene.render.engine == 'CYCLES':
         scene.cycles.samples = 48
     scene.view_settings.view_transform = 'Standard'
-    scene.render.resolution_x, scene.render.resolution_y = 2800, 1000
-    scene.render.filepath = os.path.join(HERE, 'lineup.png')
+    scene.render.resolution_x, scene.render.resolution_y = resolution
+    scene.render.filepath = os.path.join(HERE, filename)
     bpy.ops.render.render(write_still=True)
 
 
@@ -1122,7 +1439,8 @@ def main():
         path, size = export(spec)
         print(f'[blockwild] {os.path.basename(path)} {size} bytes')
     render_lineup(specs)
-    print('[blockwild] lineup', os.path.join(HERE, 'lineup.png'))
+    render_dragon(specs)
+    print('[blockwild] lineup', os.path.join(HERE, 'lineup.png'), os.path.join(HERE, 'lineup_dragon.png'))
 
 
 main()

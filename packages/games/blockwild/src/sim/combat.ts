@@ -3,11 +3,16 @@ import { B, blockOf, cellId, isOpaque, isSolid } from '../shared/blocks';
 import { addItem } from '../shared/inventory';
 import { I, type Slot } from '../shared/items';
 import { eyeHeight } from '../shared/physics';
-import { MOB, MOB_TYPES, mobBox, MS, q2 } from '../shared/protocol';
+import { MOB, MOB_TYPES, mobBoxes, MS, PK, q2 } from '../shared/protocol';
 import { raycastBlocks, rayAabb } from '../shared/raycast';
 import { damageArmor, reduceDamage } from './armor';
+import { tickBlazeFireballs } from './blaze';
 import { closeScreen } from './containers';
+import { onDragonDamaged, tickAcid } from './dragon';
+import { tickEyes } from './ender-eyes';
+import { onEndermanHurt } from './enderman';
 import { MAX_ITEMS } from './entities';
+import { tickPearls } from './pearls';
 import { primeTnt } from './redstone';
 import { addFx, isProtected, nextId, playerById, type Arrow, type DamageCause, type Mob, type Player, type State } from './state';
 import { breakBlock, dropStacks } from './world';
@@ -49,7 +54,7 @@ export type Knock = { x: number; z: number; strength: number; up?: number };
  * decides whether armor helps (armor.reduceDamage, then armor.damageArmor with the same raw amount).
  */
 export function damagePlayer(state: State, player: Player, amount: number, message: string, knock?: Knock, cause: DamageCause = 'other'): boolean {
-  if (player.dead || !player.connected || state.settings.mode === 'creative' || isProtected(state, player) || amount <= 0) return false;
+  if (player.dead || !player.connected || state.settings.mode === 'creative' || isProtected(state, player) && cause !== 'void' || amount <= 0) return false;
   const applied = absorb(player, state.clock, amount);
   if (applied <= 0) return false;
   const reduced = reduceDamage(state, player, applied, cause);
@@ -98,10 +103,19 @@ const MOB_DROPS: Record<number, MobDrop[]> = {
   [MOB.ghast]: [[I.gunpowder, 0, 2]],
 };
 export const mobState = (mob: Mob) => (mob.sheared ? MS.SHEARED : 0) | (mob.baby > 0 ? MS.BABY : 0);
+/** World hit boxes of a live mob (mobBoxes: one, or the dragon's posed parts). */
+export const mobHitBoxes = (mob: Mob) => mobBoxes({ t: mob.t, x: mob.x, y: mob.y, z: mob.z, s: mobState(mob), yaw: mob.yaw, pt: mob.pt });
+/** How a mob was hit: `part` indexes mobHitBoxes (the dragon's head is DRAGON_HEAD); `arrow` for arrow hits. */
+export type Hit = { part?: number; arrow?: boolean };
 
-/** Damage a mob; attackers make hostiles angry and animals panic. Objects (primed TNT) take no damage. */
-export function damageMob(state: State, mob: Mob, amount: number, attacker: Player | null, knock?: Knock): boolean {
-  if (mob.health <= 0 || amount <= 0 || MOB_TYPES[mob.t]!.kind === 'object') return false;
+/**
+ * Damage a mob; attackers make hostiles angry and animals panic. Objects (primed TNT) take no damage; the dragon and end
+ * crystals take theirs through dragon.onDragonDamaged, and endermen may dodge (enderman.onEndermanHurt).
+ */
+export function damageMob(state: State, mob: Mob, amount: number, attacker: Player | null, knock?: Knock, hit: Hit = {}): boolean {
+  if (mob.health <= 0 || amount <= 0) return false;
+  if (mob.t === MOB.ender_dragon || mob.t === MOB.end_crystal) return onDragonDamaged(state, mob, amount, attacker, hit);
+  if (MOB_TYPES[mob.t]!.kind === 'object' || mob.t === MOB.enderman && !onEndermanHurt(state, mob, amount, attacker, hit)) return false;
   const applied = absorb(mob, state.clock, amount);
   if (applied <= 0) return false;
   mob.health -= applied;
@@ -131,12 +145,23 @@ export function killMob(state: State, mob: Mob, killer: Player | null) {
       if (n > 0) drops.push({ id: item, n });
     }
     if (mob.t === MOB.sheep && !mob.sheared) drops.push({ id: B.white_wool, n: 1 });
+    if (killer) drops.push(...playerKillDrops(state, mob));
     dropStacks(state, mob.x, mob.y + 0.5, mob.z, drops);
   }
   if (killer) {
     killer.stats.mobs++;
     state.stats.mobs++;
   }
+}
+
+/**
+ * Drops only a player kill earns: a blaze rod (a second one a third of the time), and 1-3 ender pearls.
+ * (`state.pearlPity` is still saved so older v10 worlds load, but every kill now drops pearls.)
+ */
+function playerKillDrops(state: State, mob: Mob): Slot[] {
+  if (mob.t === MOB.blaze) return [{ id: I.blaze_rod, n: state.rand() < 1 / 3 ? 2 : 1 }];
+  if (mob.t !== MOB.enderman) return [];
+  return [{ id: I.ender_pearl, n: 1 + Math.floor(state.rand() * 3) }];
 }
 
 const EXPLOSION_PROOF = new Set<number>([B.bedrock, B.obsidian, B.water, B.air, B.barrier]);
@@ -186,18 +211,21 @@ export function explode(state: State, x: number, y: number, z: number, power: nu
   }
 }
 
-/** Spawn an arrow, or with k = 1 a ghast fireball (moved by nether-mobs.tickFireballs). Returns it. */
+/**
+ * Spawn an arrow, or another projectile kind `k` (PK; each moves in its owner's tick). Arrows and ghast fireballs play
+ * their launch effect here; the other kinds play their own. Returns it.
+ */
 export function spawnArrow(state: State, x: number, y: number, z: number, vx: number, vy: number, vz: number, damage: number, shooter: string | number, pickup: boolean, k = 0): Arrow {
   const arrow: Arrow = { id: nextId(state), x, y, z, vx, vy, vz, age: 0, stuck: false, damage, shooter, pickup, k };
   state.arrows.push(arrow);
   if (state.arrows.length > MAX_ARROWS) state.arrows.splice(0, state.arrows.length - MAX_ARROWS);
-  addFx(state, k ? 'fireball' : 'bow', x, y, z);
+  if (k === PK.ARROW || k === PK.GHAST_FIREBALL) addFx(state, k ? 'fireball' : 'bow', x, y, z);
   return arrow;
 }
 
-function arrowHitsEntity(state: State, arrow: Arrow, length: number): { player?: Player; mob?: Mob; distance: number } | null {
+function arrowHitsEntity(state: State, arrow: Arrow, length: number): { player?: Player; mob?: Mob; part?: number; distance: number } | null {
   const origin: [number, number, number] = [arrow.x, arrow.y, arrow.z], dir: [number, number, number] = [arrow.vx, arrow.vy, arrow.vz];
-  let best: { player?: Player; mob?: Mob; distance: number } | null = null;
+  let best: { player?: Player; mob?: Mob; part?: number; distance: number } | null = null;
   const speed = Math.hypot(arrow.vx, arrow.vy, arrow.vz);
   if (typeof arrow.shooter === 'number') {
     // Mob arrows hit players (co-op: player arrows never hit players).
@@ -210,9 +238,10 @@ function arrowHitsEntity(state: State, arrow: Arrow, length: number): { player?:
   } else {
     for (const mob of state.mobs) {
       if (mob.health <= 0) continue;
-      const box = mobBox({ t: mob.t, x: mob.x, y: mob.y, z: mob.z, s: mobState(mob) });
-      const hit = rayAabb(origin, dir, [box[0] - 0.1, box[1], box[2] - 0.1, box[3] + 0.1, box[4], box[5] + 0.1], length);
-      if (hit && (!best || hit.distance * speed < best.distance)) best = { mob, distance: hit.distance * speed };
+      mobHitBoxes(mob).forEach((box, part) => {
+        const hit = rayAabb(origin, dir, [box[0] - 0.1, box[1], box[2] - 0.1, box[3] + 0.1, box[4], box[5] + 0.1], length);
+        if (hit && (!best || hit.distance * speed < best.distance)) best = { mob, part, distance: hit.distance * speed };
+      });
     }
   }
   return best;
@@ -241,7 +270,7 @@ export function tickArrows(state: State, dt: number) {
     if (entity && (!block || entity.distance <= block.distance)) {
       const knock: Knock = { x: arrow.x - arrow.vx, z: arrow.z - arrow.vz, strength: 4, up: 3 };
       if (entity.player) damagePlayer(state, entity.player, arrow.damage, `was shot by ${shooterName(state, arrow)}`, knock, 'arrow');
-      if (entity.mob) damageMob(state, entity.mob, arrow.damage, typeof arrow.shooter === 'string' ? playerById(state, arrow.shooter) ?? null : null, knock);
+      if (entity.mob) damageMob(state, entity.mob, arrow.damage, typeof arrow.shooter === 'string' ? playerById(state, arrow.shooter) ?? null : null, knock, { part: entity.part, arrow: true });
       addFx(state, 'hit', arrow.x, arrow.y, arrow.z);
       arrow.age = Infinity;
       continue;
@@ -262,6 +291,11 @@ export function tickArrows(state: State, dt: number) {
     arrow.vz *= drag;
     arrow.vy = arrow.vy * drag - 20 * dt;
   }
+  // Projectile kinds 2..5 belong to their feature modules (ghast fireballs already moved in nether-mobs.tickFireballs).
+  tickBlazeFireballs(state, dt);
+  tickEyes(state, dt);
+  tickAcid(state, dt);
+  tickPearls(state, dt);
   if (state.arrows.some(arrow => arrow.age === Infinity)) state.arrows = state.arrows.filter(arrow => arrow.age !== Infinity);
 }
 function shooterName(state: State, arrow: Arrow) {

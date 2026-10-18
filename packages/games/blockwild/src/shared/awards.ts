@@ -1,7 +1,7 @@
 /** Results-journal awards, shared by the server outcome rows and the results view. */
 import type { JournalEntry } from './protocol';
 
-export type AwardKey = keyof Omit<JournalEntry, 'id'> | 'survivor';
+export type AwardKey = keyof Omit<JournalEntry, 'id'> | 'survivor' | 'dragon';
 export type Award = { key: AwardKey; title: string; ids: string[] };
 
 /** [stat, minimum to earn it, group title (best player), solo title]. */
@@ -12,13 +12,19 @@ const AWARDS: readonly [keyof Omit<JournalEntry, 'id' | 'deaths'>, number, strin
   ['mobs', 3, 'Monster hunter', 'Monster hunter'],
   ['distance', 500, 'Trailblazer', 'Explorer'],
 ];
-const SURVIVOR = 'Never fell';
+const SURVIVOR = 'Never fell', SLAYER = 'Dragon slayer';
 
 /**
  * Groups: the best value at or above each award's minimum wins it (ties share), and everyone with no deaths is a
- * survivor. Solo: at most two personal highlights (the stats furthest past their minimum, then surviving).
+ * survivor. Solo: at most two personal highlights (the stats furthest past their minimum, then surviving). Players in
+ * `slayers` (ids credited in View.victory) lead with "Dragon slayer" either way.
  */
-export function awards(journal: readonly JournalEntry[]): Award[] {
+export function awards(journal: readonly JournalEntry[], slayers: readonly string[] = []): Award[] {
+  const ids = journal.filter(entry => slayers.includes(entry.id)).map(entry => entry.id);
+  const slain: Award[] = ids.length ? [{ key: 'dragon', title: SLAYER, ids }] : [];
+  return [...slain, ...statAwards(journal)];
+}
+function statAwards(journal: readonly JournalEntry[]): Award[] {
   if (journal.length === 1) {
     const [entry] = journal as [JournalEntry];
     const earned = AWARDS.filter(([key, min]) => entry[key] >= min).sort((a, b) => entry[b[0]] / b[1] - entry[a[0]] / a[1]);

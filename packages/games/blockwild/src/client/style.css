@@ -76,6 +76,53 @@
 .bw-goal[data-urgent=true]{border-color:#ffb46a;background:linear-gradient(135deg,#4a2250f2,#140f38f2);animation:bw-urgent 1.6s ease-in-out infinite alternate}
 .bw-goal[data-urgent=true] small{color:#ffb46a}
 @keyframes bw-urgent{to{box-shadow:0 0 0 3px #ffb46a55,0 8px 24px #0007}}
+.bw-goal[data-victory=true]{border-color:#e0b3ff;background:linear-gradient(135deg,#3a1d5ef2,#120826f2)}
+.bw-goal[data-victory=true] small{color:#e0b3ff}
+
+/* Ender Dragon boss bar (players in the End, and the TV): MC purple with notches. */
+.bw-hud{--bw-boss-w:min(440px,34vw)}
+.bw-boss{position:absolute;left:50%;top:max(8px,var(--safe-top));transform:translateX(-50%);width:var(--bw-boss-w);display:grid;gap:3px;text-align:center;pointer-events:none;z-index:4;filter:drop-shadow(0 2px 0 #000a)}
+.bw-boss-head{display:flex;justify-content:center;align-items:baseline;gap:.5em;white-space:nowrap}
+.bw-boss-head b{font:400 clamp(.9rem,1.5vw,1.25rem)/1 var(--font-display);color:#fff;text-shadow:2px 2px 0 #2a0b40}
+.bw-boss-head span{font-size:.72rem;font-weight:900;color:#e9cfff}
+.bw-boss-bar{height:12px;border:2px solid #0b0414;border-radius:2px;background:#2a0b40;box-shadow:inset 0 2px 0 #0006;overflow:hidden}
+.bw-boss-bar>i{display:block;height:100%;width:calc(var(--fill) * 100%);background:linear-gradient(#f2a8ff,#c13df0 45%,#7d1aa8);transition:width .3s ease-out;
+  -webkit-mask:repeating-linear-gradient(90deg,#000 0 calc(10% - 2px),#0008 calc(10% - 2px) 10%);mask:repeating-linear-gradient(90deg,#000 0 calc(10% - 2px),#0008 calc(10% - 2px) 10%)}
+.bw-boss-crystals{display:inline-flex;justify-self:center;align-items:center;gap:4px;font-size:.7rem;font-weight:900;color:#ffd6f8;text-shadow:1px 1px 0 #000}
+.bw-boss-crystals .bw-icon{width:14px;height:14px;filter:none}
+.bw-boss-crystals[data-none=true]{color:var(--kp-lime)}
+.bw-hud:has(.bw-boss) .bw-toasts{top:calc(max(8px,var(--safe-top)) + 62px)}
+.bw-tv .bw-boss{position:static;transform:none;flex:0 1 30em;min-width:12em;font-size:1.15em}
+.bw-tv-top:has(.bw-boss)>:not(.bw-boss){flex-shrink:0}
+.bw-tv .bw-boss-bar{height:.8em}
+.bw-tv .bw-boss-head span,.bw-tv .bw-boss-crystals{font-size:.8em}
+.bw-tv .bw-boss-crystals .bw-icon{width:1.1em;height:1.1em}
+
+/* Victory celebration: a starry purple wash, pixel sparks, the dragon's silhouette and a rolling journal. */
+.bw-victory{position:absolute;inset:0;z-index:7;display:grid;place-items:center;padding:max(8px,var(--safe-top)) max(8px,var(--safe-right)) max(8px,var(--safe-bottom)) max(8px,var(--safe-left));background:radial-gradient(ellipse at 50% 30%,#4a1f78d9,#12062af2 70%);pointer-events:auto;overflow:hidden;animation:bw-toast .6s ease-out}
+.bw-victory-sparks>i{position:absolute;left:var(--x);bottom:-12px;width:var(--s);height:var(--s);background:#e9b3ff;box-shadow:0 0 6px #d27bff;opacity:0;animation:bw-spark var(--t) linear var(--d) infinite}
+.bw-victory-sparks>i:nth-child(3n){background:#fff6e5}
+@keyframes bw-spark{10%{opacity:.9}100%{opacity:0;transform:translateY(-105vh)}}
+.bw-victory-card{position:relative;display:grid;justify-items:center;gap:6px;width:min(560px,100%);max-height:100%;padding:14px 18px 12px;border-radius:1rem;background:linear-gradient(160deg,#25124af2,#0b0620f2);border:2px solid #c98bff80;box-shadow:0 0 0 3px var(--kp-ink),0 20px 60px #000c;text-align:center}
+.bw-victory-dragon{width:min(220px,40vw);height:auto;min-width:0;min-height:0;aspect-ratio:44/17;filter:drop-shadow(0 0 14px #b44dff)}
+.bw-victory-eyebrow{margin:0;font-size:.72rem;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#e0b3ff}
+.bw-victory h2{margin:0;font:400 clamp(1.4rem,4vw,2.4rem)/1.05 var(--font-display);color:var(--kp-sun);text-shadow:0 3px 0 #2a0b40}
+.bw-victory-by{margin:0;font-weight:800}
+.bw-victory-by b{color:#fff}
+.bw-victory-journal{position:relative;width:100%;height:8.6em;overflow:hidden;border-radius:.7rem;background:#05071a99;-webkit-mask:linear-gradient(transparent,#000 18%,#000 82%,transparent);mask:linear-gradient(transparent,#000 18%,#000 82%,transparent)}
+.bw-victory-journal:focus-visible{outline:3px solid var(--kp-sun);outline-offset:2px}
+.bw-victory-roll{list-style:none;margin:0;padding:0 .8rem;display:grid;font-weight:800;font-size:.9rem;animation:bw-roll calc(var(--n) * 1.6s + 2s) linear infinite}
+.bw-victory-roll li{padding-bottom:.35em}
+.bw-victory-journal:hover .bw-victory-roll,.bw-victory-journal:focus .bw-victory-roll{animation-play-state:paused}
+@keyframes bw-roll{to{transform:translateY(-50%)}}
+.bw-victory-player b{color:var(--player);margin-right:.4em;text-shadow:1px 1px 0 #000}
+.bw-victory-player .bw-award{margin:0 .2rem}
+.bw-victory .bw-resume{width:min(280px,80%);margin-top:4px}
+.bw-victory-note{font-size:.72rem;font-weight:700;color:#fff6e5b3}
+.bw-tv .bw-victory{font-size:max(15px,1.1vw)}
+.bw-tv .bw-victory-card{width:min(44em,70vw);padding:1.2em 1.6em 1em}
+.bw-tv .bw-victory-dragon{width:min(20em,30vw)}
+.bw-tv .bw-victory-journal{height:10em}
 
 /* Touch controls. Only these surfaces suppress browser gestures. */
 .bw-touch{position:absolute;inset:0}
@@ -240,6 +287,7 @@
 .bw-clock em{font-style:normal}
 .bw-clock em[data-soon=true]{color:#ffb46a;font-weight:900}
 .bw-clock[data-phase=night] b{color:#c8d4ff}
+.bw-clock[data-phase=end] b{color:#e08bff}
 .bw-dial{position:relative;width:4.2em;height:2.3em;overflow:hidden;border-bottom:2px solid #fff6e566}
 .bw-dial::before{content:'';position:absolute;inset:.2em .2em -2em;border-radius:50%;border:2px dashed #fff6e533}
 .bw-orb{position:absolute;width:.9em;height:.9em;transform:translate(-50%,-50%);image-rendering:pixelated}
@@ -269,7 +317,9 @@
 .bw-card[data-status=offline]{opacity:.5;filter:grayscale(.7)}
 .bw-card-armor{grid-area:armor;display:inline-flex;align-items:center;gap:.15em;font-size:.75em;font-weight:900;color:#dfe5f0}
 .bw-card-armor .bw-sprite{width:1em;height:1em;min-width:0;min-height:0}
-.bw-card[data-nether=true]{background:linear-gradient(150deg,#5a1c14eb,#1e0908eb);border-color:#ff7a4540}
+.bw-card[data-dim=nether]{background:linear-gradient(150deg,#5a1c14eb,#1e0908eb);border-color:#ff7a4540}
+.bw-card[data-dim=end]{background:linear-gradient(150deg,#3a1d5eeb,#120826eb);border-color:#c98bff40}
+.bw-card[data-status='in the end'] .bw-card-status{color:#e0b3ff}
 .bw-card[data-status='in the nether'] .bw-card-status,.bw-card[data-status='on fire'] .bw-card-status{color:#ff9a5c}
 /* Six or more players: a slim column of two-line cards on the left, under the clock. */
 .bw-tv[data-compact=true]{grid-template-columns:minmax(0,18em) 1fr;grid-template-rows:auto 1fr;column-gap:1em}
@@ -294,6 +344,7 @@
 .bw-instructions ul{padding-left:1.1rem;display:grid;gap:.4rem;line-height:1.45}
 .bw-results h1{margin:.1em 0 .4em;font-size:clamp(1.8rem,4vw,3rem);color:var(--kp-sun)}
 .bw-results .kp-eyebrow{margin:0}
+.bw-results-dragon{display:inline-block;margin:0 0 .8rem;padding:.45rem .9rem;border-radius:.7rem;background:linear-gradient(135deg,#4a1f78,#1d0c3a);border:2px solid #c98bff99;font-weight:900;color:#f2dcff}
 .bw-results-totals{display:flex;flex-wrap:wrap;gap:.5rem;list-style:none;padding:0;margin:0 0 1rem}
 .bw-results-totals li{padding:.45rem .8rem;border-radius:.7rem;background:var(--kp-ink);border:1px solid var(--border);font-weight:800}
 .bw-results-totals b{color:var(--kp-sun);font-size:1.2em;margin-right:.2em}
@@ -326,6 +377,9 @@
   .bw-offer{min-height:48px;padding-block:2px}
 }
 @media(max-height:519px) and (max-width:799px){.bw-doll{display:none}}
+@media(max-height:519px){.bw-hud{--bw-boss-w:28vw}.bw-boss-head span{display:none}.bw-victory-card{grid-template-columns:auto 1fr;justify-items:start;text-align:left;column-gap:14px;padding:10px 14px}.bw-victory-card>*{grid-column:2}.bw-victory-dragon{grid-column:1;grid-row:1/span 4;width:min(180px,26vw)}.bw-victory-journal{height:6.4em}.bw-victory .bw-resume{justify-self:stretch;width:auto}.bw-victory-note{display:none}}
 @media(max-height:420px){.bw-hud[data-touch=true] .bw-goal{top:max(6px,var(--safe-top));max-width:34%}.bw-toast{font-size:.8rem;padding:.3rem .7rem}}
+/* In the End the goal chip narrows so the boss bar keeps the top centre. */
+.bw-hud:has(.bw-boss) .bw-goal{max-width:min(330px,calc(50vw - var(--bw-boss-w) / 2 - 22px))}
 /* The platform shortens every animation to 1ms under reduced motion, so a fading label would vanish: keep it steady instead. */
-@media(prefers-reduced-motion:reduce){.bw-low span,.bw-hungry span,.bw-selname{animation:none}}
+@media(prefers-reduced-motion:reduce){.bw-low span,.bw-hungry span,.bw-selname,.bw-victory-roll{animation:none}.bw-victory-roll [aria-hidden]{display:none}.bw-victory-sparks{display:none}.bw-victory-journal{overflow:auto;-webkit-mask:none;mask:none}}

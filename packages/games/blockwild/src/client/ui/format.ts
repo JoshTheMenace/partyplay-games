@@ -1,5 +1,5 @@
 /** Pure presentation helpers for the Blockwild HUD, TV overlay and journal. No React, DOM or art imports. */
-import { DAY_TICKS, inNether, MAX_AIR } from '../../shared/constants';
+import { DAY_TICKS, inEnd, inNether, MAX_AIR } from '../../shared/constants';
 import { countItem } from '../../shared/inventory';
 import { armorOf, B, durabilityOf, I, itemOf, type Slot } from '../../shared/items';
 import { PF, type JournalEntry, type PubPlayer, type TradeOffer } from '../../shared/protocol';
@@ -30,6 +30,9 @@ const HINTS: Partial<Record<number, string>> = {
   [B.redstone_lamp]: 'Lights up while powered', [I.repeater]: 'Sends a full signal forward after a delay; use it to change the delay',
   [B.piston]: 'Pushes up to 12 blocks when powered', [B.sticky_piston]: 'Pushes blocks and pulls the front one back', [B.tnt]: 'Explodes 4 s after it is lit or powered',
   [B.redstone_block]: 'Always powers what it touches', [I.iron_door]: 'Opens only with redstone power', [I.flint_and_steel]: 'Lights fires, TNT and Nether portals',
+  [B.observer]: 'Pulses from its back when the block it watches changes', [B.daylight_detector]: 'Powers in sunlight; use it to switch to night mode',
+  [I.ender_eye]: 'Throw it to find a stronghold, or fill an End portal frame', [I.ender_pearl]: 'Throw it to teleport where it lands; the landing hurts',
+  [I.end_crystal]: 'Goes on obsidian or bedrock; explodes when hit',
 };
 export const itemHint = (id: number): string | undefined => HINTS[id];
 
@@ -66,7 +69,7 @@ export function skyAngle(time: number): { body: 'sun' | 'moon'; angle: number } 
   return t < half ? { body: 'sun', angle: (t / half) * 180 } : { body: 'moon', angle: ((t - half) / half) * 180 };
 }
 
-/** One-word activity for a player card on the TV (location words when idle: caving, in the nether). */
+/** One-word activity for a player card on the TV (location words when idle: caving, in the nether, in the end). */
 export function playerStatus(player: PubPlayer): string {
   if (player.flags & PF.OFFLINE) return 'offline';
   if (player.flags & PF.DEAD) return 'down';
@@ -76,6 +79,7 @@ export function playerStatus(player: PubPlayer): string {
   if (player.flags & PF.USING) return itemOf(player.held)?.food ? 'eating' : 'aiming';
   if (player.flags & PF.FLYING) return 'flying';
   if (inNether(player.x, player.z)) return 'in the nether';
+  if (inEnd(player.x, player.z)) return 'in the end';
   if (player.y < 52) return 'caving';
   if (player.health <= 6) return 'hurt';
   return 'exploring';

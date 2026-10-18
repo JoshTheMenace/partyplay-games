@@ -2,20 +2,21 @@
  * Pure redstone helpers shared by the server simulation (sim/redstone.ts) and the client mesher: which blocks conduct,
  * how dust joins its neighbours (including one-block steps) and the dust colour by power.
  */
-import { B, blockOf, cellId, cellState, isOpaque, repeaterFacing } from './blocks';
+import { B, blockOf, cellId, cellState, isOpaque, observerFacing, repeaterFacing } from './blocks';
 import type { CellReader } from './chunk';
-import { FACING, type Vec3 } from './coords';
+import { FACING, FACING_FACE, type Vec3 } from './coords';
 
-/** Solid opaque blocks conduct: they can be strongly or weakly powered and cut dust steps. Pistons and redstone blocks don't. */
-export const conducts = (cell: number) => isOpaque(cell) && blockOf(cell).shape !== 'piston' && cellId(cell) !== B.redstone_block;
+/** Solid opaque blocks conduct: they can be strongly or weakly powered and cut dust steps. Pistons, observers and redstone blocks don't. */
+export const conducts = (cell: number) => isOpaque(cell) && blockOf(cell).shape !== 'piston' && blockOf(cell).shape !== 'observer' && cellId(cell) !== B.redstone_block;
 export const isDust = (cell: number) => cellId(cell) === B.redstone_wire;
 
-/** Dust joins dust, power sources and repeaters whose axis runs along direction `dir` (0..3 N, E, S, W). */
+/** Dust joins dust, power sources, repeaters whose axis runs along direction `dir` (0..3 N, E, S, W) and an observer's back. */
 function joins(cell: number, dir: number): boolean {
   switch (cellId(cell)) {
     case B.redstone_wire: case B.redstone_torch: case B.redstone_torch_off: case B.lever: case B.stone_button: case B.oak_button:
-    case B.stone_pressure_plate: case B.oak_pressure_plate: case B.redstone_block: return true;
+    case B.stone_pressure_plate: case B.oak_pressure_plate: case B.redstone_block: case B.daylight_detector: return true;
     case B.repeater: return (repeaterFacing(cellState(cell)) & 1) === (dir & 1);
+    case B.observer: return observerFacing(cellState(cell)) === FACING_FACE[dir];
   }
   return false;
 }

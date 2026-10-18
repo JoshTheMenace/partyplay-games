@@ -1,5 +1,5 @@
 /** World access for the simulation: fast readers, edits with bookkeeping, block breaking with support cascades, light and spawn queries. */
-import { B, BED_HEAD, blockOf, cellId, cellState, chestLoot, DOOR_UPPER, isOpaque, isSolid, isWater, lightOf } from '../shared/blocks';
+import { B, BED_HEAD, blockOf, cellId, cellState, chestLoot, DOOR_UPPER, isOpaque, isSolid, isWater, lightOf, WART_MATURE } from '../shared/blocks';
 import { outsideCell, type CellReader, type VoxelWorld } from '../shared/chunk';
 import { HEIGHT } from '../shared/constants';
 import { cellIndex, chunkKey, FACES, FACING, localIndex, type Vec3 } from '../shared/coords';
@@ -12,6 +12,7 @@ import { spawnItem } from './entities';
 import { onBlockChanged as fireChanged } from './fire';
 import { onBlockChanged as portalChanged } from './portals';
 import { onBlockChanged as redstoneChanged } from './redstone';
+import { onSilverfishStoneBroken } from './silverfish';
 import { addFx, type State } from './state';
 import { openLootChest } from './structures';
 
@@ -41,7 +42,7 @@ export const isLoaded = (state: State, x: number, z: number) => state.world.cach
 
 const tracksGrowth = (cell: number) => {
   const id = cellId(cell);
-  return isCrop(id) && cellState(cell) < 7 || isSapling(id) || id === B.sugar_cane || id === B.farmland;
+  return isCrop(id) && cellState(cell) < 7 || id === B.nether_wart && cellState(cell) < WART_MATURE || isSapling(id) || id === B.sugar_cane || id === B.farmland;
 };
 const isFurnace = (id: number) => id === B.furnace || id === B.furnace_lit;
 
@@ -124,6 +125,7 @@ export function breakBlock(state: State, x: number, y: number, z: number, drops?
   if (!writeCells(state, writes)) return false;
   dropStacks(state, x + 0.5, y + 0.3, z + 0.5, drops ?? miningDrops(cell, 0, state.rand));
   if (fx) addFx(state, 'break', x + 0.5, y + 0.5, z + 0.5, cell);
+  if (id === B.silverfish_stone) onSilverfishStoneBroken(state, x, y, z);
   settle(state, writes.map(([wx, wy, wz]) => [wx, wy, wz]));
   return true;
 }

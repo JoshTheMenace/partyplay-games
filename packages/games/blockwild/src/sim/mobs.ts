@@ -1,9 +1,10 @@
 /**
  * Mobs: spawning rules, despawning, AI (chase, melee, archery, pounce, fuse, wander, flee, follow, breed) and physics.
- * Villagers, Nether mobs and primed TNT think in their feature modules (see CUSTOM_AI) and reuse the shared physics.
+ * Villagers, Nether mobs, primed TNT and the endgame mobs think in their feature modules (see CUSTOM_AI) and reuse the
+ * shared physics (flyers move themselves and return null).
  */
 import { B, cellId, isLiquid, isOpaque, isWater } from '../shared/blocks';
-import { inNether, STEP_HEIGHT } from '../shared/constants';
+import { dimensionAt, STEP_HEIGHT } from '../shared/constants';
 import { chunkKey, type Vec3 } from '../shared/coords';
 import { I } from '../shared/items';
 import { rand2, rand3 } from '../shared/noise';
@@ -11,13 +12,17 @@ import { regionCollides } from '../shared/physics';
 import { MOB, MOB_TYPES } from '../shared/protocol';
 import { raycastBlocks } from '../shared/raycast';
 import { structuresNear } from '../shared/structures/index';
+import { spawnFortressMobs, thinkBlaze } from './blaze';
 import { damageMob, damagePlayer, explode, hostileDamage, spawnArrow } from './combat';
+import { thinkCrystal, thinkDragon } from './dragon';
+import { spawnEndermen, thinkEnderman } from './enderman';
 import { spawnItem } from './entities';
 import { BURN_SECONDS, igniteEntity } from './fire';
 import { moveBody } from './motion';
 import { spawnNetherMobs, thinkNetherMob } from './nether-mobs';
 import { findPath } from './pathfind';
 import { thinkTnt } from './redstone';
+import { thinkSilverfish } from './silverfish';
 import { activePlayers, addFx, isNight, isProtected, nextId, playerById, type Mob, type Player, type State } from './state';
 import { preyFor, spawnVillagers, thinkVillager } from './villagers';
 import { blockLight, isLoaded, skyExposed, surfaceY } from './world';
@@ -29,10 +34,13 @@ export function hostileCap(state: State) {
   return Math.round(Math.min(50, 2 + 6 * activePlayers(state).length) * scale);
 }
 /** Walking speed per mob type (m/s). */
-export const SPEED: readonly number[] = [2.4, 2.5, 3.0, 2.3, 1.4, 1.5, 1.4, 1.4, 1.6, 2.3, 1.2, 0];
+export const SPEED: readonly number[] = [2.4, 2.5, 3.0, 2.3, 1.4, 1.5, 1.4, 1.4, 1.6, 2.3, 1.2, 0, 1.2, 3.0, 0, 0, 2.6];
 /** Every-tick AI of the types owned by feature modules: returns the desired horizontal velocity, or null when it moved the mob itself. */
 type CustomAi = (state: State, mob: Mob, dt: number) => [number, number] | null;
-const CUSTOM_AI: Partial<Record<number, CustomAi>> = { [MOB.villager]: thinkVillager, [MOB.zombified_piglin]: thinkNetherMob, [MOB.ghast]: thinkNetherMob, [MOB.tnt]: thinkTnt };
+const CUSTOM_AI: Partial<Record<number, CustomAi>> = {
+  [MOB.villager]: thinkVillager, [MOB.zombified_piglin]: thinkNetherMob, [MOB.ghast]: thinkNetherMob, [MOB.tnt]: thinkTnt,
+  [MOB.blaze]: thinkBlaze, [MOB.enderman]: thinkEnderman, [MOB.ender_dragon]: thinkDragon, [MOB.end_crystal]: thinkCrystal, [MOB.silverfish]: thinkSilverfish,
+};
 const FOOD: Record<number, readonly number[]> = { [MOB.cow]: [I.wheat], [MOB.sheep]: [I.wheat], [MOB.pig]: [I.carrot, I.potato], [MOB.chicken]: [I.wheat_seeds] };
 const HOSTILE_WEIGHTS: readonly [number, number][] = [[MOB.zombie, 30], [MOB.skeleton, 25], [MOB.spider, 25], [MOB.creeper, 20]];
 const ANIMALS = [MOB.cow, MOB.pig, MOB.sheep, MOB.chicken] as const;
@@ -53,7 +61,7 @@ export function newMob(state: State, t: number, x: number, y: number, z: number,
     target: null, aggroUntil: 0, thinkAt: clock + state.rand() * 0.5, path: null, pathIndex: 0, repathAt: 0, goal: null, stuck: 0, lastX: x, lastZ: z,
     fuse: 0, cooldown: clock + 1, charge: 0, panicUntil: 0, loveUntil: 0, breedAt: 0, eggAt: clock + 300 + state.rand() * 300,
     ambientAt: clock + 5 + state.rand() * 15, fire: 0, persistent: type.kind === 'animal' || type.kind === 'villager',
-    seed: Math.floor(state.rand() * 2 ** 31), p: 0, home: null, uses: [], prey: null,
+    seed: Math.floor(state.rand() * 2 ** 31), p: 0, home: null, uses: [], prey: null, pt: 0, ph: 0,
   };
 }
 
@@ -102,11 +110,12 @@ const inTemple = (state: State, x: number, y: number, z: number) =>
  */
 function spawnHostiles(state: State) {
   const players = activePlayers(state), cap = hostileCap(state), get = state.getLoaded, r = state.rand, night = isNight(state.time);
-  // The Nether has its own spawning (nether-mobs.ts) and caps.
-  let hostiles = state.mobs.filter(mob => isHostile(mob) && !inNether(mob.x, mob.z)).length;
-  for (const player of players) for (let attempt = 0; attempt < 3 && hostiles < cap && !inNether(player.x, player.z); attempt++) {
+  // The Nether and the End have their own spawning (nether-mobs.ts, blaze.ts, enderman.ts) and caps.
+  const overworld = (x: number, z: number) => dimensionAt(x, z) === 'overworld';
+  let hostiles = state.mobs.filter(mob => isHostile(mob) && overworld(mob.x, mob.z)).length;
+  for (const player of players) for (let attempt = 0; attempt < 3 && hostiles < cap && overworld(player.x, player.z); attempt++) {
     const angle = r() * Math.PI * 2, d = 24 + r() * 24, x = Math.floor(player.x + Math.cos(angle) * d), z = Math.floor(player.z + Math.sin(angle) * d);
-    if (!isLoaded(state, x, z) || inNether(x, z)) continue;
+    if (!isLoaded(state, x, z) || !overworld(x, z)) continue;
     const surface = surfaceY(get, x, z);
     let y = r() < 0.5 ? surface + 1 : Math.min(surface, Math.floor(player.y) + Math.floor(r() * 25) - 12);
     for (let scan = 0; scan < 12 && y > 1 && !(isOpaque(get(x, y - 1, z)) && !isOpaque(get(x, y, z))); scan++) y--;
@@ -370,6 +379,8 @@ export function tickMobs(state: State, dt: number) {
   else if (state.ticks % 20 === 3) {
     spawnHostiles(state);
     spawnNetherMobs(state);
+    spawnFortressMobs(state);
+    spawnEndermen(state);
   }
   state.pathBudget = PATH_BUDGET;
   const day = state.time < 12000 || state.time >= 23500, simulated: Mob[] = [];
@@ -381,7 +392,8 @@ export function tickMobs(state: State, dt: number) {
     const hostile = isHostile(mob);
     // Despawn before the loaded check: a hostile left in an evicted chunk must not hold a hostile-cap slot forever.
     if (hostile && (nearest > 96 || nearest > 32 && state.rand() < dt / 40)) { mob.health = 0; continue; }
-    if (nearest > 80 || !isLoaded(state, mob.x, mob.z)) continue;
+    // The boss thinks wherever it is: the dragon flies far from players and over unloaded chunks.
+    if (MOB_TYPES[mob.t]!.kind !== 'boss' && (nearest > 80 || !isLoaded(state, mob.x, mob.z))) continue;
     const custom = CUSTOM_AI[mob.t];
     if (!custom && state.clock >= mob.thinkAt) think(state, mob);
     const desired = custom ? custom(state, mob, dt) : hostile ? hostileAct(state, mob, dt) : animalAct(state, mob, dt);

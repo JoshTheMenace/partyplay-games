@@ -14,6 +14,10 @@ export const B = {
   sandstone_stairs: 98, sandstone_slab: 99, dirt_path: 100, cracked_stone_bricks: 101, mossy_stone_bricks: 102, redstone_ore: 103, redstone_wire: 104, redstone_torch: 105, redstone_torch_off: 106, lever: 107,
   stone_button: 108, oak_button: 109, stone_pressure_plate: 110, oak_pressure_plate: 111, redstone_lamp: 112, redstone_lamp_lit: 113, repeater: 114, piston: 115, sticky_piston: 116, piston_head: 117,
   iron_door: 118, tnt: 119, redstone_block: 120,
+  // Endgame: fortresses, strongholds, the End and quartz building.
+  nether_brick_fence: 121, nether_brick_stairs: 122, nether_brick_slab: 123, nether_wart: 124, end_stone: 125, end_stone_bricks: 126, end_portal_frame: 127, end_portal: 128, dragon_egg: 129, iron_bars: 130,
+  quartz_pillar: 131, chiseled_quartz_block: 132, quartz_stairs: 133, quartz_slab: 134, smooth_quartz: 135, quartz_bricks: 136, observer: 137, daylight_detector: 138, purpur_block: 139, purpur_pillar: 140,
+  silverfish_stone: 141, cracked_end_stone_bricks: 142, soul_torch: 143, soul_lantern: 144, chiseled_stone_bricks: 145,
   /** Invisible solid wall returned outside the world's horizontal bounds. Never stored. */
   barrier: 255,
 } as const;
@@ -36,5 +40,7 @@ export const I = {
   golden_helmet: 336, golden_chestplate: 337, golden_leggings: 338, golden_boots: 339,
   iron_helmet: 340, iron_chestplate: 341, iron_leggings: 342, iron_boots: 343,
   diamond_helmet: 344, diamond_chestplate: 345, diamond_leggings: 346, diamond_boots: 347,
+  // Endgame.
+  blaze_rod: 348, blaze_powder: 349, ender_pearl: 350, ender_eye: 351, nether_wart: 352, end_crystal: 353,
 } as const;
 export type ItemName = keyof typeof I;

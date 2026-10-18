@@ -5,11 +5,11 @@
  * gives exact values for that chunk plus a one-block border. Every chunk is lit the same way from its own region,
  * so neighbouring chunks always agree at their shared borders without any cross-chunk bookkeeping.
  *
- * Arrays have two extra layers: layer 0 is bedrock (y = -1) and the last layer is open sky (y = 128).
+ * Arrays have two extra layers: layer 0 is bedrock (y = -1; the void's air under End chunks) and the last layer is open sky (y = 128).
  */
 import { B } from '../../shared/blocks';
-import { CHUNK, HEIGHT } from '../../shared/constants';
-import { EMIT, FILTER_CELL } from './tables';
+import { CHUNK, HEIGHT, inEnd } from '../../shared/constants';
+import { EMIT_CELL, FILTER_CELL } from './tables';
 
 /** Region width in cells (3 chunks), cells per layer, layers (HEIGHT + floor + ceiling). */
 export const RX = 3 * CHUNK, RA = RX * RX, RL = HEIGHT + 2, REGION_CELLS = RA * RL;
@@ -58,7 +58,7 @@ export const newVolume = (): Volume => ({ cells: new Uint16Array(VOLUME_CELLS), 
 export function fillRegion(region: Region, cx: number, cz: number, chunkAt: (cx: number, cz: number) => Uint16Array | null) {
   const { cells } = region;
   let top = 1;
-  cells.fill(B.bedrock, 0, RA);
+  cells.fill(inEnd(cx * CHUNK, cz * CHUNK) ? B.air : B.bedrock, 0, RA);
   cells.fill(B.air, REGION_CELLS - RA);
   for (let dz = 0; dz < 3; dz++) for (let dx = 0; dx < 3; dx++) {
     const chunk = chunkAt(cx + dx - 1, cz + dz - 1), x0 = dx * CHUNK, z0 = dz * CHUNK;
@@ -136,7 +136,7 @@ export function computeLight(region: Region) {
   }
   flood(region, sky);
   for (let i = RA; i < (top + 1) * RA; i++) {
-    const emit = EMIT[cells[i]! & 255]!;
+    const emit = EMIT_CELL[cells[i]!]!;
     if (emit) {
       block[i] = emit;
       queue.push(i);

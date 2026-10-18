@@ -1,5 +1,5 @@
 import {
-  attachedFace, B, blockOf, BUTTON_PRESSED, DOOR_OPEN, fenceConnects, pistonFacing, PISTON_EXTENDED, PLATE_PRESSED, PORTAL_Z, SLAB_DOUBLE, SLAB_TOP, STAIRS_TOP,
+  attachedFace, B, blockOf, BUTTON_PRESSED, DOOR_OPEN, fenceConnects, FRAME_EYE, pistonFacing, PISTON_EXTENDED, PLATE_PRESSED, PORTAL_Z, SLAB_DOUBLE, SLAB_TOP, STAIRS_TOP,
 } from './blocks';
 
 /** Axis-aligned box in block-local coordinates: [x0, y0, z0, x1, y1, z1], within 0..1 (fence collision rises to 1.5). */
@@ -63,13 +63,18 @@ function headBoxes(face: number): readonly Box[] {
   rod[axis + 3] = face & 1 ? px(12) : 1;
   return [plate, rod as unknown as Box];
 }
-/** Fence post and one arm per connection (N, E, S, W), `height` tall (1.5 collision, 1 selection). */
-function fenceBoxes(state: number, height: number): readonly Box[] {
-  const boxes: Box[] = [[px(6), 0, px(6), px(10), height, px(10)]];
-  const arms: Box[] = [[px(6), 0, 0, px(10), height, px(6)], [px(10), 0, px(6), 1, height, px(10)], [px(6), 0, px(10), px(10), height, 1], [0, 0, px(6), px(6), height, px(10)]];
+/**
+ * A post `2·r` wide and one arm per connection (N, E, S, W), `height` tall: fences (r 2/16; 1.5 collision, 1 selection)
+ * and panes (iron bars, r 1/16, one block tall).
+ */
+function postBoxes(state: number, height: number, r = px(2)): readonly Box[] {
+  const a = 0.5 - r, b = 0.5 + r, boxes: Box[] = [[a, 0, a, b, height, b]];
+  const arms: Box[] = [[a, 0, 0, b, height, a], [b, 0, a, 1, height, b], [a, 0, b, b, height, 1], [0, 0, a, a, height, b]];
   arms.forEach((arm, dir) => { if (fenceConnects(state, dir)) boxes.push(arm); });
   return boxes;
 }
+/** End portal frame: a 13/16 slab, plus the eye's 8/16 knob on top once one is inserted. */
+const FRAME: Box = [0, 0, 0, 1, px(13), 1], FRAME_KNOB: Box = [px(4), px(13), px(4), px(12), 1, px(12)];
 
 function selectionOf(cell: number): readonly Box[] {
   const block = blockOf(cell), state = cell >> 8;
@@ -89,7 +94,7 @@ function selectionOf(cell: number): readonly Box[] {
     case 'farmland': return [[0, 0, 0, 1, px(15), 1]];
     case 'portal': return [state & PORTAL_Z ? [px(6), 0, 0, px(10), 1, 1] : [0, 0, px(6), 1, 1, px(10)]];
     case 'fire': return [[0, 0, 0, 1, px(1), 1]];
-    case 'fence': return fenceBoxes(state, 1);
+    case 'fence': return postBoxes(state, 1);
     case 'cage': return [FULL];
     case 'wire': return [[0, 0, 0, 1, px(1), 1]];
     case 'lever': return [onFace(attachedFace(state), px(8), px(8), px(10))];
@@ -98,6 +103,13 @@ function selectionOf(cell: number): readonly Box[] {
     case 'repeater': return [[0, 0, 0, 1, px(2), 1]];
     case 'piston': return [state & PISTON_EXTENDED ? cutFace(pistonFacing(state), px(4)) : FULL];
     case 'piston_head': return headBoxes(pistonFacing(state));
+    case 'end_frame': return state & FRAME_EYE ? [FRAME, FRAME_KNOB] : [FRAME];
+    // The portal surface is at 12/16: a body reaching below it is inside the portal.
+    case 'end_portal': return [[0, 0, 0, 1, px(12), 1]];
+    case 'egg': return [[px(1), 0, px(1), px(15), 1, px(15)]];
+    case 'pane': return postBoxes(state, 1, px(1));
+    case 'observer': return [FULL];
+    case 'daylight': return [[0, 0, 0, 1, px(6), 1]];
   }
 }
 function collisionOf(cell: number): readonly Box[] {
@@ -107,7 +119,7 @@ function collisionOf(cell: number): readonly Box[] {
   // Cactus is 15/16 tall so standing on it counts as touching it; soul sand sinks you 2/16; fences block jumps.
   if (block.shape === 'cactus') return [[px(1), 0, px(1), px(15), px(15), px(15)]];
   if (block.id === B.soul_sand) return [[0, 0, 0, 1, px(14), 1]];
-  if (block.shape === 'fence') return fenceBoxes(cell >> 8, 1.5);
+  if (block.shape === 'fence') return postBoxes(cell >> 8, 1.5);
   return selectionOf(cell);
 }
 

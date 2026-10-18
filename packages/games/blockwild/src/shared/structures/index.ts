@@ -8,7 +8,7 @@
  * so `paintStructures` only replays the bucket of the chunk being generated. Dungeons are per-chunk features instead.
  */
 import { B } from '../blocks';
-import { CHUNK, HEIGHT, NETHER, SEED_CACHE, WORLD } from '../constants';
+import { CHUNK, END, HEIGHT, NETHER, SEED_CACHE, WORLD } from '../constants';
 import { cellIndex, chunkKey, localIndex, type Vec3 } from '../coords';
 import { createRng, hash3 } from '../noise';
 import { TREE_RADIUS } from '../trees';
@@ -46,7 +46,7 @@ const grids = () => gridTable ??= [
   { kind: 'village', spacing: 32, separation: 8, salt: 0x51a9, reach: VILLAGE_REACH + 4, clearTrees: true, plan: planVillage },
 ];
 const gridOf = (kind: StructureKind) => grids().find(g => g.kind === kind)!;
-/** Keep structures this far from the world rim and the Nether region's walls. */
+/** Keep structures this far from the world rim and the Nether and End regions. */
 const MARGIN = 24;
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -69,7 +69,7 @@ function startOf(seed: number, grid: Grid, gx: number, gz: number): [number, num
   return [(gx * grid.spacing + h % span) * CHUNK + 8, (gz * grid.spacing + (h >>> 16) % span) * CHUNK + 8];
 }
 const clearOfEdges = (b: Bounds) => b[0] >= MARGIN && b[2] >= MARGIN && b[3] < WORLD - MARGIN && b[5] < WORLD - MARGIN
-  && !(b[3] >= NETHER.x0 - MARGIN && b[2] < NETHER.z0 + NETHER.size + MARGIN);
+  && !(b[3] >= NETHER.x0 - MARGIN && b[2] < NETHER.z0 + NETHER.size + MARGIN) && !(b[3] >= END.x0 - MARGIN && b[5] >= END.z0 - MARGIN);
 
 /** The structure started in grid cell (gx, gz), planned and baked once per seed (null when the cell has none). */
 function built(seed: number, grid: Grid, gx: number, gz: number): Built | null {

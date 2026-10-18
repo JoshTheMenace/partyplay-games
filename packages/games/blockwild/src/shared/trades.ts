@@ -3,10 +3,13 @@
  * profession and seed so the client could show them too. Everything runs on emeralds: a villager buys common goods
  * for one emerald and sells useful things for a few (prices follow Minecraft's).
  */
+import type { Vec3 } from './coords';
 import { B, I, type Slot } from './items';
-import { createRng, rngInt, type Rng } from './noise';
+import { createRng, hash3, rngInt, type Rng } from './noise';
+import type { Village } from './structures/village';
 
-export const PROFESSIONS = ['Farmer', 'Librarian', 'Armorer', 'Toolsmith', 'Cleric'] as const;
+export const PROFESSIONS = ['Farmer', 'Librarian', 'Armorer', 'Toolsmith', 'Cleric', 'Mason'] as const;
+export const MASON = 5;
 /** One offer: pay `buy` (and `buyB`) for `sell`, at most `max` times between restocks. */
 export type Offer = { buy: Slot; buyB?: Slot; sell: Slot; max: number };
 
@@ -40,10 +43,24 @@ const TABLES: readonly Table[] = [
     rare: [{ buy: [E, 8], buyB: [I.diamond, 1], sell: [I.diamond_pickaxe, 1], max: RARE }, { buy: [E, 7], buyB: [I.diamond, 1], sell: [I.diamond_axe, 1], max: RARE }],
   },
   { // Cleric
-    buys: [buys(I.rotten_flesh, 32), buys(I.gold_ingot, 3), buys(I.bone, 16)],
+    buys: [buys(I.rotten_flesh, 32), buys(I.gold_ingot, 3), buys(I.bone, 16), buys(I.quartz, 12)],
     sells: [sells(1, I.redstone, 2), sells(1, I.glowstone_dust, 3), sells(4, B.glowstone, 1), sells([8, 10], I.golden_apple, 1, 4), sells(1, I.bone_meal, 6, 16)],
   },
+  { // Mason: buys clay, stone and quartz; sells building blocks
+    buys: [buys(I.clay_ball, 10), buys(B.stone, 20), buys(I.quartz, 12)],
+    sells: [sells(1, B.bricks, 10, 16), sells(1, B.chiseled_stone_bricks, 4, 16), sells(1, B.stone_bricks, 8, 16), sells(1, B.terracotta, 1, 16), sells(1, B.quartz_block, 1),
+      sells(1, B.quartz_pillar, 1)],
+  },
 ];
+/**
+ * The profession of the villager born beside `bed`: hashed from the bed (farmer to cleric, as before masons), except
+ * that a village of two or more houses has exactly one mason, in a house picked from its centre.
+ */
+export function professionAt(seed: number, village: Pick<Village, 'center' | 'houses'>, bed: Readonly<Vec3>): number {
+  const { center: [cx, cy, cz], houses } = village, mason = houses.length > 1 ? houses[hash3(seed + 2, cx, cy, cz) % houses.length]!.bed : null;
+  return mason?.every((v, i) => v === bed[i]) ? MASON : hash3(seed, bed[0], bed[1], bed[2]) % MASON;
+}
+
 /** Share of armorers and toolsmiths that carry one diamond deal. */
 const RARE_CHANCE = 0.4;
 

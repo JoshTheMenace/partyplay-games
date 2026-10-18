@@ -21,18 +21,18 @@ import { store } from '../store';
 import type { Crack, VoxelEngine } from '../engine/index';
 import type { HostMusic } from '../audio/host-music';
 import type { Sfx } from '../audio/sfx';
-import { IMPACT_PITCH, impactSound, mobPitch, mobSynth, mobVoice, stepSound } from '../audio/sounds';
+import { IMPACT_PITCH, impactSound, mobPitch, mobRange, mobSynth, mobVoice, stepSound } from '../audio/sounds';
 import { reducedMotion, Spectator, ViewEffects, type Subject, type ViewState } from './camera';
 import { Controls } from './controls';
 import { ScreenFx } from './effects';
-import { Entities } from './entities';
+import { Entities, type EntityEmit } from './entities';
 import { Hand, type HandPose } from './hand';
 import { hud } from './hud';
 import { Interaction, type Frame } from './interact';
 import type { ModelLibrary } from './models';
 import { buildInput, NetSync } from './net';
 import { EditOverlay } from './overlay';
-import { Particles } from './particles';
+import { Particles, TINTS } from './particles';
 import { LocalPlayer } from './player';
 import { configurePrediction, sendCommand, setServerView } from './predict';
 import type { ItemModels, SpriteSheet } from './sprites';
@@ -52,7 +52,12 @@ export type RuntimeDeps = {
 
 const INPUT_MS = 50, BODY_PUBLISH_MS = 250, EMITTER_SCAN = 0.5, STEP_DISTANCE = 1.7, FX_DEDUPE_MS = 1500;
 /** Blocks that give off particles (and a few ambient sounds) near the camera. */
-const EMITTERS = new Set<number>([B.torch, B.furnace_lit, B.lantern, B.jack_o_lantern, B.redstone_torch, B.redstone_wire, B.fire, B.monster_spawner, B.lava, B.nether_portal]);
+const EMITTERS = new Set<number>([B.torch, B.furnace_lit, B.lantern, B.jack_o_lantern, B.redstone_torch, B.redstone_wire, B.fire, B.monster_spawner, B.lava, B.nether_portal,
+  B.soul_torch, B.end_portal, B.dragon_egg]);
+/** Emitters sampled evenly from the area instead of kept nearest-first (they come in seas and sheets). */
+const SAMPLED = new Set<number>([B.lava, B.nether_portal, B.end_portal]);
+/** Acid clouds drawn at once (x, y, z, radius, seconds left each), how long one lingers, and boss-fight shake reach. */
+const MAX_CLOUDS = 8, CLOUD_SECONDS = 3, BUFFET_RANGE = 10, LANDING_RANGE = 40;
 /** Emitters kept per scan, and how many lava surfaces and portal cells among them (sampled evenly from the area). */
 const MAX_EMITTERS = 256, MAX_SAMPLED = 48, MAX_SPAWNERS = 6;
 /** Seconds a piston move takes on screen (MC: 2 game ticks, plus a little so the eye catches it). */
@@ -115,6 +120,7 @@ export class Runtime {
   private readonly scratch = new Vector3();
   private readonly getCell: CellReader;
   private readonly still = reducedMotion();
+  private readonly clouds = new Float64Array(MAX_CLOUDS * 5);
 
   constructor(private readonly d: RuntimeDeps) {
     const props = d.props();
@@ -132,6 +138,16 @@ export class Runtime {
     this.entities.onFireball = (x, y, z, dt) => {
       if (Math.random() < dt * 24) this.particles.smoke(x + (Math.random() - 0.5) * 0.4, y + (Math.random() - 0.5) * 0.4, z + (Math.random() - 0.5) * 0.4, 0.8, 'poof');
       if (Math.random() < dt * 10) this.particles.flame(x, y, z);
+    };
+    this.entities.onEmit = (kind, x, y, z, dt) => this.emit(kind, x, y, z, dt);
+    this.entities.onDragon = (cue, x, y, z) => {
+      const at = [x, y, z] as const, near = this.distanceTo(x, y, z);
+      if (cue === 'flap') d.sfx.synth('flap', { at, range: 96, volume: 1.1, pitch: 0.8 });
+      else if (cue === 'roar') d.sfx.synth('roar', { at, range: 160, volume: 1.3 });
+      else {
+        d.sfx.synth('flap', { at, range: 96, volume: 1.4, pitch: 0.45 });
+        if (near < LANDING_RANGE) this.effects.shake(0.7 * (1 - near / LANDING_RANGE));
+      }
     };
     this.particles = new Particles(d.sheet.texture, d.sheet.white, (rect, rand, out) => d.sheet.chip(rect, rand, out));
     d.scene.add(this.particles.mesh);
@@ -168,11 +184,15 @@ export class Runtime {
     if (this.controller) this.updateLocal(dt, p);
     else this.updateSpectator(dt);
     if (this.loading !== hud.get().loading) hud.set({ loading: this.loading });
+    const eye = this.d.camera.position;
+    this.entities.viewer = [eye.x, eye.y, eye.z];
     this.entities.update(serverNow, dt);
     this.d.engine.setGlows(this.entities.glows, this.entities.glowCount);
     this.entities.labels(this.d.camera, this.d.canvas.clientHeight);
     this.updateCracks();
     this.updateEmitters(dt);
+    this.updateClouds(dt);
+    this.buffet();
     this.particles.update(dt, this.getCell);
     this.d.engine.update(this.d.camera, dt);
     // Listener yaw from the view direction (the spectator camera is not in YXZ order, so rotation.y is not its yaw).
@@ -406,6 +426,7 @@ export class Runtime {
     this.subjects.length = count;
     const seed = this.d.seed;
     this.spectator.update(this.d.camera, this.subjects, this.getCell, (x, z) => this.groundY(seed, x, z), dt);
+    hud.set({ focus: this.spectator.focus });
   }
   private groundY(seed: number, x: number, z: number) {
     const world = this.d.engine.world, bx = Math.floor(x), bz = Math.floor(z);
@@ -437,7 +458,7 @@ export class Runtime {
     for (let y = cy - 6; y <= cy + 6; y++) for (let z = cz - 10; z <= cz + 10; z++) for (let x = cx - 10; x <= cx + 10; x++) {
       const cell = this.getCell(x, y, z), id = cellId(cell);
       if (!EMITTERS.has(id) || id === B.redstone_wire && !wirePower(cellState(cell))) continue;
-      if (id === B.lava || id === B.nether_portal) {
+      if (SAMPLED.has(id)) {
         if (id === B.lava && !isAir(this.getCell(x, y + 1, z))) continue;
         // Reservoir sampling: every candidate has the same chance of being kept.
         const slot = seen++ < MAX_SAMPLED ? seen - 1 : Math.floor(Math.random() * seen);
@@ -465,12 +486,12 @@ export class Runtime {
     for (const list of this.emitterLists) for (let i = 0; i < list.length; i += 4) {
       const x = list[i]!, y = list[i + 1]!, z = list[i + 2]!, cell = list[i + 3]!, id = cellId(cell), r = Math.random();
       switch (id) {
-        case B.torch: case B.redstone_torch: {
+        case B.torch: case B.redstone_torch: case B.soul_torch: {
           const box = selectionBoxes(cell)[0];
           if (!box) continue;
           const fx = x + (box[0] + box[3]) / 2, fy = y + box[4] + 0.08, fz = z + (box[2] + box[5]) / 2;
           if (id === B.redstone_torch) { if (r < dt * 2.5) particles.redstone(fx, fy, fz); continue; }
-          if (r < dt * 4) particles.flame(fx, fy, fz);
+          if (r < dt * 4) particles.flame(fx, fy, fz, id === B.soul_torch ? TINTS.soul : TINTS.flame);
           if (Math.random() < dt * 0.9) particles.smoke(fx, fy + 0.08, fz, light(fx, fy, fz));
           break;
         }
@@ -494,6 +515,11 @@ export class Runtime {
             if (Math.random() < 0.3) sfx.synth('fizz', { at: [x + 0.5, y + 1, z + 0.5], volume: 0.1, pitch: 1.8 });
           }
           break;
+        case B.end_portal:
+          // Dark specks rising off the starfield.
+          if (r < dt * 1.2) particles.trail(x + Math.random(), y + 0.8, z + Math.random(), TINTS.dark, 0.05);
+          break;
+        case B.dragon_egg: if (r < dt * 3) particles.mote(x + 0.2 + Math.random() * 0.6, y + 0.3 + Math.random() * 0.8, z + 0.2 + Math.random() * 0.6); break;
         case B.nether_portal:
           // Motes right at the eye (standing in a portal) would fill the view: only farther cells emit.
           if (r < dt * 3 && this.d.camera.position.distanceToSquared(this.scratch.set(x + 0.5, y + 0.5, z + 0.5)) > 4) {
@@ -544,7 +570,7 @@ export class Runtime {
     const mob = MOB_TYPES[fx.a ?? -1]?.key;
     const voice = (volume: number, pitch: number) => {
       if (!mob) return;
-      const sample = mobVoice(mob, Math.random() * 3), synth = mobSynth(mob), range = mob === 'ghast' ? 48 : undefined;
+      const sample = mobVoice(mob, Math.random() * 3), synth = mobSynth(mob), range = mobRange(mob);
       if (sample) sfx.play(sample, { at, volume, pitch: pitch * mobPitch(mob) });
       else if (synth) sfx.synth(synth, range ? { at, volume, pitch, range } : { at, volume, pitch });
     };
@@ -610,8 +636,84 @@ export class Runtime {
         return;
       case 'ghast': sfx.synth('ghast', { at, range: 48 }); return;
       case 'fireball': sfx.synth('shriek', { at, range: 48 }); sfx.play('fire', { at, volume: 0.6 }); return;
+      case 'eye':
+        if (!predicted) sfx.synth('eye', { at });
+        particles.burst(fx.x, fx.y + 0.4, fx.z, TINTS.ender, 14, 1.6);
+        return;
+      case 'shatter':
+        sfx.play(`impact-glass-${Math.floor(Math.random() * 3)}`, { at, pitch: 1.2 });
+        particles.burst(fx.x, fx.y, fx.z, TINTS.ender, 28, 3.5);
+        return;
+      case 'portalOpen': {
+        // The End portal lights: a deep chord for everyone nearby, a fountain of motes and, up close, a flash and a rumble.
+        sfx.synth('portalOpen', { at, range: 64, volume: 1.5 });
+        particles.burst(fx.x, fx.y + 0.5, fx.z, TINTS.ender, 90, 5);
+        for (let i = 0; i < 40; i++) particles.mote(fx.x + (Math.random() - 0.5) * 3, fx.y + 0.8 + Math.random() * 2, fx.z + (Math.random() - 0.5) * 3);
+        const near = this.distanceTo(fx.x, fx.y, fx.z);
+        if (near < 16) { this.screen?.flash(); this.effects.shake(0.35); }
+        return;
+      }
+      case 'dragonDeath':
+        sfx.synth('dragonDeath', { at, range: 256, volume: 1.4 });
+        if (this.distanceTo(fx.x, fx.y, fx.z) < 160) this.effects.shake(0.6);
+        return;
+      case 'acid': this.addCloud(fx.x, fx.y, fx.z, fx.a ?? 3); sfx.synth('fizz', { at, volume: 0.7, pitch: 0.7 }); return;
+      case 'crystal':
+        sfx.play(`impact-glass-${Math.floor(Math.random() * 3)}`, { at, volume: 1.2, pitch: 0.7, range: 64 });
+        particles.burst(fx.x, fx.y + 1, fx.z, TINTS.beam, 40, 7, 0.1);
+        return;
+      case 'pearl': case 'teleport':
+        sfx.synth('vwoop', { at, volume: 0.8 });
+        for (let i = 0; i < 3; i++) particles.burst(fx.x, fx.y + (i - 1) * 0.8, fx.z, TINTS.ender, 10, 1.4);
+        if (fx.k === 'pearl' && this.isSelf(fx)) this.screen?.flash();
+        return;
+      case 'blazeShoot': sfx.synth('blazeShoot', { at, range: 32 }); return;
+      case 'scream': sfx.synth('scream', { at, range: 32 }); return;
+      case 'observer': sfx.synth('click', { at, pitch: 1.25, volume: 0.35 }); return;
     }
   }
+
+  /** Particles entities give off this frame (Entities.onEmit). */
+  private emit(kind: EntityEmit, x: number, y: number, z: number, dt: number) {
+    const p = this.particles, r = Math.random();
+    switch (kind) {
+      case 'blaze': p.smoke(x, y, z, 0.3, 'poof'); if (r < 0.3) p.flame(x, y, z); return;
+      case 'ender': p.mote(x, y, z); return;
+      case 'smallFireball': if (r < dt * 30) p.smoke(x, y, z, 0.6); if (r < dt * 12) p.flame(x, y, z); return;
+      case 'eye': if (r < dt * 45) p.trail(x, y, z, TINTS.ender); return;
+      case 'pearl': if (r < dt * 25) p.trail(x, y, z, TINTS.ender, 0.05); return;
+      case 'acidball': if (r < dt * 50) p.trail(x, y, z, TINTS.acid, 0.14); return;
+      case 'breath': if (r < dt * 40) p.cloud(x, y - 0.8, z, 1.2); return;
+      case 'dying': if (r < dt * 40) p.trail(x + (Math.random() - 0.5) * 8, y + (Math.random() - 0.5) * 3, z + (Math.random() - 0.5) * 8, TINTS.beam, 0.12); return;
+      case 'vanish': p.burst(x, y, z, TINTS.beam, 140, 14, 0.16); p.burst(x, y, z, TINTS.ender, 80, 8, 0.12); return;
+    }
+  }
+
+  /** An acid cloud lingering where a dragon fireball burst or the dragon breathed (replaces the oldest when full). */
+  private addCloud(x: number, y: number, z: number, radius: number) {
+    const c = this.clouds;
+    let slot = 0;
+    for (let i = 0; i < MAX_CLOUDS; i++) if (c[i * 5 + 4]! < c[slot * 5 + 4]!) slot = i;
+    c.set([x, y, z, radius, CLOUD_SECONDS], slot * 5);
+  }
+  private updateClouds(dt: number) {
+    const c = this.clouds;
+    for (let o = 0; o < c.length; o += 5) {
+      if (c[o + 4]! <= 0) continue;
+      c[o + 4]! -= dt;
+      const radius = c[o + 3]!;
+      for (let n = dt * 14 * radius; n > 0; n--) if (n >= 1 || Math.random() < n) this.particles.cloud(c[o]!, c[o + 1]!, c[o + 2]!, radius);
+    }
+  }
+  /** Wing buffet: the view shakes while the dragon sweeps past close by. */
+  private buffet() {
+    const dragon = this.entities.dragon;
+    if (!dragon || !this.player) return;
+    const near = this.distanceTo(dragon.x, dragon.y + 2, dragon.z);
+    if (near < BUFFET_RANGE) this.effects.shake(0.45 * (1 - near / BUFFET_RANGE));
+  }
+  /** Distance from the camera (the local eye or the TV's camera). */
+  private distanceTo(x: number, y: number, z: number) { return this.d.camera.position.distanceTo(this.scratch.set(x, y, z)); }
   private isSelf(fx: Fx) {
     const body = this.player?.body;
     return !!body && Math.hypot(body.x - fx.x, body.z - fx.z) < 1.5;

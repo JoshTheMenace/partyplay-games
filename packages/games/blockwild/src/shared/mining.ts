@@ -41,6 +41,9 @@ export function breakTime(cell: number, held: number, onGround: boolean, inWater
   return seconds;
 }
 
+/** Whether a player may break the cell at all: never unbreakable blocks, except end portal frames in creative. */
+export const isBreakable = (cell: number, creative: boolean) => blockOf(cell).hardness >= 0 || creative && (cell & 255) === B.end_portal_frame;
+
 /** Crack stage 0..9 for a mining progress 0..1. */
 export const crackStage = (progress: number) => Math.max(0, Math.min(9, Math.floor(progress * 10)));
 
@@ -50,6 +53,7 @@ export function drops(cell: number, held: number, rand: () => number): Slot[] {
   const block = blockOf(cell);
   if (held === I.shears && SHEARABLE.has(block.id)) return [{ id: block.id, n: 1 }];
   if (!canHarvest(cell, held)) return [];
+  if (block.id === B.gravel) return [{ id: rand() < 0.1 ? I.flint : B.gravel, n: 1 }];
   const out: Slot[] = [];
   for (const d of block.drops(cell >> 8)) {
     if (d.chance < 1 && rand() >= d.chance) continue;

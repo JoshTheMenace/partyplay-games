@@ -1,7 +1,7 @@
 /** Projections sent to clients: the public View, per-player PrivateView and the results Outcome. */
 import type { Outcome } from '../../../../party-contract/src/index';
 import { awards } from '../shared/awards';
-import { inNether } from '../shared/constants';
+import { dimensionAt } from '../shared/constants';
 import { cellIndex } from '../shared/coords';
 import { SMELT_SECONDS } from '../shared/inventory';
 import { armorPoints, type Slot } from '../shared/items';
@@ -9,6 +9,8 @@ import { breakTime, crackStage } from '../shared/mining';
 import { MOB, MS, PF, q2, q3, type JournalEntry, type PrivateView, type PubMob, type PubPlayer, type Screen, type View } from '../shared/protocol';
 import { mobState } from './combat';
 import { screenSlots } from './containers';
+import { bossView } from './dragon';
+import { victoryView } from './end';
 import { newPlayer } from './players';
 import { fxList, playerById, type Mob, type Player, type State } from './state';
 import { tradeScreen } from './villagers';
@@ -54,7 +56,11 @@ export function publicView(state: State): View {
     }),
     fx: fxList(state), sleeping: state.players.filter(player => player.sleeping).length, stats: { ...state.stats },
   };
-  if (state.finished) view.journal = journalOf(state);
+  const boss = bossView(state), victory = victoryView(state);
+  // The results screen and the victory celebration both read the journal.
+  if (state.finished || victory) view.journal = journalOf(state);
+  if (boss) view.boss = boss;
+  if (victory) view.victory = victory;
   return view;
 }
 
@@ -63,6 +69,8 @@ function pubMob(state: State, mob: Mob): PubMob {
   const view: PubMob = { id: mob.id, t: mob.t, x: q2(mob.x), y: q2(mob.y), z: q2(mob.z), yaw: q3(mob.yaw), hurt: mob.hurt, a: mob.a };
   if (s) view.s = s;
   if (mob.t === MOB.villager) view.p = mob.p;
+  if (mob.pt) view.pt = q3(mob.pt);
+  if (mob.t === MOB.ender_dragon) view.ph = mob.ph;
   return view;
 }
 
@@ -84,7 +92,7 @@ export function playerView(state: State, playerId: string): PrivateView {
     health: q2(player.health), food: player.food, saturation: q2(player.saturation), air: Math.round(player.air),
     dead: player.dead, spawn: player.bed ? [...player.bed] : [q2(state.spawn[0]), q2(state.spawn[1]), q2(state.spawn[2])], mode: state.settings.mode,
     keepInventory: state.settings.keepInventory, armor: copySlots(player.armor), armorPoints: armorPoints(player.armor),
-    dimension: inNether(player.x, player.z) ? 'nether' : 'overworld',
+    dimension: dimensionAt(player.x, player.z),
   };
   const burning = Math.ceil(player.fire * 20), portal = q2(player.portal);
   if (burning > 0) view.burning = burning;
@@ -98,9 +106,12 @@ export function playerView(state: State, playerId: string): PrivateView {
 
 const journalOf = (state: State): JournalEntry[] => state.players.map(({ id, stats }) => ({ ...stats, id, distance: Math.round(stats.distance) }));
 
+/** Players credited with the victory (Victory.by holds names). */
+export const slayerIds = (state: State) => state.players.filter(player => state.end.victory?.by.includes(player.name)).map(player => player.id);
+
 /** Cooperative results: everyone wins once the host finishes; each row reads as a short highlight reel led by its awards. */
 export function outcome(state: State): Outcome {
-  const won = awards(journalOf(state));
+  const won = awards(journalOf(state), slayerIds(state));
   const rows = state.players.map(player => {
     const s = player.stats, parts = [...won.filter(award => award.ids.includes(player.id)).map(award => award.title), `${s.mined} mined`, `${s.placed} placed`, `${s.crafted} crafted`];
     if (s.mobs) parts.push(`${s.mobs} mob${s.mobs === 1 ? '' : 's'}`);

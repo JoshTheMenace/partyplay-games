@@ -412,6 +412,16 @@ const dust = (ramp: readonly Rgb[], spark: Rgb) => {
   for (const [x, y] of [[4, 5], [11, 6], [7, 3]] as const) p.put(x, y, spark);
   return p;
 };
+/** A shaded, outlined sphere (ender pearl, eye of ender) with a detail stamp on top. */
+const orb = (ramp: readonly Rgb[], detail: (p: Pix) => void) => {
+  const p = new Pix();
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+    const dx = x + 0.5 - 8, dy = y + 0.5 - 8.5, d = Math.hypot(dx, dy);
+    if (d < 5.6) p.put(x, y, ramp[Math.max(0, Math.min(ramp.length - 1, Math.floor((0.62 - dx * 0.05 - dy * 0.07 - d * 0.04) * ramp.length)))]!);
+  }
+  detail(p);
+  return outline(p);
+};
 /** Armor icons: W highlight, L light, M mid, D dark; recoloured per material. */
 const ARMOR: Record<'helmet' | 'chestplate' | 'leggings' | 'boots', [string[], number, number]> = {
   helmet: [['....WWWLLL....', '..WWLLLLLLLM..', '.WLLLLLLLLLLM.', '.LLLLLLLLLLMM.', '.LLMDDDDDDLMD.', '.LLD......MMD.', '.LMD......MMD.', '.MMD......MDD.'], 1, 4],
@@ -446,6 +456,30 @@ Object.assign(SPRITES, {
   ], { S: 0x9a9aa2, s: 0x6a6a72, W: 0xffffff, L: 0x6e6e74, M: 0x4a4a50, D: 0x2e2e34 }, 1, 3),
   repeater: () => art(['...W......W....', '..rRr....rRr...', '...R......R....', '...h......h....', 'SSSSSSSSSSSSSSS', 'LLLLLLLLLLLLLLM', 'MMMMMMMMMMMMMMD'], { W: 0xffe0d0, R: 0xe82014, r: 0xa80c06, h: 0x8a6436, S: 0xd0d0d4, L: 0xa8a8ae, M: 0x7c7c82, D: 0x5a5a60 }, 0, 6),
   iron_door: () => art(['....WWWWWW....', '....W.WW.W....', '....W.WW.W....', '....WWWWWW....', '....WLLLLW....', '....WMMMMW....', '....WLLLkW....', '....WLLLLW....', '....WMMMMW....', '....WWWWWW....'], { W: 0xd8dce0, L: 0xb4b8be, M: 0x8d9197, k: 0x3a3a40 }, 1, 3),
+  // Endgame.
+  blaze_rod: () => art(['..........WY', '.........WYO', '........WYO.', '.......YYO..', '......YYO...', '.....WYO....', '....YYO.....', '...YYO......', '..WYO.......', '.YYO........', '.YO.........'],
+    { W: 0xfff6c0, Y: 0xf8c832, O: 0xc8781a }, 2, 2),
+  blaze_powder: () => dust([0x9a4a08, 0xe07a14, 0xf8b030, 0xffe070], 0xfff4c0),
+  ender_pearl: () => orb([0x0a2a28, 0x0f4440, 0x16605a, 0x1e7e74, 0x3aa89a, 0x9ae8dc], (p) => { p.put(6, 6, 0xe0fff8); p.put(7, 6, 0x9ae8dc); p.put(6, 7, 0x9ae8dc); }),
+  ender_eye: () => orb([0x10301c, 0x1b4a2a, 0x2a6a3a, 0x3e8a4a, 0x6ab86a, 0xc4f0b0], (p) => {
+    for (let y = 5; y < 12; y++) p.put(8, y, 0x0a140c);
+    p.put(7, 7, 0x0a140c).put(7, 8, 0x0a140c).put(7, 9, 0x0a140c).put(9, 8, 0x1a2a1a).put(5, 6, 0xf0ffe8);
+  }),
+  nether_wart: () => { const RED = [0x4a0a0e, 0x7a161a, 0xa42622, 0xc8423a, 0xe87060]; const p = blob(new Pix(), 6, 9.5, 3.4, 3, RED, 0.4, 14); blob(p, 10.5, 7.5, 2.8, 2.6, RED, 0.4, 15); blob(p, 9, 11.5, 2.4, 2, RED, 0.3, 16); return outline(p); },
+  end_crystal: () => art([
+    '......gg......',
+    '....gGPPGg....',
+    '...gPpMMpPg...',
+    '..gPpMWWMpPg..',
+    '..GPMWMMWMPG..',
+    '..GPMWMMWMPG..',
+    '..gPpMWWMpPg..',
+    '...gPpMMpPg...',
+    '....gGPPGg....',
+    '......gg......',
+    '....kkkkkk....',
+    '...kKKKKKKk...',
+  ], { g: 0x9aa4b8, G: 0xd8e0ee, P: 0xc848c0, p: 0x8a2a90, M: 0xf07ae8, W: 0xffe0fc, k: 0x1a1a1e, K: 0x3a3a40 }, 1, 2),
   lever: () => art(['..........W.....', '.........Hh.....', '........Hh......', '.......Hh.......', '......Hh........', '..CCCCCCCCCC....', '..CcCCCCcCCc....', '..cccccccccc....'], { W: 0xe8e8ec, H: 0x9c7440, h: 0x6e4f28, C: 0x8c8c92, c: 0x5e5e64 }, 1, 4),
 });
 

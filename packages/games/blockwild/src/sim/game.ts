@@ -9,14 +9,20 @@ import { bodyCollides } from '../shared/physics';
 import { returnToInventory, type Containers } from '../shared/inventory';
 import { IF, MOB, MOB_TYPES, neutralInput, MS, type Input, type Settings } from '../shared/protocol';
 import { findSpawn, generateChunk } from '../shared/worldgen';
+import { newBlazeState } from './blaze';
 import { tickArrows } from './combat';
 import { runCommands, updateHolds } from './commands';
 import { closeScreen, tickFurnaces, validateScreens } from './containers';
+import { ensureDragon, newDragonState } from './dragon';
+import { newEndState, tickExitPortal, tickVoid } from './end';
+import { newEyeState, tickEndPortalTravel } from './ender-eyes';
+import { newEndermanState } from './enderman';
 import { tickItems } from './entities';
 import { newFireState, tickBurning, tickFireBlocks } from './fire';
 import { tickGrowth, trackCane } from './growth';
 import { newMob, populateChunk, tickMobs } from './mobs';
 import { newNetherState, tickFireballs } from './nether-mobs';
+import { newPearlState } from './pearls';
 import { applyMovement, newPlayer, sleepTick, survivalTick, wake } from './players';
 import { newPortalState, tickPortals } from './portals';
 import { newRedstoneState, tickRedstone } from './redstone';
@@ -53,9 +59,11 @@ export function createState(ctx: RoundContext, requested: Settings, options: Cre
     get: makeReader(world, false), getLoaded: makeReader(world, true), rand: createRng((settings.seed * 7919 + ctx.seed) | 0),
     clock: 0, time: save?.time ?? START_TICK, day: save?.day ?? 0, revision: 1, players: [], mobs: [], items: [], arrows: [], fx: [], nextId: 0, fxId: 0,
     chests: save?.chests ?? new Map(), furnaces: save?.furnaces ?? new Map(), lights: new Map(), growables, animalChunks: save?.populated ?? new Set(),
-    spawn: [0, 0, 0], stats: save?.stats ?? { mined: 0, placed: 0, crafted: 0, mobs: 0, deaths: 0, days: 0 }, finished: false, ticks: 0,
+    spawn: [0, 0, 0], stats: save?.stats ?? { mined: 0, placed: 0, crafted: 0, mobs: 0, deaths: 0, days: 0, dragons: 0 }, finished: false, ticks: 0,
     pathBudget: 0, editsCache: { revision: 0, list: [] }, source, absent: [],
     structures: newStructureState(), portals: newPortalState(), fire: newFireState(), nether: newNetherState(), redstone: newRedstoneState(), villages: newVillageState(),
+    blaze: newBlazeState(), eyes: newEyeState(), dragon: newDragonState(), endermen: newEndermanState(), pearls: newPearlState(),
+    end: newEndState(save?.end, save?.victory), pearlPity: save?.pearlPity ?? 0,
   };
   // Chunk by chunk, so each generates once however many edits it holds (the saved y-first order thrashes the cache).
   const chunkOf = (index: number) => { const [x, , z] = cellXYZ(index); return chunkKey(x >> 4, z >> 4); };
@@ -80,7 +88,7 @@ export function createState(ctx: RoundContext, requested: Settings, options: Cre
     const saved = names.get(p.name) === 1 ? save?.players.filter(s => s.name === p.name) : undefined;
     if (saved?.length === 1) {
       matched.add(p.name);
-      const s = saved[0]!, fits = !bodyCollides(state.get, { x: s.x, y: s.y, z: s.z, sneaking: false }, 0.05);
+      const s = saved[0]!, fits = s.y >= 0 && !bodyCollides(state.get, { x: s.x, y: s.y, z: s.z, sneaking: false }, 0.05);
       Object.assign(player, { yaw: s.yaw, pitch: s.pitch, health: s.health, food: s.food, saturation: s.saturation, inv: s.inv, armor: s.armor, bed: s.bed, stats: s.stats, milestones: s.milestones });
       if (fits) Object.assign(player, { x: s.x, y: s.y, z: s.z, fallPeak: s.y, supportY: s.y, tp: { n: 1, x: s.x, y: s.y, z: s.z } });
     }
@@ -106,7 +114,7 @@ function withHeld(player: Player): Player {
 /** What the save module needs from the live state. */
 export const saveSource = (state: State): SaveSource => ({
   settings: state.settings, worldId: state.worldId, time: state.time, day: state.day, edits: state.world.edits, players: [...state.players.map(withHeld), ...state.absent],
-  chests: state.chests, furnaces: state.furnaces, populated: state.animalChunks, stats: state.stats,
+  chests: state.chests, furnaces: state.furnaces, populated: state.animalChunks, stats: state.stats, end: state.end, victory: state.end.victory, pearlPity: state.pearlPity,
   animals: state.mobs.filter(mob => MOB_TYPES[mob.t]!.kind === 'animal' && mob.health > 0).map(mob => ({ t: mob.t, x: mob.x, y: mob.y, z: mob.z, s: (mob.sheared ? MS.SHEARED : 0) | (mob.baby > 0 ? MS.BABY : 0) })),
   villagers: state.mobs.filter(mob => mob.t === MOB.villager && mob.health > 0).map(mob => ({ x: mob.x, y: mob.y, z: mob.z, p: mob.p, home: mob.home, uses: mob.uses, seed: mob.seed })),
 });
@@ -142,7 +150,8 @@ const WARNINGS: readonly [number, string, boolean][] = [
 
 /**
  * One 20 Hz tick: time, players (movement, commands, survival), sleep, screens, then the world in a fixed order:
- * redstone → portals → burning → fire blocks → spawners → mobs → fireballs → arrows → items → furnaces → growth.
+ * redstone → portals (nether, End entry, End exit) → burning → fire blocks → spawners → dragon → mobs → fireballs →
+ * arrows (and the other projectiles) → items → void → furnaces → growth.
  */
 export function tickState(state: State, inputs: ReadonlyMap<string, Input>, dt: number) {
   state.clock += dt;
@@ -176,13 +185,17 @@ export function tickState(state: State, inputs: ReadonlyMap<string, Input>, dt: 
   validateScreens(state);
   tickRedstone(state, dt);
   tickPortals(state, dt);
+  tickEndPortalTravel(state, dt);
+  tickExitPortal(state, dt);
   tickBurning(state, dt);
   tickFireBlocks(state, dt);
   tickSpawners(state, dt);
+  ensureDragon(state);
   tickMobs(state, dt);
   tickFireballs(state, dt);
   tickArrows(state, dt);
   tickItems(state, dt);
+  tickVoid(state, dt);
   tickFurnaces(state, dt);
   tickGrowth(state);
 }

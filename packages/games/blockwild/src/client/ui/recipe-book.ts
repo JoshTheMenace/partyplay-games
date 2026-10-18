@@ -1,14 +1,20 @@
 /** Recipe book filtering and ingredient summaries (pure). */
 import { countItem } from '../../shared/inventory';
-import { B, I, itemName, itemOf, type ItemCategory, type Slot } from '../../shared/items';
+import { B, I, itemName, itemOf, type ItemCategory, type ItemDef, type Slot } from '../../shared/items';
 import { canCraft, ingredientsOf, RECIPES, type Ingredient, type Recipe } from '../../shared/recipes';
 
-export type BookTab = 'all' | 'blocks' | 'tools' | 'combat' | 'redstone' | 'food' | 'materials';
+export type BookTab = 'all' | 'blocks' | 'tools' | 'combat' | 'redstone' | 'food' | 'materials' | 'end';
 export const BOOK_TABS: readonly { id: BookTab; label: string; icon: number }[] = [
   { id: 'all', label: 'All', icon: B.crafting_table }, { id: 'blocks', label: 'Blocks', icon: B.bricks }, { id: 'tools', label: 'Tools', icon: I.stone_pickaxe },
   { id: 'combat', label: 'Combat', icon: I.iron_sword }, { id: 'redstone', label: 'Redstone', icon: I.redstone }, { id: 'food', label: 'Food', icon: I.bread },
-  { id: 'materials', label: 'Materials', icon: I.stick },
+  { id: 'materials', label: 'Materials', icon: I.stick }, { id: 'end', label: 'The End', icon: I.ender_eye },
 ];
+/** The endgame kit and End blocks get their own tab in the recipe book and the creative palette, whatever their item category. */
+export const END_ITEMS: ReadonlySet<number> = new Set([I.ender_pearl, I.ender_eye, I.end_crystal, B.end_stone, B.end_stone_bricks, B.cracked_end_stone_bricks,
+  B.purpur_block, B.purpur_pillar, B.end_portal_frame, B.dragon_egg]);
+export type PaletteTab = ItemCategory | 'end';
+/** Creative palette tab of an item: its category, except the End kit (own tab) and the quartz block (Building, beside its family). */
+export const paletteTab = (item: ItemDef): PaletteTab => END_ITEMS.has(item.id) ? 'end' : item.id === B.quartz_block ? 'building' : item.category;
 const TAB_OF: Record<ItemCategory, BookTab> = {
   building: 'blocks', decoration: 'blocks', nature: 'blocks', tools: 'tools', combat: 'combat', food: 'food', materials: 'materials', redstone: 'redstone', nether: 'blocks',
 };
@@ -47,7 +53,7 @@ export function filterRecipes(inv: readonly (Slot | null)[], filter: BookFilter,
   for (const recipe of recipes) {
     const item = itemOf(recipe.out.id);
     if (!item || item.hidden) continue;
-    if (filter.tab !== 'all' && TAB_OF[recipe.category] !== filter.tab) continue;
+    if (filter.tab !== 'all' && (END_ITEMS.has(recipe.out.id) ? 'end' : TAB_OF[recipe.category]) !== filter.tab) continue;
     if (query && !matches(recipe, query)) continue;
     const craftable = canCraft(inv, recipe, filter.nearTable);
     if (filter.craftableOnly && !craftable) continue;

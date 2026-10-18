@@ -2,6 +2,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { ArcadeButton, ToggleRow, type InstructionsViewProps, type ResultsViewProps, type SettingsViewProps } from '../../../../../party-ui/src/index';
 import type { Difficulty, Mode, Settings, View } from '../../shared/protocol';
+import { nameList } from './endgame';
 import { awards, formatDistance } from './format';
 
 function Segment<T extends string>({ label, value, options, disabled, onChange }: { label: string; value: T; options: readonly { value: T; label: string; note: string }[]; disabled: boolean; onChange(value: T): void }) {
@@ -56,14 +57,15 @@ export function InstructionsView({ role }: InstructionsViewProps) {
     <h2>Build a world together</h2>
     <p>Everyone explores the same boundless blocky world from their own phone or laptop. This screen follows the action.</p>
     <p>Punch trees, craft tools, dig for iron and diamonds, and get a roof over your heads before the first night.</p>
+    <p>Later, brave the Nether, find the stronghold and defeat the Ender Dragon together.</p>
   </div>;
   return <div className="bw-instructions">
     <h2>Survive, mine, craft and build</h2>
     <ul>
       <li><b>Phone:</b> hold your phone sideways. Left thumb walks, right thumb looks. Hold <b>Mine</b> to break blocks, tap <b>Use</b> to place.</li>
       <li><b>Keyboard:</b> WASD to move, mouse to look, left click mines, right click places, <kbd>E</kbd> opens your inventory.</li>
-      <li>Start by punching a tree. The <b>Next goal</b> hint walks you through the rest, all the way to the Nether.</li>
-      <li>Later: find villages to trade emeralds, craft armor, and wire levers, lamps and pistons with redstone.</li>
+      <li>Start by punching a tree. The <b>Next goal</b> hint walks you through the rest, all the way to the Ender Dragon.</li>
+      <li>Along the way: trade with villagers, craft armor, wire redstone, and hunt blazes and endermen for the eyes of ender that open the End.</li>
     </ul>
   </div>;
 }
@@ -71,17 +73,20 @@ export function InstructionsView({ role }: InstructionsViewProps) {
 /** World journal: days survived, world totals, and each explorer's highlights and awards. */
 export function ResultsView({ outcome, publicView, playerId }: ResultsViewProps<View>) {
   const view = publicView, journal = view.journal ?? [];
-  const players = view.players, won = awards(journal);
+  const players = view.players, victory = view.victory;
+  const won = awards(journal, players.filter(player => victory?.by.includes(player.name)).map(player => player.id));
   const rows = outcome.rows.map(row => ({ row, player: players.find(p => p.id === row.playerId), entry: journal.find(e => e.id === row.playerId) }));
   const days = view.stats.days;
   return <div className="bw-results">
     <p className="kp-eyebrow">World journal</p>
     <h1>{days === 0 ? 'Your first day in the wild' : days === 1 ? 'One day in the wild' : `${days} days in the wild`}</h1>
+    {victory && <p className="bw-results-dragon">Ender Dragon defeated on day {victory.day + 1}{victory.by.length ? ` by ${nameList(victory.by)}` : ''}</p>}
     <ul className="bw-results-totals">
       <li><b className="kp-numeral">{view.stats.mined.toLocaleString()}</b> blocks mined</li>
       <li><b className="kp-numeral">{view.stats.placed.toLocaleString()}</b> placed</li>
       <li><b className="kp-numeral">{view.stats.crafted.toLocaleString()}</b> crafted</li>
       <li><b className="kp-numeral">{view.stats.mobs.toLocaleString()}</b> mobs defeated</li>
+      {view.stats.dragons > 1 && <li><b className="kp-numeral">{view.stats.dragons}</b> dragons slain</li>}
     </ul>
     <ol className="bw-journal">
       {rows.map(({ row, player, entry }) => <li key={row.playerId} data-me={row.playerId === playerId} style={{ '--player': player?.color ?? 'var(--kp-sky)' } as CSSProperties}>

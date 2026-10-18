@@ -12,7 +12,7 @@ import { hasSprite, paintSprite } from './sprites';
 import { paintTexture } from './textures';
 
 export const ICON_SIZE = 64;
-const FLAT: ReadonlySet<Shape> = new Set(['cross', 'crop', 'torch', 'ladder', 'door', 'lantern']);
+const FLAT: ReadonlySet<Shape> = new Set(['cross', 'crop', 'torch', 'ladder', 'door', 'lantern', 'pane']);
 /** Item actually drawn for an id (hidden technical blocks show their item: wheat crop → seeds, water → bucket). */
 const shown = (id: number) => id > 0 && id < 256 ? itemForBlock(id) : id;
 /** Sprite key for items drawn flat from a hand-made sprite (every non-block item, plus block items like the lever). */
@@ -23,8 +23,8 @@ export function heldAsBlock(id: number): boolean {
   const item = shown(id), block = item < 256 ? BLOCKS[item] : undefined;
   return !!block && block.render !== 'none' && !FLAT.has(block.shape) && spriteOf(item) === null;
 }
-/** Icon states: facing blocks show their front (south, the icon's left face), pistons face up, fences run east–west. */
-const ICON_STATE: Partial<Record<Shape, number>> = { piston: 3, fence: 2 | 8 };
+/** Icon states: facing blocks show their front (south, the icon's left face), pistons face up, fences run east–west, observers watch south. */
+const ICON_STATE: Partial<Record<Shape, number>> = { piston: 3, fence: 2 | 8, observer: 5 };
 /** Cell value used to draw a block item (stairs rise away from the viewer). */
 export function iconCell(id: number): number {
   const item = shown(id), block = blockOf(item);

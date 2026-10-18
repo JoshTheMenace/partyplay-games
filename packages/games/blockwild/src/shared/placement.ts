@@ -3,7 +3,7 @@
  * Entity overlap (players/mobs) is checked by the caller against collisionBoxes of the returned cells.
  */
 import {
-  attachedFace, B, BED_HEAD, blockOf, cellId, cellState, DOOR_UPPER, isFullCube, isLava, isLiquid, isReplaceable, isSolid, isWater, makeCell,
+  attachedFace, B, BED_HEAD, blockOf, cellId, cellState, DOOR_UPPER, FRAME_EYE, isFullCube, isLava, isLiquid, isReplaceable, isSolid, isWater, makeCell,
   PISTON_EXTENDED, pistonFacing, SLAB_BOTTOM, SLAB_DOUBLE, SLAB_TOP, STAIRS_TOP,
 } from './blocks';
 import type { World } from './chunk';
@@ -27,13 +27,13 @@ const SOIL = new Set<number>([B.grass_block, B.dirt, B.snowy_grass, B.farmland])
 const CROPS = new Set<number>([B.wheat, B.carrots, B.potatoes]);
 const SAPLINGS = new Set<number>([B.oak_sapling, B.birch_sapling, B.spruce_sapling]);
 const TILLABLE = new Set<number>([B.grass_block, B.dirt, B.snowy_grass]);
-const INTERACTIVE = new Set<number>([B.crafting_table, B.furnace, B.furnace_lit, B.chest, B.bed, B.oak_door, B.lever, B.stone_button, B.oak_button, B.repeater]);
+const INTERACTIVE = new Set<number>([B.crafting_table, B.furnace, B.furnace_lit, B.chest, B.bed, B.oak_door, B.lever, B.stone_button, B.oak_button, B.repeater, B.daylight_detector]);
 const HOES = new Set<number>([I.wooden_hoe, I.stone_hoe, I.iron_hoe, I.diamond_hoe]);
 const SHOVELS = new Set<number>([I.wooden_shovel, I.stone_shovel, I.iron_shovel, I.diamond_shovel]);
 const PATHABLE = new Set<number>([B.grass_block, B.dirt]);
 const BUCKETS = new Set<number>([I.bucket, I.water_bucket, I.lava_bucket]);
-/** Blocks no item may place (buckets, fire from flint and steel, portals from frames, heads from pistons). */
-const UNPLACEABLE = new Set<number>([B.water, B.lava, B.farmland, B.fire, B.nether_portal, B.piston_head]);
+/** Blocks no item may place (buckets, fire from flint and steel, portals from frames and eyes, heads from pistons). */
+const UNPLACEABLE = new Set<number>([B.water, B.lava, B.farmland, B.fire, B.nether_portal, B.piston_head, B.end_portal]);
 const AXIS_BY_FACE = [1, 1, 0, 0, 2, 2] as const;
 
 export const isCrop = (id: number) => CROPS.has(id);
@@ -64,6 +64,7 @@ export function canSurvive(world: World, x: number, y: number, z: number, cell =
   const id = cellId(cell), state = cellState(cell), block = blockOf(cell);
   const below = world.getCell(x, y - 1, z), belowId = cellId(below);
   if (CROPS.has(id)) return belowId === B.farmland;
+  if (id === B.nether_wart) return belowId === B.soul_sand;
   switch (block.shape) {
     case 'torch': {
       if (state === 0) return sturdyTop(below);
@@ -89,7 +90,7 @@ export function canSurvive(world: World, x: number, y: number, z: number, cell =
       return cellId(other) === B.bed && ((cellState(other) & BED_HEAD) !== 0) !== head;
     }
     case 'cactus': return belowId === B.sand || belowId === B.cactus;
-    case 'lantern': case 'plate': case 'wire': case 'repeater': return sturdyTop(below);
+    case 'lantern': case 'plate': case 'wire': case 'repeater': case 'daylight': return sturdyTop(below);
     case 'lever': case 'button': {
       const [dx, dy, dz] = FACES[attachedFace(state)]!;
       return isFullCube(world.getCell(x - dx, y - dy, z - dz));
@@ -113,23 +114,28 @@ export function placeTarget(world: World, hit: PlaceHit): [number, number, numbe
 }
 const free = (world: World, x: number, y: number, z: number) => inWorld(x, y, z) && isReplaceable(world.getCell(x, y, z));
 
-/** Fence connection bits (N, E, S, W) for a fence at (x, y, z): it joins fences and full cubes beside it. */
-export function fenceState(world: World, x: number, y: number, z: number): number {
+/** Blocks that store N/E/S/W connections in state bits 0–3 and keep them up to date: fences and panes (iron bars). */
+export const isConnector = (id: number) => { const shape = blockOf(id).shape; return shape === 'fence' || shape === 'pane'; };
+/**
+ * Connection bits (N, E, S, W) for a fence or pane `id` at (x, y, z): it joins its own kind (oak fences never join nether
+ * brick fences) and full cubes beside it.
+ */
+export function fenceState(world: World, x: number, y: number, z: number, id: number = B.oak_fence): number {
   let state = 0;
   FACING.forEach(([dx, dz], dir) => {
     const cell = world.getCell(x + dx, y, z + dz);
-    if (cellId(cell) === B.oak_fence || isFullCube(cell) && cellId(cell) !== B.barrier) state |= 1 << dir;
+    if (cellId(cell) === id || isFullCube(cell) && cellId(cell) !== B.barrier) state |= 1 << dir;
   });
   return state;
 }
-/** Writes that re-connect the fences beside (x, y, z) after that cell changed (empty when none change). */
+/** Writes that re-connect the fences and panes beside (x, y, z) after that cell changed (empty when none change). */
 export function fenceUpdates(world: World, x: number, y: number, z: number): CellWrite[] {
   const writes: CellWrite[] = [];
   for (const [dx, dz] of FACING) {
-    const nx = x + dx, nz = z + dz, cell = world.getCell(nx, y, nz);
-    if (cellId(cell) !== B.oak_fence) continue;
-    const state = fenceState(world, nx, y, nz);
-    if (state !== cellState(cell)) writes.push([nx, y, nz, makeCell(B.oak_fence, state)]);
+    const nx = x + dx, nz = z + dz, cell = world.getCell(nx, y, nz), id = cellId(cell);
+    if (!isConnector(id)) continue;
+    const state = fenceState(world, nx, y, nz, id);
+    if (state !== cellState(cell)) writes.push([nx, y, nz, makeCell(id, state)]);
   }
   return writes;
 }
@@ -197,7 +203,11 @@ function placeCells(world: World, item: number, hit: PlaceHit, yaw: number, pitc
     // A repeater's output points away from the player; a piston's head points at them (up or down when looking steeply).
     case 'repeater': return single(look);
     case 'piston': return single(pitch < -0.8 ? 3 : pitch > 0.8 ? 2 : FACING_FACE[(look + 2) % 4]);
-    case 'fence': return single(fenceState(world, x, y, z));
+    // An observer watches where the player looks, so its output (back) faces them.
+    case 'observer': return single(pitch < -0.8 ? 2 : pitch > 0.8 ? 3 : FACING_FACE[look]);
+    case 'fence': case 'pane': return single(fenceState(world, x, y, z, block));
+    // Frames placed by hand (creative) face the player, like MC.
+    case 'end_frame': return single((look + 2) % 4);
   }
   if (def.state === 'axis') return single(AXIS_BY_FACE[face]);
   if (def.state === 'facing') return single((look + 2) % 4);
@@ -211,6 +221,8 @@ function placeCells(world: World, item: number, hit: PlaceHit, yaw: number, pitc
 export function usesBlock(cell: number, held: number, sneaking: boolean): boolean {
   const id = cellId(cell);
   if (INTERACTIVE.has(id) && (!sneaking || !held)) return true;
+  if (held === I.ender_eye && id === B.end_portal_frame) return !(cellState(cell) & FRAME_EYE);
+  if (held === I.end_crystal) return isCrystalBase(cell);
   if (HOES.has(held)) return TILLABLE.has(id);
   if (SHOVELS.has(held) && PATHABLE.has(id)) return true;
   if (held === I.bone_meal) return isGrowable(cell);
@@ -248,5 +260,9 @@ export function bucketUse(world: World, held: number, x: number, y: number, z: n
   if (!water) return { writes: [[x, y, z, meets.length ? B.obsidian : B.lava]], item: I.bucket, fx: meets.length ? 'fizz' : 'splash' };
   return { writes: [[x, y, z, B.water], ...meets.map(([ax, ay, az]): CellWrite => [ax, ay, az, B.obsidian])], item: I.bucket, fx: meets.length ? 'fizz' : 'splash' };
 }
+/** End crystals stand only on obsidian or bedrock (the `use` command on that block places one on top). */
+export const isCrystalBase = (cell: number) => cellId(cell) === B.obsidian || cellId(cell) === B.bedrock;
+/** Items thrown at once by right-click (no block target, or a block they don't use): the client sends `useItem`. */
+export const isThrown = (held: number) => held === I.ender_pearl || held === I.ender_eye;
 /** Whether holding right-click with this item is a timed use (eat or draw a bow) finished by `useItem`. */
 export const isHeldUse = (held: number, food: number) => held === I.bow || !!itemOf(held)?.food && (food < 20 || held === I.golden_apple);

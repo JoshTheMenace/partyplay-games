@@ -64,7 +64,17 @@ export const AMBIENT = 0.012;
 export const NETHER_FOG_NEAR = linear(0x2a0b08), NETHER_FOG_FAR = linear(0x4a1410);
 export const NETHER_AMBIENT: Rgb = [0.18, 0.07, 0.045];
 /** Fog density per block in the Nether (exponential), on top of the render-distance edge fade. */
-export const NETHER_FOG_DENSITY = 0.02;
+export const NETHER_FOG_DENSITY = 0.014;
+/**
+ * The End: no sun, moon, clouds or day cycle. Dark violet fog (near → far, the far colour is also its horizon), a
+ * purple-black sky that darkens into the void below, flat sky light at 0.55 with a faint violet tint and a violet floor.
+ */
+export const END_FOG_NEAR = linear(0x140b1c), END_FOG_FAR = linear(0x241430), END_ZENITH = linear(0x0b0612), END_VOID = linear(0x050308);
+export const END_SKY_LIGHT: Rgb = [0.52, 0.47, 0.6];
+export const END_AMBIENT: Rgb = [0.03, 0.018, 0.045];
+export const END_FOG_DENSITY = 0.006;
+/** Lowest sky light level (0..1) anything in the End gets: its light is flat, not from above. */
+export const END_FLAT_SKY = 0.73;
 const glsl = (c: Rgb) => `vec3(${c.map(v => v.toFixed(5)).join(', ')})`;
 
 /** Uniform declarations and helpers shared by every world/sky shader. */
@@ -77,6 +87,7 @@ uniform float uDusk;
 uniform float uDay;
 uniform float uTime;
 uniform float uNether;
+uniform float uEnd;
 
 float lightCurve(float l) {
   float f = l / (4.0 - 3.0 * l);
@@ -94,7 +105,10 @@ vec3 skyColor(vec3 d) {
   c = mix(c, uDuskColor, uDusk * band * (0.25 + 0.75 * pow(s, 4.0)));
   c += vec3(1.0, 0.85, 0.6) * (pow(s, 10.0) * 0.18 + pow(s, 120.0) * 0.4) * (uDay * 0.7 + uDusk * 0.6);
   // The Nether has no sky: everything beyond the fog is its far colour.
-  return mix(c, ${glsl(NETHER_FOG_FAR)}, uNether);
+  c = mix(c, ${glsl(NETHER_FOG_FAR)}, uNether);
+  // The End: the fog's far colour at the horizon, deepening to purple-black overhead and near-black in the void below.
+  vec3 end = mix(${glsl(END_FOG_FAR)}, d.y > 0.0 ? ${glsl(END_ZENITH)} : ${glsl(END_VOID)}, smoothstep(0.0, 0.55, abs(d.y)));
+  return mix(c, end, uEnd);
 }
 
 /** Colour distant terrain fades into: the sky just above the horizon in that direction. */

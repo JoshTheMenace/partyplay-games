@@ -1,6 +1,6 @@
 /** Player lifecycle: movement validation, environment (fall, water), survival stats, death/respawn and sleeping. */
 import { B, blockOf, cellId, isSolid, isWater } from '../shared/blocks';
-import { FLY_SPEED, FLY_VERTICAL, inNether, JUMP_VELOCITY, MAX_AIR, MAX_FOOD, MAX_HEALTH, SPRINT_SPEED, TERMINAL_VELOCITY } from '../shared/constants';
+import { dimensionAt, FLY_SPEED, FLY_VERTICAL, JUMP_VELOCITY, MAX_AIR, MAX_FOOD, MAX_HEALTH, SPRINT_SPEED, TERMINAL_VELOCITY } from '../shared/constants';
 import type { Vec3 } from '../shared/coords';
 import { emptyInventory, emptySlots } from '../shared/inventory';
 import { bodyBox, bodyCollides, collectBoxes, eyeInWater, newBody, regionCollides, regionTouches } from '../shared/physics';
@@ -215,9 +215,9 @@ export function respawn(state: State, player: Player): boolean {
   return true;
 }
 
-/** Use a bed: always sets the respawn point; at night (and with no monsters close) the player lies down. Beds explode in the Nether. */
+/** Use a bed: always sets the respawn point; at night (and with no monsters close) the player lies down. Beds explode in the Nether and the End. */
 export function useBed(state: State, player: Player, x: number, y: number, z: number): boolean {
-  if (inNether(x, z)) {
+  if (dimensionAt(x, z) !== 'overworld') {
     breakBlock(state, x, y, z, []);
     explode(state, x + 0.5, y + 0.5, z + 0.5, 5, 'was killed by [Intentional Game Design]');
     return true;

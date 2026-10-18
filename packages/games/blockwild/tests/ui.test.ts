@@ -3,17 +3,19 @@ import test from 'node:test';
 import { B, I, ITEM_LIST, type Slot } from '../src/shared/items';
 import { PF, type PrivateView, type PubPlayer, type TradeOffer, type View } from '../src/shared/protocol';
 import { awards, bubbles, dayPhase, itemDetails, itemHint, meterIcons, offerState, playerStatus, untilChange, wear, wornArmor } from '../src/client/ui/format';
-import { GOALS, nextGoal, parseReached, serializeReached, shelterDue, type GoalContext } from '../src/client/ui/goals';
+import { atFortress, atStronghold, GOALS, nextGoal, parseReached, serializeReached, shelterDue, type GoalContext } from '../src/client/ui/goals';
 import { clickButton, stickVector } from '../src/client/ui/input';
-import { filterRecipes, ingredientLabel, ingredientSummary, missingText } from '../src/client/ui/recipe-book';
+import { filterRecipes, paletteTab, ingredientLabel, ingredientSummary, missingText } from '../src/client/ui/recipe-book';
 import { recipeById } from '../src/shared/recipes';
+import type { Fortress } from '../src/shared/structures/fortress';
 import { defaultSettings, loadSettings, store } from '../src/client/store';
 import { hud as hudStore } from '../src/client/game/hud';
 import { isNightWarning, sanitizeSettings, updateSettings } from '../src/client/ui/state';
 
 const inventory = (...stacks: Slot[]) => [...stacks, ...Array<Slot | null>(36 - stacks.length).fill(null)];
 const ctx = (inv: (Slot | null)[], extra: Partial<GoalContext> = {}): GoalContext =>
-  ({ inv, day: 0, time: 1000, placed: 0, armor: [null, null, null, null], nether: false, portal: false, village: false, ...extra });
+  ({ inv, day: 0, time: 1000, placed: 0, armor: [null, null, null, null], nether: false, portal: false, village: false,
+    end: false, fortress: false, stronghold: false, endPortal: false, crystals: false, victory: false, ...extra });
 const player = (patch: Partial<PubPlayer>): PubPlayer => ({ id: 'p', name: 'P', color: '#fff', x: 0, y: 70, z: 0, yaw: 0, pitch: 0, held: 0, swing: 0, hurt: 0, health: 20, flags: 0, armor: [0, 0, 0, 0], ...patch });
 const pieces = (...ids: number[]) => ids.map(id => ({ id, n: 1 }));
 
@@ -75,22 +77,48 @@ test('later items imply earlier goals, time-based goals are skipped without impl
   assert.equal(new Set(GOALS.map(goal => goal.id)).size, GOALS.length);
 });
 
-test('after the diamond pickaxe the chain leads through the Nether, then to the optional side goals', () => {
+test('after the diamond pickaxe the chain leads through the Nether and the End to the dragon, then to side goals', () => {
   const pick = inventory({ id: I.diamond_pickaxe, n: 1 }), reached = new Set<string>();
-  assert.equal(nextGoal(ctx(pick), reached)?.id, 'portal');
+  const next = (inv: (Slot | null)[], extra: Partial<GoalContext> = {}) => nextGoal(ctx(inv, extra), reached)?.id;
+  assert.equal(next(pick), 'portal');
   assert.match(nextGoal(ctx(pick), reached)!.hint, /water onto lava.*4×5.*flint and steel/);
-  assert.equal(nextGoal(ctx(pick, { portal: true }), reached)?.id, 'nether', 'standing in a lit portal proves it is built');
-  assert.equal(nextGoal(ctx(pick, { nether: true }), reached)?.id, 'quartz');
-  assert.equal(nextGoal(ctx(inventory({ id: I.quartz, n: 1 })), reached)?.id, 'village');
-  assert.equal(nextGoal(ctx(inventory(), { village: true }), reached)?.id, 'trade');
-  reached.add('trade');
-  assert.equal(nextGoal(ctx(inventory(), { armor: pieces(I.iron_helmet, I.iron_chestplate, I.iron_leggings, I.leather_boots) }), reached)?.id, 'iron_armor');
-  assert.equal(nextGoal(ctx(inventory(), { armor: pieces(I.iron_helmet, I.diamond_chestplate, I.iron_leggings, I.iron_boots) }), reached)?.id, 'lamp', 'diamond is iron or better');
-  assert.equal(nextGoal(ctx(inventory({ id: B.redstone_lamp, n: 1 })), reached), null);
+  assert.equal(next(pick, { portal: true }), 'nether', 'standing in a lit portal proves it is built');
+  assert.equal(next(pick, { nether: true }), 'quartz');
+  assert.equal(next(inventory({ id: I.quartz, n: 1 })), 'iron_armor', 'gear up before the fortress');
+  assert.equal(nextGoal(ctx(inventory({ id: I.quartz, n: 1 }), { armor: pieces(I.iron_helmet, I.diamond_chestplate, I.iron_leggings, I.iron_boots) }), new Set())?.id, 'fortress', 'diamond is iron or better');
+  assert.equal(next(inventory(), { nether: true, fortress: true }), 'blaze_rods', 'finding a fortress skips the optional armor');
+  assert.ok(reached.has('iron_armor'));
+  assert.equal(next(inventory({ id: I.blaze_powder, n: 2 })), 'pearls');
+  assert.equal(next(inventory({ id: I.ender_pearl, n: 1 })), 'eyes');
+  assert.equal(next(inventory({ id: I.ender_eye, n: 4 })), 'stronghold');
+  assert.match(nextGoal(ctx(inventory()), reached)!.hint, /Throw an eye and follow it/);
+  assert.equal(next(inventory(), { stronghold: true }), 'end_portal');
+  assert.equal(next(inventory(), { endPortal: true }), 'end');
+  assert.match(nextGoal(ctx(inventory()), reached)!.hint, /only way home is to beat the dragon, or to die/);
+  assert.equal(next(inventory(), { end: true }), 'crystals');
+  assert.equal(next(inventory(), { crystals: true }), 'dragon');
+  const won = nextGoal(ctx(inventory(), { victory: true }), reached)!;
+  assert.equal(won.title, 'You beat Blockwild! Keep building.');
+  assert.equal(won.hint, 'Next idea: find a village.', 'the chip suggests the first open side goal');
+  assert.equal(next(inventory(), { victory: true, village: true }), 'victory');
+  for (const id of ['trade', 'lamp', 'quartz_build']) reached.add(id);
+  assert.match(nextGoal(ctx(inventory(), { victory: true }), reached)!.hint, /observer clock/);
+  assert.equal(nextGoal(ctx(inventory({ id: B.observer, n: 2 }), { victory: true }), reached)!.hint, 'The world is yours now.');
+  assert.equal(nextGoal(ctx(inventory()), new Set(GOALS.map(goal => goal.id))), null, 'before victory, all done means no chip');
   const early = new Set<string>();
   assert.equal(nextGoal(ctx(inventory({ id: B.redstone_lamp, n: 1 }), { village: true }), early)?.id, 'wood', 'side goals never skip the chain');
   assert.ok(early.has('lamp') && early.has('village') && !early.has('planks'), 'but they latch when reached early');
-  assert.equal(nextGoal(ctx(inventory({ id: I.quartz, n: 1 })), early)?.id, 'trade', 'and are skipped later');
+  assert.match(nextGoal(ctx(inventory(), { victory: true }), early)!.hint, /trade with a villager/, 'and are skipped later');
+  assert.equal(nextGoal(ctx(inventory({ id: B.quartz_stairs, n: 4 })), new Set())?.id, 'wood', 'quartz building is a side goal');
+});
+
+test('fortress and stronghold proximity read the structure bounds', () => {
+  const fort: Fortress[] = [{ center: [100, 60, 100], bounds: [80, 40, 90, 120, 80, 110], spawners: [] }];
+  assert.ok(atFortress(fort, 75, 100) && atFortress(fort, 100, 117));
+  assert.ok(!atFortress(fort, 60, 100));
+  assert.ok(atStronghold([[0, 30, 0]], 20, 40, 0));
+  assert.ok(!atStronghold([[0, 30, 0]], 20, 50, 0), 'far above, on the surface');
+  assert.ok(!atStronghold([[0, 30, 0]], 30, 30, 0));
 });
 
 test('redstone items explain themselves in one line; armor shows its points', () => {
@@ -220,7 +248,7 @@ test('day clock and player status read the public view', () => {
 
 const view = (players: number): View => ({
   seed: 42, worldId: '42-test', mode: 'survival', difficulty: 'normal', time: 14000, day: 2, revision: 1, edits: [], mobs: [], items: [], arrows: [], fx: [], sleeping: 0,
-  stats: { mined: 1234, placed: 56, crafted: 7, mobs: 8, deaths: 1, days: 2 },
+  stats: { mined: 1234, placed: 56, crafted: 7, mobs: 8, deaths: 1, days: 2, dragons: 0 },
   players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `Explorer_${String(i).padStart(2, '0')}_long`, color: '#ff5748', x: 0, y: 64, z: 0, yaw: 0, pitch: 0, held: i ? B.torch : 0, swing: 0, hurt: 0, health: 13, flags: i === 3 ? 32 : 0, armor: [0, 0, 0, 0] })),
 });
 test('views render complete markup for a full roster', async () => {
@@ -296,7 +324,94 @@ test('views render complete markup for a full roster', async () => {
   const netherView = { ...view(10), players: view(10).players.map((p, i) => i === 1 ? { ...p, x: 3700, z: 50, y: 40, armor: [I.iron_helmet, I.iron_chestplate, I.iron_leggings, I.iron_boots] as PubPlayer['armor'] } : p) };
   const tvNether = renderToString(createElement(client.DisplayView, { ...base, playerId: null, publicView: netherView }));
   assert.match(tvNether, /in the nether/);
-  assert.equal(tvNether.match(/data-nether="true"/g)?.length, 1);
+  assert.equal(tvNether.match(/data-dim="nether"/g)?.length, 1);
   assert.match(tvNether, /aria-label="Armor 15"/);
   assert.equal(tv.match(/bw-card-armor/g), null, 'no armor badge without armor');
+});
+
+test('endgame tooltips, palette tabs and the recipe book End tab', () => {
+  for (const id of [I.ender_eye, I.ender_pearl, I.end_crystal, B.observer, B.daylight_detector]) assert.match(itemHint(id) ?? '', /^[A-Z][^\n]{8,70}[^.]$/, String(id));
+  const tab = (id: number) => paletteTab(ITEM_LIST.find(item => item.id === id)!);
+  for (const id of [B.end_stone, B.end_stone_bricks, B.purpur_block, B.dragon_egg, I.ender_eye, I.ender_pearl, I.end_crystal]) assert.equal(tab(id), 'end');
+  for (const id of [B.quartz_block, B.quartz_pillar, B.chiseled_quartz_block, B.quartz_stairs, B.quartz_slab, B.smooth_quartz, B.quartz_bricks]) assert.equal(tab(id), 'building');
+  assert.equal(tab(B.observer), 'redstone');
+  assert.equal(tab(B.daylight_detector), 'redstone');
+  assert.equal(tab(B.nether_brick_fence), 'nether');
+  const visible = ITEM_LIST.filter(item => !item.hidden);
+  assert.ok([B.iron_bars, B.soul_lantern, B.chiseled_stone_bricks, I.blaze_rod, I.nether_wart, B.end_portal_frame].every(id => visible.some(item => item.id === id)), 'new things are in the palette');
+  const book = (t: 'end' | 'redstone' | 'blocks') => filterRecipes(inventory(), { tab: t, query: '', craftableOnly: false, nearTable: true }).map(entry => entry.recipe.out.id);
+  assert.ok(book('end').includes(I.ender_eye) && book('end').includes(B.purpur_block) && book('end').includes(I.end_crystal));
+  assert.ok(book('redstone').includes(B.observer) && book('redstone').includes(B.daylight_detector));
+  assert.ok(book('blocks').includes(B.quartz_bricks) && !book('blocks').includes(B.end_stone_bricks));
+});
+
+test('the boss bar, the once-per-world celebration and the dragon results', async () => {
+  const { renderToString: render } = await import('react-dom/server');
+  const renderToString = (node: Parameters<typeof render>[0]) => render(node).replace(/<!-- -->/g, '');
+  const { createElement } = await import('react');
+  const [{ BossBar, Celebration, crystalText, firstCelebration, nameList, parseCelebrated, victoryJournal, VICTORY_KEY }, { ControllerView }, { DisplayView }, { ResultsView }] =
+    await Promise.all([import('../src/client/ui/endgame'), import('../src/client/ui/controller'), import('../src/client/ui/display'), import('../src/client/ui/lobby')]);
+  assert.equal(crystalText(3), '3 crystals heal it');
+  assert.equal(crystalText(1), '1 crystal heals it');
+  assert.equal(crystalText(0), 'No crystals left');
+  assert.equal(nameList(['Ann']), 'Ann');
+  assert.equal(nameList(['Ann', 'Bo', 'Cy']), 'Ann, Bo and Cy');
+  const bar = renderToString(createElement(BossBar, { boss: { name: 'Ender Dragon', health: 142.4, max: 200, crystals: 4 } }));
+  assert.match(bar, /role="meter"[^>]*aria-valuenow="143"/);
+  assert.match(bar, /Ender Dragon/);
+  assert.match(bar, /--fill:0.715/);
+  assert.match(bar, /4 crystals heal it/);
+
+  const data = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', { value: { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) }, configurable: true });
+  try {
+    assert.equal(firstCelebration('w1'), true);
+    assert.equal(firstCelebration('w1'), false, 'once per world on this device');
+    assert.equal(firstCelebration('w2'), true);
+    assert.deepEqual(parseCelebrated(data.get(VICTORY_KEY)!), ['w1', 'w2']);
+    for (let i = 0; i < 30; i++) firstCelebration(`old${i}`);
+    assert.equal(parseCelebrated(data.get(VICTORY_KEY)!).length, 20, 'bounded');
+    assert.deepEqual(parseCelebrated('{"no":1}'), []);
+  } finally {
+    Reflect.deleteProperty(globalThis, 'localStorage');
+  }
+
+  const base = { roomId: 'r', roundId: 'x', isHost: false, serverNowMs: () => 0, setInput() {}, sendAction: async () => ({ accepted: true }), assetsReady() {} };
+  const won: View = { ...view(10), boss: { name: 'Ender Dragon', health: 60, max: 200, crystals: 0 }, victory: { day: 11, tick: 4000, by: ['Explorer_00_long', 'Explorer_02_long'] },
+    stats: { ...view(10).stats, dragons: 1 }, players: view(10).players.map((p, i) => i < 3 ? { ...p, x: 3840, z: 3840 } : p) };
+  const party = renderToString(createElement(Celebration, { view: won, onClose() {} }));
+  assert.match(party, /The Ender Dragon has been defeated!/);
+  assert.match(party, /Final blows by <b>Explorer_00_long and Explorer_02_long<\/b>/);
+  assert.match(party, /Victory · day 12/);
+  assert.match(party, />Continue</);
+  // The journal rolls two copies (the second hidden from screen readers) so the loop is seamless and never empty.
+  assert.equal(party.match(/<li class="bw-victory-player"/g)?.length, 10);
+  assert.equal(party.match(/<li aria-hidden="true" class="bw-victory-player"/g)?.length, 10);
+  assert.equal(party.match(/>Dragon slayer</g)?.length, 4);
+  assert.doesNotMatch(party, /aria-modal/, 'never traps focus away from the Room menu');
+  const journal = victoryJournal({ ...won, stats: { ...won.stats, deaths: 0 }, journal: won.players.map((p, i) => ({ id: p.id, mined: i ? 1 : 900, placed: 0, crafted: 0, mobs: 0, deaths: 1, distance: 0 })) });
+  assert.equal(journal.world[0], '12 days from the first tree to the last blow');
+  assert.ok(journal.world.includes('Nobody fell along the way'));
+  assert.deepEqual(journal.players[0]!.titles, ['Dragon slayer', 'Top miner']);
+  assert.deepEqual(journal.players[1]!.titles, ['Explorer']);
+
+  const pv: PrivateView = { ack: 0, tp: { n: 0, x: 0, y: 0, z: 0 }, imp: { n: 0, vx: 0, vy: 0, vz: 0 }, inv: inventory(), cursor: null, grid: [null, null, null, null], out: null, screen: null,
+    health: 20, food: 20, saturation: 5, air: 300, dead: false, spawn: [0, 0, 0], mode: 'survival', keepInventory: false, armor: [null, null, null, null], armorPoints: 0, dimension: 'end' };
+  const inEnd = renderToString(createElement(ControllerView, { ...base, viewRole: 'controller', playerId: 'p0', publicView: won, privateView: pv }));
+  assert.match(inEnd, /class="bw-boss"/);
+  assert.match(inEnd, /No crystals left/);
+  assert.doesNotMatch(renderToString(createElement(ControllerView, { ...base, viewRole: 'controller', playerId: 'p0', publicView: won, privateView: { ...pv, dimension: 'overworld' } })), /bw-boss/,
+    'only players in the End see the bar');
+  const tvRender = () => renderToString(createElement(DisplayView, { ...base, viewRole: 'display', playerId: null, privateView: null, publicView: won }));
+  assert.doesNotMatch(tvRender(), /class="bw-boss"/, 'the TV shows the bar only while its camera follows someone in the End');
+  hudStore.set({ focus: won.players[0]!.id });
+  const tv = tvRender();
+  hudStore.set({ focus: null });
+  assert.match(tv, /class="bw-boss"/);
+  assert.equal(tv.match(/data-dim="end"/g)?.length, 3);
+  assert.equal(tv.match(/>in the end</g)?.length, 3);
+  const results = renderToString(createElement(ResultsView, { outcome: { complete: true, winners: ['p0'], rows: [{ playerId: 'p0' }, { playerId: 'p1' }] },
+    publicView: { ...won, journal: won.players.map(p => ({ id: p.id, mined: 0, placed: 0, crafted: 0, mobs: 0, deaths: 1, distance: 0 })) }, playerId: 'p0' }));
+  assert.match(results, /Ender Dragon defeated on day 12 by Explorer_00_long and Explorer_02_long/);
+  assert.equal(results.match(/class="bw-award">Dragon slayer</g)?.length, 1, 'p0 is a slayer, p1 is not');
 });

@@ -1,5 +1,5 @@
-/** Growth near players: crops, saplings (shared tree generator), sugar cane, farmland moisture, and bone meal. */
-import { B, cellId, cellState, isAir, isWater, makeCell } from '../shared/blocks';
+/** Growth near players: crops, nether wart, saplings (shared tree generator), sugar cane, farmland moisture, and bone meal. */
+import { B, cellId, cellState, isAir, isWater, makeCell, WART_MATURE } from '../shared/blocks';
 import { CHUNK, HEIGHT, SEA_LEVEL } from '../shared/constants';
 import { cellIndex, cellXYZ, inWorld, localIndex } from '../shared/coords';
 import { isCrop, isSapling, type CellWrite } from '../shared/placement';
@@ -10,7 +10,7 @@ import { blockLight, isLoaded, skyExposed, writeCell, writeCells } from './world
 const LOGS = new Set<number>([B.oak_log, B.birch_log, B.spruce_log]);
 const FLOWERS = [B.dandelion, B.poppy, B.cornflower] as const;
 /** Mean seconds per growth step. */
-const CROP_WET = 35, CROP_DRY = 80, SAPLING = 40, CANE = 45;
+const CROP_WET = 35, CROP_DRY = 80, SAPLING = 40, CANE = 45, WART = 60;
 const GROWTH_RANGE = 96;
 
 /** Grow a sapling at (x, y, z) into a tree; false if a trunk cell is blocked or the edit limit is reached. */
@@ -54,7 +54,11 @@ export function tickGrowth(state: State) {
     const [x, y, z] = cellXYZ(index);
     if (!isLoaded(state, x, z) || !nearPlayer(state, x, z)) continue;
     const cell = state.get(x, y, z), id = cellId(cell), stage = cellState(cell);
-    if (!isCrop(id) && !isSapling(id) && id !== B.sugar_cane && id !== B.farmland) state.growables.delete(index);
+    if (!isCrop(id) && !isSapling(id) && id !== B.sugar_cane && id !== B.farmland && id !== B.nether_wart) state.growables.delete(index);
+    // Nether wart needs no light or water, in any dimension.
+    else if (id === B.nether_wart) {
+      if (stage < WART_MATURE && r() < 1 / WART) writeCell(state, x, y, z, makeCell(id, stage + 1));
+    }
     else if (isCrop(id)) {
       const wet = (cellState(state.get(x, y - 1, z)) & 1) === 1;
       if (r() < 1 / (wet ? CROP_WET : CROP_DRY) && lit(state, x, y, z)) writeCell(state, x, y, z, makeCell(id, Math.min(7, stage + 1)));

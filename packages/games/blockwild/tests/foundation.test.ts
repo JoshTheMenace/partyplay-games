@@ -41,7 +41,7 @@ test('index math round-trips', () => {
 });
 
 test('block table is complete and consistent', () => {
-  assert.equal(BLOCK_LIST.length, 121);
+  assert.equal(BLOCK_LIST.length, 146);
   assert.equal(new Set(BLOCK_LIST.map(b => b.name)).size, BLOCK_LIST.length);
   for (const block of BLOCK_LIST) {
     assert.equal(BLOCKS[block.id], block);
@@ -201,7 +201,7 @@ test('settings defaults are deterministic and views are serializable', () => {
   assert.equal(validateSettings({ seed: 1000000 }).seed, 0);
   assertSerializable(manifest);
   assertSerializable(neutralInput());
-  assert.equal(MOB_TYPES.map(m => m.key).join(), 'zombie,skeleton,spider,creeper,cow,pig,sheep,chicken,villager,zombified_piglin,ghast,tnt');
+  assert.equal(MOB_TYPES.map(m => m.key).join(), 'zombie,skeleton,spider,creeper,cow,pig,sheep,chicken,villager,zombified_piglin,ghast,tnt,blaze,enderman,ender_dragon,end_crystal,silverfish');
   for (const count of [1, 10]) {
     const players = Array.from({ length: count }, (_, i) => ({ id: `p${i}`, name: `P${i}`, color: '#fff' }));
     const state = rules.create({ roomId: 'r', roundId: 'x', seed: 1, nowMs: 0, players }, validateSettings({}));

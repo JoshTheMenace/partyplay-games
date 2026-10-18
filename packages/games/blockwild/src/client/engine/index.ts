@@ -8,16 +8,18 @@
 import { Box3, BufferAttribute, BufferGeometry, Color, Fog, Frustum, Group, Matrix4, Mesh, Sphere, Vector3, type PerspectiveCamera } from 'three';
 import type { ResourceScope } from '../../../../../party-runtime/src/index';
 import { isOpaque, TEXTURE_KEYS } from '../../shared/blocks';
-import { CHUNK, CHUNKS, HEIGHT, inNether, WORLD } from '../../shared/constants';
+import { CHUNK, CHUNKS, HEIGHT, inEnd, inNether, WORLD } from '../../shared/constants';
 import { cellIndex, chunkFromKey, chunkKey, FACES, localIndex } from '../../shared/coords';
 import type { Target } from '../store';
-import { AMBIENT, lightCurve, NETHER_AMBIENT, NETHER_FOG_FAR, NETHER_FOG_NEAR, skyState, TORCH_LIGHT } from './environment';
+import {
+  AMBIENT, END_AMBIENT, END_FLAT_SKY, END_FOG_FAR, END_FOG_NEAR, END_SKY_LIGHT, lightCurve, NETHER_AMBIENT, NETHER_FOG_FAR, NETHER_FOG_NEAR, skyState, TORCH_LIGHT,
+} from './environment';
 import { newVolume, volumeIndex, type Volume } from './light';
 import { createUniforms, createWorldMaterials, GLOWS, type WorldMaterials, type WorldUniforms } from './material';
 import { Mesher } from './mesher';
 import { BlockOutline, CrackOverlay, type Crack } from './overlays';
 import { SkyRenderer } from './sky';
-import type { BlockAtlas, ColumnUpdate, FromWorker, LayerMesh, ToWorker } from './types';
+import { OPTIONAL_KEYS, type BlockAtlas, type ColumnUpdate, type FromWorker, type LayerMesh, type ToWorker } from './types';
 import { ClientWorld } from './world';
 
 export { createFallbackAtlas } from './fallback-atlas';
@@ -33,7 +35,7 @@ export type EngineOptions = {
 const MAX_IN_FLIGHT = 3, MAX_PENDING = 6, UPLOAD_BUDGET_MS = 4, PLAN_INTERVAL = 0.25, READY_RADIUS = 2;
 /** Animated textures: base key, the uniform holding the current frame's layer, frames per second. */
 const ANIMATED = [['water', 'uWaterLayer', 8], ['lava', 'uLavaLayer', 4], ['nether_portal', 'uPortalLayer', 12], ['fire', 'uFireLayer', 16]] as const;
-/** Seconds for the Nether look to fade in or out after crossing its border (a portal trip). */
+/** Seconds for the Nether or End look to fade in or out after crossing its border (a portal trip). */
 const NETHER_FADE = 0.6;
 
 /** Uniforms game-side effects share with the world (the atlas, clock and current animation frames). */
@@ -74,8 +76,11 @@ class QuadIndex {
 }
 
 type Column = { cx: number; cz: number; meshes: (Mesh | null)[] };
-/** Linear fog colour for entities in the Nether. */
-const NETHER_HAZE = new Color(...NETHER_FOG_NEAR).lerp(new Color(...NETHER_FOG_FAR), 0.6);
+/** Linear fog colours for entities in the Nether and the End; the End's flat, faintly violet light. */
+const NETHER_HAZE = new Color(...NETHER_FOG_NEAR).lerp(new Color(...NETHER_FOG_FAR), 0.6), END_HAZE = new Color(...END_FOG_NEAR).lerp(new Color(...END_FOG_FAR), 0.5);
+const END_LIGHT = new Color(...END_SKY_LIGHT);
+/** Eases a dimension blend towards 0 or 1 over NETHER_FADE (jumps when the frame is the first or the gap is total). */
+const fade = (was: number, to: number, dt: number) => dt > 0 && Math.abs(to - was) < 1 ? Math.max(0, Math.min(1, was + Math.sign(to - was) * dt / NETHER_FADE)) : to;
 /** Layers of an animated texture: the base key, then 'key_1', 'key_2'... until the atlas has no more. */
 export function animationFrames(atlas: BlockAtlas, key: string): number[] {
   const missing = atlas.layerOf('missing'), frames = [atlas.layerOf(key)];
@@ -130,6 +135,8 @@ export class VoxelEngine {
   /** Effective edits (authoritative + overlay) last sent to the worker. */
   private effective = new Map<number, number>();
   private daylight = 1;
+  /** Sky light of the time of day (setTime); the End blends it towards its own flat light. */
+  private readonly daySky = new Color(1, 1, 1);
   private readonly scratch: [number, number, number] = [0, 0, 0];
   private readyResolve: (() => void) | null = null;
   private readonly readyPromise: Promise<void>;
@@ -150,7 +157,7 @@ export class VoxelEngine {
     this.shared = { uAtlas: u.uAtlas, uTime: u.uTime, uLavaLayer: u.uLavaLayer, uPortalLayer: u.uPortalLayer, uFireLayer: u.uFireLayer };
 
     const missing = atlas.layerOf('missing'), layers: Record<string, number> = { missing };
-    for (const key of TEXTURE_KEYS) layers[key] = atlas.layerOf(key);
+    for (const key of [...TEXTURE_KEYS, ...OPTIONAL_KEYS]) layers[key] = atlas.layerOf(key);
     this.frames = ANIMATED.map(([key]) => animationFrames(atlas, key));
 
     this.worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
@@ -191,12 +198,13 @@ export class VoxelEngine {
       u[uniform].value = frames[Math.floor(time * fps) % frames.length]!;
     }
     // Everything dimension-related follows the camera (the first-person eye or the TV spectator), fading across a trip.
-    const nether = inNether(position.x, position.z) ? 1 : 0, was = u.uNether.value;
-    if (was !== nether) {
-      u.uNether.value = dt > 0 && Math.abs(nether - was) < 1 ? Math.max(0, Math.min(1, was + Math.sign(nether - was) * dt / NETHER_FADE)) : nether;
-      this.applyFog();
+    const nether = inNether(position.x, position.z) ? 1 : 0, end = inEnd(position.x, position.z) ? 1 : 0;
+    if (u.uNether.value !== nether || u.uEnd.value !== end) {
+      u.uNether.value = fade(u.uNether.value, nether, dt);
+      u.uEnd.value = fade(u.uEnd.value, end, dt);
+      this.applySky();
     }
-    this.sky.update(position.x, position.z, dt, u.uNether.value > 0.5);
+    this.sky.update(position.x, position.z, dt, u.uNether.value > 0.5 || u.uEnd.value > 0.5);
     this.updateSlides(dt);
 
     const cx = Math.floor(position.x / CHUNK), cz = Math.floor(position.z / CHUNK), centre = chunkKey(Math.max(0, Math.min(CHUNKS - 1, cx)), Math.max(0, Math.min(CHUNKS - 1, cz)));
@@ -220,12 +228,18 @@ export class VoxelEngine {
     u.uSunDir.value.set(...state.sun);
     u.uZenith.value.setRGB(...state.zenith);
     u.uHorizon.value.setRGB(...state.horizon);
-    u.uSkyLight.value.setRGB(...state.skyLight);
+    this.daySky.setRGB(...state.skyLight);
     u.uDay.value = state.day;
     u.uDusk.value = state.dusk;
     u.uStars.value = state.stars;
     u.uAngle.value = state.angle;
-    this.daylight = (state.skyLight[0] + state.skyLight[1] + state.skyLight[2]) / 3;
+    this.applySky();
+  }
+
+  /** Sky light from the time of day, or the End's constant violet-tinted light, then the fog that matches it. */
+  private applySky() {
+    const light = this.uniforms.uSkyLight.value.copy(this.daySky).lerp(END_LIGHT, this.uniforms.uEnd.value);
+    this.daylight = (light.r + light.g + light.b) / 3;
     this.applyFog();
   }
 
@@ -237,10 +251,12 @@ export class VoxelEngine {
 
   /** Linear light colour at a point, as the world shader lights a block there: warm near torches, blue at night. */
   lightRgb(x: number, y: number, z: number, out: [number, number, number] = [0, 0, 0]) {
-    const [sky, block] = this.openLight(x, y, z), s = lightCurve(sky / 15), b = lightCurve(block / 15), daylight = this.uniforms.uSkyLight.value, nether = this.uniforms.uNether.value;
-    out[0] = Math.min(1, Math.max(s * daylight.r, b * TORCH_LIGHT[0]) + AMBIENT + (NETHER_AMBIENT[0] - AMBIENT) * nether);
-    out[1] = Math.min(1, Math.max(s * daylight.g, b * TORCH_LIGHT[1]) + AMBIENT + (NETHER_AMBIENT[1] - AMBIENT) * nether);
-    out[2] = Math.min(1, Math.max(s * daylight.b, b * TORCH_LIGHT[2]) + AMBIENT + (NETHER_AMBIENT[2] - AMBIENT) * nether);
+    const u = this.uniforms, daylight = u.uSkyLight.value, nether = u.uNether.value, end = u.uEnd.value, [sky, block] = this.openLight(x, y, z);
+    const level = sky / 15, s = lightCurve(level + (Math.max(level, END_FLAT_SKY) - level) * end), b = lightCurve(block / 15);
+    for (let i = 0; i < 3; i++) {
+      const ambient = AMBIENT + (NETHER_AMBIENT[i]! - AMBIENT) * nether, floor = ambient + (END_AMBIENT[i]! - ambient) * end;
+      out[i] = Math.min(1, Math.max(s * (i === 0 ? daylight.r : i === 1 ? daylight.g : daylight.b), b * TORCH_LIGHT[i]!) + floor);
+    }
     return out;
   }
 
@@ -260,6 +276,8 @@ export class VoxelEngine {
 
   /** True while the camera is in the Nether (the look has faded in). */
   get inNether() { return this.uniforms.uNether.value > 0.5; }
+  /** True while the camera is in the End (the look has faded in). */
+  get inEnd() { return this.uniforms.uEnd.value > 0.5; }
 
   /**
    * Point glows lighting nearby terrain this frame (fireballs, primed TNT), `count` entries of 7 numbers each:
@@ -333,14 +351,14 @@ export class VoxelEngine {
   /** World fog uniforms plus the matching `scene.fog` for entity materials. */
   private applyFog() {
     // Loaded terrain reaches at least radius·16 − 8 blocks from the camera; fog finishes just inside that edge.
-    const u = this.uniforms, far = this.radius * CHUNK - 8, near = far * 0.68, underwater = u.uUnderwater.value > 0.5, nether = u.uNether.value;
+    const u = this.uniforms, far = this.radius * CHUNK - 8, near = far * 0.68, underwater = u.uUnderwater.value > 0.5, nether = u.uNether.value, end = u.uEnd.value;
     u.uFogFar.value = far;
     u.uFogNear.value = near;
-    // The Nether's dense exponential haze, approximated linearly for entities.
-    this.fog.near = underwater ? 0 : near * (1 - nether);
+    // The Nether's dense and the End's thin exponential haze, approximated linearly for entities.
+    this.fog.near = underwater ? 0 : near * (1 - nether) * (1 - end * 0.6);
     this.fog.far = underwater ? 18 : far + (Math.min(far, 70) - far) * nether;
     if (underwater) this.fog.color.copy(u.uWaterFog.value).multiplyScalar(0.15 + 0.85 * this.daylight);
-    else this.fog.color.copy(u.uHorizon.value).lerp(NETHER_HAZE, nether);
+    else this.fog.color.copy(u.uHorizon.value).lerp(NETHER_HAZE, nether).lerp(END_HAZE, end);
   }
 
   /** Moves slides along; finished ones unveil their cells and linger until the worker's new mesh covers them. */

@@ -1,11 +1,17 @@
-/** "Next goal" helper for newcomers: the survival progression from punching trees to the Nether, derived from the inventory. */
+/** "Next goal" helper for newcomers: the survival progression from punching trees to the Ender Dragon, derived from the inventory and position. */
 import { DAY_TICKS } from '../../shared/constants';
+import type { Vec3 } from '../../shared/coords';
 import { armorOf, B, I, type Slot } from '../../shared/items';
+import type { Fortress } from '../../shared/structures/fortress';
 
-/** nether: in the Nether now; portal: a portal just lit nearby or standing in one; village: a villager is close by. */
+/**
+ * nether/end: in that dimension now; portal: a Nether portal just lit nearby or standing in one; village: a villager is close
+ * by; fortress/stronghold: at a fortress or a stronghold's portal room; endPortal: an End portal just opened nearby;
+ * crystals: the boss bar shows no crystals left; victory: this world's dragon is dead.
+ */
 export type GoalContext = {
-  inv: readonly (Slot | null)[]; day: number; time: number; placed: number;
-  armor: readonly (Slot | null)[]; nether: boolean; portal: boolean; village: boolean;
+  inv: readonly (Slot | null)[]; day: number; time: number; placed: number; armor: readonly (Slot | null)[];
+  nether: boolean; portal: boolean; village: boolean; end: boolean; fortress: boolean; stronghold: boolean; endPortal: boolean; crystals: boolean; victory: boolean;
 };
 /** `soft` goals (time-based or optional side goals) never imply the earlier steps; they are simply skipped once done. */
 export type Goal = { id: string; title: string; hint: string; icon: number; soft?: boolean; done(ctx: GoalContext): boolean };
@@ -36,15 +42,42 @@ export const GOALS: readonly Goal[] = [
   { id: 'nether', title: 'Enter the Nether', hint: 'Stand in the purple portal for a few seconds. Bring a sword and blocks.', icon: B.netherrack, done: ctx => ctx.nether },
   { id: 'quartz', title: 'Mine nether quartz', hint: 'White-flecked ore in the netherrack. Watch out for ghasts.', icon: B.nether_quartz_ore,
     done: ctx => has(ctx, I.quartz, B.nether_quartz_ore, B.quartz_block) },
-  // Side goals: optional, shown once the chain is done, and skipped whenever they were reached earlier.
+  // Gearing up before the fortress is optional: finding the fortress first skips it.
+  { id: 'iron_armor', title: 'Wear full iron armor', hint: 'Blazes hit hard. Craft all four pieces from 24 iron ingots, then put them on.', icon: I.iron_chestplate, soft: true,
+    done: ctx => [0, 1, 2, 3].every(i => ironOrBetter(ctx.armor[i])) },
+  { id: 'fortress', title: 'Find a Nether fortress', hint: 'Follow long bridges across the lava sea. The first is near where the spawn portal leads.', icon: B.nether_bricks,
+    done: ctx => ctx.fortress },
+  { id: 'blaze_rods', title: 'Get blaze rods', hint: 'Blazes spawn around fortress spawners. Bring a bow and armor.', icon: I.blaze_rod, done: ctx => has(ctx, I.blaze_rod, I.blaze_powder) },
+  { id: 'pearls', title: 'Hunt endermen for ender pearls', hint: "Don't look them in the eye. They're common in the dark and in the End.", icon: I.ender_pearl,
+    done: ctx => has(ctx, I.ender_pearl) },
+  { id: 'eyes', title: 'Craft eyes of ender', hint: 'Blaze powder and an ender pearl make one eye. The portal needs up to 12.', icon: I.ender_eye, done: ctx => has(ctx, I.ender_eye) },
+  { id: 'stronghold', title: 'Find the stronghold', hint: 'Throw an eye and follow it. Dig down where it drops and find the portal room.', icon: B.stone_bricks,
+    done: ctx => ctx.stronghold },
+  { id: 'end_portal', title: 'Open the End portal', hint: 'Place eyes in all 12 frames around the lava pool.', icon: B.end_portal_frame, done: ctx => ctx.endPortal },
+  { id: 'end', title: 'Enter the End', hint: 'Jump into the portal ready to fight. The only way home is to beat the dragon, or to die.', icon: B.end_stone,
+    done: ctx => ctx.end },
+  { id: 'crystals', title: 'Destroy the end crystals', hint: 'They heal the dragon from the pillar tops. Shoot them or pillar up.', icon: I.end_crystal, done: ctx => ctx.crystals },
+  { id: 'dragon', title: 'Defeat the Ender Dragon', hint: 'Hit its head for extra damage. It lands on the portal in the middle.', icon: B.dragon_egg, done: ctx => ctx.victory },
+  // Side goals: optional, suggested once the dragon is beaten, and skipped whenever they were reached earlier.
   { id: 'village', title: 'Find a village', hint: 'Villages sit on plains, in forests, taiga and deserts. Follow the dirt paths.', icon: B.dirt_path, soft: true, done: ctx => ctx.village },
   { id: 'trade', title: 'Trade with a villager', hint: 'Use a villager to see its offers. Emeralds buy the best goods.', icon: I.emerald, soft: true,
     done: () => false /* latched by the trade screen (reachGoal) */ },
-  { id: 'iron_armor', title: 'Wear full iron armor', hint: 'Craft all four pieces from 24 iron ingots, then put them on.', icon: I.iron_chestplate, soft: true,
-    done: ctx => [0, 1, 2, 3].every(i => ironOrBetter(ctx.armor[i])) },
   { id: 'lamp', title: 'Build a redstone lamp', hint: 'Four redstone around glowstone. Put a lever next to it and flip it.', icon: B.redstone_lamp, soft: true,
     done: ctx => has(ctx, B.redstone_lamp) },
+  { id: 'quartz_build', title: 'Build with quartz', hint: 'Quartz blocks, pillars, stairs and bricks make bright, clean builds.', icon: B.quartz_pillar, soft: true,
+    done: ctx => has(ctx, B.quartz_pillar, B.chiseled_quartz_block, B.quartz_stairs, B.quartz_slab, B.smooth_quartz, B.quartz_bricks) },
+  { id: 'observer_clock', title: 'Build an observer clock', hint: 'Two observers facing each other pulse forever. Lay dust from the back of one and watch it flicker.', icon: B.observer, soft: true,
+    done: ctx => count(ctx, B.observer) >= 2 },
 ];
+/** Once the dragon is dead the chip celebrates, suggesting any side goal still open. */
+const VICTORY: Goal = { id: 'victory', title: 'You beat Blockwild! Keep building.', hint: 'The world is yours now.', icon: B.dragon_egg, soft: true, done: () => false };
+
+/** Inside a fortress's bounds or within 8 blocks of them. */
+export const atFortress = (fortresses: readonly Fortress[], x: number, z: number) =>
+  fortresses.some(({ bounds: [x0, , z0, x1, , z1] }) => x >= x0 - 8 && x <= x1 + 8 && z >= z0 - 8 && z <= z1 + 8);
+/** Within 24 blocks (and 16 up or down) of a stronghold's portal room. */
+export const atStronghold = (rooms: readonly Vec3[], x: number, y: number, z: number) =>
+  rooms.some(([rx, ry, rz]) => Math.hypot(rx - x, rz - z) < 24 && Math.abs(ry - y) < 16);
 
 const SHELTER = GOALS.find(goal => goal.id === 'shelter')!;
 /** From dusk until dawn of the first night, a player without shelter progress sees the shelter goal whatever else is next. */
@@ -52,7 +85,7 @@ export const shelterDue = (ctx: GoalContext) => ctx.time % DAY_TICKS >= 11000 &&
 
 /**
  * Next goal. `reached` latches ids already completed (the caller persists it per world), so spending
- * ingredients never steps the helper backwards. Newly completed ids are added to `reached`. Null = all done.
+ * ingredients never steps the helper backwards. Newly completed ids are added to `reached`. Null = all done (before victory).
  */
 export function nextGoal(ctx: GoalContext, reached: Set<string>): Goal | null {
   let latest = -1, next: Goal | null = null;
@@ -61,6 +94,7 @@ export function nextGoal(ctx: GoalContext, reached: Set<string>): Goal | null {
     if (index <= latest || reached.has(goal.id) || goal.done(ctx)) reached.add(goal.id);
     else next ??= goal;
   }
+  if (ctx.victory) return next ? { ...VICTORY, hint: `Next idea: ${next.title.toLowerCase()}.` } : VICTORY;
   return shelterDue(ctx) ? SHELTER : next;
 }
 

@@ -5,6 +5,7 @@ import { PF, type Action, type Input, type PrivateView, type PubPlayer, type Vie
 import { hud } from '../game/hud';
 import { closeScreen, sendCommand } from '../game/predict';
 import { store, touch } from '../store';
+import { BossBar, Celebration, useCelebration } from './endgame';
 import { Crosshair, GoalChip, Hotbar, SelectedName, Toasts, Vitals } from './hud';
 import { DeathScreen, PauseSheet } from './menus';
 import { ChestScreen, CreativeScreen, FurnaceScreen, InventoryScreen, TableScreen, TradeScreen } from './screens';
@@ -65,16 +66,19 @@ function Sleeping({ view }: { view: View }) {
 
 export function ControllerView({ publicView, privateView, playerId, connected, isHost }: GameViewProps<Input, Action, View, PrivateView>) {
   const screen = useStore(store, s => s.screen), locked = useStore(store, s => s.pointerLocked), touchMode = useTouchMode();
-  const dead = !!privateView?.dead, wasLocked = useRef(locked);
+  const dead = !!privateView?.dead, wasLocked = useRef(locked), party = useCelebration(publicView), celebrating = useRef(false);
+  celebrating.current = party.open;
   useServerToasts(privateView);
   useMenuKeys(dead);
   // Death closes every container (the server returns grid/cursor items); the menu may stay open.
   useEffect(() => { if (dead && screen && screen !== 'pause') closeScreen(); }, [dead, screen]);
   // Desktop MC feel: losing the pointer lock (Esc, alt-tab) with nothing open shows the menu.
   useEffect(() => {
-    if (wasLocked.current && !locked && !store.get().screen && !touch.active && !dead) openMenu('pause');
+    if (wasLocked.current && !locked && !store.get().screen && !touch.active && !dead && !celebrating.current) openMenu('pause');
     wasLocked.current = locked;
   }, [locked]);
+  // The celebration frees the mouse so Continue can be clicked; Continue takes it back.
+  useEffect(() => { if (party.open && document.pointerLockElement) document.exitPointerLock(); }, [party.open]);
   // Leaving the round: never strand an open screen or a held touch in the next one.
   useEffect(() => () => store.set({ screen: null, quickMove: false }), []);
 
@@ -85,6 +89,7 @@ export function ControllerView({ publicView, privateView, playerId, connected, i
   return <div className="bw-hud" data-touch={touchMode}>
     {playing && touchMode && <TouchControls creative={privateView.mode === 'creative'}/>}
     {playing && !sleeping && <Crosshair/>}
+    {publicView.boss && privateView.dimension === 'end' && <BossBar boss={publicView.boss}/>}
     {playing && <GoalChip view={publicView} pv={privateView} me={me}/>}
     {!screen && <Toasts/>}
     {playing && !touchMode && !locked && <p className="bw-clickplay kp-hud-text">Click the world to play · <kbd>E</kbd> inventory · <kbd>Esc</kbd> menu</p>}
@@ -95,6 +100,7 @@ export function ControllerView({ publicView, privateView, playerId, connected, i
       <Hotbar/>
     </div>
     {connected === false && <p className="bw-reconnect" role="status">Reconnecting… your controls are paused.</p>}
+    {party.open && !dead && <Celebration view={publicView} onClose={() => { party.close(); relockPointer(); }}/>}
     <Screens view={privateView} me={me} worldId={publicView.worldId} host={isHost}/>
   </div>;
 }

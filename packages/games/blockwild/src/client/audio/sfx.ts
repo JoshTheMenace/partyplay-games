@@ -164,5 +164,45 @@ export class Sfx {
       const p = 2 * Math.PI * (980 - t * 900) * t;
       return Math.tanh(3 * Math.sin(p)) * Math.min(1, t * 60) * Math.exp(-t * 7) * 0.22 + noise() * Math.exp(-t * 14) * 0.12;
     }));
+    // Eye of ender settling into a frame: a glassy two-note chime.
+    this.synths.set('eye', make(0.7, t => (Math.sin(2 * Math.PI * 988 * t) + 0.6 * Math.sin(2 * Math.PI * 1480 * t) * Math.min(1, t * 8)) * Math.exp(-t * 6) * 0.22));
+    // Dragon roar: a deep, gravelly growl swelling and falling, a wavering saw through distortion over rumbling noise.
+    this.synths.set('roar', make(2.2, t => {
+      phase += (78 - t * 14 + Math.sin(2 * Math.PI * 9 * t) * 6) / rate;
+      low += (noise() - low) * 0.08;
+      const saw = 2 * (phase % 1) - 1, env = Math.min(1, t * 3) * Math.exp(-Math.max(0, t - 0.9) * 2.2);
+      return Math.tanh(2.6 * (saw * 0.7 + Math.sin(2 * Math.PI * phase * 2.01) * 0.3) + low * 2.4) * env * 0.42;
+    }));
+    // A big wing beat: a soft, low whump of air.
+    this.synths.set('flap', make(0.5, t => { low += (noise() - low) * 0.06; return low * Math.sin(Math.PI * Math.min(1, t / 0.5)) ** 2 * 2.2; }));
+    // Enderman scream: a harsh, fast-warbling shriek.
+    this.synths.set('scream', make(1.1, t => {
+      const p = 2 * Math.PI * (620 + 260 * Math.sin(2 * Math.PI * 23 * t) + t * 180) * t;
+      return Math.tanh(4 * Math.sin(p)) * Math.min(1, t * 25) * Math.exp(-t * 2.4) * 0.22 + noise() * Math.exp(-t * 6) * 0.06;
+    }));
+    // Teleport "vwoop": a sine plunging from high to low.
+    this.synths.set('vwoop', make(0.5, t => Math.sin(2 * Math.PI * (1300 * t - 1100 * t * t)) * Math.sin(Math.PI * t / 0.5) * 0.3));
+    // Blaze breath: rushing, pulsing air.
+    this.synths.set('blaze', make(1.2, t => { low += (noise() - low) * 0.12; return low * (0.55 + 0.45 * Math.sin(2 * Math.PI * 3 * t)) * Math.sin(Math.PI * t / 1.2) * 1.1; }));
+    // Blaze firing: a quick fiery whoosh.
+    this.synths.set('blazeShoot', make(0.35, t => { const n = noise(), hiss = n - last; last = n; low += (n - low) * 0.3; return (hiss * 0.25 + low * 0.9) * Math.exp(-t * 9) * Math.min(1, t * 90); }));
+    // Silverfish: a dry, high chittering hiss.
+    this.synths.set('silverfish', make(0.3, t => { const n = noise(), hiss = n - last; last = n; return hiss * (0.5 + 0.5 * Math.sign(Math.sin(2 * Math.PI * 38 * t))) * Math.exp(-t * 8) * 0.3; }));
+    // End portal opening: a deep, swelling minor chord under a rising shimmer.
+    const chord = [65.4, 98, 130.8, 155.6, 196];
+    this.synths.set('portalOpen', make(3.2, t => {
+      let tone = 0;
+      for (const f of chord) tone += Math.sin(2 * Math.PI * f * t * (1 + t * 0.004));
+      const shimmer = Math.sin(2 * Math.PI * (900 + t * 500) * t) * Math.sin(2 * Math.PI * 7 * t) * 0.15;
+      return (tone * 0.12 + shimmer) * Math.min(1, t * 1.5) * Math.exp(-Math.max(0, t - 1.8) * 2);
+    }));
+    // The dragon dying: a long roar climbing in pitch into a bright, ringing wash.
+    phase = 0;
+    this.synths.set('dragonDeath', make(6, t => {
+      phase += (70 + t * t * 9) / rate;
+      low += (noise() - low) * 0.05;
+      const saw = 2 * (phase % 1) - 1, ring = Math.sin(2 * Math.PI * 660 * t) * Math.sin(2 * Math.PI * 990 * t) * Math.max(0, t - 3) * 0.06;
+      return (Math.tanh(2 * saw + low * 2) * 0.32 + ring) * Math.min(1, t * 2) * Math.min(1, (6 - t) * 1.5);
+    }));
   }
 }

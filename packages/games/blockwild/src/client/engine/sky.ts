@@ -1,7 +1,8 @@
 /**
  * Sky dome (gradient, square sun and moon, twinkling stars) and a drifting layer of blocky 3D clouds at y = 140.
  * Both read the shared world uniforms, so they always match the fog and water reflections. In the Nether the dome
- * shows only the fog colour and the clouds hide.
+ * shows only the fog colour and the clouds hide; in the End it is a still, purple-black void full of faint stars and
+ * drifting violet nebulae, all the way round (below the island too).
  */
 import { BackSide, BufferAttribute, BufferGeometry, Mesh, ShaderMaterial, SphereGeometry, type Object3D } from 'three';
 import { SKY_GLSL } from './environment';
@@ -34,6 +35,33 @@ vec2 square(vec3 d, vec3 c, float r) {
   vec3 v = cross(u, c);
   vec2 p = vec2(dot(d, u), dot(d, v)) / along;
   return vec2(step(max(abs(p.x), abs(p.y)), r), length(p));
+}
+
+/** Value noise on a cube face grid (smooth), for the End's nebulae. */
+float cloud(vec3 d, float scale) {
+  vec3 p = d * scale, i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x), mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y);
+  float b = mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x), mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y);
+  return mix(a, b, f.z);
+}
+
+/** The End's sky: still pixel stars in every direction over slow violet nebulae; the void below fades darker. */
+vec3 endSky(vec3 d) {
+  vec3 color = skyColor(d);
+  float nebula = cloud(d + vec3(uTime * 0.002, 0.0, 0.0), 3.0) * 0.65 + cloud(d, 7.0) * 0.35;
+  color += vec3(0.16, 0.06, 0.24) * smoothstep(0.5, 0.85, nebula) * (0.6 + 0.4 * smoothstep(-0.6, 0.3, d.y));
+  vec3 a = abs(d);
+  vec2 uv = a.x > a.y && a.x > a.z ? d.yz / a.x : a.y > a.z ? d.xz / a.y : d.xy / a.z;
+  vec3 face = sign(d) * step(max(a.x, max(a.y, a.z)) - 0.0001, a);
+  vec2 cell = floor(uv * 120.0);
+  float h = hash(vec3(cell, dot(face, vec3(1.0, 2.0, 3.0)) + 11.0));
+  if (h > 0.975) {
+    float twinkle = 0.75 + 0.25 * sin(uTime * (0.6 + h * 9.0) + h * 80.0);
+    vec3 tint = mix(vec3(0.75, 0.7, 1.0), vec3(1.0, 0.85, 1.0), fract(h * 61.0));
+    color += tint * (h - 0.975) * 32.0 * twinkle * (0.45 + 0.55 * smoothstep(-0.8, 0.2, d.y));
+  }
+  return color;
 }
 
 void main() {
@@ -69,6 +97,7 @@ void main() {
   color += vec3(0.7, 0.8, 1.0) * exp(-moon.y * 7.0) * 0.08 * uStars * horizon;
   // No sun, moon or stars in the Nether: only its fog colour.
   color = mix(color, skyColor(d), uNether);
+  if (uEnd > 0.0) color = mix(color, endSky(d), uEnd);
   gl_FragColor = vec4(color, 1.0);
 #include <tonemapping_fragment>
 #include <colorspace_fragment>
@@ -176,9 +205,9 @@ export class SkyRenderer {
     scene.add(this.dome, ...this.clouds);
   }
 
-  /** Keeps the dome around the camera and the cloud tiles centred on it while they drift west to east (none in the Nether). */
-  update(cameraX: number, cameraZ: number, dt: number, nether = false) {
-    for (const mesh of this.clouds) mesh.visible = !nether;
+  /** Keeps the dome around the camera and the cloud tiles centred on it while they drift west to east (none in the Nether or the End). */
+  update(cameraX: number, cameraZ: number, dt: number, cloudless = false) {
+    for (const mesh of this.clouds) mesh.visible = !cloudless;
     this.drift = (this.drift + dt * CLOUD_SPEED) % CLOUD_PERIOD;
     const x = Math.floor((cameraX - this.drift) / CLOUD_PERIOD) * CLOUD_PERIOD + this.drift - CLOUD_PERIOD;
     const z = Math.floor(cameraZ / CLOUD_PERIOD) * CLOUD_PERIOD - CLOUD_PERIOD;

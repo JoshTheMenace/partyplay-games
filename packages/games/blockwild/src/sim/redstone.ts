@@ -8,15 +8,19 @@
  * on it or pointing into it (a lone dot points everywhere). A lit torch's other sides power components, never blocks.
  * Consumers (lamps, doors, pistons, tnt) and torch/repeater inputs take either; dust only takes strong block power.
  *
+ * Observers watch the cell in front and pulse their back for one redstone tick when it changes; daylight detectors emit
+ * like a redstone block at the strength of the sun on them, re-read every second.
+ *
  * Every write lands in `onBlockChanged`, which marks the cell dirty; `tickRedstone` runs due scheduled ticks, presses
  * plates and then re-evaluates the components within two blocks of each dirty cell, in rounds, until nothing changes.
  * Dust recomputes its whole connected network at once (bounded BFS), so power removal never counts down slowly.
  */
 import {
-  attachedFace, B, blockOf, BUTTON_PRESSED, cellId, cellState, DOOR_OPEN, DOOR_UPPER, isAir, isLiquid, LEVER_ON, makeCell, pistonFacing, PISTON_EXTENDED,
-  PISTON_STICKY, PLATE_PRESSED, repeaterDelay, repeaterFacing, REPEATER_POWERED, wirePower, type Shape,
+  attachedFace, B, blockOf, BUTTON_PRESSED, cellId, cellState, DAYLIGHT_INVERTED, daylightPower, DOOR_OPEN, DOOR_UPPER, isAir, isLiquid, LEVER_ON, makeCell,
+  observerFacing, OBSERVER_POWERED, pistonFacing, PISTON_EXTENDED, PISTON_STICKY, PLATE_PRESSED, repeaterDelay, repeaterFacing, REPEATER_POWERED, wirePower, type Shape,
 } from '../shared/blocks';
 import type { CellReader } from '../shared/chunk';
+import { DAY_TICKS, dimensionAt } from '../shared/constants';
 import { bodyBox, regionCollides } from '../shared/physics';
 import { cellIndex, cellXYZ, FACES, FACING_FACE, faceToFacing, inWorld, type Vec3 } from '../shared/coords';
 import type { CellWrite } from '../shared/placement';
@@ -26,7 +30,7 @@ import { explode, mobState } from './combat';
 import { newMob } from './mobs';
 import { teleport } from './players';
 import { addFx, type Mob, type Player, type State } from './state';
-import { breakBlock, isLoaded, settle, writeCell, writeCells } from './world';
+import { breakBlock, isLoaded, settle, skyExposed, writeCell, writeCells } from './world';
 
 /** Redstone server state, created with the world and not saved (loaded edits re-register through onBlockChanged). */
 export type RedstoneState = {
@@ -44,9 +48,12 @@ export type RedstoneState = {
   doors: Set<number>;
   /** Torch cell → game ticks of its recent toggles; burnt-out torch → the tick it may relight. */
   toggles: Map<number, number[]>; burnt: Map<number, number>;
+  /** Daylight detector cells (re-read every second); observers switched on so far this tick (see OBSERVER_BUDGET). */
+  daylight: Set<number>; pulses: number;
 };
 export const newRedstoneState = (): RedstoneState => ({
   scheduled: new Map(), queue: new Map(), dirty: new Set(), pulsed: new Set(), waiting: new Set(), settled: new Set(), doors: new Set(), toggles: new Map(), burnt: new Map(),
+  daylight: new Set(), pulses: 0,
 });
 
 /** Game ticks: torch inversion (1 redstone tick), lamp switch-off, plate hold after the last touch, stone/oak buttons, tnt fuse. */
@@ -55,13 +62,16 @@ const BUTTON_TICKS: Readonly<Record<number, number>> = { [B.stone_button]: 20, [
 /** A torch toggling more than 8 times within 60 ticks burns out for 3 s. */
 const BURNOUT_TOGGLES = 8, BURNOUT_WINDOW = 60, BURNOUT_TICKS = 60;
 const PUSH_LIMIT = 12, MAX_DUST = 8192, MAX_ROUNDS = 64;
+/** Observers fire 1 redstone tick after their cell changes and stay on for 1; past 256 switch-ons in a tick the rest wait a tick. */
+const PULSE = 2, OBSERVER_BUDGET = 256;
 
 /** Blocks whose change matters to redstone (plus any change of conductivity). */
 const COMPONENTS = new Set<number>([B.redstone_wire, B.redstone_torch, B.redstone_torch_off, B.lever, B.stone_button, B.oak_button, B.stone_pressure_plate,
-  B.oak_pressure_plate, B.redstone_block, B.redstone_lamp, B.redstone_lamp_lit, B.repeater, B.piston, B.sticky_piston, B.piston_head, B.oak_door, B.iron_door, B.tnt]);
-/** Components that react to power (sources only emit). */
+  B.oak_pressure_plate, B.redstone_block, B.redstone_lamp, B.redstone_lamp_lit, B.repeater, B.piston, B.sticky_piston, B.piston_head, B.oak_door, B.iron_door, B.tnt,
+  B.observer, B.daylight_detector]);
+/** Components that react to power (sources only emit), plus observers (a loaded powered one turns off) and daylight detectors (their mode). */
 const REACTS = new Set<number>([B.redstone_wire, B.redstone_torch, B.redstone_torch_off, B.repeater, B.redstone_lamp, B.redstone_lamp_lit, B.piston, B.sticky_piston,
-  B.oak_door, B.iron_door, B.tnt]);
+  B.oak_door, B.iron_door, B.tnt, B.observer, B.daylight_detector]);
 /** Pistons cannot move these (nor extended pistons, unloaded chunks or the world edge). */
 const IMMOVABLE = new Set<number>([B.bedrock, B.obsidian, B.chest, B.furnace, B.furnace_lit, B.monster_spawner, B.nether_portal, B.piston_head, B.barrier]);
 /** Shapes a push breaks (dropping their items) instead of moving. */
@@ -94,6 +104,8 @@ function emits(get: CellReader, cell: number, x: number, y: number, z: number, f
     case B.lever: case B.stone_button: case B.oak_button: return s & LEVER_ON && (!strong || face === (attachedFace(s) ^ 1)) ? 15 : 0;
     case B.stone_pressure_plate: case B.oak_pressure_plate: return s & PLATE_PRESSED && (!strong || face === 2) ? 15 : 0;
     case B.redstone_block: return strong ? 0 : 15;
+    case B.daylight_detector: return strong ? 0 : daylightPower(s);
+    case B.observer: return s & OBSERVER_POWERED && face === (observerFacing(s) ^ 1) ? 15 : 0;
     case B.redstone_torch: return face === torchSupport(s) || strong && face !== 3 ? 0 : 15;
     case B.repeater: return s & REPEATER_POWERED && face === FACING_FACE[repeaterFacing(s)] ? 15 : 0;
     case B.redstone_wire:
@@ -170,6 +182,14 @@ function run(state: State, index: number) {
       if (s & PLATE_PRESSED && writeCell(state, x, y, z, makeCell(id, s & ~PLATE_PRESSED))) addFx(state, 'button', x + 0.5, y, z + 0.5, 0);
       return;
     case B.piston: case B.sticky_piston: updatePiston(state, x, y, z, cell); return;
+    case B.observer:
+      if (s & OBSERVER_POWERED) { writeCell(state, x, y, z, makeCell(id, s & ~OBSERVER_POWERED)); return; }
+      if (rs.pulses >= OBSERVER_BUDGET) return schedule(state, index, 1);
+      if (!writeCell(state, x, y, z, makeCell(id, s | OBSERVER_POWERED))) return;
+      schedule(state, index, PULSE);
+      // One effect per tick at most, so observer clocks never crowd other effects out of the 64-entry list.
+      if (rs.pulses++ === 0) addFx(state, 'observer', x + 0.5, y + 0.5, z + 0.5);
+      return;
   }
 }
 /** Count a torch toggle; turning off after more than 8 toggles in 60 ticks burns it out for 3 s. */
@@ -199,7 +219,24 @@ function react(state: State, x: number, y: number, z: number) {
     case B.oak_door: case B.iron_door: return updateDoor(state, x, y, z, cell);
     case B.piston: case B.sticky_piston: return updatePiston(state, x, y, z, cell);
     case B.tnt: if (received(get, x, y, z)) primeTnt(state, x, y, z); return;
+    // A powered observer always has its switch-off scheduled, except one just loaded from a save.
+    case B.observer: if (s & OBSERVER_POWERED) schedule(state, index, PULSE); return;
+    case B.daylight_detector: return updateDaylight(state, x, y, z, cell);
   }
+}
+
+/**
+ * Daylight detector power: open sky (no opaque block above) times the sun's height, so 15 at noon and 0 from sunset to
+ * sunrise; inverted detectors give 15 minus that. The Nether and the End have no sky: both modes stay at 0 there (MC).
+ */
+export function daylightTarget(state: State, x: number, y: number, z: number, s: number): number {
+  if (dimensionAt(x, z) !== 'overworld') return 0;
+  const power = skyExposed(state.getLoaded, x, y + 1, z) ? Math.round(15 * Math.max(0, Math.sin(2 * Math.PI * state.time / DAY_TICKS))) : 0;
+  return s & DAYLIGHT_INVERTED ? 15 - power : power;
+}
+function updateDaylight(state: State, x: number, y: number, z: number, cell: number) {
+  const s = cellState(cell), power = daylightTarget(state, x, y, z, s);
+  if (power !== daylightPower(s)) writeCell(state, x, y, z, makeCell(B.daylight_detector, s & DAYLIGHT_INVERTED | power));
 }
 
 /**
@@ -279,13 +316,14 @@ function extend(state: State, x: number, y: number, z: number, cell: number): bo
     chain.push([cx, cy, cz, c]);
   }
   const head = makeCell(B.piston_head, facing | (cellId(cell) === B.sticky_piston ? PISTON_STICKY : 0));
-  const moved: CellWrite[] = [...chain.map(([cx, cy, cz, c]): CellWrite => [cx + dx, cy + dy, cz + dz, c]).reverse(), [x + dx, y + dy, z + dz, head]];
+  const moved: CellWrite[] = [...chain.map(([cx, cy, cz, c]): CellWrite => [cx + dx, cy + dy, cz + dz, unpowered(c)]).reverse(), [x + dx, y + dy, z + dz, head]];
   if (!state.world.canEdit([...moved, [x, y, z, cell | PISTON_EXTENDED << 8]])) return false;
   if (crush) breakBlock(state, ...crush);
   for (const [wx, wy, wz, value] of moved) writeCell(state, wx, wy, wz, value);
   writeCell(state, x, y, z, cell | PISTON_EXTENDED << 8);
   shove(state, moved, dx, dy, dz);
   settle(state, moved.map(([wx, wy, wz]): Vec3 => [wx, wy, wz]));
+  pulseMoved(state, moved);
   addFx(state, 'piston', x + 0.5, y + 0.5, z + 0.5, facing + 8 * chain.length);
   return true;
 }
@@ -297,13 +335,19 @@ function retract(state: State, x: number, y: number, z: number, cell: number): b
   let pulled = 0;
   if (cellId(head) === B.piston_head && pistonFacing(cellState(head)) === facing) {
     const pull = cellId(cell) === B.sticky_piston && inWorld(hx + dx, hy + dy, hz + dz) && !isAir(far) && !isLiquid(far) && !immovable(far) && !fragile(far);
-    writes.push(pull ? [hx, hy, hz, far] : [hx, hy, hz, B.air]);
+    writes.push(pull ? [hx, hy, hz, unpowered(far)] : [hx, hy, hz, B.air]);
     if (pull) { writes.push([hx + dx, hy + dy, hz + dz, B.air]); pulled = 1; }
   }
   if (!writeCells(state, writes)) return false;
   settle(state, writes.slice(1).map(([wx, wy, wz]): Vec3 => [wx, wy, wz]));
+  pulseMoved(state, writes.slice(1));
   addFx(state, 'piston', x + 0.5, y + 0.5, z + 0.5, (facing ^ 1) + 8 * pulled);
   return true;
+}
+/** A moved observer arrives switched off and pulses once (as in MC), whatever it now watches. */
+const unpowered = (cell: number) => cellId(cell) === B.observer ? cell & ~(OBSERVER_POWERED << 8) : cell;
+function pulseMoved(state: State, cells: readonly CellWrite[]) {
+  for (const [x, y, z, cell] of cells) if (cellId(cell) === B.observer) schedule(state, cellIndex(x, y, z), PULSE, true);
 }
 /**
  * Move players, mobs and items overlapping the cells a piston just filled one block along the push, when they fit
@@ -377,12 +421,27 @@ function flush(state: State) {
  */
 export function onBlockChanged(state: State, x: number, y: number, z: number, old: number, cell: number): void {
   const rs = state.redstone, index = cellIndex(x, y, z), oldId = cellId(old), id = cellId(cell);
+  observe(state, index, old, cell);
   if (oldId !== id) detach(state, x, y, z, old, id);
   if (id === B.redstone_wire && oldId === id) { rs.pulsed.add(index); return; }
   if (!COMPONENTS.has(oldId) && !COMPONENTS.has(id) && conducts(old) === conducts(cell)) return;
   rs.dirty.add(index);
+  if (id === B.daylight_detector) rs.daylight.add(index);
+  else rs.daylight.delete(index);
   if (BUTTON_TICKS[id] && cellState(cell) & BUTTON_PRESSED) schedule(state, index, BUTTON_TICKS[id]);
   if (isPlate(id) && cellState(cell) & PLATE_PRESSED) schedule(state, index, PLATE_HOLD);
+}
+/**
+ * Observers: the cell at `index` changed (any id or state change: placing, breaking, growth, redstone, pistons; also
+ * every saved edit on load, which restarts observer clocks). Each observer watching it schedules a pulse in 1 redstone
+ * tick; one that is already due or still on ignores the change (MC), so no observer fires more than once per 2 ticks.
+ */
+export function observe(state: State, index: number, _oldCell: number, _newCell: number): void {
+  const [x, y, z] = cellXYZ(index);
+  for (let f = 0; f < 6; f++) {
+    const [dx, dy, dz] = FACES[f]!, cell = state.getLoaded(x + dx, y + dy, z + dz);
+    if (cellId(cell) === B.observer && observerFacing(cellState(cell)) === (f ^ 1)) schedule(state, cellIndex(x + dx, y + dy, z + dz), PULSE);
+  }
 }
 /** Clean up after a replaced component: piston halves go together; door and (unless it just toggled) torch memories are forgotten. */
 function detach(state: State, x: number, y: number, z: number, old: number, id: number) {
@@ -402,18 +461,25 @@ function detach(state: State, x: number, y: number, z: number, old: number, id: 
 }
 
 /**
- * Every tick, before portals and mobs: wake dirty cells whose chunk loaded, run due scheduled ticks, press plates under
- * players, mobs and (oak) items, then settle everything dirty (player edits this tick included).
+ * Every tick, before portals and mobs: re-read daylight detectors (once a second), wake dirty cells whose chunk loaded,
+ * run due scheduled ticks, press plates under players, mobs and (oak) items, then settle everything dirty (player edits
+ * this tick included).
  */
 export function tickRedstone(state: State, _dt: number): void {
   const rs = state.redstone, now = state.ticks;
+  rs.pulses = 0;
+  if (now % 20 === 11) for (const index of rs.daylight) {
+    const [x, y, z] = cellXYZ(index), cell = state.getLoaded(x, y, z);
+    if (isLoaded(state, x, z) && cellId(cell) === B.daylight_detector) updateDaylight(state, x, y, z, cell);
+  }
   if (now % RETRY === 0) for (const index of rs.waiting) {
     const [x, , z] = cellXYZ(index);
     if (isLoaded(state, x, z)) { rs.waiting.delete(index); rs.dirty.add(index); }
   }
-  const due = rs.queue.get(now);
+  // Unschedule everything due first, so a tick run now can schedule another cell that is also due now (observer clocks).
+  const due = (rs.queue.get(now) ?? []).filter(index => rs.scheduled.get(index) === now && rs.scheduled.delete(index));
   rs.queue.delete(now);
-  for (const index of due ?? []) if (rs.scheduled.get(index) === now) { rs.scheduled.delete(index); run(state, index); }
+  for (const index of due) run(state, index);
   pressPlates(state);
   flush(state);
 }

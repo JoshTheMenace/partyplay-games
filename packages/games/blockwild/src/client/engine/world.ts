@@ -1,5 +1,6 @@
 import { B } from '../../shared/blocks';
 import { outsideCell, type World } from '../../shared/chunk';
+import { inEnd } from '../../shared/constants';
 import { cellXYZ, chunkKey, localIndex } from '../../shared/coords';
 
 type Column = { cells: Uint16Array; light: Uint8Array };
@@ -32,13 +33,13 @@ export class ClientWorld implements World {
   }
   /** True once the column containing (x, z) has arrived. */
   isLoaded(x: number, z: number) { return !!this.column(Math.floor(x) >> 4, Math.floor(z) >> 4); }
-  /** Sky and block light 0..15 at a cell ([15, 0] above the world or when not loaded). */
+  /** Sky and block light 0..15 at a cell ([15, 0] above the world, in the End's void or when not loaded; [0, 0] under bedrock). */
   lightLevels(x: number, y: number, z: number): [number, number] {
     x = Math.floor(x);
     y = Math.floor(y);
     z = Math.floor(z);
     const column = y >= 0 && y < 128 ? this.column(x >> 4, z >> 4) : undefined;
-    if (!column) return [y < 0 ? 0 : 15, 0];
+    if (!column) return [y < 0 && !inEnd(x, z) ? 0 : 15, 0];
     const packed = column.light[localIndex(x & 15, y, z & 15)]!;
     return [packed >> 4, packed & 15];
   }

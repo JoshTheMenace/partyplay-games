@@ -622,7 +622,8 @@ function torch(p: Pix, head: Palette = TORCH_HEAD) {
     '.......hH.......', '.......hH.......', '.......hH.......', '.......hH.......', '.......hH.......', '.......hH.......', '.......kK.......',
   ], { ...head, h: 0x9c7440, H: 0x6e4f28, k: 0x7a5a32, K: 0x543a1e }, 0, 6);
 }
-function lantern(p: Pix) {
+const LANTERN_GLOW = { O: 0xf0a030, Y: 0xffd060, W: 0xfff4c0, R: 0xd87a24 }, SOUL_GLOW = { O: 0x28b0d0, Y: 0x70e8f8, W: 0xe0ffff, R: 0x1a7a9a };
+function lantern(p: Pix, glow: Palette = LANTERN_GLOW) {
   p.draw([
     '.......oo.......',
     '......o..o......',
@@ -637,7 +638,7 @@ function lantern(p: Pix) {
     '.....oRRRRo.....',
     '.....oMMMMo.....',
     '.....oooooo.....',
-  ], { o: 0x2a2c33, M: 0x4a4e58, L: 0x6e737e, O: 0xf0a030, Y: 0xffd060, W: 0xfff4c0, R: 0xd87a24 }, 0, 3);
+  ], { o: 0x2a2c33, M: 0x4a4e58, L: 0x6e737e, ...glow }, 0, 3);
 }
 function ladder(p: Pix) {
   const RAIL = [0x5a3e1e, 0x7a5a30, 0x9a7440], RUNG = [0x6a4a24, 0x8e6a3a, 0xa8824e];
@@ -864,11 +865,7 @@ function dirtPath(p: Pix, top: boolean) {
 
 function crackedStoneBricks(p: Pix) {
   stoneBricks(p);
-  const r = rng(511);
-  for (const [x0, y0, len] of [[3, 1, 7], [11, 8, 8], [6, 10, 5]] as const) {
-    let x = x0, y = y0;
-    for (let k = 0; k < len; k++) { p.set(x, y, 0x2e2e32); p.set(x + 1, y, STONE[1]!); y++; x += r() < 0.35 ? 1 : r() < 0.5 ? -1 : 0; }
-  }
+  cracks(p, 511, [[3, 1, 7], [11, 8, 8], [6, 10, 5]], 0x2e2e32, STONE[1]!);
 }
 
 // ---------- expansion: redstone ----------
@@ -973,6 +970,201 @@ function tnt(p: Pix, part: 'side' | 'top' | 'bottom') {
   p.draw(['TTT.N..N.TTT', '.T..NN.N..T.', '.T..N.NN..T.', '.T..N..N..T.'], { T: 0x1e1a1a, N: 0x1e1a1a }, 2, 6);
 }
 
+// ---------- endgame: fortresses, strongholds, the End and quartz ----------
+
+/** Pale, pitted end stone (the ramp is shared by its bricks). */
+const END_STONE = [0xaaa870, 0xbab97f, 0xc8c78c, 0xd4d398, 0xdedda4, 0xe8e7b2];
+function endStone(p: Pix) {
+  p.fill((x, y) => pick(END_STONE, 0.45 + (tnoise(x, y, 601, 4) - 0.5) * 0.45 + (hash(x, y, 602) - 0.5) * 0.4));
+  const r = rng(603);
+  for (let i = 0; i < 9; i++) {
+    const x = floor(r() * 16), y = floor(r() * 16), big = r() < 0.4;
+    p.set(x, y, END_STONE[0]!).set(x + 1, y + 1, END_STONE[5]!);
+    if (big) p.set(x + 1, y, END_STONE[0]!).set(x + 2, y + 1, END_STONE[4]!);
+  }
+}
+/** Carve crack lines (dark with a lit edge) into a painted tile. */
+function cracks(p: Pix, seed: number, lines: readonly (readonly [number, number, number])[], dark: Rgb, lit: Rgb) {
+  const r = rng(seed);
+  for (const [x0, y0, len] of lines) {
+    let x = x0, y = y0;
+    for (let k = 0; k < len; k++) { p.set(x, y, dark); p.set(x + 1, y, lit); y++; x += r() < 0.35 ? 1 : r() < 0.5 ? -1 : 0; }
+  }
+}
+
+/**
+ * End portal frame (13/16 slab). Side: end stone under a jade band (rows 3–6, the slab's top edge). Top: jade stone with
+ * a socket in the 8×8 centre, which holds the eye in `_top_eye`.
+ */
+const JADE = [0x163a34, 0x1f4c43, 0x2a6152, 0x3a7a66, 0x52967e, 0x78b89c];
+/** The inserted eye: bright teal, so a filled frame reads at a glance against the dark empty socket. */
+const EYE = [0x157a78, 0x22a39c, 0x3cc8b8, 0x6ae4cc, 0xa8f6e2, 0xf0fffa];
+function endFrame(p: Pix, part: 'side' | 'top' | 'top_eye') {
+  if (part === 'side') {
+    endStone(p);
+    for (let x = 0; x < 16; x++) for (let y = 0; y < 7; y++) p.set(x, y, y === 3 ? JADE[5]! : y === 6 ? JADE[0]! : pick(JADE, 0.5 + (hash(x, y, 611) - 0.5) * 0.4 - (y < 3 ? 0.2 : 0)));
+    for (let x = 1; x < 16; x += 4) { p.set(x, 4, JADE[1]!); p.set(x + 1, 4, JADE[1]!); p.set(x, 5, JADE[4]!); p.set(x + 1, 5, JADE[3]!); }
+    return;
+  }
+  p.fill((x, y) => pick(JADE, 0.4 + (tnoise(x, y, 612, 4) - 0.5) * 0.3 + (hash(x, y, 613) - 0.5) * 0.3));
+  for (let i = 0; i < 16; i++) { p.set(i, 0, JADE[5]!); p.set(0, i, JADE[4]!); p.set(i, 15, JADE[0]!); p.set(15, i, JADE[1]!); }
+  for (const i of [1, 14]) for (let k = 2; k < 14; k += 3) { p.set(k, i, JADE[4]!); p.set(i, k, JADE[4]!); }
+  for (let i = 3; i < 13; i++) { p.set(i, 3, JADE[0]!); p.set(3, i, JADE[0]!); p.set(i, 12, JADE[4]!); p.set(12, i, JADE[4]!); }
+  if (part === 'top') p.rect(4, 4, 8, 8, (x, y) => mix(0x040a08, JADE[0]!, clamp((Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5)) - 1.5) / 2.5)));
+  else eyeTop(p);
+}
+/** The top of an inserted eye of ender (cols/rows 4–11): a bright teal orb with a slim dark-teal pupil and a glint. */
+function eyeTop(p: Pix) {
+  p.rect(4, 4, 8, 8, (x, y) => {
+    const d = Math.hypot(x - 7.5, y - 7.5);
+    if (d > 4.3) return JADE[0]!;
+    return pick(EYE, 0.85 - d / 5.5 - (x + y - 15) * 0.05);
+  });
+  for (let y = 6; y < 10; y++) p.set(7, y, 0x0c3a3c).set(8, y, y === 6 || y === 9 ? EYE[1]! : 0x145052);
+  p.set(5, 5, EYE[5]!).set(6, 5, EYE[4]!).set(5, 6, EYE[4]!);
+}
+/** The inserted eye's knob (8×3×8 on the frame): faces sample it positionally, so rows 0–2 are its rim and the centre its top. */
+function frameEye(p: Pix) {
+  p.fill((x, y) => pick(EYE, 0.45 + (hash(x, y, 614) - 0.5) * 0.25));
+  eyeTop(p);
+  for (let x = 0; x < 16; x++) { p.set(x, 0, EYE[4]!); p.set(x, 1, pick(EYE, 0.55 + (hash(x, 1, 615) - 0.5) * 0.3)); p.set(x, 2, EYE[1]!); }
+}
+
+/** End portal: near-black depth with teal nebula and sparse coloured stars (the mesher adds screen-space parallax). */
+function endPortal(p: Pix) {
+  p.fill((x, y) => mix(0x03060a, 0x0e2c34, clamp((tnoise(x, y, 621, 8) - 0.35) * 1.6) * 0.7 + clamp((tnoise(x, y, 622, 4) - 0.6) * 2) * 0.3));
+  const STARS = [0x7af0d8, 0x3ab8c0, 0xc8fff0, 0x5a8ae8, 0x9ae07a, 0xffffff], r = rng(623);
+  for (let i = 0; i < 14; i++) {
+    const x = floor(r() * 16), y = floor(r() * 16), c = STARS[floor(r() * STARS.length)]!;
+    p.set(x, y, c);
+    if (i < 4) p.set(x + 1, y, shade(c, 0.5)).set(x - 1, y, shade(c, 0.5)).set(x, y + 1, shade(c, 0.5)).set(x, y - 1, shade(c, 0.5));
+  }
+}
+/** A still starfield for the End sky dome (art-only key 'end_sky'): violet-black with faint stars. */
+function endSky(p: Pix) {
+  p.fill((x, y) => mix(0x0a0610, 0x24142e, clamp(tnoise(x, y, 631, 8) * 0.7 + tnoise(x, y, 632, 4) * 0.3 - 0.25)));
+  const r = rng(633);
+  for (let i = 0; i < 10; i++) p.set(floor(r() * 16), floor(r() * 16), i % 3 ? 0x8a7aa0 : 0xe8e0f4);
+}
+
+/** Dragon egg: glossy black shell with violet mottling and a few magenta sparks. */
+function dragonEgg(p: Pix) {
+  const SHELL = [0x07050a, 0x0e0a14, 0x160f20, 0x21162e, 0x2e1e42, 0x3e2858];
+  p.fill((x, y) => pick(SHELL, tnoise(x, y, 641, 4) * 0.55 + hash(x, y, 642) * 0.3 + (tnoise(x, y, 643, 2) > 0.72 ? 0.35 : 0)));
+  for (const [x, y] of [[3, 4], [11, 2], [7, 9], [13, 12], [2, 13]] as const) p.set(x, y, 0xb45ae0).set(x + 1, y + 1, 0x4a2a6a);
+}
+
+/** Iron bars: two 2-px bars per tile (cols 7–8 carry the lone post) held by two rails; clear between. */
+function ironBars(p: Pix) {
+  const BAR = [0x3a3c42, 0x5a5e66, 0x7c8088, 0xa4a8b0, 0xc8ccd2];
+  p.fill((x, y) => {
+    const rail = y === 2 || y === 13, bar = x === 7 || x === 8 || x === 15 || x === 0;
+    if (!bar && !rail) return null;
+    if (bar) return pick(BAR, (x === 7 || x === 0 ? 0.8 : 0.35) + (hash(x, y, 651) - 0.5) * 0.2);
+    return y === 2 ? BAR[3]! : BAR[1]!;
+  });
+  for (const x of [0, 7, 8, 15]) for (const y of [2, 13]) p.set(x, y, BAR[4]!);
+}
+
+/** Quartz pillar side (vertical flutes) and top (a ringed capital). */
+function quartzPillar(p: Pix, top: boolean) {
+  if (top) {
+    p.fill((x, y) => {
+      const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5)), ring = floor(d);
+      return pick(QUARTZ, (ring === 7 ? 0.95 : ring === 6 ? 0.1 : ring === 3 ? 0.2 : ring === 2 ? 0.85 : 0.55) + (hash(x, y, 661) - 0.5) * 0.1);
+    });
+    return;
+  }
+  p.fill((x, y) => pick(QUARTZ, (x === 0 || x === 15 ? 0.95 : x === 1 || x === 14 ? 0.15 : x % 4 === 3 ? 0.2 : x % 4 === 0 ? 0.85 : 0.55) + (hash(x, y, 662) - 0.5) * 0.12));
+}
+/** Chiseled quartz: carved bands with a stepped lozenge motif (the top is a framed rosette). */
+function chiseledQuartz(p: Pix, top: boolean) {
+  quartzBlock(p, top);
+  if (top) {
+    p.draw(['..dd..', '.dlld.', 'dl..ld', 'dl..ld', '.dlld.', '..dd..'], { d: QUARTZ[0]!, l: QUARTZ[5]! }, 5, 5);
+    return;
+  }
+  for (let x = 1; x < 15; x++) { p.set(x, 3, QUARTZ[0]!); p.set(x, 4, QUARTZ[5]!); p.set(x, 11, QUARTZ[0]!); p.set(x, 12, QUARTZ[5]!); }
+  p.draw(['...d......d...', '..dld....dld..', '.dl.ld..dl.ld.', '..dld....dld..', '...d......d...'], { d: QUARTZ[0]!, l: QUARTZ[5]! }, 1, 5);
+}
+
+/** Observer. Front: a stern stone face; back: the output socket (lit when pulsing); top: an arrow toward the face (image top). */
+const OBSERVER = [0x3a3a3e, 0x4a4a50, 0x5a5a60, 0x6a6a70, 0x7a7a80, 0x8c8c92];
+function observer(p: Pix, part: 'front' | 'back' | 'back_on' | 'side' | 'top') {
+  p.fill((x, y) => pick(OBSERVER, 0.5 + (tnoise(x, y, 671, 4) - 0.5) * 0.3 + (hash(x, y, 672) - 0.5) * 0.3));
+  for (let i = 0; i < 16; i++) { p.set(i, 0, OBSERVER[5]!); p.set(0, i, OBSERVER[4]!); p.set(i, 15, OBSERVER[0]!); p.set(15, i, OBSERVER[1]!); }
+  if (part === 'front') {
+    p.rect(2, 2, 12, 12, (x, y) => pick(OBSERVER, 0.15 + (hash(x, y, 673) - 0.5) * 0.2));
+    for (const x0 of [3, 9]) p.draw(['LLLL', 'kkkk', 'kkkk'], { L: OBSERVER[3]!, k: 0x141416 }, x0, 4);
+    p.draw(['LLLLLLLL', 'kRkRkRkk', 'kkkkkkkk'], { L: OBSERVER[3]!, k: 0x141416, R: 0x5a1410 }, 4, 10);
+  } else if (part === 'back' || part === 'back_on') {
+    const on = part === 'back_on', DOT = on ? [0xa81410, 0xf0341e, 0xff8a60, 0xffe0c0] : [0x2a0806, 0x3e0c08, 0x561410, 0x6a1c16];
+    p.rect(4, 4, 8, 8, (x, y) => x === 4 || y === 4 ? OBSERVER[0]! : x === 11 || y === 11 ? OBSERVER[5]! : 0x1c1c20);
+    p.rect(6, 6, 4, 4, (x, y) => pick(DOT, 0.9 - Math.hypot(x - 6.8, y - 6.8) / 3.5));
+    if (on) for (const [x, y] of [[5, 7], [7, 5], [10, 8], [8, 10]] as const) p.set(x, y, 0x8a2010);
+  } else if (part === 'side') {
+    for (let x = 1; x < 15; x++) { p.set(x, 7, 0x1c1c20); p.set(x, 8, x % 3 ? 0x4a0c08 : 0x7a1410); p.set(x, 9, OBSERVER[5]!); }
+  } else {
+    p.draw(['...d...', '..dld..', '.dl.ld.', 'dl...ld', '...l...', '...l...', '...l...', '...l...'], { d: 0x1c1c20, l: OBSERVER[5]! }, 4, 3);
+  }
+}
+
+/** Daylight detector: sensor cells in a quartz grid on top (deep blue when inverted); the side is an oak rim. */
+function daylightTop(p: Pix, inverted: boolean) {
+  const CELL = inverted ? [0x141a3a, 0x1e2852, 0x2c3a6e, 0x40528c, 0x6a7ab4] : [0x2e4a70, 0x3e6290, 0x527eae, 0x74a2cc, 0xb4d6ee];
+  p.fill((x, y) => {
+    if (x === 0 || y === 0 || x === 15 || y === 15) return QUARTZ[x === 0 || y === 0 ? 5 : 1]!;
+    if (x % 5 === 0 || y % 5 === 0) return QUARTZ[x % 5 === 0 && y % 5 === 0 ? 0 : 3]!;
+    const u = x % 5, v = y % 5;
+    return pick(CELL, 0.75 - (u + v) * 0.09 + (hash(x, y, 681) - 0.5) * 0.2 + (u === 1 && v === 1 ? 0.4 : 0));
+  });
+}
+function daylightSide(p: Pix) {
+  planks(p, OAK, 682);
+  for (let x = 0; x < 16; x++) { p.set(x, 10, QUARTZ[4]!); p.set(x, 11, QUARTZ[1]!); p.set(x, 15, OAK[0]!); }
+}
+
+/** Purpur: lilac stone in four bevelled 8×8 tiles; the pillar has vertical ribs and a squared ring top. */
+const PURPUR = [0x6e4e72, 0x7e5a84, 0x8e6896, 0x9e78a6, 0xae88b4, 0xc09ec4];
+function purpur(p: Pix, part: 'block' | 'pillar' | 'pillar_top') {
+  p.fill((x, y) => {
+    const n = (hash(x, y, 691) - 0.5) * 0.22 + (tnoise(x, y, 692, 4) - 0.5) * 0.2;
+    if (part === 'pillar') return pick(PURPUR, (x % 5 === 0 ? 0.9 : x % 5 === 4 ? 0.15 : 0.55) + n);
+    const u = part === 'block' ? x & 7 : x, v = part === 'block' ? y & 7 : y, max = part === 'block' ? 7 : 15;
+    if (part === 'pillar_top') { const ring = floor(Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5))); return pick(PURPUR, (ring % 3 === 0 ? 0.2 : ring % 3 === 1 ? 0.85 : 0.55) + n); }
+    return pick(PURPUR, (u === 0 || v === 0 ? 0.9 : u === max || v === max ? 0.1 : 0.55) + n);
+  });
+}
+
+/** Chiseled stone bricks: a framed slab with a carved ring in the middle. */
+function chiseledStoneBricks(p: Pix) {
+  grain(p, STONE, 701, 4, 0.5);
+  for (let i = 0; i < 16; i++) { p.set(i, 0, STONE[5]!); p.set(0, i, STONE[5]!); p.set(i, 15, MORTAR); p.set(15, i, MORTAR); p.set(i, 14, STONE[1]!); p.set(14, i, STONE[1]!); }
+  p.fill((x, y) => {
+    const d = Math.hypot(x - 7, y - 7);
+    return d > 4.4 && d < 5.4 ? (x + y < 14 ? STONE[0]! : STONE[5]!) : d < 1.6 ? STONE[1]! : d > 2.4 && d < 3.2 ? (x + y < 14 ? STONE[5]! : STONE[0]!) : null;
+  });
+}
+
+/** Nether wart: maroon warty stalks that swell with each stage. */
+function netherWart(p: Pix, stage: number) {
+  const WART = [0x3e080c, 0x5e1014, 0x7e1a1c, 0x9e2626, 0xbe3a34, 0xdc5e4e], r = rng(711);
+  for (const x0 of [3, 8, 12]) {
+    const height = 3 + stage * 3 + floor(r() * 2), lean = r() < 0.5 ? -1 : 1;
+    for (let k = 0; k < height; k++) p.put(x0 + (k > height * 0.6 ? lean : 0), 15 - k, pick(WART, 0.2 + k / height * 0.3));
+    const bulbs = 1 + stage, top = 15 - height, cx = x0 + (height > 4 ? lean : 0);
+    for (let b = 0; b < bulbs; b++) {
+      const bx = cx + [0, -2, 2, -1][b]!, by = top + [0, 2, 3, 5][b]!, rad = stage >= 2 && b < 2 ? 1.6 : 1.1;
+      for (let y = floor(by - rad); y <= by + rad; y++) for (let x = floor(bx - rad); x <= bx + rad; x++) {
+        const d = Math.hypot(x - bx, y - by);
+        if (d <= rad) p.put(x, y, pick(WART, 0.9 - d / (rad + 1) * 0.6 - (x - bx + y - by) * 0.12));
+      }
+    }
+  }
+}
+
+const SOUL_FLAME = { W: 0xe8ffff, Y: 0x7ef0ff, O: 0x28c0e0, R: 0x1a7a9a, C: 0x0e3a4a };
+
 function missing(p: Pix) { p.fill((x, y) => ((x >> 2) + (y >> 2)) & 1 ? 0xff00ff : 0x101010); }
 /** A lightly noised flat colour (from the key's hash) for texture keys without a painter. */
 function placeholder(key: string): Painter {
@@ -1036,10 +1228,24 @@ const PAINTERS: Record<string, Painter> = {
   piston_side: p => piston(p, 'side'), piston_top: p => piston(p, 'top'), piston_top_sticky: p => piston(p, 'sticky'), piston_bottom: p => piston(p, 'bottom'), piston_inner: p => piston(p, 'inner'),
   iron_door_top: p => ironDoor(p, true), iron_door_bottom: p => ironDoor(p, false),
   tnt_side: p => tnt(p, 'side'), tnt_top: p => tnt(p, 'top'), tnt_bottom: p => tnt(p, 'bottom'),
+  // Endgame.
+  end_stone: endStone, end_stone_bricks: p => bricks(p, END_STONE, [0x8a8a5a, 0x9a9966], 721),
+  cracked_end_stone_bricks: p => { bricks(p, END_STONE, [0x8a8a5a, 0x9a9966], 721); cracks(p, 722, [[3, 0, 6], [11, 6, 9], [6, 9, 5]], 0x6e6e46, END_STONE[5]!); },
+  end_portal_frame_side: p => endFrame(p, 'side'), end_portal_frame_top: p => endFrame(p, 'top'), end_portal_frame_top_eye: p => endFrame(p, 'top_eye'),
+  end_portal_frame_eye: frameEye, end_portal: endPortal, end_sky: endSky, dragon_egg: dragonEgg, iron_bars: ironBars,
+  quartz_pillar: p => quartzPillar(p, false), quartz_pillar_top: p => quartzPillar(p, true),
+  chiseled_quartz_block: p => chiseledQuartz(p, false), chiseled_quartz_block_top: p => chiseledQuartz(p, true),
+  quartz_bricks: p => bricks(p, QUARTZ.slice(1), [QUARTZ[0]!, 0xb8ada2], 723),
+  observer_front: p => observer(p, 'front'), observer_back: p => observer(p, 'back'), observer_back_on: p => observer(p, 'back_on'),
+  observer_side: p => observer(p, 'side'), observer_top: p => observer(p, 'top'),
+  daylight_detector_top: p => daylightTop(p, false), daylight_detector_inverted_top: p => daylightTop(p, true), daylight_detector_side: daylightSide,
+  purpur_block: p => purpur(p, 'block'), purpur_pillar: p => purpur(p, 'pillar'), purpur_pillar_top: p => purpur(p, 'pillar_top'),
+  chiseled_stone_bricks: chiseledStoneBricks, soul_torch: p => torch(p, SOUL_FLAME), soul_lantern: p => lantern(p, SOUL_GLOW),
   missing,
 };
 for (const [key, color] of Object.entries(WOOL)) PAINTERS[key] = p => wool(p, color);
 for (let s = 0; s < 8; s++) PAINTERS[`wheat_stage${s}`] = p => wheat(p, s);
+for (let s = 0; s < 4; s++) PAINTERS[`nether_wart_stage${s}`] = p => netherWart(p, s);
 for (let s = 0; s < 4; s++) {
   PAINTERS[`carrots_stage${s}`] = p => rootCrop(p, s, 0xf08a1c, 0xb85c0c);
   PAINTERS[`potatoes_stage${s}`] = p => rootCrop(p, s, 0xd8b064, 0xa07a3a);

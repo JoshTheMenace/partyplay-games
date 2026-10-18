@@ -10,7 +10,7 @@ import { addItem, removeItem } from '../shared/inventory';
 import { hash3 } from '../shared/noise';
 import { MOB, MOB_TYPES, type Screen, type TradeOffer } from '../shared/protocol';
 import { villagesNear, type Village } from '../shared/structures/index';
-import { offersFor, PROFESSIONS } from '../shared/trades';
+import { offersFor, professionAt } from '../shared/trades';
 import { openScreen } from './containers';
 import { cellOf, computePath, followPath, lineOfSight, newMob, SPEED } from './mobs';
 import { MAX_SAVED_VILLAGERS } from './save';
@@ -40,7 +40,7 @@ export function spawnVillagers(state: State, cx: number, cz: number, villages: r
     const [bx, by, bz] = bed, living = state.mobs.filter(isVillager);
     if (bx >> 4 !== cx || bz >> 4 !== cz || living.length >= MAX_SAVED_VILLAGERS || living.some(m => m.home?.every((v, i) => v === bed[i]))) continue;
     const [x, y, z] = standNear(state, [bx + 0.5, by, bz + 0.5], 1);
-    const mob = Object.assign(newMob(state, MOB.villager, x, y, z), { p: hash3(seed, bx, by, bz) % PROFESSIONS.length, home: [bx, by, bz] as Vec3, seed: hash3(seed + 1, bx, by, bz) >>> 1 });
+    const mob = Object.assign(newMob(state, MOB.villager, x, y, z), { p: professionAt(seed, village, bed), home: [bx, by, bz] as Vec3, seed: hash3(seed + 1, bx, by, bz) >>> 1 });
     state.mobs.push(mob);
     state.villages.centres.set(mob.id, village.center);
   }

@@ -6,9 +6,9 @@ import { B, blockOf, cellId, cellState, DOOR_OPEN, isLiquid } from '../../shared
 import type { CellReader } from '../../shared/chunk';
 import { FACES, type Vec3 } from '../../shared/coords';
 import { armorOf, I, itemOf } from '../../shared/items';
-import { breakTime } from '../../shared/mining';
+import { breakTime, isBreakable } from '../../shared/mining';
 import { eyeInWater, type Body, bodyBox } from '../../shared/physics';
-import { EAT_SECONDS, placementFor } from '../../shared/placement';
+import { EAT_SECONDS, isThrown, placementFor } from '../../shared/placement';
 import type { Mode } from '../../shared/protocol';
 import { raycastBlocks } from '../../shared/raycast';
 import type { Target } from '../store';
@@ -20,7 +20,7 @@ import type { EditOverlay } from './overlay';
 import type { Particles } from './particles';
 import { sendCommand } from './predict';
 import type { Rect } from './sprites';
-import { blockUse, breakWrites, doorToggle, holdUse, useWrites, writesHitBodies } from './targeting';
+import { blockUse, breakWrites, doorToggle, holdUse, useWrites, writesHitBodies, type Aim } from './targeting';
 
 export type InteractContext = {
   getCell: CellReader; overlay: EditOverlay; sfx: Sfx; particles: Particles; hand: Hand;
@@ -31,7 +31,7 @@ export type InteractContext = {
   /** Remember a predicted edit so the matching server effect is not played twice. */
   predicted(x: number, y: number, z: number): void;
 };
-export type Frame = { dt: number; mode: Mode; body: Body; yaw: number; pitch: number; eye: Vec3; dir: Vec3; target: Target | null; held: number; slot: number; food: number; hasArrows: boolean };
+export type Frame = { dt: number; mode: Mode; body: Body; yaw: number; pitch: number; eye: Vec3; dir: Vec3; target: Aim | null; held: number; slot: number; food: number; hasArrows: boolean };
 
 const CREATIVE_BREAK = 0.22, SURVIVAL_BREAK_PAUSE = 0.15, PLACE_REPEAT = 0.22, ATTACK_REPEAT = 0.45, HIT_SOUND = 0.25;
 
@@ -87,7 +87,7 @@ export class Interaction {
     if (t?.kind === 'mob') {
       this.stopMining();
       if (input.minePressed || this.attackWait <= 0) {
-        sendCommand({ t: 'attack', id: t.id });
+        sendCommand(t.part === undefined ? { t: 'attack', id: t.id } : { t: 'attack', id: t.id, part: t.part });
         this.swing();
         this.attackWait = ATTACK_REPEAT;
         // Falling hits are critical in MC: show the sparks.
@@ -118,6 +118,7 @@ export class Interaction {
     }
     if (this.breakWait > 0) return;
     if (f.mode === 'creative') {
+      if (!isBreakable(t.cell, true)) return;
       this.breakBlock(t.x, t.y, t.z, t.cell);
       this.breakWait = CREATIVE_BREAK;
       return;
@@ -163,7 +164,8 @@ export class Interaction {
         return;
       }
     }
-    if (t?.kind === 'mob') {
+    // Pearls and eyes throw even when the crosshair is on a mob (escaping an enderman, aiming past a crystal).
+    if (t?.kind === 'mob' && !isThrown(f.held)) {
       if (pressed) { sendCommand({ t: 'interact', id: t.id }); this.swing(); }
       this.placeWait = PLACE_REPEAT;
       return;
@@ -183,12 +185,22 @@ export class Interaction {
         return;
       }
       if (kind) {
-        // Redstone controls toggle once per click, like doors.
-        if ((kind === 'lever' || kind === 'button' || kind === 'repeater') && !pressed) return;
+        // Redstone controls toggle once per click, like doors; eyes and crystals go in one per click.
+        if ((kind === 'lever' || kind === 'button' || kind === 'repeater' || kind === 'daylight' || kind === 'eye' || kind === 'crystal') && !pressed) return;
         this.useBlock(f, t, kind);
         return;
       }
       if (this.place(f, t)) return;
+    }
+    if (isThrown(f.held)) {
+      // Ender pearls and eyes fly from the hand; the server launches them (and keeps the pearl's cooldown).
+      if (pressed) {
+        sendCommand({ t: 'useItem', slot: f.slot });
+        this.ctx.sfx.play('bow', { volume: 0.35, pitch: 0.7 });
+        this.swing();
+      }
+      this.placeWait = PLACE_REPEAT;
+      return;
     }
     const armor = armorOf(f.held);
     if (armor && pressed) {
@@ -215,7 +227,9 @@ export class Interaction {
     overlay.set(writes, n);
     for (const [x, y, z] of writes) this.ctx.predicted(x, y, z);
     if (kind === 'till' || kind === 'path') sfx.play('step-grass-1', { at: [t.x + 0.5, t.y + 1, t.z + 0.5] });
-    else if (kind === 'lever' || kind === 'button' || kind === 'repeater') sfx.synth('click', { at, pitch: kind === 'lever' ? 0.75 : 0.95, volume: 0.9 });
+    else if (kind === 'lever' || kind === 'button' || kind === 'repeater' || kind === 'daylight') sfx.synth('click', { at, pitch: kind === 'lever' ? 0.75 : 0.95, volume: 0.9 });
+    else if (kind === 'eye') sfx.synth('eye', { at });
+    else if (kind === 'crystal') sfx.play('impact-glass-1', { at, pitch: 0.8 });
     else if (kind === 'ignite' || kind === 'tnt') sfx.synth('scrape', { at, volume: 0.8 });
     else if (kind === 'bucket' && writes.length) {
       // Obsidian from water meeting lava hisses; everything else splashes.

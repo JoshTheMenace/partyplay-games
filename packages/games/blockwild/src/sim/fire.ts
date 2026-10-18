@@ -28,7 +28,7 @@ export const BURN_SECONDS = { lava: 15, fire: 8, fireball: 5, daylight: 8 } as c
 /** Fire on these never burns out. */
 const ETERNAL = new Set<number>([B.netherrack, B.magma_block]);
 /** Nether mobs ignore fire and lava; primed TNT is an object. */
-const fireproof = (mob: Mob) => mob.t === MOB.zombified_piglin || mob.t === MOB.ghast || MOB_TYPES[mob.t]!.kind === 'object';
+const fireproof = (mob: Mob) => mob.t === MOB.zombified_piglin || mob.t === MOB.ghast || mob.t === MOB.blaze || MOB_TYPES[mob.t]!.kind === 'object';
 const burnout = (state: State) => state.clock + 2 + state.rand() * 4;
 
 /** Called after every cell write and for each saved edit on load, like portals.onBlockChanged: track fire cells. */

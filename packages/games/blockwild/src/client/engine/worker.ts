@@ -10,7 +10,7 @@ import { cellXYZ, chunkFromKey, chunkKey, localIndex } from '../../shared/coords
 import { generateChunk } from '../../shared/worldgen';
 import { computeLight, extractCoreLight, extractVolume, fillRegion, newRegion, newVolume, type Volume } from './light';
 import { joinLayers, Mesher } from './mesher';
-import { EMIT, FILTER_CELL } from './tables';
+import { EMIT_CELL, FILTER_CELL } from './tables';
 import type { ColumnUpdate, FromWorker, Layers, ToWorker } from './types';
 
 const SECTIONS = HEIGHT / CHUNK;
@@ -105,7 +105,7 @@ function applyEdits() {
     echo.push(index, final);
     const chunk = cells.get(key), old = chunk?.[local];
     if (old === final) continue;
-    lighting ||= old === undefined || FILTER_CELL[old] !== FILTER_CELL[final] || EMIT[old & 255] !== EMIT[final & 255];
+    lighting ||= old === undefined || FILTER_CELL[old] !== FILTER_CELL[final] || EMIT_CELL[old] !== EMIT_CELL[final];
     if (chunk) chunk[local] = final;
     changed.push(x, y, z);
   }

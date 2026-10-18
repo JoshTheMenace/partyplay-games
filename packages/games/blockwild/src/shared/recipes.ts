@@ -97,6 +97,25 @@ shaped(B.sandstone_stairs, 4, ['X  ', 'XX ', 'XXX'], { X: B.sandstone });
 shaped(B.sandstone_slab, 6, ['XXX'], { X: B.sandstone });
 shapeless(B.mossy_stone_bricks, 1, [B.stone_bricks, B.short_grass]);
 shaped(B.oak_fence, 3, ['P#P', 'P#P'], { P: PLANKS, '#': I.stick });
+// Endgame: fortress, stronghold and End blocks, quartz building.
+shaped(B.nether_brick_fence, 6, ['B#B', 'B#B'], { B: B.nether_bricks, '#': I.nether_brick });
+shaped(B.nether_brick_stairs, 4, ['X  ', 'XX ', 'XXX'], { X: B.nether_bricks });
+shaped(B.nether_brick_slab, 6, ['XXX'], { X: B.nether_bricks });
+shaped(B.end_stone_bricks, 4, ['XX', 'XX'], { X: B.end_stone });
+shaped(B.purpur_block, 8, ['XXX', 'XPX', 'XXX'], { X: B.end_stone_bricks, P: I.ender_pearl });
+shaped(B.purpur_pillar, 2, ['X', 'X'], { X: B.purpur_block });
+shaped(B.iron_bars, 16, ['III', 'III'], { I: I.iron_ingot });
+shaped(B.quartz_pillar, 2, ['X', 'X'], { X: B.quartz_block });
+shaped(B.chiseled_quartz_block, 1, ['X', 'X'], { X: B.quartz_slab });
+shaped(B.quartz_stairs, 4, ['X  ', 'XX ', 'XXX'], { X: B.quartz_block });
+shaped(B.quartz_slab, 6, ['XXX'], { X: B.quartz_block });
+shaped(B.quartz_bricks, 4, ['XX', 'XX'], { X: B.quartz_block });
+shaped(B.chiseled_stone_bricks, 1, ['X', 'X'], { X: B.stone_brick_slab });
+shaped(B.soul_torch, 4, ['C', '#', 'S'], { C: [I.coal, I.charcoal], '#': I.stick, S: B.soul_sand });
+shaped(B.soul_lantern, 1, ['NNN', 'NTN', 'NNN'], { N: I.iron_nugget, T: B.soul_torch });
+shapeless(I.blaze_powder, 2, [I.blaze_rod]);
+shapeless(I.ender_eye, 1, [I.blaze_powder, I.ender_pearl]);
+shaped(I.end_crystal, 1, ['GGG', 'GEG', 'GOG'], { G: B.glass, E: I.ender_eye, O: B.obsidian });
 // Armor and combat.
 ARMOR_MATERIALS.forEach((material, m) => {
   const X = [I.leather, I.gold_ingot, I.iron_ingot, I.diamond][m]!;
@@ -114,6 +133,8 @@ shaped(B.stone_pressure_plate, 1, ['XX'], { X: B.stone });
 shaped(B.oak_pressure_plate, 1, ['XX'], { X: PLANKS });
 shaped(I.repeater, 1, ['TRT', 'SSS'], { T: B.redstone_torch, R: I.redstone, S: B.stone });
 shaped(B.redstone_lamp, 1, [' R ', 'RGR', ' R '], { R: I.redstone, G: B.glowstone });
+shaped(B.observer, 1, ['CCC', 'RRQ', 'CCC'], { C: B.cobblestone, R: I.redstone, Q: I.quartz });
+shaped(B.daylight_detector, 1, ['GGG', 'QQQ', 'SSS'], { G: B.glass, Q: I.quartz, S: B.oak_slab });
 shaped(B.piston, 1, ['PPP', 'CIC', 'CRC'], { P: PLANKS, C: B.cobblestone, I: I.iron_ingot, R: I.redstone });
 shapeless(B.sticky_piston, 1, [B.piston, I.string, I.string]);
 shaped(I.iron_door, 3, ['XX', 'XX', 'XX'], { X: I.iron_ingot });

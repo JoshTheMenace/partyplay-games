@@ -272,6 +272,8 @@ test('every entity has an animatable rig and every visible item a 3D model, with
   const library = new ModelLibrary(), wanted: Record<string, string[]> = {
     humanoid: ['head', 'body', 'arm_l', 'arm_r', 'leg_l', 'leg_r'], creeper: ['head', 'leg_fl', 'leg_br'], quadruped: ['head', 'leg_fl', 'leg_br'],
     spider: ['head', 'leg_0', 'leg_7'], chicken: ['head', 'leg_l', 'arm_r'], ghast: ['head', 'leg_0', 'leg_8', 'face_idle', 'face_shoot'], block: ['body'],
+    blaze: ['head', 'rods_ring_0', 'rods_ring_2'], enderman: ['head', 'jaw', 'arm_l', 'leg_r'], silverfish: ['seg_0', 'seg_3'],
+    dragon: ['body', 'head', 'jaw', 'neck_0', 'neck_4', 'tail_0', 'tail_9', 'wing_l', 'wingtip_r'], crystal: ['frame_outer', 'frame_inner', 'core'],
   };
   for (const key of Object.keys(RIG_KIND) as ModelKey[]) {
     const rig = library.instance(key);

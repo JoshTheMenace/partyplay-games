@@ -15,5 +15,7 @@ export type HudState = {
   loading: boolean;
   /** Worn armor (head, chest, legs, feet) with pending clicks predicted, like `screen`. */
   armor: (Slot | null)[];
+  /** The watching display: the id of the player its spectator camera follows (null when nobody is in shot). */
+  focus: string | null;
 };
-export const hud = createStore<HudState>({ hurt: 0, underwater: false, using: 0, screen: null, loading: false, armor: [null, null, null, null] });
+export const hud = createStore<HudState>({ hurt: 0, underwater: false, using: 0, screen: null, loading: false, armor: [null, null, null, null], focus: null });

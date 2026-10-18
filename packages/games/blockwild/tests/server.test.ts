@@ -382,11 +382,14 @@ test('hostile mobs spawn at night in the dark, never by day or in torchlight', (
     const state = game();
     state.time = time;
     if (torches) for (let dx = -60; dx <= 60; dx += 10) for (let dz = -60; dz <= 60; dz += 10) writeCell(state, X + dx, 64, Z + dz, B.torch);
+    // The most seen at once: far hostiles randomly despawn, so the count at any one moment wobbles.
+    let most = 0;
     for (let i = 0; i < 400; i++) {
       state.time = time;
       run(state);
+      most = Math.max(most, state.mobs.filter(mob => mob.t <= MOB.creeper).length);
     }
-    return state.mobs.filter(mob => mob.t <= MOB.creeper).length;
+    return most;
   };
   assert.equal(spawnFor(6000, false), 0);
   assert.ok(spawnFor(16000, false) >= 5);
@@ -608,9 +611,13 @@ test('spawn and respawn protection: no damage, ignored by monsters, reported in 
   run(state, {}, 60);
   assert.equal(player.health, 20, 'the zombie ignores a protected player');
   assert.equal(zombie.target, null);
-  run(state, {}, 100);
+  let lowest = 20;
+  for (let i = 0; i < 100; i++) {
+    run(state);
+    lowest = Math.min(lowest, player.health);
+  }
   assert.equal('protectedTicks' in playerView(state, 'p0'), false, 'omitted once protection ends');
-  assert.ok(player.health < 20, 'then monsters attack');
+  assert.ok(lowest < 20, 'then monsters attack (well-fed players heal quickly, so watch every tick)');
   damagePlayer(state, player, 50, 'fell');
   const camper = newMob(state, MOB.skeleton, state.spawn[0] + 6, 64, state.spawn[2]), far = newMob(state, MOB.zombie, state.spawn[0] + 30, 64, state.spawn[2]);
   state.mobs.push(camper, far);

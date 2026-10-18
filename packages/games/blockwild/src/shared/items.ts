@@ -46,21 +46,23 @@ function add(key: ItemName, category: ItemCategory, props: Partial<Omit<ItemDef,
 
 // Block items 1..255 share their block id.
 const HIDDEN = new Set<number>([B.water, B.furnace_lit, B.wheat, B.carrots, B.potatoes, B.farmland, B.bed, B.oak_door, B.sugar_cane,
-  B.lava, B.nether_portal, B.fire, B.redstone_wire, B.redstone_torch_off, B.redstone_lamp_lit, B.repeater, B.piston_head, B.iron_door]);
+  B.lava, B.nether_portal, B.fire, B.redstone_wire, B.redstone_torch_off, B.redstone_lamp_lit, B.repeater, B.piston_head, B.iron_door, B.nether_wart, B.end_portal]);
 const NATURE = new Set<number>([B.grass_block, B.dirt, B.sand, B.gravel, B.stone, B.oak_log, B.birch_log, B.spruce_log, B.oak_leaves, B.birch_leaves, B.spruce_leaves,
   B.coal_ore, B.iron_ore, B.gold_ore, B.diamond_ore, B.snow_block, B.snowy_grass, B.ice, B.cactus, B.clay, B.short_grass, B.fern, B.dandelion, B.poppy, B.cornflower,
   B.dead_bush, B.oak_sapling, B.birch_sapling, B.spruce_sapling, B.pumpkin, B.melon, B.bedrock, B.obsidian, B.red_mushroom, B.brown_mushroom, B.emerald_ore, B.redstone_ore, B.dirt_path]);
-const DECORATION = new Set<number>([B.crafting_table, B.furnace, B.chest, B.torch, B.ladder, B.lantern, B.bookshelf, B.jack_o_lantern, B.oak_fence, B.cobweb, B.monster_spawner]);
-const NETHER_BLOCKS = new Set<number>([B.netherrack, B.soul_sand, B.glowstone, B.nether_quartz_ore, B.nether_gold_ore, B.magma_block, B.nether_bricks, B.quartz_block]);
+const DECORATION = new Set<number>([B.crafting_table, B.furnace, B.chest, B.torch, B.ladder, B.lantern, B.bookshelf, B.jack_o_lantern, B.oak_fence, B.cobweb, B.monster_spawner,
+  B.iron_bars, B.soul_torch, B.soul_lantern, B.end_portal_frame, B.dragon_egg]);
+const NETHER_BLOCKS = new Set<number>([B.netherrack, B.soul_sand, B.glowstone, B.nether_quartz_ore, B.nether_gold_ore, B.magma_block, B.nether_bricks, B.quartz_block,
+  B.nether_brick_fence, B.nether_brick_stairs, B.nether_brick_slab]);
 const REDSTONE_BLOCKS = new Set<number>([B.redstone_torch, B.lever, B.stone_button, B.oak_button, B.stone_pressure_plate, B.oak_pressure_plate, B.redstone_lamp,
-  B.piston, B.sticky_piston, B.tnt, B.redstone_block]);
+  B.piston, B.sticky_piston, B.tnt, B.redstone_block, B.observer, B.daylight_detector]);
 const blockCategory = (id: number): ItemCategory =>
   NATURE.has(id) ? 'nature' : DECORATION.has(id) ? 'decoration' : NETHER_BLOCKS.has(id) ? 'nether' : REDSTONE_BLOCKS.has(id) ? 'redstone' : 'building';
 /** Furnace burn seconds for block items (MC values). */
 const BLOCK_FUEL = new Map<number, number>([
   ...[B.oak_planks, B.birch_planks, B.spruce_planks, B.oak_log, B.birch_log, B.spruce_log, B.crafting_table, B.chest, B.bookshelf, B.ladder, B.oak_stairs].map(id => [id, 15] as const),
   ...[B.oak_sapling, B.birch_sapling, B.spruce_sapling, B.white_wool, B.red_wool, B.yellow_wool, B.blue_wool, B.green_wool, B.black_wool].map(id => [id, 5] as const),
-  [B.oak_slab, 7.5], [B.coal_block, 800], [B.oak_fence, 15], [B.oak_pressure_plate, 15], [B.oak_button, 5],
+  [B.oak_slab, 7.5], [B.coal_block, 800], [B.oak_fence, 15], [B.oak_pressure_plate, 15], [B.oak_button, 5], [B.daylight_detector, 15],
 ]);
 for (const block of BLOCK_LIST) {
   if (block.id === B.air) continue;
@@ -93,6 +95,12 @@ add('lava_bucket', 'tools', { stack: 1, fuel: 1000 });
 add('redstone', 'redstone', { places: B.redstone_wire });
 add('repeater', 'redstone', { places: B.repeater, name: 'Redstone Repeater' });
 add('iron_door', 'redstone', { places: B.iron_door });
+add('blaze_rod', 'materials', { fuel: 120 });
+add('blaze_powder', 'materials');
+add('ender_pearl', 'tools', { stack: 16 });
+add('ender_eye', 'tools', { name: 'Eye of Ender' });
+add('nether_wart', 'nether', { places: B.nether_wart });
+add('end_crystal', 'combat');
 
 const FOODS: [ItemName, number, number][] = [
   ['bread', 5, 6], ['apple', 4, 2.4], ['golden_apple', 4, 9.6], ['carrot', 3, 3.6], ['potato', 1, 0.6], ['baked_potato', 5, 6], ['melon_slice', 2, 1.2],
@@ -160,6 +168,8 @@ export function itemForBlock(blockId: number): number {
     case B.repeater: return I.repeater;
     case B.piston_head: return B.piston;
     case B.iron_door: return I.iron_door;
+    case B.nether_wart: return I.nether_wart;
+    case B.end_portal: return I.ender_eye;
     default: return blockId;
   }
 }

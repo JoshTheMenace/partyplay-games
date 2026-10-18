@@ -1,19 +1,19 @@
 /**
- * World saves (format version 9). Edits are packed little-endian
+ * World saves (format version 10; version 9 still loads). Edits are packed little-endian
  * (uint32 cell index, uint16 value) and base64 encoded; slots are compact [index, id, n, d?] tuples. `parseSave`
  * validates everything and throws a readable message.
  */
 import { B, BLOCKS, cellId } from '../shared/blocks';
-import { CHEST_SIZE, DAY_TICKS, EDIT_LIMIT, HEIGHT, INVENTORY_SIZE, MAX_FOOD, MAX_HEALTH, WORLD } from '../shared/constants';
-import { isCellIndex, type Vec3 } from '../shared/coords';
+import { CHEST_SIZE, DAY_TICKS, EDIT_LIMIT, HEIGHT, inEnd, INVENTORY_SIZE, MAX_FOOD, MAX_HEALTH, WORLD } from '../shared/constants';
+import { cellXYZ, isCellIndex, type Vec3 } from '../shared/coords';
 import { emptySlots } from '../shared/inventory';
 import { armorOf, durabilityOf, isItem, maxStack, type Slot } from '../shared/items';
-import { MOB_TYPES, MS, q2, q3, validateSettings, type Settings, type Stats } from '../shared/protocol';
+import { MOB_TYPES, MS, q2, q3, validateSettings, type Settings, type Stats, type Victory } from '../shared/protocol';
 import { PROFESSIONS } from '../shared/trades';
 import { MAX_CHESTS, MAX_FURNACES } from './containers';
 import type { Furnace, PlayerStats, SavedPlayerState } from './state';
 
-export const SAVE_VERSION = 9;
+export const SAVE_VERSION = 10;
 /**
  * Oldest version that still loads. Edits only record differences from generated terrain, so a world saved before the
  * expansion generator (version 8) would silently grow lava caves and structures through its builds: it is refused.
@@ -23,6 +23,8 @@ export const OLD_SAVE_MESSAGE = 'This world was made with the previous version o
 const MAX_SAVED_PLAYERS = 24, MAX_SAVED_ANIMALS = 48, CHUNK_BITS = (WORLD / 16) ** 2;
 export const MAX_SAVED_VILLAGERS = 64;
 const MAX_OFFERS = 8;
+/** The End (save v10): ten obsidian pillars (0..9) can hold a crystal; the dragon has 200 health. */
+export const END_PILLARS = 10, DRAGON_HEALTH = 200;
 
 /** [slot index, item id, count] or [slot index, item id, count, damage]. */
 export type SlotTuple = [number, number, number] | [number, number, number, number];
@@ -41,20 +43,26 @@ export type SavedAnimal = { t: number; x: number; y: number; z: number; s: numbe
 export type SavedVillager = { x: number; y: number; z: number; p: number; home?: Vec3; uses: number[]; seed: number };
 /** A villager in live shapes (home null when it has none). */
 export type VillagerState = Omit<SavedVillager, 'home'> & { home: Vec3 | null };
+/** The End's progress (v10): the dragon's life and health, pillars (0..9) that still hold crystals, the exit portal and the egg. */
+export type SavedEnd = { dragon: 'alive' | 'dead'; health: number; crystals: number[]; portalActive: boolean; egg: boolean };
 export type SaveData = {
-  format: 'blockwild'; version: 9; seed: number;
+  format: 'blockwild'; version: 10; seed: number;
   /** Stable world identity (derived from the seed when missing). */
   worldId: string; mode: Settings['mode']; difficulty: Settings['difficulty']; keepInventory: boolean;
   time: number; day: number; edits: string;
   players: SavedPlayer[]; chests: { i: number; slots: SlotTuple[] }[]; furnaces: SavedFurnace[]; animals: SavedAnimal[]; villagers: SavedVillager[];
   /** Base64 bitset of chunks whose animals were already rolled (so loading does not repopulate them). */
   populated: string; stats: Stats;
+  /** v10: the End, the victory (null until the dragon dies) and the ender pearl pity counter. */
+  end: SavedEnd; victory: Victory | null; pearlPity: number;
 };
 /** Validated save contents in live-state shapes. */
 export type ParsedSave = {
   settings: Settings; worldId: string; time: number; day: number; edits: Map<number, number>;
   players: SavedPlayerState[];
   chests: Map<number, (Slot | null)[]>; furnaces: Map<number, Furnace>; animals: SavedAnimal[]; villagers: VillagerState[]; populated: Set<number>; stats: Stats;
+  /** Absent in version 9 saves (a fresh End). */
+  end?: SavedEnd; victory: Victory | null; pearlPity: number;
 };
 /** What exportSave reads from the live state (kept structural so this module stays independent of the tick code). */
 export type SaveSource = {
@@ -63,6 +71,8 @@ export type SaveSource = {
   players: readonly (SavedPlayerState & { dead?: boolean })[];
   chests: ReadonlyMap<number, readonly (Slot | null)[]>; furnaces: ReadonlyMap<number, Furnace>;
   animals: readonly SavedAnimal[]; villagers: readonly VillagerState[]; populated: ReadonlySet<number>; stats: Stats;
+  /** Absent: a fresh End, no victory, no pity. */
+  end?: SavedEnd; victory?: Victory | null; pearlPity?: number;
 };
 
 const toBase64 = (bytes: Uint8Array) => Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('base64');
@@ -119,8 +129,14 @@ export function exportSave(source: SaveSource): SaveData {
       return saved;
     }),
     populated: packBits(source.populated), stats: { ...source.stats },
+    end: source.end ? endRecord(source.end) : freshEnd(),
+    victory: source.victory ? { ...source.victory, by: [...source.victory.by] } : null, pearlPity: source.pearlPity ?? 0,
   };
 }
+/** Only the saved fields (the live End state carries runtime fields too). */
+const endRecord = ({ dragon, health, crystals, portalActive, egg }: SavedEnd): SavedEnd => ({ dragon, health: q2(health), crystals: [...crystals], portalActive, egg });
+/** A new world's End: the dragon alive at full health, a crystal on every pillar. */
+export const freshEnd = (): SavedEnd => ({ dragon: 'alive', health: DRAGON_HEALTH, crystals: Array.from({ length: END_PILLARS }, (_, i) => i), portalActive: false, egg: false });
 
 function invalid(what: string) { return new Error(`This Blockwild save is damaged (${what}).`); }
 const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -155,11 +171,12 @@ const vec3 = (value: unknown, what: string): Vec3 => {
   if (v.length !== 3) throw invalid(what);
   return [integer(v[0], 0, WORLD - 1, what), integer(v[1], 0, HEIGHT - 1, what), integer(v[2], 0, WORLD - 1, what)];
 };
-const STAT_KEYS = ['mined', 'placed', 'crafted', 'mobs', 'deaths', 'days'] as const;
+const STAT_KEYS = ['mined', 'placed', 'crafted', 'mobs', 'deaths', 'days', 'dragons'] as const;
 const PLAYER_STAT_KEYS = ['mined', 'placed', 'crafted', 'mobs', 'deaths', 'distance'] as const;
-function statsOf<K extends string>(value: unknown, keys: readonly K[]): Record<K, number> {
+/** Stat totals; keys missing from an older save (v9 has no `dragons`) count as 0. */
+function statsOf<K extends string>(value: unknown, keys: readonly K[], optional: readonly K[] = []): Record<K, number> {
   if (!isObject(value)) throw invalid('stats');
-  return Object.fromEntries(keys.map(key => [key, integer(value[key], 0, 1e12, 'stats')])) as Record<K, number>;
+  return Object.fromEntries(keys.map(key => [key, value[key] === undefined && optional.includes(key) ? 0 : integer(value[key], 0, 1e12, 'stats')])) as Record<K, number>;
 }
 /** A container cell is either an edit of that block or unedited (a worldgen chest or furnace; createState checks the terrain). */
 const placedOrGenerated = (edits: ReadonlyMap<number, number>, index: number, block: number) => !edits.has(index) || cellId(edits.get(index)!) === block;
@@ -174,14 +191,22 @@ export function parseSave(raw: unknown): ParsedSave {
   if (raw.worldId !== undefined && (typeof raw.worldId !== 'string' || !/^[a-z0-9-]{1,64}$/.test(raw.worldId))) throw invalid('settings');
   if (typeof raw.edits !== 'string' || typeof raw.populated !== 'string') throw invalid('edits');
   const edits = unpackEdits(raw.edits);
+  // Before v10 the End's corner was ordinary overworld: whatever was built or left there does not come along.
+  const legacy = raw.version < 10, stale = (x: number, z: number) => legacy && inEnd(x, z);
+  for (const index of legacy ? edits.keys() : []) {
+    const [x, , z] = cellXYZ(index);
+    if (inEnd(x, z)) edits.delete(index);
+  }
 
   const players = list(raw.players, MAX_SAVED_PLAYERS, 'players').map(value => {
     if (!isObject(value) || typeof value.name !== 'string' || value.name.length > 64) throw invalid('players');
+    // y −1 means "no usable spot" (saved falling through the void, or inside a pre-End save's End): they load at the world spawn.
+    const x = number(value.x, 0, WORLD, 'players'), z = number(value.z, 0, WORLD, 'players'), bed = value.spawn === null ? null : vec3(value.spawn, 'spawn');
     return {
-      name: value.name, x: number(value.x, 0, WORLD, 'players'), y: number(value.y, -64, HEIGHT + 64, 'players'), z: number(value.z, 0, WORLD, 'players'),
+      name: value.name, x, y: stale(x, z) ? -1 : Math.max(-1, Math.min(HEIGHT + 64, number(value.y, -1e6, 1e6, 'players'))), z,
       yaw: number(value.yaw, -10, 10, 'players'), pitch: number(value.pitch, -2, 2, 'players'),
       health: number(value.health, 0.5, MAX_HEALTH, 'players'), food: integer(value.food, 0, MAX_FOOD, 'players'), saturation: number(value.saturation, 0, MAX_FOOD, 'players'),
-      inv: slots(value.inv, INVENTORY_SIZE, 'inventory'), armor: armorSlots(value.armor), bed: value.spawn === null ? null : vec3(value.spawn, 'spawn'),
+      inv: slots(value.inv, INVENTORY_SIZE, 'inventory'), armor: armorSlots(value.armor), bed: bed && !stale(bed[0], bed[2]) ? bed : null,
       stats: statsOf(value.stats, PLAYER_STAT_KEYS), milestones: integer(value.milestones, 0, 2 ** 30, 'players'),
     };
   });
@@ -200,12 +225,12 @@ export function parseSave(raw: unknown): ParsedSave {
     const burnMax = number(value.burnMax, 0, 1000, 'furnaces');
     furnaces.set(i, { slots: slots(value.slots, 3, 'furnaces'), burn: number(value.burn, 0, burnMax, 'furnaces'), burnMax, cook: number(value.cook, 0, 10, 'furnaces') });
   }
-  const animals = list(raw.animals, MAX_SAVED_ANIMALS, 'animals').map(value => {
+  const animals = list(raw.animals, MAX_SAVED_ANIMALS, 'animals').map((value): SavedAnimal => {
     if (!isObject(value)) throw invalid('animals');
     const t = integer(value.t, 0, MOB_TYPES.length - 1, 'animals');
     if (MOB_TYPES[t]!.hostile) throw invalid('animals');
     return { t, x: number(value.x, 0, WORLD, 'animals'), y: number(value.y, 0, HEIGHT, 'animals'), z: number(value.z, 0, WORLD, 'animals'), s: integer(value.s, 0, MS.SHEARED | MS.BABY, 'animals') };
-  });
+  }).filter(a => !stale(a.x, a.z));
   const villagers = list(raw.villagers, MAX_SAVED_VILLAGERS, 'villagers').map((value): VillagerState => {
     if (!isObject(value)) throw invalid('villagers');
     return {
@@ -213,14 +238,32 @@ export function parseSave(raw: unknown): ParsedSave {
       home: value.home === undefined ? null : vec3(value.home, 'villagers'), uses: list(value.uses, MAX_OFFERS, 'villagers').map(n => integer(n, 0, 1e6, 'villagers')),
       seed: integer(value.seed, 0, 2 ** 31 - 1, 'villagers'),
     };
-  });
+  }).filter(v => !stale(v.x, v.z));
   const bits = fromBase64(raw.populated), populated = new Set<number>();
   if (bits.length !== CHUNK_BITS / 8) throw invalid('chunks');
   bits.forEach((byte, i) => { for (let b = 0; b < 8; b++) if (byte & (1 << b)) populated.add(i * 8 + b); });
   return {
     settings, worldId: typeof raw.worldId === 'string' ? raw.worldId : String(settings.seed), time: integer(raw.time, 0, DAY_TICKS - 1, 'time'), day: integer(raw.day, 0, 1e9, 'day'), edits,
-    players, chests, furnaces, animals, villagers, populated, stats: statsOf(raw.stats, STAT_KEYS),
+    players, chests, furnaces, animals, villagers, populated, stats: statsOf(raw.stats, STAT_KEYS, ['dragons']),
+    ...raw.version >= 10 ? { end: endOf(raw.end) } : {}, victory: raw.version >= 10 ? victoryOf(raw.victory) : null,
+    pearlPity: raw.version >= 10 ? integer(raw.pearlPity, 0, 1e6, 'pearls') : 0,
   };
+}
+
+function endOf(value: unknown): SavedEnd {
+  if (!isObject(value) || (value.dragon !== 'alive' && value.dragon !== 'dead') || typeof value.portalActive !== 'boolean' || typeof value.egg !== 'boolean') throw invalid('end');
+  const crystals = list(value.crystals, END_PILLARS, 'end').map(n => integer(n, 0, END_PILLARS - 1, 'end'));
+  if (new Set(crystals).size !== crystals.length) throw invalid('end');
+  return { dragon: value.dragon, health: number(value.health, 0, DRAGON_HEALTH, 'end'), crystals, portalActive: value.portalActive, egg: value.egg };
+}
+function victoryOf(value: unknown): Victory | null {
+  if (value === null) return null;
+  if (!isObject(value)) throw invalid('victory');
+  const by = list(value.by, MAX_SAVED_PLAYERS, 'victory').map(name => {
+    if (typeof name !== 'string' || name.length > 64) throw invalid('victory');
+    return name;
+  });
+  return { day: integer(value.day, 0, 1e9, 'victory'), tick: integer(value.tick, 0, DAY_TICKS - 1, 'victory'), by };
 }
 
 /** Worn armor from a saved player (absent before version 9); each piece must sit in its own slot. */

@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import { readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import test from 'node:test';
-import { ATLAS_KEYS, atlasPixels, createBlockAtlas, CRACK_STAGES, itemIcon, itemSprite, layerOf, MISSING_LAYER, texturePixels, TILE, WATER_FRAMES } from '../src/client/art/atlas';
+import { ATLAS_KEYS, atlasPixels, EXTRA_KEYS, createBlockAtlas, CRACK_STAGES, itemIcon, itemSprite, layerOf, MISSING_LAYER, texturePixels, TILE, WATER_FRAMES } from '../src/client/art/atlas';
 import { hasSprite } from '../src/client/art/sprites';
 import { hasTexture } from '../src/client/art/textures';
 import { BLOCK_LIST, faceTexture, makeCell, TEXTURE_KEYS } from '../src/shared/blocks';
 import { I, ITEM_LIST, TOOL_TIERS } from '../src/shared/items';
-import { MOB_TYPES } from '../src/shared/protocol';
-import { GHAST_TENTACLES, VILLAGER_MODELS } from '../src/client/art/models';
+import { DRAGON_PARTS, MOB_TYPES } from '../src/shared/protocol';
+import { BLAZE_RINGS, CRYSTAL_PARTS, DRAGON_NECK, DRAGON_TAIL, GHAST_TENTACLES, SILVERFISH_SEGMENTS, VILLAGER_MODELS } from '../src/client/art/models';
 
 const alphaCount = (px: Uint8Array, test: (a: number) => boolean) => { let n = 0; for (let i = 3; i < px.length; i += 4) if (test(px[i]!)) n++; return n; };
 
@@ -76,7 +76,7 @@ type Gltf = {
   nodes: { name?: string; translation?: number[]; children?: number[]; mesh?: number }[];
   meshes: { primitives: { attributes: { POSITION: number } }[] }[];
   accessors: { min?: number[]; max?: number[] }[];
-  images?: unknown[]; samplers?: { magFilter?: number }[]; materials?: { name?: string }[];
+  images?: unknown[]; samplers?: { magFilter?: number }[]; materials?: { name?: string; emissiveTexture?: unknown }[];
 };
 const MODELS = resolve(import.meta.dirname, '../../../../public/games/blockwild/models');
 const HUMANOID = ['head', 'body', 'arm_l', 'arm_r', 'leg_l', 'leg_r'], QUAD = ['head', 'body', 'leg_fl', 'leg_fr', 'leg_bl', 'leg_br'];
@@ -85,7 +85,11 @@ const REQUIRED: Record<string, string[]> = {
   chicken: HUMANOID, spider: ['head', 'body', ...Array.from({ length: 8 }, (_, i) => `leg_${i}`)],
   ...Object.fromEntries(VILLAGER_MODELS.map(key => [key, ['head', 'body', 'leg_l', 'leg_r', 'arms', 'nose']])),
   zombified_piglin: [...HUMANOID, 'item'], ghast: ['body', 'face_shoot', ...GHAST_TENTACLES], tnt: ['body'],
+  blaze: ['head', 'body', ...BLAZE_RINGS], enderman: [...HUMANOID, 'jaw'], silverfish: SILVERFISH_SEGMENTS, end_crystal: ['base', ...CRYSTAL_PARTS],
+  ender_dragon: ['body', 'head', 'jaw', ...DRAGON_NECK, ...DRAGON_TAIL, 'wing_l', 'wing_r', 'wingtip_l', 'wingtip_r', ...QUAD.slice(2)],
 };
+/** The dragon is the showpiece, with a bigger budget. */
+const BUDGET: Record<string, number> = { ender_dragon: 150 * 1024 };
 const mobKey = (key: string) => key.startsWith('villager') ? 'villager' : key;
 
 function readGlb(key: string): Gltf {
@@ -119,7 +123,7 @@ function layout(gltf: Gltf) {
 test('entity models exist, parse as GLB, carry the pivot nodes and fit the budget', () => {
   for (const [key, pivots] of Object.entries(REQUIRED)) {
     const size = statSync(`${MODELS}/${key}.glb`).size;
-    assert.ok(size <= 80 * 1024, `${key}.glb is ${size} bytes`);
+    assert.ok(size <= (BUDGET[key] ?? 80 * 1024), `${key}.glb is ${size} bytes`);
     const gltf = readGlb(key), names = new Set(gltf.nodes.map(n => n.name));
     for (const pivot of pivots) assert.ok(names.has(pivot), `${key} lacks node ${pivot}`);
     assert.ok((gltf.images?.length ?? 0) > 0, `${key} embeds its pixel-art texture`);
@@ -140,4 +144,32 @@ test('entity models exist, parse as GLB, carry the pivot nodes and fit the budge
   const sword = layout(readGlb('zombified_piglin')).origin, hand = sword.get('item')!, arm = sword.get('arm_r')!;
   assert.ok(hand[0] === arm[0] && hand[1]! < arm[1]!, 'the piglin sword sits in its right hand');
   assert.ok(readGlb('tnt').materials?.some(m => m.name === 'tnt'), 'primed TNT has a flashable tnt material');
+});
+
+test('endgame models: glowing eyes, see-through crystal frames and a dragon sized to its hit boxes', () => {
+  const materials = (key: string) => new Set(readGlb(key).materials?.map(m => m.name));
+  for (const key of ['enderman', 'ender_dragon']) assert.ok(materials(key).has('eyes'), `${key} has glowing 'eyes'`);
+  for (const [key, name] of [['blaze', 'glow'], ['end_crystal', 'glow'], ['end_crystal', 'crystal_glass'], ['ender_dragon', 'wing']] as const) assert.ok(materials(key).has(name), `${key} has '${name}'`);
+  assert.ok(readGlb('end_crystal').materials?.find(m => m.name === 'glow')?.emissiveTexture, 'glow materials are emissive');
+  const { origin } = layout(readGlb('ender_dragon')), at = (name: string) => origin.get(name)!;
+  // Model forward is -Z (DRAGON_PARTS 'at' is [forward, right, up] in blocks).
+  const part = (key: string) => DRAGON_PARTS.find(p => p.key === key)!.at;
+  assert.ok(Math.abs(-at('head')[2]! - part('head')[0]) < 2.5, `head ${-at('head')[2]!} m forward`);
+  assert.ok(at('tail_9')[2]! > -part('tail_2')[0] - 1, 'the tail reaches past the last tail box');
+  assert.ok(at('wingtip_l')[0]! < -part('wing_right')[1] + 1 && at('wingtip_r')[0]! > part('wing_right')[1] - 1, 'wings span the wing boxes');
+  for (let i = 1; i < DRAGON_NECK.length; i++) assert.ok(at(DRAGON_NECK[i]!)[2]! < at(DRAGON_NECK[i - 1]!)[2]!, 'the neck chains forward');
+  for (let i = 1; i < DRAGON_TAIL.length; i++) assert.ok(at(DRAGON_TAIL[i]!)[2]! > at(DRAGON_TAIL[i - 1]!)[2]!, 'the tail chains backward');
+  const crystal = layout(readGlb('end_crystal')).origin;
+  for (const name of CRYSTAL_PARTS) assert.ok(Math.abs(crystal.get(name)![1]! - 1.5) < 0.01, `${name} floats 1.5 m up`);
+});
+
+test('endgame textures: art-only layers, growing wart, see-through bars, a lit observer and a solid portal', () => {
+  for (const key of EXTRA_KEYS) { assert.ok(hasTexture(key), key); assert.notEqual(layerOf(key), MISSING_LAYER, key); }
+  const solid = (key: string) => alphaCount(texturePixels(key), a => a > 0);
+  const brightness = (key: string) => { const px = texturePixels(key); let sum = 0; for (let i = 0; i < px.length; i += 4) sum += px[i]! + px[i + 1]! + px[i + 2]!; return sum; };
+  for (let s = 1; s < 4; s++) assert.ok(solid(`nether_wart_stage${s}`) > solid(`nether_wart_stage${s - 1}`), `wart stage ${s} grows`);
+  assert.ok(solid('iron_bars') < TILE * TILE / 2, 'iron bars are mostly see-through');
+  for (const key of ['end_portal', 'end_stone', 'purpur_block', 'end_sky']) assert.equal(solid(key), TILE * TILE, `${key} is opaque`);
+  assert.ok(brightness('observer_back_on') > brightness('observer_back'), 'a pulsing observer lights its back');
+  for (const item of ['blaze_rod', 'blaze_powder', 'ender_pearl', 'ender_eye', 'nether_wart', 'end_crystal'] as const) assert.ok(hasSprite(item), item);
 });

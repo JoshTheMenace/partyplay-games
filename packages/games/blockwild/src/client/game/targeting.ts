@@ -1,30 +1,47 @@
 /** Pure targeting and interaction rules used by the local player loop. */
 import {
-  B, BED_HEAD, blockOf, BUTTON_PRESSED, cellId, cellState, DOOR_OPEN, DOOR_UPPER, isAir, LEVER_ON, makeCell, pistonFacing, PISTON_EXTENDED,
+  B, BED_HEAD, blockOf, BUTTON_PRESSED, cellId, cellState, DAYLIGHT_INVERTED, DOOR_OPEN, DOOR_UPPER, FRAME_EYE, isAir, LEVER_ON, makeCell, pistonFacing, PISTON_EXTENDED,
 } from '../../shared/blocks';
 import type { CellReader } from '../../shared/chunk';
 import { FACES, FACING, type Vec3 } from '../../shared/coords';
 import { I, itemOf } from '../../shared/items';
+import { DRAGON_PARTS } from '../../shared/protocol';
 import type { BlockHit } from '../../shared/raycast';
 import { rayAabb } from '../../shared/raycast';
 import { bucketTarget, bucketUse, canSurvive, fenceUpdates, isHoe, isPathable, isShovel, usesBlock, type CellWrite, type PlaceHit } from '../../shared/placement';
 import { collisionBoxes } from '../../shared/shapes';
 import type { Target } from '../store';
 
-export type MobBox = { id: number; box: readonly [number, number, number, number, number, number] };
+/** One hit box of a mob; `part` indexes `mobBoxes` (the dragon's parts) and rides along on attacks. */
+export type MobBox = { id: number; box: readonly [number, number, number, number, number, number]; part?: number };
+/** A targeted mob with the part the crosshair hit (the dragon's head, a wing...), when it has several. */
+export type MobTarget = Extract<Target, { kind: 'mob' }> & { part?: number };
+export type Aim = Exclude<Target, { kind: 'mob' }> | MobTarget;
 
 /** Nearest of the block hit and any mob box within reach (mobs win ties so you can hit a mob in front of grass). */
-export function pickTarget(block: BlockHit | null, mobs: Iterable<MobBox>, origin: Readonly<Vec3>, dir: Readonly<Vec3>, reach: number): Target | null {
-  let best: Target | null = block ? { kind: 'block', x: block.x, y: block.y, z: block.z, face: block.face, cell: block.cell, point: block.point } : null;
+export function pickTarget(block: BlockHit | null, mobs: Iterable<MobBox>, origin: Readonly<Vec3>, dir: Readonly<Vec3>, reach: number): Aim | null {
+  let best: Aim | null = block ? { kind: 'block', x: block.x, y: block.y, z: block.z, face: block.face, cell: block.cell, point: block.point } : null;
   let bestDistance = block ? block.distance : reach;
   for (const mob of mobs) {
     const hit = rayAabb(origin, dir, mob.box, reach);
     if (hit && hit.distance <= bestDistance) {
       bestDistance = hit.distance;
-      best = { kind: 'mob', id: mob.id, distance: hit.distance };
+      best = mob.part === undefined ? { kind: 'mob', id: mob.id, distance: hit.distance } : { kind: 'mob', id: mob.id, distance: hit.distance, part: mob.part };
     }
   }
   return best;
+}
+
+/**
+ * The dragon's posed part boxes written into `out[i].box` (DRAGON_PARTS order), exactly as the shared `mobBoxes` builds them
+ * but without allocating, for the interpolated pose drawn this frame.
+ */
+export function dragonBoxes(x: number, y: number, z: number, yaw: number, pitch: number, out: readonly { readonly box: readonly number[] }[]) {
+  const sin = Math.sin(yaw), cos = Math.cos(yaw), flat = Math.cos(pitch), rise = Math.sin(pitch), cy = y + 2;
+  DRAGON_PARTS.forEach(({ at: [f, r, u], w, h }, i) => {
+    const px = x - sin * f * flat + cos * r, py = cy + (r ? 0 : f * rise) + u, pz = z - cos * f * flat - sin * r, box = out[i]!.box as number[];
+    box[0] = px - w; box[1] = py - h; box[2] = pz - w; box[3] = px + w; box[4] = py + h; box[5] = pz + w;
+  });
 }
 /** True when two targets are the same block face (and cell value) or the same mob: skips redundant store updates. */
 export function sameTarget(a: Target | null, b: Target | null): boolean {
@@ -80,7 +97,7 @@ export function doorToggle(getCell: CellReader, x: number, y: number, z: number,
 
 const STATIONS = new Set<number>([B.crafting_table, B.furnace, B.furnace_lit, B.chest, B.bed, B.oak_door]);
 const CONTROLS = new Map<number, UseKind>([[B.lever, 'lever'], [B.stone_button, 'button'], [B.oak_button, 'button'], [B.repeater, 'repeater']]);
-export type UseKind = 'open' | 'door' | 'till' | 'path' | 'bonemeal' | 'bucket' | 'lever' | 'button' | 'repeater' | 'ignite' | 'tnt' | null;
+export type UseKind = 'open' | 'door' | 'till' | 'path' | 'bonemeal' | 'bucket' | 'lever' | 'button' | 'repeater' | 'ignite' | 'tnt' | 'eye' | 'crystal' | 'daylight' | null;
 /**
  * What right-clicking this block with `held` does as a 'use' command (null = try placing instead). The decision is the
  * server's own `usesBlock`; this only classifies it for prediction. Tilling and paths are predicted only with air above.
@@ -90,6 +107,9 @@ export function blockUse(cell: number, above: number, held: number, sneaking: bo
   const id = cellId(cell);
   if (STATIONS.has(id) && (!sneaking || !held)) return id === B.oak_door ? 'door' : 'open';
   if (CONTROLS.has(id) && (!sneaking || !held)) return CONTROLS.get(id)!;
+  if (id === B.daylight_detector && (!sneaking || !held)) return 'daylight';
+  if (held === I.ender_eye) return 'eye';
+  if (held === I.end_crystal) return 'crystal';
   if (isHoe(held)) return cellId(above) === B.air ? 'till' : null;
   if (isShovel(held) && isPathable(id)) return cellId(above) === B.air ? 'path' : null;
   if (held === I.flint_and_steel) return id === B.tnt ? 'tnt' : 'ignite';
@@ -98,8 +118,9 @@ export function blockUse(cell: number, above: number, held: number, sneaking: bo
 
 /**
  * Predicted cell writes of a 'use' (the server's rules): levers flip, buttons press, repeaters cycle their delay, hoes
- * till, shovels make paths, flint and steel lights fire across the clicked face, buckets fill or pour. Empty when the
- * result is the server's alone (opening screens, portals, priming TNT, bone meal).
+ * till, shovels make paths, flint and steel lights fire across the clicked face, buckets fill or pour, daylight detectors
+ * flip to inverted and eyes of ender drop into frames. Empty when the result is the server's alone (opening screens,
+ * portals, priming TNT, bone meal, end crystals).
  */
 export function useWrites(getCell: CellReader, kind: UseKind, hit: PlaceHit, held: number): CellWrite[] {
   const { x, y, z } = hit, cell = getCell(x, y, z), state = cellState(cell), world = { getCell };
@@ -107,6 +128,8 @@ export function useWrites(getCell: CellReader, kind: UseKind, hit: PlaceHit, hel
     case 'lever': return [[x, y, z, cell ^ LEVER_ON << 8]];
     case 'button': return state & BUTTON_PRESSED ? [] : [[x, y, z, cell | BUTTON_PRESSED << 8]];
     case 'repeater': return [[x, y, z, makeCell(B.repeater, state & ~12 | ((state >> 2) + 1 & 3) << 2)]];
+    case 'daylight': return [[x, y, z, cell ^ DAYLIGHT_INVERTED << 8]];
+    case 'eye': return [[x, y, z, cell | FRAME_EYE << 8]];
     case 'till': return [[x, y, z, B.farmland]];
     case 'path': return [[x, y, z, B.dirt_path]];
     case 'ignite': {

@@ -10,16 +10,20 @@
  * 3. Ores by depth (emeralds in mountains), rare lava lakes in deserts and mountains, trees from this chunk
  *    and its eight neighbours (so canopies never cut at borders), then ground decorations.
  *
- * The sealed Nether corner (see nether.ts) has its own generator; the overworld around it is deep ocean.
+ * The sealed Nether and End corners (see nether.ts, end.ts) have their own generators; the overworld around them is deep ocean.
+ * Fortresses paint into Nether chunks and strongholds into overworld chunks (structures/fortress.ts, stronghold.ts).
  *
  * Only + - * /, Math.floor/sqrt/abs/min/max and integer hashes are used (see noise.ts).
  */
 import { B } from './blocks';
-import { CHUNK, HEIGHT, NETHER, SEA_LEVEL, SEED_CACHE, SPAWN_X, SPAWN_Z, WORLD } from './constants';
+import { CHUNK, END, HEIGHT, NETHER, SEA_LEVEL, SEED_CACHE, SPAWN_X, SPAWN_Z, WORLD } from './constants';
 import { CHUNK_CELLS } from './chunk';
 import { localIndex, type Vec3 } from './coords';
 import { clamp, createRng, curve, fbm2, hash3, lerp, rand2, rand3, ridged2, rngInt, simplex3, smoothstep, subSeed, type Rng } from './noise';
+import { generateEndChunk, isEndChunk } from './end';
 import { generateNetherChunk, isNetherChunk } from './nether';
+import { paintFortress } from './structures/fortress';
+import { paintStronghold } from './structures/stronghold';
 import { paintStructures, structuresNear } from './structures/index';
 import { growTree, TREE_RADIUS, treeCanReplace, type TreeKind } from './trees';
 
@@ -95,6 +99,9 @@ function column(ctx: Context, x: number, z: number, out: Column): Column {
   // Deep ocean around the sealed Nether corner, so nobody stumbles onto its bedrock wall.
   const nx = Math.max(0, NETHER.x0 - x), nz = Math.max(0, z - (NETHER.z0 + NETHER.size - 1));
   c -= 1.6 * (1 - smoothstep(48, 280, Math.sqrt(nx * nx + nz * nz)));
+  // The same around the End corner (zero, so v9 terrain is unchanged, farther than 280 blocks from it).
+  const ex = Math.max(0, END.x0 - x), ez = Math.max(0, END.z0 - z);
+  c -= 1.6 * (1 - smoothstep(48, 280, Math.sqrt(ex * ex + ez * ez)));
 
   const e = fbm2(ctx.eros, wx, wz, 900, 3) * 1.4;
   const land = smoothstep(-0.1, 0.06, c);
@@ -311,7 +318,12 @@ const FLOWERS = [B.dandelion, B.poppy, B.cornflower];
 const FLOWERY = new Set([BIOME.plains, BIOME.forest, BIOME.birch_forest]);
 
 export function generateChunk(seed: number, cx: number, cz: number): Uint16Array {
-  if (isNetherChunk(cx, cz)) return generateNetherChunk(seed, cx, cz);
+  if (isEndChunk(cx, cz)) return generateEndChunk(seed, cx, cz);
+  if (isNetherChunk(cx, cz)) {
+    const cells = generateNetherChunk(seed, cx, cz);
+    paintFortress(seed, cx, cz, cells);
+    return cells;
+  }
   const ctx = context(seed), cells = new Uint16Array(CHUNK_CELLS), x0 = cx * CHUNK, z0 = cz * CHUNK;
 
   let maxH = SEA_LEVEL;
@@ -389,6 +401,7 @@ export function generateChunk(seed: number, cx: number, cz: number): Uint16Array
 
   decorate(ctx, cells, x0, z0);
   paintStructures(seed, cx, cz, cells);
+  paintStronghold(seed, cx, cz, cells);
   return cells;
 }
 

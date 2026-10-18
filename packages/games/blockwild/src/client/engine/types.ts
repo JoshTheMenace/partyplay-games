@@ -8,11 +8,15 @@ import type { DataArrayTexture } from 'three';
  * - `layerOf` covers every key in TEXTURE_KEYS plus optional animation frames 'water_1'.., 'lava_1'.., 'nether_portal_1'..
  *   and 'fire_1'.. (the engine plays every frame it finds, in order, and stops at the first missing one),
  *   'crack_0'..'crack_9' (break stages: dark pixels with alpha) and 'missing' (returned for unknown keys).
+ * - OPTIONAL_KEYS may be painted too; the mesher falls back to a related texture while an atlas lacks them.
  */
 export interface BlockAtlas {
   readonly texture: DataArrayTexture;
   layerOf(key: string): number;
 }
+
+/** Extra texture keys beyond TEXTURE_KEYS: the eye of ender sitting in an end portal frame (else its top-with-eye texture). */
+export const OPTIONAL_KEYS = ['end_portal_frame_eye'] as const;
 
 /** One render layer of a column mesh: 4 vertices per quad, drawn with the shared quad index. */
 export type LayerMesh = {
@@ -32,9 +36,10 @@ export const OPAQUE = 0, CUTOUT = 1, TRANSLUCENT = 2;
 
 /**
  * Vertex flags (uvl.w). WATER, LAVA, PORTAL and FIRE swap in the current animation frame and (except water) glow at full
- * brightness; SURFACE wobbles liquid tops; WIRE tints redstone dust by its power (lt.w = power·17).
+ * brightness; SURFACE wobbles liquid tops; WIRE tints redstone dust by its power (lt.w = power·17); END draws the End
+ * portal's starfield (no texture) at full brightness.
  */
-export const VF_LEAVES = 1, VF_PLANT = 2, VF_WATER = 4, VF_SURFACE = 8, VF_LAVA = 16, VF_PORTAL = 32, VF_FIRE = 64, VF_WIRE = 128;
+export const VF_LEAVES = 1, VF_PLANT = 2, VF_WATER = 4, VF_SURFACE = 8, VF_LAVA = 16, VF_PORTAL = 32, VF_FIRE = 64, VF_WIRE = 128, VF_END = 256;
 
 export type ToWorker =
   | { type: 'init'; seed: number; layers: Record<string, number>; capacity: number }

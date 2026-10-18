@@ -10,10 +10,18 @@ import { MOB_TYPES } from '../../shared/protocol';
 import { ARMOR_BOXES, armorGeometry, armorSheet, texturePixels, VILLAGER_MODELS, type ArmorMaterial } from '../art/atlas';
 import { hash } from '../art/pixels';
 
+type Digit = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 export type Pivot = 'head' | 'body' | 'arm_l' | 'arm_r' | 'leg_l' | 'leg_r' | 'leg_fl' | 'leg_fr' | 'leg_bl' | 'leg_br' | 'wool'
-  | 'leg_0' | 'leg_1' | 'leg_2' | 'leg_3' | 'leg_4' | 'leg_5' | 'leg_6' | 'leg_7' | 'leg_8' | 'face_idle' | 'face_shoot';
-/** 'ghast': a floating head with nine tentacles (leg_0..8) and two faces; 'block': a single textured cube (primed TNT). */
-export type RigKind = 'humanoid' | 'quadruped' | 'spider' | 'creeper' | 'chicken' | 'ghast' | 'block';
+  | 'leg_0' | 'leg_1' | 'leg_2' | 'leg_3' | 'leg_4' | 'leg_5' | 'leg_6' | 'leg_7' | 'leg_8' | 'face_idle' | 'face_shoot'
+  | 'jaw' | `rods_ring_${0 | 1 | 2}` | `seg_${0 | 1 | 2 | 3}` | `neck_${0 | 1 | 2 | 3 | 4}` | `tail_${Digit}` | 'wing_l' | 'wing_r' | 'wingtip_l' | 'wingtip_r'
+  | 'frame_outer' | 'frame_inner' | 'core' | 'base';
+/**
+ * 'ghast': a floating head with nine tentacles (leg_0..8) and two faces; 'block': a single textured cube (primed TNT).
+ * Endgame: 'blaze' (head over three spinning rings of rods), 'enderman' (humanoid pivots plus a jaw in the head),
+ * 'silverfish' (body segments seg_0..3, head first), 'dragon' (body; chained neck_0..4 → head → jaw and tail_0..9;
+ * wing_l/r → wingtip_l/r; four legs) and 'crystal' (nested frames around a core over a base).
+ */
+export type RigKind = 'humanoid' | 'quadruped' | 'spider' | 'creeper' | 'chicken' | 'ghast' | 'block' | 'blaze' | 'enderman' | 'silverfish' | 'dragon' | 'crystal';
 /** Mob keys, the player, and one villager model per profession (VILLAGER_MODELS[p]; plain 'villager' is the farmer). */
 export type ModelKey = typeof MOB_TYPES[number]['key'] | 'player' | typeof VILLAGER_MODELS[number];
 
@@ -21,7 +29,8 @@ export type ModelKey = typeof MOB_TYPES[number]['key'] | 'player' | typeof VILLA
 export type Rig = {
   /** `ModelLibrary.version` when built: an older rig is swapped once its GLB arrives. */
   root: Group; kind: RigKind; version: number; pivots: Partial<Record<Pivot, Object3D>>;
-  materials: { material: MeshLambertMaterial; base: Color; shirt: boolean }[];
+  /** `glow`: self-lit (materials named eyes/glow/core: the enderman's and dragon's eyes, a crystal's core). */
+  materials: { material: MeshLambertMaterial; base: Color; shirt: boolean; glow: boolean }[];
   /** Metres per model pixel inside the pivots (humanoids are 32 px tall), for attachments. */
   unit: number;
   /** A procedural stand-in (its GLB has not arrived or does not exist). */
@@ -31,9 +40,10 @@ export type Rig = {
 export const RIG_KIND: Record<ModelKey, RigKind> = {
   player: 'humanoid', zombie: 'humanoid', skeleton: 'humanoid', creeper: 'creeper', spider: 'spider', cow: 'quadruped', pig: 'quadruped', sheep: 'quadruped', chicken: 'chicken',
   villager: 'humanoid', zombified_piglin: 'humanoid', ghast: 'ghast', tnt: 'block',
-  villager_librarian: 'humanoid', villager_armorer: 'humanoid', villager_toolsmith: 'humanoid', villager_cleric: 'humanoid',
+  villager_librarian: 'humanoid', villager_armorer: 'humanoid', villager_toolsmith: 'humanoid', villager_cleric: 'humanoid', villager_mason: 'humanoid',
+  blaze: 'blaze', enderman: 'enderman', ender_dragon: 'dragon', end_crystal: 'crystal', silverfish: 'silverfish',
 };
-/** Model for a villager of profession p (0 farmer .. 4 cleric). */
+/** Model for a villager of profession p (0 farmer .. 5 mason). */
 export const villagerModel = (p: number): ModelKey => VILLAGER_MODELS[p] ?? 'villager';
 
 /** Accepted node names per pivot (the art pipeline's names first, older model names after). */
@@ -63,6 +73,12 @@ const PIVOTS: Record<RigKind, Pivot[]> = {
   spider: ['head', 'body', 'leg_0', 'leg_1', 'leg_2', 'leg_3', 'leg_4', 'leg_5', 'leg_6', 'leg_7'],
   ghast: ['head', 'body', 'leg_0', 'leg_1', 'leg_2', 'leg_3', 'leg_4', 'leg_5', 'leg_6', 'leg_7', 'leg_8', 'face_idle', 'face_shoot'],
   block: ['body'],
+  blaze: ['head', 'body', 'rods_ring_0', 'rods_ring_1', 'rods_ring_2'],
+  enderman: ['head', 'body', 'arm_l', 'arm_r', 'leg_l', 'leg_r', 'jaw'],
+  silverfish: ['seg_0', 'seg_1', 'seg_2', 'seg_3'],
+  dragon: ['body', 'head', 'jaw', 'neck_0', 'neck_1', 'neck_2', 'neck_3', 'neck_4', ...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => `tail_${i}` as Pivot),
+    'wing_l', 'wing_r', 'wingtip_l', 'wingtip_r', 'leg_fl', 'leg_fr', 'leg_bl', 'leg_br'],
+  crystal: ['frame_outer', 'frame_inner', 'core', 'base'],
 };
 
 function findPivots(root: Object3D, kind: RigKind) {
@@ -76,6 +92,8 @@ function findPivots(root: Object3D, kind: RigKind) {
   return pivots;
 }
 
+/** Material names that light themselves (eyes, the blaze's rods, a crystal's core). */
+const GLOW = /eyes|glow|core/i;
 /** Give an instance its own Lambert materials (keeps map/vertex colours). Fallback rigs already own theirs (`copy` false). */
 function ownMaterials(root: Object3D, copy: boolean): Rig['materials'] {
   const out: Rig['materials'] = [], copies = new Map<Material, MeshLambertMaterial>();
@@ -88,10 +106,12 @@ function ownMaterials(root: Object3D, copy: boolean): Rig['materials'] {
         const source = m as Material & { map?: MeshLambertMaterial['map']; color?: Color; vertexColors?: boolean };
         own = new MeshLambertMaterial({ map: source.map ?? null, vertexColors: source.vertexColors ?? false, color: source.color?.clone() ?? new Color(1, 1, 1), transparent: m.transparent, alphaTest: m.alphaTest, side: m.side });
         own.name = m.name;
+        // Self-lit parts glow in their own texture's colours (the entity tint sets the emissive strength).
+        if (GLOW.test(m.name)) own.emissiveMap = own.map;
       }
       if (!copies.has(m)) {
         copies.set(m, own);
-        out.push({ material: own, base: own.color.clone(), shirt: /shirt/i.test(m.name) || /shirt/i.test(node.name) });
+        out.push({ material: own, base: own.color.clone(), shirt: /shirt/i.test(m.name) || /shirt/i.test(node.name), glow: GLOW.test(m.name) });
       }
       return own;
     };
@@ -101,10 +121,13 @@ function ownMaterials(root: Object3D, copy: boolean): Rig['materials'] {
 }
 
 // Procedural fallback -------------------------------------------------------------------------------------------
-/** A box on a pivot (`size` null = an empty group, e.g. a ghast face); `tex` = block texture keys for +X, -X, +Y, -Y, +Z, -Z. */
+/**
+ * A box on a pivot (`size` null = an empty group, e.g. a ghast face); `tex` = block texture keys for +X, -X, +Y, -Y, +Z, -Z.
+ * `glow` names the material so it lights itself (eyes); `opacity` < 1 makes it see-through (a crystal's glass).
+ */
 type Part = {
   pivot: Pivot | 'eye' | 'snout'; size: [number, number, number] | null; at: [number, number, number]; offset: [number, number, number]; color: number;
-  shirt?: boolean; parent?: Pivot; tex?: readonly string[];
+  shirt?: boolean; parent?: Pivot; tex?: readonly string[]; glow?: boolean; opacity?: number;
 };
 const SKIN = 0xc68e6a, PANTS = 0x3b4a8c;
 function humanoid(skin: number, shirt: number, pants: number, thin = false): Part[] {
@@ -174,11 +197,99 @@ function ghast(): Part[] {
     facePart('face_shoot', 0, -0.62, 0.8, 0.55, front, 0x160c0c),
   ];
 }
+/** Blaze: a glowing head over three rings of four golden rods (MC: 2 × 8 px), each ring a pivot that spins. */
+function blaze(): Part[] {
+  const rods = [[1.05, 0.5], [0.62, 0.42], [0.2, 0.32]] as const, parts: Part[] = [
+    { pivot: 'body', size: [0.16, 0.9, 0.16], at: [0, 0.35, 0], offset: [0, 0.45, 0], color: 0x9a5a1a },
+    { pivot: 'head', size: [0.5, 0.5, 0.5], at: [0, 1.3, 0], offset: [0, 0.25, 0], color: 0xe2a42c },
+    facePart('head', -0.11, 0.27, 0.12, 0.08, 0.25, 0x2a1406), facePart('head', 0.11, 0.27, 0.12, 0.08, 0.25, 0x2a1406), facePart('head', 0, 0.12, 0.26, 0.05, 0.25, 0x6a3a0e),
+  ];
+  rods.forEach(([y, r], ring) => {
+    const pivot = `rods_ring_${ring}` as Pivot;
+    parts.push({ pivot, size: null, at: [0, y, 0], offset: [0, 0, 0], color: 0 });
+    for (let i = 0; i < 4; i++) {
+      const a = i * Math.PI / 2 + ring * 0.4;
+      parts.push({ pivot: 'eye', parent: pivot, size: [0.125, 0.5, 0.125], at: [Math.cos(a) * r, 0, Math.sin(a) * r], offset: [0, 0, 0], color: i % 2 ? 0xf6c636 : 0xe8a822 });
+    }
+  });
+  return parts;
+}
+/** Enderman: a 2.9 m stick figure in near-black with long limbs, glowing purple eyes and a jaw that drops when it is angry. */
+function enderman(): Part[] {
+  const black = 0x15111a, limb = 1.7, shoulder = 2.38;
+  return [
+    { pivot: 'leg_l', size: [0.12, limb, 0.12], at: [-0.1, limb, 0], offset: [0, -limb / 2, 0], color: black },
+    { pivot: 'leg_r', size: [0.12, limb, 0.12], at: [0.1, limb, 0], offset: [0, -limb / 2, 0], color: black },
+    { pivot: 'body', size: [0.46, 0.72, 0.24], at: [0, limb, 0], offset: [0, 0.36, 0], color: 0x1b1620 },
+    { pivot: 'arm_l', size: [0.12, limb, 0.12], at: [-0.29, shoulder, 0], offset: [0, -limb / 2 + 0.06, 0], color: black },
+    { pivot: 'arm_r', size: [0.12, limb, 0.12], at: [0.29, shoulder, 0], offset: [0, -limb / 2 + 0.06, 0], color: black },
+    { pivot: 'head', size: [0.46, 0.34, 0.46], at: [0, 2.42, 0], offset: [0, 0.29, 0], color: 0x18131c },
+    { pivot: 'jaw', parent: 'head', size: [0.44, 0.12, 0.44], at: [0, 0.12, 0.22], offset: [0, -0.06, -0.22], color: 0x100c13 },
+    { pivot: 'eye', parent: 'head', size: [0.15, 0.045, 0.02], at: [-0.11, 0.25, -0.235], offset: [0, 0, 0], color: 0xe27cff, glow: true },
+    { pivot: 'eye', parent: 'head', size: [0.15, 0.045, 0.02], at: [0.11, 0.25, -0.235], offset: [0, 0, 0], color: 0xe27cff, glow: true },
+  ];
+}
+/** Silverfish: four grey segments, widest in the middle, head first (towards -Z). */
+const silverfish = (): Part[] => [[0.2, 0.16, 0.14], [0.32, 0.22, 0.16], [0.26, 0.18, 0.16], [0.14, 0.12, 0.16]].map(([w, h, l], i): Part =>
+  ({ pivot: `seg_${i}` as Pivot, size: [w!, h!, l!], at: [0, 0, -0.2 + i * 0.15], offset: [0, h! / 2, 0], color: i ? 0x8d9097 : 0x777a82 }));
+/**
+ * Ender dragon (−Z forward, the body centred 2 m up like its hit boxes): a long dark body, a chained neck of five
+ * segments to a horned head with a jaw and glowing eyes, a ten-segment tail, two jointed wings and folded legs.
+ */
+function dragon(): Part[] {
+  const hide = 0x1d1922, belly = 0x2a2431, spine = 0x4b4458, skin = 0x3b2d4b, parts: Part[] = [
+    { pivot: 'body', size: [3, 2.4, 7], at: [0, 2, 0], offset: [0, 0, 0], color: hide },
+    { pivot: 'eye', parent: 'body', size: [2.6, 0.3, 6.4], at: [0, -1.2, 0], offset: [0, 0, 0], color: belly },
+    ...[-2.4, -0.8, 0.8, 2.4].map((z): Part => ({ pivot: 'eye', parent: 'body', size: [0.3, 0.6, 0.6], at: [0, 1.45, z], offset: [0, 0, 0], color: spine })),
+    ...(['leg_fl', 'leg_fr', 'leg_bl', 'leg_br'] as const).map((pivot, i): Part =>
+      ({ pivot, parent: 'body', size: [0.6, 1.6, 0.7], at: [i % 2 ? 1.1 : -1.1, -1.1, i < 2 ? -2.2 : 2.2], offset: [0, -0.7, 0.2], color: hide })),
+  ];
+  let parent: Pivot = 'body';
+  for (let i = 0; i < 5; i++) {
+    const pivot = `neck_${i}` as Pivot;
+    parts.push({ pivot, parent, size: [1.1, 1.1, 1.25], at: [0, i ? 0 : 0.5, i ? -1.2 : -3.5], offset: [0, 0, -0.6], color: i % 2 ? belly : hide },
+      { pivot: 'eye', parent: pivot, size: [0.25, 0.4, 0.4], at: [0, 0.7, -0.6], offset: [0, 0, 0], color: spine });
+    parent = pivot;
+  }
+  parts.push(
+    { pivot: 'head', parent, size: [1.9, 1.3, 2.4], at: [0, 0, -1.2], offset: [0, 0.15, -1.2], color: hide },
+    { pivot: 'eye', parent: 'head', size: [0.3, 0.5, 0.7], at: [-0.55, 1.0, -0.2], offset: [0, 0, 0], color: spine },
+    { pivot: 'eye', parent: 'head', size: [0.3, 0.5, 0.7], at: [0.55, 1.0, -0.2], offset: [0, 0, 0], color: spine },
+    { pivot: 'eye', parent: 'head', size: [0.4, 0.16, 0.06], at: [-0.6, 0.45, -1.9], offset: [0, 0, 0], color: 0xd85cff, glow: true },
+    { pivot: 'eye', parent: 'head', size: [0.4, 0.16, 0.06], at: [0.6, 0.45, -1.9], offset: [0, 0, 0], color: 0xd85cff, glow: true },
+    { pivot: 'jaw', parent: 'head', size: [1.6, 0.4, 2.2], at: [0, -0.5, -0.1], offset: [0, -0.2, -1.1], color: belly },
+  );
+  parent = 'body';
+  for (let i = 0; i < 10; i++) {
+    const pivot = `tail_${i}` as Pivot, w = 1.05 - i * 0.07;
+    parts.push({ pivot, parent, size: [w, w, 0.85], at: [0, i ? 0 : 0.2, i ? 0.8 : 3.5], offset: [0, 0, 0.4], color: i % 2 ? belly : hide });
+    if (i % 2 === 0) parts.push({ pivot: 'eye', parent: pivot, size: [0.2, 0.35, 0.3], at: [0, w / 2 + 0.15, 0.4], offset: [0, 0, 0], color: spine });
+    parent = pivot;
+  }
+  for (const side of [-1, 1]) {
+    const wing = side < 0 ? 'wing_l' : 'wing_r', tip = side < 0 ? 'wingtip_l' : 'wingtip_r';
+    parts.push(
+      { pivot: wing, parent: 'body', size: [6, 0.4, 0.4], at: [side * 1.4, 1.0, -1.6], offset: [side * 3, 0, 0], color: hide },
+      { pivot: 'eye', parent: wing, size: [6, 0.08, 4.6], at: [side * 3, 0, 2.3], offset: [0, 0, 0], color: skin },
+      { pivot: tip, parent: wing, size: [5, 0.3, 0.3], at: [side * 6, 0, 0], offset: [side * 2.5, 0, 0], color: hide },
+      { pivot: 'eye', parent: tip, size: [5, 0.06, 4.2], at: [side * 2.5, 0, 2.1], offset: [0, 0, 0], color: skin },
+    );
+  }
+  return parts;
+}
+/** End crystal: two see-through glass frames turning around a glowing pink core, floating over a bedrock base. */
+const crystal = (): Part[] => [
+  { pivot: 'base', size: [1.5, 0.4, 1.5], at: [0, 0, 0], offset: [0, 0.2, 0], color: 0x5a5a5a, tex: Array<string>(6).fill('bedrock') },
+  { pivot: 'frame_outer', size: [1, 1, 1], at: [0, 1.25, 0], offset: [0, 0, 0], color: 0xe8dcff, opacity: 0.32 },
+  { pivot: 'frame_inner', parent: 'frame_outer', size: [0.78, 0.78, 0.78], at: [0, 0, 0], offset: [0, 0, 0], color: 0xd7c6ff, opacity: 0.42 },
+  { pivot: 'core', parent: 'frame_inner', size: [0.5, 0.5, 0.5], at: [0, 0, 0], offset: [0, 0, 0], color: 0xff6ad5, glow: true },
+];
 const FALLBACK: Record<ModelKey, () => Part[]> = {
-  villager, villager_librarian: villager, villager_armorer: villager, villager_toolsmith: villager, villager_cleric: villager,
+  villager, villager_librarian: villager, villager_armorer: villager, villager_toolsmith: villager, villager_cleric: villager, villager_mason: villager,
   zombified_piglin: piglin,
   ghast,
   tnt: () => [{ pivot: 'body', size: [0.98, 0.98, 0.98], at: [0, 0, 0], offset: [0, 0.49, 0], color: 0xffffff, tex: ['tnt_side', 'tnt_side', 'tnt_top', 'tnt_bottom', 'tnt_side', 'tnt_side'] }],
+  blaze, enderman, ender_dragon: dragon, end_crystal: crystal, silverfish,
   player: () => humanoid(SKIN, 0xffffff, PANTS),
   zombie: () => humanoid(0x5c8f4e, 0x2f8f9a, 0x3a3f8f),
   skeleton: () => humanoid(0xcfcfcf, 0xbdbdbd, 0xa8a8a8, true),
@@ -235,9 +346,10 @@ function blockTexture(key: string): Texture {
 function buildFallback(key: ModelKey): Group {
   const root = new Group(), nodes = new Map<string, Object3D>();
   for (const part of FALLBACK[key]()) {
-    const pivot = new Group(), name = part.shirt ? 'shirt' : part.pivot;
+    const pivot = new Group(), name = part.shirt ? 'shirt' : part.glow ? 'eyes' : part.pivot, see = part.opacity !== undefined;
     if (part.size) {
-      const material = part.tex ? part.tex.map(tex => new MeshLambertMaterial({ map: blockTexture(tex), name })) : new MeshLambertMaterial({ color: part.color, name });
+      const material = part.tex ? part.tex.map(tex => new MeshLambertMaterial({ map: blockTexture(tex), name }))
+        : new MeshLambertMaterial({ color: part.color, name, transparent: see, opacity: part.opacity ?? 1, depthWrite: !see });
       const mesh = new Mesh(box(part.size), material);
       mesh.position.set(...part.offset);
       pivot.add(mesh);
@@ -320,6 +432,7 @@ export const PROFESSIONS: readonly { robe: number; pieces: Piece[] }[] = [
   { robe: 0x55565e, pieces: [{ pivot: 'head', box: [-3.4, 4.6, -4.3, -0.6, 6.4, -4.05], color: 0x141414 }, { pivot: 'body', box: [-4.3, 0.5, -2.45, 4.3, 11, -2.1], color: 0x2c2c30 }] },
   { robe: 0x8a6f4e, pieces: [{ pivot: 'body', box: [-4.3, 0.5, -2.45, 4.3, 11, -2.1], color: 0x2e2620 }, { pivot: 'body', box: [-4.4, 5, -2.5, 4.4, 5.8, 2.5], color: 0x5a4632 }] },
   { robe: 0x6c3a8e, pieces: [{ pivot: 'body', box: [-4.4, 11, -2.4, 4.4, 12.2, 2.4], color: 0xd8b040 }, { pivot: 'head', box: [-4.6, 7.6, -4.6, 4.6, 10.6, 4.6], color: 0x5a2e78 }] },
+  { robe: 0x6a4c30, pieces: [{ pivot: 'body', box: [-4.3, 0.5, -2.45, 4.3, 11, -2.1], color: 0x8a8a86 }, { pivot: 'body', box: [-4.4, 8.6, -2.5, 4.4, 9.4, 2.5], color: 0x4a4a48 }] },
 ];
 
 /** Faint cloth grain shared by outfit boxes (multiplies their colour). */
@@ -355,7 +468,7 @@ export function wearArmor(rig: Rig, worn: readonly number[]): Attachment {
     const material = new MeshLambertMaterial({ map, alphaTest: 0.5, name: 'armor' }), mesh = new Mesh(geometry, material);
     node.add(mesh);
     meshes.push(mesh);
-    rig.materials.push({ material, base: material.color.clone(), shirt: false });
+    rig.materials.push({ material, base: material.color.clone(), shirt: false, glow: false });
   });
   return { meshes };
 }
@@ -371,7 +484,7 @@ export function attach(rig: Rig, pieces: readonly Piece[]): Attachment {
     mesh.position.set((b[0] + b[3]) / 2 * u, (b[1] + b[4]) / 2 * u, (b[2] + b[5]) / 2 * u);
     node.add(mesh);
     meshes.push(mesh);
-    rig.materials.push({ material, base: material.color.clone(), shirt: false });
+    rig.materials.push({ material, base: material.color.clone(), shirt: false, glow: false });
   }
   return { meshes };
 }

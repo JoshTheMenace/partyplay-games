@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { HOTBAR_SIZE, INVENTORY_SIZE } from '../../shared/constants';
 import { countItem } from '../../shared/inventory';
-import { ARMOR_PIECES, B, I, ITEM_LIST, itemName, type ItemCategory, type Slot } from '../../shared/items';
+import { ARMOR_PIECES, B, I, ITEM_LIST, itemName, type Slot } from '../../shared/items';
 import type { TradeOffer } from '../../shared/protocol';
 import { PROFESSIONS } from '../../shared/trades';
 import { hud } from '../game/hud';
@@ -11,7 +11,7 @@ import { store } from '../store';
 import { itemHint, offerState } from './format';
 import { reachGoal, Toasts } from './hud';
 import { ItemIcon, PlayerDoll } from './icons';
-import { BOOK_TABS, filterRecipes, ingredientSummary, missingText, type BookEntry, type BookTab } from './recipe-book';
+import { BOOK_TABS, filterRecipes, ingredientSummary, missingText, paletteTab, type BookEntry, type BookTab, type PaletteTab } from './recipe-book';
 import { FloatingLayer, SlotButton, SlotFace, SlotGrid, slotLabel } from './slot';
 import { relockPointer, toast, useStore, useTouchMode } from './state';
 
@@ -203,17 +203,18 @@ function RecipeBook({ table }: { table: boolean }) {
   </section>;
 }
 
-const CREATIVE_TABS: readonly { id: ItemCategory; label: string; icon: number }[] = [
+const CREATIVE_TABS: readonly { id: PaletteTab; label: string; icon: number }[] = [
   { id: 'building', label: 'Building', icon: B.bricks }, { id: 'decoration', label: 'Decoration', icon: B.lantern }, { id: 'nature', label: 'Nature', icon: B.grass_block },
   { id: 'tools', label: 'Tools', icon: I.diamond_pickaxe }, { id: 'combat', label: 'Combat', icon: I.diamond_sword }, { id: 'food', label: 'Food', icon: I.apple },
   { id: 'materials', label: 'Materials', icon: I.diamond }, { id: 'redstone', label: 'Redstone', icon: I.redstone }, { id: 'nether', label: 'Nether', icon: B.netherrack },
+  { id: 'end', label: 'The End', icon: B.end_stone },
 ];
 const PALETTE = ITEM_LIST.filter(item => !item.hidden);
 /** Creative palette: tap an item to fill the selected hotbar slot with a full stack. */
 export function CreativeScreen() {
-  const [tab, setTab] = useState<ItemCategory>('building'), [query, setQuery] = useState('');
+  const [tab, setTab] = useState<PaletteTab>('building'), [query, setQuery] = useState('');
   const inv = useStore(store, s => s.inv), selected = useStore(store, s => s.selected), q = query.trim().toLowerCase();
-  const items = PALETTE.filter(item => q ? item.name.toLowerCase().includes(q) : item.category === tab);
+  const items = PALETTE.filter(item => q ? item.name.toLowerCase().includes(q) : paletteTab(item) === tab);
   return <Sheet title="Creative" className="bw-creative-sheet" onClose={closeAndResume}
     tools={<button type="button" className="bw-chip" onClick={() => store.set({ screen: 'inventory' })}>Inventory</button>}>
     <div className="bw-tabs" role="tablist" aria-label="Item categories">
