@@ -12,6 +12,7 @@ export type GameManifest = {
   timing: 'realtime' | 'turn-based'; input: readonly ('state' | 'action')[];
   privatePlayerViews: boolean; supportsSolo: boolean;
   sessionControls?: readonly ('save' | 'finish')[];
+  prepareTimeoutMs?: number;
   snapshotCache?: SnapshotCachePolicy;
   simulation?: { stepHz: number; snapshotHz: number; maxCatchUpSteps: number };
 };
@@ -22,6 +23,7 @@ export type GameRules<State, Input, Action, Settings, PublicView, PrivateView> =
   validateSettings(raw: unknown): Settings; parseInput(raw: unknown): Input; parseAction(raw: unknown): Action;
   /** Public, per-seat setup. Validate incomplete drafts; require a complete choice when ready is true. */
   parseLobbyChoice?(raw: unknown, ready: boolean): unknown;
+  validateStart?(players: RoundContext['players'], settings: Settings): void;
   create(ctx: RoundContext, settings: Settings): State; neutralInput(): Input;
   applyAction(state: State, playerId: PlayerId, action: Action, nowMs: number): void;
   tick(state: State, inputs: ReadonlyMap<PlayerId, Input>, dtSeconds: number, nowMs: number): void;

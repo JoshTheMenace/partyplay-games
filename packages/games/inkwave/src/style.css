@@ -1,0 +1,46 @@
+@font-face{font-family:Inkwave Titan;src:url('/games/inkwave/assets/fonts/TitanOne-latin.woff2') format('woff2');font-display:swap}
+@font-face{font-family:Inkwave Rubik;src:url('/games/inkwave/assets/fonts/Rubik-latin.woff2') format('woff2');font-weight:400 900;font-display:swap}
+.inkwave{color:#fff;font-family:Inkwave Rubik,sans-serif}
+.inkwave-scene{display:block;width:100%;height:100%;border:0;pointer-events:auto}
+.kp-scene-stage:has(.inkwave-scene)>.kp-scene-overlay{inset:0}.inkwave-display{position:absolute;inset:0;pointer-events:none}
+/* Shared display: the original HUD's outlined Titan type, team colours from the match. */
+.inkwave-display :is(b,strong){font:400 1em/1 Inkwave Titan,sans-serif;-webkit-text-stroke:.16em #15121c;paint-order:stroke fill}
+.inkwave-score{position:absolute;top:14px;left:50%;translate:-50% 0;display:flex;align-items:center;gap:14px}
+.inkwave-team{display:grid;min-width:170px;padding:6px 16px 8px;border-radius:14px;background:var(--team);box-shadow:0 0 0 3px #fff,0 0 0 6px #15121c,0 7px 0 5px #0006;text-align:right}
+.inkwave-team+strong+.inkwave-team{text-align:left}.inkwave-team small{font-weight:900;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#15121c}.inkwave-team b{font-size:30px}
+.inkwave-team i{display:block;height:8px;margin:5px 0 1px;border-radius:4px;background:linear-gradient(90deg,#fff var(--hp),#15121c66 0)}
+.inkwave-score strong{display:grid;place-items:center;min-width:120px;font-size:34px;padding:10px 22px;border-radius:999px;background:#15121c;box-shadow:0 0 0 4px #fff,0 7px 0 4px #0006}
+.inkwave-score strong small{font:800 12px Inkwave Rubik,sans-serif;letter-spacing:.06em;color:#ffd24a;-webkit-text-stroke:0;margin-top:4px}
+.inkwave-roster{position:absolute;left:16px;right:16px;bottom:14px;display:flex;gap:28px;margin:0;padding:0;list-style:none}
+.inkwave-roster>li{flex:1 1 0;display:flex;gap:8px;min-width:0}.inkwave-roster>li:nth-child(2){flex-direction:row-reverse}
+.inkwave-roster div{flex:1 1 0;min-width:0;display:grid;gap:3px;padding:7px 10px;border-radius:10px;background:#15121cd9;box-shadow:inset 0 4px var(--team)}
+.inkwave-roster b{font-size:15px;overflow-wrap:anywhere}.inkwave-roster span{font-size:12px;font-weight:700;color:#d8d2e6}
+.inkwave-intro{text-align:center;padding-top:12vh;pointer-events:none}.inkwave-intro strong{font:400 48px Inkwave Titan,sans-serif;-webkit-text-stroke:6px #15121c;paint-order:stroke fill}
+@media(prefers-reduced-motion:reduce){.inkwave *{animation:none!important;transition:none!important}}
+.inkwave-original{display:block;border:0;width:100%;height:620px;background:#15121c;border-radius:12px}
+.inkwave-original[hidden]{display:none}
+.inkwave-loadout{margin-bottom:8px}
+.inkwave-ready{position:sticky;bottom:0;z-index:2;display:flex;align-items:center;justify-content:center;gap:12px;padding:8px 0 max(8px,env(safe-area-inset-bottom));background:#15121cf5;border-radius:12px}
+.inkwave-ready .kp-btn{margin:0}.inkwave-ready span{font-size:13px}.inkwave-lobby>p{font-size:13px;line-height:1.4}
+.inkwave-results{height:760px}.inkwave-watch .inkwave-results{height:max(540px,calc(100dvh - 200px))}
+@media(max-width:600px){.inkwave-original{height:900px}.inkwave-results{height:1150px}}
+.inkwave-settings{height:clamp(320px,calc(90dvh - 220px),620px)}
+
+@media(max-width:900px){.inkwave-loadout{height:clamp(400px,calc(100dvh - 160px),720px)}.inkwave-ready .kp-btn{width:100%;min-height:48px}.inkwave-ready{flex-wrap:wrap}}
+@media(min-width:601px) and (max-width:900px){.inkwave-loadout{height:max(248px,calc(100dvh - 124px))}}
+/* Phones give the arena the whole screen. The shell's buttons stack in the top-left corner, left of the squad
+   icons and above the thumb zones; the minimap moves down to make room (public/mobile.css). */
+.kp-shell-immersive:has(.inkwave-scene) .kp-landscape-controller{inset:var(--phone-top,0px) var(--safe-right) auto var(--safe-left);height:var(--phone-height,100dvh)}
+.kp-shell-immersive:has(.inkwave-scene) .kp-scene-stage{border-radius:0}
+.kp-shell-immersive:has(.inkwave-scene)>.kp-header{position:fixed;z-index:20;top:calc(var(--phone-top,0px) + 6px);left:calc(var(--safe-left) + 10px);min-height:0;margin:0;pointer-events:none}
+.kp-shell-immersive:has(.inkwave-scene) :is(.kp-header-brand,.kp-session-pill){display:none}
+.kp-shell-immersive:has(.inkwave-scene) .kp-header-actions{flex-direction:column;align-items:stretch;gap:6px}
+.kp-shell-immersive:has(.inkwave-scene) .kp-header .kp-btn{pointer-events:auto;min-height:44px;margin:0;padding:4px 10px;font-size:12px;background:#15121cb3}
+/* Short landscape phones: the loadout takes the full height and Ready sits over the character preview. */
+@media(orientation:landscape) and (max-height:500px){
+ .kp-shell-immersive:has(.inkwave-lobby)>.kp-header{margin-bottom:.5rem}
+ .kp-shell-immersive:has(.inkwave-lobby) .kp-header .kp-btn{min-height:44px;padding:4px 12px;font-size:12px}
+ .inkwave-lobby .inkwave-loadout{height:calc(var(--phone-height,100dvh) - 84px);margin:0}
+ .inkwave-ready{position:fixed;z-index:3;right:calc(max(1.25rem,var(--safe-right)) + 14px);bottom:calc(max(1rem,var(--safe-bottom)) + 12px);width:min(240px,30vw);flex-direction:column;gap:4px;padding:0;background:none}
+ .inkwave-ready span{text-shadow:0 1px 3px #000}
+}

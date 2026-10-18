@@ -1,0 +1,31 @@
+.party-menu{background:#15121c url('assets/stages/tidewater-dusk.webp') center/cover!important;touch-action:auto!important}
+.party-menu #ui-root{touch-action:pan-y}
+.party-menu .iw-ui [data-nav]{min-width:44px;min-height:44px}
+.party-menu .iw-ui [data-nav]:focus-visible{outline:3px solid white;outline-offset:3px}
+.party-settings .iw-ss__launch,.party-settings .iw-ss__kit,.party-settings .iw-btn--start,.party-settings .iw-wchip,.party-loadout .iw-loadout__practice,.party-loadout .iw-nameedit,.party-results .iw-res__btns,.party-watching .iw-xp{display:none!important}
+.party-results .iw-res__foot{justify-content:center}
+.party-menu .iw-prompts{display:none}
+@media(max-width:600px){.party-menu .iw-ui{--u:7px}.party-menu .iw-screen{overflow-y:auto;overflow-x:hidden}.party-settings .iw-modesel__row{display:flex;flex-direction:column;position:relative;inset:auto;width:auto;margin:100px 16px 20px}.party-settings .iw-mode{min-height:230px}.party-results .iw-res__teams{grid-template-columns:1fr}.party-results .iw-res__body{position:relative;top:auto;margin-top:220px;padding-bottom:24px}.party-results .iw-res__head{top:20px}.party-results .iw-prow__nm{overflow-wrap:anywhere}}
+
+.party-menu .iw-screen{overflow-y:auto;overflow-x:hidden}
+.party-settings .iw-ss__left{position:relative;top:auto;margin-top:100px;margin-bottom:24px}
+.party-menu .iw-seg__opt{border:0;background:transparent;min-width:44px;min-height:44px;font:inherit;font-size:11px;font-weight:800;padding:4px}
+.party-menu .iw-seg__hl{display:none}
+.party-menu .iw-seg__opt.is-sel{background:linear-gradient(180deg,var(--a-light),var(--a));border-radius:10px}
+.party-menu .iw-setrow--stack .iw-seg{grid-auto-flow:row;grid-template-columns:repeat(3,minmax(0,1fr));border-radius:12px}
+.party-loadout .iw-name__pen{display:none}
+.party-loadout .iw-screen:is(.iw-loadout,.iw-results) .iw-backbtn,.party-settings .iw-modesel .iw-backbtn{display:none}
+@media(max-width:600px){.party-settings .iw-ss{display:flex;flex-direction:column}.party-settings .iw-ss__left{order:2;width:auto;left:auto;margin:0 16px 24px}.party-settings .iw-ss__hero{order:1;position:relative;inset:auto;flex:none;height:230px;margin:100px 16px 24px}.party-settings .iw-ss__name{font-size:24px}.party-settings .iw-ss__blurb{font-size:11px}.party-settings .iw-ss__time{top:8px;right:8px}.party-settings .iw-ss__layout{display:none}.party-settings .iw-ss__list{max-height:none}}
+
+@media(max-width:600px){
+.party-menu .iw-head{left:16px;right:16px;align-items:flex-start}.party-menu .iw-head__sub{white-space:normal}.party-menu .iw-h1{font-size:28px}
+.party-loadout .iw-ltile{min-width:0}.party-loadout .iw-lsaved{order:3}
+.party-results .iw-res__head{left:16px;right:16px}.party-results .iw-res__title{font-size:40px}.party-results .iw-res__metarow,.party-results .iw-res__medallist{flex-wrap:wrap}.party-results .iw-res__meta{white-space:normal}
+.party-results .iw-res__body{inset:auto;width:auto;margin:400px 12px 0;padding-bottom:24px}.party-results .iw-res__teams{grid-template-columns:minmax(0,1fr);gap:20px}.party-results .iw-ttable{min-width:0}
+.party-results .iw-ttable__head,.party-results .iw-prow{grid-template-columns:18px minmax(0,1fr) 40px 20px 20px;gap:3px}.party-results .iw-ttable--boss .iw-ttable__head,.party-results .iw-ttable--boss .iw-prow{grid-template-columns:16px minmax(0,1fr) 44px 18px 18px 18px 28px;gap:2px}
+.party-results .iw-prow{height:auto;min-height:44px;padding:6px 4px}.party-results .iw-prow__name{flex-wrap:wrap;white-space:normal;overflow:visible;gap:3px}.party-results .iw-prow__nm{font-size:12px}.party-results .iw-prow__name em{margin-left:0}.party-results .iw-ttable__team{font-size:10px;letter-spacing:0}.party-results .iw-ttable__col{font-size:9px;letter-spacing:0}.party-results .iw-prow__turf,.party-results .iw-prow__n{font-size:11px}
+.party-results .iw-xp{width:100%;margin-top:16px}.party-results .iw-xp__row{flex-wrap:wrap;gap:4px}.party-results .iw-xp__next{white-space:normal}.party-results .iw-cover__names{font-size:12px}
+}
+
+
+@media(max-width:600px){.party-results .iw-res__boss{height:auto;min-height:100px;flex-wrap:wrap;padding:10px 8px 10px 48px}.party-results .iw-rb__emb{width:38px;height:38px;left:3px;top:30px}.party-results .iw-rb__main{flex-basis:100%}.party-results .iw-rb__row{flex-wrap:wrap;gap:5px}.party-results .iw-rb__phase{margin-left:0}.party-results .iw-rb__name{font-size:12px;width:100%}.party-results .iw-rb__stamp{left:auto;right:8px;top:auto;bottom:5px;translate:none;font-size:16px}.party-results .iw-rb__time{padding:3px 6px}}
