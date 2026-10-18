@@ -6,6 +6,8 @@ import { angleDelta, headingOf } from '../sim/math';
 import { sampleAt } from '../sim/track';
 import { getTrack } from '../tracks/index';
 import type { RaceEvent, RaceView, RacerView } from '../sim/types';
+import { CHAOS } from '../sim/chaos';
+import { PHYSICS } from '../sim/physics';
 import type { ViewRect } from '../render/types';
 import { splitRects } from '../render/layout';
 import { ItemFace } from './icons';
@@ -62,6 +64,7 @@ export function ViewportHud({ race, racer, rect, viewports, showControlsHint }: 
       <div className="kp2-hud-left">
         <div className={`kp2-hud-slot ${racer.item || racer.rollT > 0 ? '' : 'is-empty'} ${racer.trailing ? 'is-trailing' : ''}`}><ItemFace racer={racer}/></div>
         <div className="kp2-hud-lap kp-numeral"><small>Lap</small>{lap}<span>/{race.laps}</span></div>
+        {racer.kart === 'roadster' && <div className={`kp2-hud-air ${racer.flyT > 0 ? 'is-firing' : ''}`}><small>Air</small><i style={{ transform: `scaleX(${racer.tank / PHYSICS.flyTank})` }}/></div>}
       </div>
       <div className="kp2-hud-right">
         <div className={`kp2-hud-rank kp-numeral kp2-rank-${rankTone(racer.rank)}`} aria-label={`Position ${racer.rank} of ${race.racers.length}`}>{racer.rank}<sup>{ordinalSuffix(racer.rank)}</sup></div>
@@ -73,7 +76,7 @@ export function ViewportHud({ race, racer, rect, viewports, showControlsHint }: 
     {wrongWay && <div className="kp2-hud-alert" role="alert"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm-5 7.5h10v3H7z" fill="currentColor"/></svg>Wrong way!</div>}
     {racer.respawnT > 0 && !finished && <div className="kp2-hud-note">Back on track in a sec…</div>}
     {finished && <div className="kp2-hud-finish"><span>Finish!</span><b className={`kp-numeral kp2-rank-${rankTone(racer.rank)}`}>{racer.rank}<sup>{ordinalSuffix(racer.rank)}</sup></b><small className="kp-numeral">{formatTime(racer.finishTime)}</small></div>}
-    {showControlsHint && race.time < 6 && <div className="kp2-hud-hint"><span><kbd>←</kbd><kbd>→</kbd> steer</span><span><kbd>Shift</kbd> drift</span><span><kbd>E</kbd> item</span><span><kbd>S</kbd> brake</span><span><kbd>H</kbd> honk</span></div>}
+    {showControlsHint && race.time < 6 && <div className="kp2-hud-hint"><span><kbd>←</kbd><kbd>→</kbd> steer</span><span><kbd>Shift</kbd> drift</span><span><kbd>E</kbd> item</span><span><kbd>S</kbd> brake</span><span><kbd>H</kbd> honk</span>{racer.kart === 'roadster' && <span><kbd>F</kbd> fly</span>}</div>}
   </div>;
 }
 
@@ -99,6 +102,17 @@ function Tower({ race, highlight }: { race: RaceView; highlight: readonly string
   </ol>;
 }
 
+/** The active chaos event: a colour wash over everything, a big announcement, then a shrinking timer chip. */
+export function ChaosHud({ race }: { race: RaceView }) {
+  const kind = race.phase === 'racing' ? race.chaos.kind : null; if (!kind) return null;
+  const info = CHAOS[kind], left = race.chaos.t / info.seconds;
+  return <div className="kp2-chaos" style={{ '--c': info.color } as CSSProperties} role="status">
+    <div className="kp2-chaos-wash" key={`w-${race.chaos.next}-${kind}`}/>
+    {info.seconds - race.chaos.t < 2.6 && <div className="kp2-chaos-banner" key={`b-${race.chaos.next}-${kind}`}><small>Chaos!</small><b>{info.name}</b><span>{info.blurb}</span></div>}
+    <div className="kp2-chaos-chip"><b>{info.name}</b><i style={{ transform: `scaleX(${Math.max(0, left)})` }}/></div>
+  </div>;
+}
+
 export function SharedHud({ race, followId, mode }: SharedHudProps) {
   const humans = race.racers.filter(r => !r.bot), follow = race.racers.find(r => r.id === followId);
   const views = mode === 'split' ? humans.length : 1;
@@ -108,6 +122,7 @@ export function SharedHud({ race, followId, mode }: SharedHudProps) {
   const highlight = mode === 'split' ? humans.map(r => r.id) : follow ? [follow.id] : [];
   return <div className={`kp2-shared kp2-shared-${layout}`}>
     <CountdownBig time={race.time}/>
+    <ChaosHud race={race}/>
     {layout === 'full' && <Tower race={race} highlight={highlight}/>}
     {spare && <div className="kp2-spare" style={{ left: `${spare.x * 100}%`, top: `${spare.y * 100}%`, width: `${spare.w * 100}%`, height: `${spare.h * 100}%` }}>
       <Tower race={race} highlight={highlight}/><Minimap race={race} highlight={highlight} className="kp2-minimap-spare"/>

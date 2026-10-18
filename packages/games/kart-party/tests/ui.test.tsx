@@ -9,6 +9,7 @@ import { rules } from '../src/server';
 import { decodeRaceView } from '../src/net/wire';
 import { InputComposer, keyBinding, keySteer, readPad, steerFromDrag } from '../src/ui/input';
 import { Controller } from '../src/ui/Controller';
+import { TiltSettings } from '../src/ui/TiltSettings';
 import { Lobby } from '../src/ui/Lobby';
 import { partyAwards, Results } from '../src/ui/Results';
 import { SettingsPanel } from '../src/ui/Settings';
@@ -35,10 +36,16 @@ const noop = () => {};
 const ctlProps = (race: RaceView, playerId: string, isHost = false) => ({ roomId: 'r', roundId: 'u', playerId, viewRole: 'controller' as const, isHost, publicView: race, privateView: null, connected: true,
   serverNowMs: () => 0, setInput: noop, releaseInput: noop, sendAction: async () => ({ accepted: true }), assetsReady: noop });
 
+test('device settings supply a tilt toggle to the shared settings panel, without their own button', () => {
+  const html = renderToStaticMarkup(<TiltSettings onClose={noop}/>);
+  assert.match(html, /role="switch" aria-checked="false" aria-label="Tilt steering"/);
+  assert.doesNotMatch(html, />Controls<|<dialog/);
+});
+
 test('composer: presses become counters, every change bumps seq, nothing is emitted when unchanged', () => {
   const sent: Input[] = [], c = new InputComposer(i => sent.push(i));
   c.hold('drift', 'k:Space', true);
-  assert.deepEqual(sent.at(-1), { steer: 0, drift: true, brake: false, item: false, hop: 1, fire: 0, seq: 1 });
+  assert.deepEqual(sent.at(-1), { steer: 0, drift: true, brake: false, item: false, hop: 1, fire: 0, fly: 0, seq: 1 });
   c.hold('drift', 't:drift:1', true);                     // a second source holding drift is not a new press
   assert.equal(sent.length, 1);
   c.hold('drift', 'k:Space', false); c.hold('drift', 't:drift:1', false);
@@ -57,13 +64,13 @@ test('composer: presses become counters, every change bumps seq, nothing is emit
 test('composer: clear releases held sources but keeps the counters; seed continues the server counters', () => {
   const sent: Input[] = [], c = new InputComposer(i => sent.push(i));
   c.seed(254, 9, 40); c.flush();
-  assert.deepEqual(sent[0], { steer: 0, drift: false, brake: false, item: false, hop: 254, fire: 9, seq: 41 });
+  assert.deepEqual(sent[0], { steer: 0, drift: false, brake: false, item: false, hop: 254, fire: 9, fly: 0, seq: 41 });
   c.hold('drift', 'a', true); c.hold('brake', 'b', true); c.steer('t:steer', .5); c.hold('item', 'g:x', true);
   assert.equal(sent.at(-1)!.hop, 255);
   c.clear('g:');
   assert.equal(sent.at(-1)!.item, false); assert.equal(sent.at(-1)!.drift, true); assert.equal(c.neutral, false);
   c.clear();
-  assert.deepEqual({ ...sent.at(-1)!, seq: 0 }, { steer: 0, drift: false, brake: false, item: false, hop: 255, fire: 10, seq: 0 });
+  assert.deepEqual({ ...sent.at(-1)!, seq: 0 }, { steer: 0, drift: false, brake: false, item: false, hop: 255, fire: 10, fly: 0, seq: 0 });
   assert.equal(c.neutral, true);
   c.hold('drift', 'a', true); assert.equal(sent.at(-1)!.hop, 0);  // wraps at 256
   c.seed(1, 1, 1); assert.equal(sent.at(-1)!.hop, 0);                // seeding after sending is ignored
@@ -77,10 +84,11 @@ test('steering, keys and gamepad mapping', () => {
   assert.deepEqual(keyBinding('ArrowLeft'), { steer: -1 }); assert.deepEqual(keyBinding('D'), { steer: 1 });
   assert.deepEqual(keyBinding(' '), { hold: 'drift' }); assert.deepEqual(keyBinding('Shift'), { hold: 'drift' });
   assert.deepEqual(keyBinding('Enter'), { hold: 'item' }); assert.deepEqual(keyBinding('e'), { hold: 'item' });
-  assert.deepEqual(keyBinding('ArrowDown'), { hold: 'brake' }); assert.deepEqual(keyBinding('h'), { honk: true });
+  assert.deepEqual(keyBinding('ArrowDown'), { hold: 'brake' }); assert.deepEqual(keyBinding('h'), { honk: true }); assert.deepEqual(keyBinding('F'), { hold: 'fly' });
   assert.equal(keyBinding('ArrowUp'), null);
   const b = (...on: number[]) => Array.from({ length: 16 }, (_, i) => ({ pressed: on.includes(i) }));
-  assert.deepEqual(readPad({ axes: [.1], buttons: b(0, 5) }), { steer: 0, drift: true, item: true, brake: false, honk: false });
+  assert.deepEqual(readPad({ axes: [.1], buttons: b(0, 5) }), { steer: 0, drift: true, item: true, brake: false, honk: false, fly: false });
+  assert.equal(readPad({ axes: [0], buttons: b(4) }).fly, true);
   assert.equal(readPad({ axes: [1], buttons: b(1) }).steer, 1);
   assert.equal(readPad({ axes: [0], buttons: b(14) }).steer, -1);
 });
@@ -91,6 +99,7 @@ test('phone controller (TV mode): steer zone, drift/item/brake, no text captions
   const html = renderToStaticMarkup(<Controller {...ctlProps(view(race), 'p1')}/>);
   assert.match(html, /kp2-ctl-full/);
   assert.match(html, /Steering area/);
+  assert.doesNotMatch(html, /role="switch"|Controls on this device|>Controls</);
   assert.match(html, /aria-label="Drift and hop \(hold\)"/);
   assert.match(html, /kp2-drift is-drifting tier-2/);
   assert.match(html, /Use Triple Nitro/); assert.match(html, /×3/);
@@ -203,15 +212,15 @@ test('viewport HUD: no event captions (rings, springs, loops); the bumper flash 
   assert.doesNotMatch(hud({ t: 19.4, type: 'bumper', racer: 'p0' }), /kp2-hud-bump/, 'the flash is brief');
 });
 
-test('lobby: picker shows 8 racers, 3 karts with stat bars and the roster; the board shows picks for a watching host', () => {
+test('lobby: picker shows 8 racers, 4 karts with stat bars and the roster; the board shows picks for a watching host', () => {
   const players: RosterPlayer[] = NAMES.map((name, i) => ({ id: `p${i}`, name, color: '#28c6e7', connected: i !== 4, ready: i % 2 === 1, ...(i % 3 ? { lobbyChoice: { character: i % 8, kart: 'tank' } } : {}) }));
   const base = { roomId: 'r', lobbyId: 'l', players, settings: settings(), connected: true, onChoice: noop, onReady: noop };
   const picker = renderToStaticMarkup(<Lobby {...base} playerId="p0" isHost={false}/>);
-  assert.equal(count(picker, 'class="kp2-char '), 8); assert.equal(count(picker, 'class="kp2-kart '), 3);
+  assert.equal(count(picker, 'class="kp2-char '), 8); assert.equal(count(picker, 'class="kp2-kart '), 4);
   assert.match(picker, /Mochi/); assert.match(picker, /Dino|Rex/); assert.match(picker, /Tank/);
   assert.match(picker, /Ready — surprise me!/); assert.match(picker, /Also picked by/);
   assert.match(picker, /5\/10 ready/);
-  assert.equal(count(picker, '<dt>'), 5 * 4);                       // hero + 3 karts
+  assert.equal(count(picker, '<dt>'), 5 * 5);                       // hero + 4 karts
   const picked = renderToStaticMarkup(<Lobby {...base} playerId="p1" isHost={false}/>);
   assert.match(picked, /Not ready/); assert.match(picked, /kp2-char is-picked/);
   // A clash is spelled out: the other picker's name on the card, and a warning in the hero.

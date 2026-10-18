@@ -25,7 +25,7 @@ dev/     sandbox (local race → real SceneView), not part of the platform build
 tests/   node:test files (run by `npm test` and `npm run test:kart`)
 ```
 
-Data flow: phones send held `Input` (≤20 Hz, coalesced) → server `tick` at 60 Hz runs `stepRace` → `publicView` = `toRaceView(race)` at 20 Hz to every screen → `scene.tsx` interpolates other karts (`RaceBuffer`), predicts the local kart (`KartPredictor`, same `stepKart` code), renders viewports, plays audio and overlays the HUD.
+Data flow: phones send held `Input` (changes at once, ≤40 Hz) → server `tick` at 60 Hz runs `stepRace` → `publicView` = `toRaceView(race)` at 30 Hz to every screen → `scene.tsx` interpolates other karts (`RaceBuffer`), predicts the local kart (`KartPredictor`, same `stepKart` code), renders viewports, plays audio and overlays the HUD.
 
 World axes: +Y up, metres, heading `h` with forward `(sin h, cos h)` and driver-right `(-cos h, sin h)`. **Steering right (steer > 0) decreases heading.** Track positions are `(d, lateral)`: metres along the lap from the start line, metres to the driver's right. Track curvature > 0 is a left turn.
 
@@ -95,12 +95,18 @@ Input edges: a `fire` counter change = press. If the item is holdable and `item`
 
 **Network (net-audio)**: `toRaceView` rounds (positions/velocities 2 dp, angles 3 dp, timers 2 dp) and drops `rng`, `ai`, and `stats` until results; the compact wire codec (`net/wire.ts`: row arrays, racer ids as row indices, plus a `players` list of human ids) keeps 10 racers mid-race at ~3.5–4.2 KB; clients decode before rendering. `RaceBuffer` interpolates by server snapshot time with `PresentationDelay` (75–150 ms), angle-aware, snapping teleports. `KartPredictor` replays locally recorded inputs over the latest authoritative kart with the same `stepKart`, and hides corrections by decaying the visual error (snap on respawn/large errors).
 
+## 6.1 Chaos mode and the Roadster (2026-10-17)
+
+**Chaos** (`Settings.chaos`: `off` | `on` | `wild`, default `on`; missing = off) lives in `sim/chaos.ts`. Every 16–24 s (`wild`: 8–13 s, first at 12 s / 6 s) a race-wide event runs for 5–9 s, never the same twice in a row, chosen with `race.rng`: Moon Gravity (gravity × 0.4 via `StepEnv.gravity`; drift hops keep full gravity), Banana Storm (a peel falls from 14 m every 0.3 s ahead of a random racer; owner `chaos`, removed when it ends), Item Frenzy (boxes refill; every racer not mid-roll spins the roulette), Mega Karts (`collideKarts(…, mega)`: bodies × 1.7, bounce 2.6; karts drawn × 1.7), Hyper Speed (`chaosParams`: top speed × 1.3, accel × 1.25) and Underdog Stars (the back half gets a star). `race.chaos` travels in the snapshot so prediction applies the same physics. Event `chaos` (value = kind index) plays a siren; the shared HUD shows the banner, colour wash and timer chip; phones show a status cell.
+
+**Roadster** (`roadster`, after the next-generation Tesla Roadster revealed 2026-10-15 at SpaceX McGregor): stats speed 1.02, accel 1.12, handling .95, weight .95, traction .92. Cold-gas thrusters (`KartParams.fly`): a `fly` press counter (optional in `Input`; missing is never a press) fires a 1 s burst — vy ≥ 6, then 34 m/s² lift against gravity capped at 8 m/s climb, 6 m/s² forward push, 70% air steering — from a 5 s tank (`KartState.tank`) refilled at 0.5 s/s on the ground. Event `thrust`. Flying karts pass over shells and other karts (the existing height checks). CPUs fire only with a full tank on a long, walled, feature-free straight, or to hop a shell, and only when centred and aligned (`clearSkies`). Model: low wedge, wraparound screen, thin LED headlights, full-width tail light, active rear wing and four rear nozzles (white vapour jets in flight).
+
 ## 7. Blender asset contracts
 
 glTF is Y-up, karts face **+Z**, driver-right is **−X**, metres, origins on the ground. Materials embedded, no textures required (vertex colours / flat PBR). Every node below must exist; the runtime falls back to primitives if one is missing.
 
 `public/models/karts.glb` (≤ 5 MB):
-- `kart_<id>` for `zoomer`, `bolt`, `tank` (≈2.2 m wide, ≈3 m long, collision radius 1.25). Children: `kart_<id>_body`; steering pivots `kart_<id>_steer_fl`/`_fr` (rotate about Y) each containing wheel spin pivots `kart_<id>_wheel_fl`/`_fr`; rear spin pivots `kart_<id>_wheel_rl`/`_rr` (spin about local X, pivot at the axle centre); `kart_<id>_steering` (steering wheel pivot); empties `kart_<id>_seat` (driver hips), `kart_<id>_exhaust_l`/`_r` (flame origins, pointing −Z). The recolourable body paint uses a material named `kart_paint`.
+- `kart_<id>` for `zoomer`, `bolt`, `tank`, `roadster` (≈2.2 m wide, ≈3 m long, collision radius 1.25). Children: `kart_<id>_body`; steering pivots `kart_<id>_steer_fl`/`_fr` (rotate about Y) each containing wheel spin pivots `kart_<id>_wheel_fl`/`_fr`; rear spin pivots `kart_<id>_wheel_rl`/`_rr` (spin about local X, pivot at the axle centre); `kart_<id>_steering` (steering wheel pivot); empties `kart_<id>_seat` (driver hips), `kart_<id>_exhaust_l`/`_r` (flame origins, pointing −Z). The recolourable body paint uses a material named `kart_paint`.
 - `char_<i>` for i = 0…7 in `CHARACTERS` order (hamster, fox, bear, frog, cat, penguin, bunny, dino), origin at the hips (placed on the seat). Children `char_<i>_body`, `char_<i>_head` (neck pivot), `char_<i>_arm_l`/`_r` (shoulder pivots; hands rest on the wheel).
 - Previews: `public/models/previews/char-<i>.png`, `kart-<id>.png`, 256×256 RGBA, transparent background.
 

@@ -63,9 +63,9 @@ test('10 racers mid-race: snapshot size and lapTimes', t => {
   assert.equal(view.phase, 'racing');
   assert.ok(view.racers.some(r => r.lapTimes.length > 0), 'lap times are kept');
   // The frozen RacerView shape has ~60 named fields (~500 B of keys per racer), so 10 racers cannot
-  // fit the 4.5 KB DESIGN target as keyed JSON; this guards the achievable budget instead.
-  assert.ok(largest <= 9500, `largest snapshot ${largest} B`);
-  assert.ok(perRacer <= 820, `per racer ${perRacer} B`);
+  // fit the 4.5 KB DESIGN target as keyed JSON; this guards the achievable budget instead (+3 Roadster thruster fields per racer).
+  assert.ok(largest <= 9900, `largest snapshot ${largest} B`);
+  assert.ok(perRacer <= 850, `per racer ${perRacer} B`);
 });
 
 test('what the server sends: 10 humans with platform UUID ids stay under 4.5 KB for a whole race', t => {

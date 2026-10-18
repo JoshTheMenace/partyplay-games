@@ -12,7 +12,7 @@ import type { Entity, RaceEvent, RaceView, RacerView } from '../sim/types';
 const RACER_KEYS = ['id', 'name', 'color', 'bot', 'connected', 'character', 'kart', 'x', 'y', 'z', 'vx', 'vy', 'vz', 'heading', 'steer', 'grounded', 'air', 'hint',
   'd', 'lateral', 'surface', 'offroad', 'lastSafeD', 'drift', 'driftCharge', 'driftTier', 'hopT', 'boostT', 'boostPower', 'slipT', 'slipCharge', 'trickT', 'tricked',
   'spinT', 'tumbleT', 'starT', 'shieldT', 'inkT', 'shockT', 'respawnT', 'invulnT', 'stallT', 'launch', 'loop', 'prevHop', 'prevFire', 'prevItem', 'lap', 'checkpoint',
-  'progress', 'rank', 'finishTime', 'lapTimes', 'lapStart', 'item', 'itemCount', 'rollT', 'trailing', 'lastSeq', 'honkT'] as const satisfies readonly (keyof RacerView)[];
+  'progress', 'rank', 'finishTime', 'lapTimes', 'lapStart', 'item', 'itemCount', 'rollT', 'trailing', 'lastSeq', 'honkT', 'flyT', 'tank', 'prevFly'] as const satisfies readonly (keyof RacerView)[];
 const ENTITY_KEYS = ['id', 'kind', 'owner', 'x', 'y', 'z', 'vx', 'vy', 'vz', 't', 'hint', 'd', 'target', 'bounces', 'fuse'] as const satisfies readonly (keyof Entity)[];
 const EVENT_KEYS = ['id', 't', 'type', 'racer', 'other', 'value', 'x', 'z'] as const satisfies readonly (keyof RaceEvent)[];
 const REFS = new Set<string>(['owner', 'target', 'racer', 'other']);   // racer-id fields sent as row indices

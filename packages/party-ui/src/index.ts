@@ -25,6 +25,8 @@ export type GameClientModule<Input, Action, Settings, PublicView, PrivateView> =
   immersivePhone?: boolean;
   LobbyView?: ComponentType<LobbyViewProps<Settings>>;
   AudioView?: ComponentType<GameAudioProps<PublicView>>;
+  /** Local player preferences inside the platform settings panel, separate from room settings. */
+  DeviceSettingsView?: ComponentType<{ onClose(): void }>;
   /** Allow portrait menus in a landscape game. The shell still releases input when the gate returns. */
   allowPortraitController?(view: PublicView | null): boolean;
   sceneRoles?: readonly ('display' | 'controller')[];

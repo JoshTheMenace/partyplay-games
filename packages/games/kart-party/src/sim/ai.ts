@@ -82,8 +82,8 @@ export function botInput(race: Race, racer: Racer): Input {
   const track = getTrack(race.track);
   const ai: AiState = racer.ai ??= { lane: 0, mistakeT: 0, itemDelay: NO_ITEM, driftHold: 0, targetD: 0 };
   const prof = PROFILE[racer.bot ? race.difficulty : 'normal'];
-  const out: Input = { steer: 0, drift: false, brake: false, item: false, hop: racer.prevHop, fire: racer.prevFire, seq: racer.lastSeq || 1 };   // seq 0 would read as "no input"
-  const press = (key: 'hop' | 'fire') => { out[key] = (racer[key === 'hop' ? 'prevHop' : 'prevFire'] + 1) & 255; };
+  const out: Input = { steer: 0, drift: false, brake: false, item: false, hop: racer.prevHop, fire: racer.prevFire, fly: racer.prevFly, seq: racer.lastSeq || 1 };   // seq 0 would read as "no input"
+  const press = (key: 'hop' | 'fire' | 'fly') => { out[key] = (racer[key === 'hop' ? 'prevHop' : key === 'fire' ? 'prevFire' : 'prevFly'] + 1) & 255; };
 
   if (race.phase === 'countdown') {
     if (ai.targetD === 0) {  // plan the start once: rocket (hit the window), stall (too early) or nothing
@@ -159,6 +159,11 @@ export function botInput(race: Race, racer: Racer): Input {
 
   // Tricks: a hop press in the air window after a ramp lip or crest (hard bots almost always, easy ones rarely).
   if (!racer.grounded && racer.trickT > 0 && !racer.tricked && raceRandom(race) < 1 - Math.pow(1 - prof.trick, 1 / 10)) press('hop');
+  // Roadster thrusters: hop over a shell closing in, and now and then burst down a clear straight with a full tank.
+  if (p.fly && racer.grounded && racer.flyT <= 0 && racer.tank >= PHYSICS.flyBurst && racer.drift === 0 && !finished && !jump && !lip) {
+    const threat = race.entities.some(e => (e.kind === 'bouncer' || e.kind === 'seeker') && e.owner !== racer.id && (e.x - racer.x) ** 2 + (e.z - racer.z) ** 2 < 14 * 14);
+    if ((threat || (racer.tank >= PHYSICS.flyTank - .5 && raceRandom(race) < .4 * DT)) && clearSkies(track, racer, v)) press('fly');
+  }
 
   // Braking: only when the upcoming line is tighter than we can hold at this speed. A crest or ramp lip that would launch
   // us brings the braking point for a corner just beyond it forward to the take-off: no brakes or grip in the air.
@@ -238,6 +243,16 @@ const toLoop = (track: Track, d: number) => track.loops.reduce((m, l) => Math.mi
 /** Metres to the start of the next gap (Infinity when the course has none). */
 const toGap = (track: Track, d: number) => track.gaps.reduce((m, g) => Math.min(m, forwardDistance(track, d, g.d0)), Infinity);
 /** Metres to the far side of a gap we are about to jump (or are flying over), else 0. */
+/** Somewhere a Roadster can fire its thrusters safely (in the air it has little grip): centred and pointing down a long straight
+ * with walls, never drop edges, and nothing in the flight path (ramps, gaps, springs, loops, bumpers, low gravity) for ~2.5 s. */
+function clearSkies(track: Track, racer: Racer, v: number) {
+  const here = sampleAt(track, racer.d), reach = Math.max(40, v * 2.5);
+  if (Math.abs(racer.lateral) > here.halfWidth - 3 || Math.abs(angleDelta(here.heading, racer.heading)) > .12) return false;
+  for (let f = 0; f <= reach; f += 8) { const s = sampleAt(track, racer.d + f); if (Math.abs(s.curvature) > .003 || s.edgeL === 'drop' || s.edgeR === 'drop' || gravityScale(track, s.d) < 1) return false; }
+  const near = (d: number) => forwardDistance(track, racer.d, d) < reach + 20;
+  return ![...track.ramps, ...track.gaps, ...track.springs, ...track.loops].some(f => near(f.d0)) && !track.movers.some(m => near(m.d));
+}
+
 function gapAhead(track: Track, d: number, v: number) {
   for (const g of track.gaps) {
     const to = forwardDistance(track, d, g.d0), span = forwardDistance(track, g.d0, g.d1);

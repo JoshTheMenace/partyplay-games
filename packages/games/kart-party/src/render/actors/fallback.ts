@@ -51,6 +51,7 @@ const SPECS: Record<KartBodyId, KartSpec> = {
   zoomer: { len: 2.55, wid: 1.45, frontR: .33, rearR: .4, frontW: .3, rearW: .38, axleF: .98, axleR: -.92, trackF: .9, trackR: .92, seatZ: -.3 },
   bolt: { len: 2.8, wid: 1.3, frontR: .3, rearR: .38, frontW: .26, rearW: .4, axleF: 1.1, axleR: -.98, trackF: .86, trackR: .9, seatZ: -.32 },
   tank: { len: 2.5, wid: 1.65, frontR: .38, rearR: .47, frontW: .36, rearW: .46, axleF: .95, axleR: -.9, trackF: .98, trackR: 1.0, seatZ: -.28 },
+  roadster: { len: 3.0, wid: 1.6, frontR: .34, rearR: .38, frontW: .3, rearW: .38, axleF: 1.08, axleR: -.98, trackF: .9, trackR: .92, seatZ: -.3 },
 };
 const DARK = 0x23262e, SEAT = 0x2b2f3a, WHITE = 0xf4f4f0, CHROME = 0xd9dde3, GUN = 0x555b66, RUBBER = 0x1b1c20;
 
@@ -186,7 +187,7 @@ const templates = new Map<string, THREE.Object3D | null>();
 /** Cached primitive template for a contract node name (`kart_<id>`, `char_<i>`, item names, `drone`), or null. */
 export function fallbackTemplate(name: string): THREE.Object3D | null {
   if (!templates.has(name)) {
-    const kart = /^kart_(zoomer|bolt|tank)$/.exec(name), char = /^char_(\d)$/.exec(name);
+    const kart = /^kart_(zoomer|bolt|tank|roadster)$/.exec(name), char = /^char_(\d)$/.exec(name);
     const t = kart ? buildKart(kart[1] as KartBodyId) : char ? buildCharacter(Number(char[1])) : buildProp(name);
     t?.traverse(o => { o.castShadow = o instanceof THREE.Mesh; });
     templates.set(name, t);

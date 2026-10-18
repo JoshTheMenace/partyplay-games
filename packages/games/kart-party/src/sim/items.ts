@@ -39,6 +39,8 @@ export const ROULETTE_SECONDS = 1.4;
 export const BOX_RESPAWN = 2.5, BOX_RADIUS = 2, MAX_PEELS = 12;
 export const THUNDER_COOLDOWN = 20, COMET_COOLDOWN = 25, SHIELD_SECONDS = 12, STAR_SECONDS = 7.5;
 export const blastRadius = (e: Entity) => e.bounces;
+/** Owner of the peels Chaos mode drops from the sky (no racer is credited with their hits). */
+export const CHAOS_OWNER = 'chaos';
 
 const G = 28, KART_R = 1.25, BLAST_LIFE = .6, TRAIL_BACK = 2.4;
 const RADIUS: Record<EntityKind, number> = { peel: .7, bouncer: .7, seeker: .7, bomb: .8, comet: 1, blast: 0 };
@@ -94,7 +96,7 @@ export function collectBoxes(race: Race, track: Track, dt: number): void {
       if (r.respawnT > 0 || r.finishTime !== null || (r.x - box.x) ** 2 + (r.z - box.z) ** 2 > BOX_RADIUS ** 2 || Math.abs(r.y + .6 - box.y) > 2.2) continue;
       race.boxes[i] = BOX_RESPAWN;
       pushEvent(race, { type: 'pickup', racer: r.id, value: i, x: box.x, z: box.z });
-      if (r.item === null && r.rollT <= 0) { r.item = rollItem(race, r); r.itemCount = ITEMS[r.item].uses; r.rollT = ROULETTE_SECONDS; r.trailing = false; }
+      if (r.item === null && r.rollT <= 0) startRoll(race, r);
       break;
     }
   });
@@ -115,6 +117,10 @@ export function handleItemInput(race: Race, racer: Racer, input: Input, track: T
   if (ITEMS[racer.item].holdable && (held || onLoop)) racer.trailing = true;
   else if (!onLoop || racer.item !== 'bomb') useItem(race, racer, track);
 }
+
+/** Spin the roulette: the item is decided now and usable when `rollT` runs out. */
+export function startRoll(race: Race, r: Racer) { r.item = rollItem(race, r); r.itemCount = ITEMS[r.item].uses; r.rollT = ROULETTE_SECONDS; r.trailing = false; }
+export const dropPeel = (race: Race, track: Track, x: number, y: number, z: number) => { spawn(race, track, 'peel', CHAOS_OWNER, x, y, z, 0, 0, 0); };
 
 function consume(racer: Racer) {
   racer.itemCount = Math.max(0, racer.itemCount - 1);

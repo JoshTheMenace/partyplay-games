@@ -6,8 +6,8 @@
  * the server will be at when an input sent *now* arrives. That lead is measured, not guessed: when
  * input k (sent at local time t_k) is first acknowledged by a snapshot at race time T, the server
  * applied it no later than T, so race time ≈ local time + min(T − t_k) over recent acks. Clock sync
- * errors cancel out of that estimate. The platform sends held input on a 50 ms cadence, so inputs are
- * assumed to leave `sendDelayMs` (25 ms, the average wait) after they are set. The estimate moves in
+ * errors cancel out of that estimate. The platform sends a held-input change at once (25 ms minimum gap), so inputs are
+ * assumed to leave `sendDelayMs` (15 ms, the average wait) after they are set. The estimate moves in
  * steps (a first ack, a faster one, snapshot jitter before any ack), so the lead actually drawn follows
  * it at ±5% of real time, like RaceBuffer's clock: a 50 ms step never skips the kart 1.5 m in a frame.
  *
@@ -19,6 +19,7 @@
  * one (a speed-aware decay, so the kart eases back by the round-trip distance instead of jumping). */
 import { angleDelta, clamp } from '../sim/math';
 import { kartParams, startBoost, stepKart, type Drafter, type KartParams } from '../sim/physics';
+import { chaosGravity, chaosParams } from '../sim/chaos';
 import type { Track } from '../sim/track';
 import { kartFromView } from '../sim/view';
 import { lerpKart } from './interpolate';
@@ -36,11 +37,11 @@ const STALE_UNACKED_MS = 1500, MAPPING_WINDOW_MS = 10000, ASSUMED_UPLINK = .05;
 const MAX_STEPS_PER_SAMPLE = 60;
 const LEAD_SLEW = .05, LEAD_SNAP = .25;   // drawn lead follows the estimate at ±5% of real time; bigger gaps jump
 const NO_EVENTS: PredictedEvent[] = [];
-/** The platform resends the held input on a 50 ms cadence, so a change leaves on average 25 ms after setInput. */
-export const PLATFORM_SEND_DELAY_MS = 25;
+/** The platform sends a change at once, or within its 25 ms minimum gap during continuous steering. */
+export const PLATFORM_SEND_DELAY_MS = 15;
 
 type Sent = { input: Input; at: number; sampled: boolean };
-type Auth = { kart: KartState; time: number; phase: Phase; racer: RacerView; params: KartParams; drafters: (Drafter & { x0: number; z0: number; vx: number; vz: number })[]; snapshotTime: number; at: number };
+type Auth = { kart: KartState; time: number; phase: Phase; racer: RacerView; params: KartParams; gravity: number; drafters: (Drafter & { x0: number; z0: number; vx: number; vz: number })[]; snapshotTime: number; at: number };
 type Pose = { x: number; y: number; z: number; heading: number };
 
 export class KartPredictor {
@@ -90,7 +91,7 @@ export class KartPredictor {
     this.sent = keep < 0 ? [] : this.sent.slice(keep);
     this.fallback = view.time + clamp((serverNowMs - snapshotTime) / 1000, 0, .5) + ASSUMED_UPLINK - nowMs / 1000;
     const drafters = view.racers.filter(r => r.id !== this.racerId).map(r => ({ x: r.x, z: r.z, x0: r.x, z0: r.z, vx: r.vx, vz: r.vz, heading: r.heading, speed: Math.hypot(r.vx, r.vz) }));
-    this.auth = { kart: kartFromView(racer), time: view.time, phase: view.phase, racer, params: kartParams(racer.character, racer.kart, view.speedClass, 1), drafters, snapshotTime, at: nowMs };
+    this.auth = { kart: kartFromView(racer), time: view.time, phase: view.phase, racer, params: chaosParams(kartParams(racer.character, racer.kart, view.speedClass, 1), view.chaos?.kind ?? null), gravity: chaosGravity(view.chaos?.kind ?? null), drafters, snapshotTime, at: nowMs };
     this.dirty = true;
   }
 
@@ -137,7 +138,7 @@ export class KartPredictor {
   private acknowledgedInput(nowMs: number): Input | null {
     const auth = this.auth, r = auth?.racer;
     if (!auth || !r || auth.phase === 'results' || r.bot || !r.connected || r.finishTime !== null) return null;
-    const acked = this.sent[0]?.input.seq === r.lastSeq ? this.sent[0].input : r.lastSeq === 0 ? { steer: 0, drift: false, brake: false, item: false, hop: r.prevHop, fire: r.prevFire, seq: 0 } : null;
+    const acked = this.sent[0]?.input.seq === r.lastSeq ? this.sent[0].input : r.lastSeq === 0 ? { steer: 0, drift: false, brake: false, item: false, hop: r.prevHop, fire: r.prevFire, fly: r.prevFly, seq: 0 } : null;
     if (!acked) return null;
     for (const s of this.sent) if (s.input.seq > r.lastSeq && nowMs - s.at > STALE_UNACKED_MS) return null;
     return acked;
@@ -184,7 +185,7 @@ export class KartPredictor {
       k.prevFire = input.fire; k.prevItem = input.item;
     }
     for (const d of auth.drafters) { d.x = d.x0 + d.vx * since; d.z = d.z0 + d.vz * since; }
-    for (const e of stepKart(k, input, auth.params, this.track, PREDICT_DT, { time, phase, drafters: auth.drafters })) this.report(time, e.type, e.value);
+    for (const e of stepKart(k, input, auth.params, this.track, PREDICT_DT, { time, phase, drafters: auth.drafters, gravity: auth.gravity })) this.report(time, e.type, e.value);
     if (time > this.frontier) this.frontier = time;
   }
   private report(t: number, type: RaceEventType, value?: number) {

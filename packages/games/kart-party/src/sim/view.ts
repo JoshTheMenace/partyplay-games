@@ -20,7 +20,7 @@ function racerView(r: Racer, results: boolean): RacerView {
     respawnT: r2(r.respawnT), invulnT: r2(r.invulnT), stallT: r2(r.stallT), launch: r.launch, loop: r3(r.loop), prevHop: r.prevHop, prevFire: r.prevFire, prevItem: r.prevItem,
     lap: r.lap, checkpoint: r.checkpoint, progress: r2(r.progress), rank: r.rank, finishTime: r.finishTime === null ? null : r3(r.finishTime),
     lapTimes: r.lapTimes.map(r3), lapStart: r3(r.lapStart), item: r.item, itemCount: r.itemCount, rollT: r2(r.rollT), trailing: r.trailing,
-    lastSeq: r.lastSeq, honkT: r2(r.honkT),
+    lastSeq: r.lastSeq, honkT: r2(r.honkT), flyT: r2(r.flyT), tank: r2(r.tank), prevFly: r.prevFly,
   };
   if (results) view.stats = { ...r.stats, airTime: r2(r.stats.airTime), topSpeed: r2(r.stats.topSpeed) };
   return view;
@@ -37,12 +37,12 @@ export function toRaceView(race: Race): RaceView {
     phase: race.phase, time: r3(race.time), racers: race.racers.map(r => racerView(r, results)), entities: race.entities.map(entityView),
     boxes: race.boxes.map(r2), events: race.events.filter(e => e.t >= race.time - EVENT_WINDOW).map(eventView), serial: race.serial,
     firstFinish: race.firstFinish === null ? null : r3(race.firstFinish), endAt: race.endAt === null ? null : r3(race.endAt),
-    cooldowns: { thunder: r2(race.cooldowns.thunder), comet: r2(race.cooldowns.comet) } };
+    cooldowns: { thunder: r2(race.cooldowns.thunder), comet: r2(race.cooldowns.comet) }, chaos: { ...race.chaos, t: r2(race.chaos.t), next: r2(race.chaos.next) } };
 }
 /** Rebuild the physics state of one racer from a snapshot (used by client prediction). */
 export function kartFromView(r: RacerView): KartState {
   const { x, y, z, vx, vy, vz, heading, steer, grounded, air, hint, d, lateral, surface, offroad, lastSafeD, drift, driftCharge, driftTier, hopT, boostT, boostPower,
-    slipT, slipCharge, trickT, tricked, spinT, tumbleT, starT, shieldT, inkT, shockT, respawnT, invulnT, stallT, launch, loop, prevHop, prevFire, prevItem } = r;
+    slipT, slipCharge, trickT, tricked, spinT, tumbleT, starT, shieldT, inkT, shockT, respawnT, invulnT, stallT, launch, loop, prevHop, prevFire, prevItem, flyT, tank, prevFly } = r;
   return { x, y, z, vx, vy, vz, heading, steer, grounded, air, hint, d, lateral, surface, offroad, lastSafeD, drift, driftCharge, driftTier, hopT, boostT, boostPower,
-    slipT, slipCharge, trickT, tricked, spinT, tumbleT, starT, shieldT, inkT, shockT, respawnT, invulnT, stallT, launch, loop, prevHop, prevFire, prevItem };
+    slipT, slipCharge, trickT, tricked, spinT, tumbleT, starT, shieldT, inkT, shockT, respawnT, invulnT, stallT, launch, loop, prevHop, prevFire, prevItem, flyT, tank, prevFly };
 }

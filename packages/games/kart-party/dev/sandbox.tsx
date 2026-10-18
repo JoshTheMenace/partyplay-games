@@ -16,8 +16,9 @@ import type { Input, RaceView, Settings } from '../src/sim/types';
 
 const q = new URLSearchParams(location.search), humans = Math.max(1, Math.min(10, Number(q.get('players') ?? 1)));
 const settings: Settings = rules.validateSettings({ track: q.get('track') ?? 'palm-bay', laps: Number(q.get('laps') ?? 3), speedClass: Number(q.get('cc') ?? 100),
-  gridSize: humans + Number(q.get('cpus') ?? 7), views: q.get('view') === 'personal' || q.get('view') === 'spectator' ? 'personal' : 'tv' });
-const players = Array.from({ length: humans }, (_, i) => ({ id: `p${i}`, name: i ? `Player ${i + 1}` : 'You', color: ['#ff5748', '#28c6e7', '#78d955', '#b58aff'][i % 4] }));
+  gridSize: humans + Number(q.get('cpus') ?? 7), chaos: q.get('chaos') ?? 'on', views: q.get('view') === 'personal' || q.get('view') === 'spectator' ? 'personal' : 'tv' });
+const players = Array.from({ length: humans }, (_, i) => ({ id: `p${i}`, name: i ? `Player ${i + 1}` : 'You', color: ['#ff5748', '#28c6e7', '#78d955', '#b58aff'][i % 4],
+  ...(q.get('kart') ? { lobbyChoice: { character: i % 8, kart: q.get('kart') } } : {}) }));
 const race = rules.create({ roomId: 'dev', roundId: 'dev-1', players, seed: Number(q.get('seed') ?? 7), nowMs: 0 }, settings);
 const input: Input = { ...rules.neutralInput() };
 let serverInput: Input = { ...rules.neutralInput() };

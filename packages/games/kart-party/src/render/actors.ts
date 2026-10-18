@@ -180,6 +180,8 @@ export const createActors: ActorsFactory = ({ track, scene, assets, quality }) =
         if (!pose) continue;
         const K = r.kart, k = pose.kart;
         K.update(pose, kartFrame);
+        // Chaos mode's Mega Karts grow (and shrink back) over a few frames; the physics body grows with them.
+        K.root.scale.setScalar(K.root.scale.x + ((frame.race.chaos?.kind === 'mega' ? 1.7 : 1) - K.root.scale.x) * Math.min(1, dt * 5));
         if (K.boostStarted) r.cue.fovKick = Math.max(r.cue.fovKick, 2 + K.boostStarted * 4);   // transient punch; the camera adds the sustained boost FOV
         if (K.landed > 5) r.cue.shake = Math.max(r.cue.shake, clamp((K.landed - 5) / 14, 0, .45));
         if (k.shockT > 0 && r.prevShock <= 0) { strike(K); shake(id, .6); }

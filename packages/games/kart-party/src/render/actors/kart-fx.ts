@@ -104,6 +104,14 @@ export class KartExtras {
       fx.emit(FX.flare, e.x, e.y, e.z, k.vx, k.vy, k.vz, this.flameColor, .35 * this.flameLevel);
       for (let i = fx.n(38 * this.flameLevel, dt); i > 0; i--) fx.emit(FX.ember, e.x, e.y, e.z, k.vx * .7 - K.forward.x * rnd(3, 7) + rnd(-1, 1), k.vy * .7 - K.forward.y * rnd(3, 7) + rnd(0, 1.5), k.vz * .7 - K.forward.z * rnd(3, 7) + rnd(-1, 1), this.flameColor, 1);
     } else if (speed < 6 && !K.respawning && k.stallT <= 0) for (const e of K.exhaust) for (let i = fx.n(5, dt); i > 0; i--) fx.emit(FX.puff, e.x, e.y, e.z, -K.forward.x * 1.2, .8, -K.forward.z * 1.2, COLORS.smoke);
+    // Roadster thrusters: cold gas, so white vapour and no flame, blasting back from the rear nozzles and down from the floor jets.
+    if (k.flyT > 0 && !K.respawning) {
+      for (const e of K.exhaust) {
+        fx.emit(FX.flare, e.x, e.y, e.z, k.vx, k.vy, k.vz, COLORS.wind, .5);
+        for (let i = fx.n(60, dt); i > 0; i--) fx.emit(FX.wind, e.x, e.y, e.z, k.vx * .4 - K.forward.x * rnd(14, 22), -rnd(2, 6), k.vz * .4 - K.forward.z * rnd(14, 22), COLORS.wind, 1.6, 1);
+      }
+      for (let i = fx.n(70, dt); i > 0; i--) fx.emit(FX.smoke, K.center.x + rnd(-.9, .9), K.center.y - .2, K.center.z + rnd(-1.2, 1.2), k.vx * .5 + rnd(-2, 2), -rnd(8, 14), k.vz * .5 + rnd(-2, 2), COLORS.white, 1.6);
+    }
     if (k.stallT > 0) for (const e of K.exhaust) for (let i = fx.n(22, dt); i > 0; i--) fx.emit(FX.smoke, e.x, e.y, e.z, -K.forward.x * 2 + rnd(-.5, .5), rnd(1, 2), -K.forward.z * 2 + rnd(-.5, .5), COLORS.darkSmoke, 1.2);
 
     const grounded = k.grounded && !K.respawning && K.airHeight < .3;

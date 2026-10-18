@@ -5,7 +5,7 @@ import { TRACK_DEFS, TRACK_IDS } from '../tracks/index';
 import type { Settings } from '../sim/types';
 import { TrackShape } from './Minimap';
 
-export const DEFAULT_SETTINGS: Settings = { track: 'palm-bay', laps: 3, speedClass: 100, difficulty: 'normal', gridSize: 8, items: 'normal', views: 'auto' };
+export const DEFAULT_SETTINGS: Settings = { track: 'palm-bay', laps: 3, speedClass: 100, difficulty: 'normal', gridSize: 8, items: 'normal', views: 'auto', chaos: 'on' };
 /** The set-pieces only Rainbow Road has, listed on its finale card. */
 const FINALE = ['Star rings', 'Springs', 'Low gravity', 'Pinball bumpers', 'Loop-the-loop'];
 type Option<V> = { value: V; label: ReactNode; note?: string };
@@ -49,6 +49,10 @@ export function SettingsPanel({ settings: raw, onChange, disabled }: SettingsVie
         { value: 'normal', label: 'Normal', note: 'Item boxes on. Racers at the back get better items.' },
         { value: 'frantic', label: 'Frantic', note: 'Everyone gets back-of-the-pack power items. Chaos!' },
         { value: 'off', label: 'Off', note: 'Pure driving. No item boxes.' }]} {...props}/>
+      <Choice name="chaos" label="Chaos" options={[
+        { value: 'on', label: 'Chaos', note: 'About every 20 seconds a surprise hits everyone: moon gravity, banana storms, mega karts and more.' },
+        { value: 'wild', label: 'Total chaos', note: 'Surprises every 10 seconds or so. Nobody is safe.' },
+        { value: 'off', label: 'Off', note: 'Classic racing. No surprises.' }]} {...props}/>
       <Choice name="gridSize" label="Grid size" wide options={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => ({ value: n, label: n,
         note: n === 1 ? 'Humans only, no CPUs.' : `CPUs fill the grid up to ${n} racers.` }))} {...props}/>
       <Choice name="views" label="Where people race" wide options={[

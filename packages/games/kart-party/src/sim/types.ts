@@ -6,12 +6,16 @@ export type SpeedClass = 50 | 100 | 150 | 200;
 export type Difficulty = 'easy' | 'normal' | 'hard';
 export type ItemMode = 'normal' | 'frantic' | 'off';
 export type ViewMode = 'auto' | 'tv' | 'personal';
-export type KartBodyId = 'zoomer' | 'bolt' | 'tank';
+export type ChaosMode = 'off' | 'on' | 'wild';
+export type ChaosKind = 'moon' | 'bananas' | 'frenzy' | 'mega' | 'hyper' | 'underdog';
+export type KartBodyId = 'zoomer' | 'bolt' | 'tank' | 'roadster';
 
 export type Settings = {
   track: TrackId; laps: number; speedClass: SpeedClass; difficulty: Difficulty;
   /** Minimum racers on the grid; CPUs fill up to this (1 = humans only). */
   gridSize: number; items: ItemMode; views: ViewMode;
+  /** Surprise race-wide events (sim/chaos.ts). Missing = off. */
+  chaos?: ChaosMode;
 };
 
 /** Per-seat lobby pick (GameRules.parseLobbyChoice). Missing picks are auto-assigned. */
@@ -26,6 +30,7 @@ export type Input = {
   item: boolean;        // held: trail a holdable item behind the kart; release deploys it
   hop: number;          // drift/hop press counter
   fire: number;         // item press counter
+  fly?: number;         // thruster press counter (Roadster only; missing = no press)
   seq: number;          // client input sequence for prediction acknowledgement
 };
 export type Action = { type: 'honk' };
@@ -53,6 +58,7 @@ export type KartState = {
   launch: -1 | 0 | 1;                       // countdown start press: 1 rocket start pending, -1 stall pending
   loop: number;                             // angle around the loop-the-loop in radians (0 = not in a loop)
   prevHop: number; prevFire: number; prevItem: boolean;
+  flyT: number; tank: number; prevFly: number;   // Roadster thrusters: burst seconds left, seconds of compressed air left, press counter
 };
 
 export type RacerStats = {
@@ -83,8 +89,8 @@ export type Entity = {
 };
 
 export type RaceEventType = 'hit' | 'bump' | 'wall' | 'boost-pad' | 'mini-turbo' | 'trick' | 'rocket-start' | 'stall'
-  | 'slipstream' | 'pickup' | 'item' | 'shield-pop' | 'explode' | 'thunder' | 'comet' | 'lap' | 'final-lap'
-  | 'finish' | 'respawn' | 'fall' | 'honk' | 'overtake' | 'ring' | 'spring' | 'bumper' | 'loop';
+  | 'slipstream' | 'pickup' | 'item' | 'shield-pop' | 'explode' | 'thunder' | 'comet' | 'lap' | 'final-lap' | 'chaos'
+  | 'finish' | 'respawn' | 'fall' | 'honk' | 'overtake' | 'ring' | 'spring' | 'bumper' | 'loop' | 'thrust';
 export type RaceEvent = { id: number; t: number; type: RaceEventType; racer: string; other?: string; value?: number; x?: number; z?: number };
 
 export type Phase = 'countdown' | 'racing' | 'results';
@@ -100,6 +106,8 @@ export type Race = {
   serial: number; rng: number;
   firstFinish: number | null; endAt: number | null;  // race time when results begin
   cooldowns: { thunder: number; comet: number };
+  /** Active chaos event (`t` seconds left), the previous one, and the race time the next one starts. */
+  chaos: { mode: ChaosMode; kind: ChaosKind | null; last: ChaosKind | null; t: number; next: number };
 };
 
 /** Snapshot sent to every screen at 20 Hz. Racer physics fields are rounded but complete, so

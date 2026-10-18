@@ -3,7 +3,7 @@
  * Snapshots are keyed by server time. The buffer maps the local clock onto server time with the
  * "lead" of the fastest recent arrival (snapshotTime − arrivalMs, max over ~2 s), so the mapping
  * never depends on clock sync and packet jitter only ever makes frames early, never late. It then
- * presents `delay` ms behind that (party-runtime PresentationDelay, 75–150 ms, adapted to arrival
+ * presents `delay` ms behind that (party-runtime PresentationDelay, 50–150 ms, adapted to arrival
  * gaps) on a monotonic clock that runs at 95–105% speed to absorb corrections — it never jumps
  * back. Past the newest snapshot it extrapolates at most `maxExtrapolateMs`, then holds. Events come
  * from the newer snapshot once the presented clock reaches their time.
@@ -64,7 +64,7 @@ export class RaceBuffer {
   private readonly resetGapMs: number;
   private readonly capacity: number;
   constructor(options: RaceBufferOptions = {}) {
-    this.delay = new PresentationDelay({ initialMs: options.initialDelayMs ?? 100, minMs: options.minDelayMs ?? 75, maxMs: options.maxDelayMs ?? 150 });
+    this.delay = new PresentationDelay({ initialMs: options.initialDelayMs ?? 100, minMs: options.minDelayMs ?? 50, maxMs: options.maxDelayMs ?? 150 });
     this.maxExtrapolateMs = options.maxExtrapolateMs ?? 60; this.resetGapMs = options.resetGapMs ?? 1000; this.capacity = Math.max(4, options.capacity ?? 32);
   }
   /** Current presentation delay (ms behind the fastest arrival). */

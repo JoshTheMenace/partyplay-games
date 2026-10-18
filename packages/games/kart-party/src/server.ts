@@ -8,7 +8,7 @@ import { resolveViewMode } from './views';
 import type { Action, Input, LobbyChoice, Race, Settings } from './sim/types';
 export type { Action, Settings } from './sim/types';
 
-const DEFAULTS: Settings = { track: 'palm-bay', laps: 3, speedClass: 100, difficulty: 'normal', gridSize: 8, items: 'normal', views: 'auto' };
+const DEFAULTS: Settings = { track: 'palm-bay', laps: 3, speedClass: 100, difficulty: 'normal', gridSize: 8, items: 'normal', views: 'auto', chaos: 'on' };
 const counter = (n: unknown) => Number.isInteger(n) ? ((n as number) % 256 + 256) % 256 : 0;
 export const rules: GameRules<Race, Input, Action, Settings, RaceWire, null> = {
   validateSettings(raw) {
@@ -20,7 +20,8 @@ export const rules: GameRules<Race, Input, Action, Settings, RaceWire, null> = {
     if (!Number.isInteger(s.gridSize) || s.gridSize < 1 || s.gridSize > 10) throw Error('Choose a grid of 1–10 racers.');
     if (!['normal', 'frantic', 'off'].includes(s.items)) throw Error('Choose an item mode.');
     if (!['auto', 'tv', 'personal'].includes(s.views)) throw Error('Choose Auto, TV or personal views.');
-    return { track: s.track, laps: s.laps, speedClass: s.speedClass, difficulty: s.difficulty, gridSize: s.gridSize, items: s.items, views: s.views };
+    if (!['off', 'on', 'wild'].includes(s.chaos!)) throw Error('Choose a chaos level.');
+    return { track: s.track, laps: s.laps, speedClass: s.speedClass, difficulty: s.difficulty, gridSize: s.gridSize, items: s.items, views: s.views, chaos: s.chaos };
   },
   parseLobbyChoice(raw, ready) {
     // Ready without a pick means "surprise me": the race assigns a free character and the Zoomer.
@@ -34,7 +35,7 @@ export const rules: GameRules<Race, Input, Action, Settings, RaceWire, null> = {
   parseInput(raw) {
     const v = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof Input, unknown>>;
     const steer = typeof v.steer === 'number' && Number.isFinite(v.steer) ? Math.max(-1, Math.min(1, v.steer)) : 0;
-    return { steer, drift: v.drift === true, brake: v.brake === true, item: v.item === true, hop: counter(v.hop), fire: counter(v.fire), seq: Number.isInteger(v.seq) && (v.seq as number) >= 0 ? v.seq as number : 0 };
+    return { steer, drift: v.drift === true, brake: v.brake === true, item: v.item === true, hop: counter(v.hop), fire: counter(v.fire), ...(v.fly === undefined ? {} : { fly: counter(v.fly) }), seq: Number.isInteger(v.seq) && (v.seq as number) >= 0 ? v.seq as number : 0 };
   },
   parseAction(raw) { if ((raw as Action | null)?.type === 'honk') return { type: 'honk' }; throw Error('Unknown action.'); },
   applyAction(state, playerId, action) { if (action.type === 'honk') honk(state, playerId); },

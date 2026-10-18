@@ -1,5 +1,5 @@
 /* Network presentation: snapshot interpolation (RaceBuffer) and local-kart prediction (KartPredictor),
- * driven through a simulated room: 60 Hz server, 20 Hz snapshots, the platform's 20 Hz held-input
+ * driven through a simulated room: 60 Hz server, 30 Hz snapshots, the platform's held-input
  * channel, and configurable one-way latencies with jitter. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -45,7 +45,7 @@ function simulate(opts: { seconds: number; upMs: () => number; downMs: () => num
   const track = getTrack(race.track), predictor = new KartPredictor(track, 'p0', opts.immediate ? { sendDelayMs: 0 } : {}), buffer = new RaceBuffer();
   const history: Pose[] = [], frames: Frame[] = [];
   const toServer: { at: number; input: Input }[] = [], toClient: { at: number; view: RaceView; time: number }[] = [];
-  let upLast = 0, downLast = 0, held: Input = { ...NEUTRAL_INPUT }, clientInput: Input = { ...NEUTRAL_INPUT }, tick = 0, nextFrame = 0, nextFlush = 50;
+  let upLast = 0, downLast = 0, held: Input = { ...NEUTRAL_INPUT }, clientInput: Input = { ...NEUTRAL_INPUT }, tick = 0, nextFrame = 0, nextFlush = 16;
   const serverOffset = 123456;          // server clock = local clock + offset: the predictor must not care
   const channel = new HeldInputChannel((kind, value) => {
     if (kind !== 'state') return;
@@ -63,10 +63,10 @@ function simulate(opts: { seconds: number; upMs: () => number; downMs: () => num
       opts.perturb?.(race, race.time);
       for (const e of race.events) if (e.id > lastServerEvent) { lastServerEvent = e.id; if (e.racer === 'p0') serverEvents.push({ type: e.type, t: e.t, local: now }); }
       const r = race.racers[0]; history.push({ time: race.time, x: r.x, y: r.y, z: r.z, heading: r.heading });
-      if (tick % 3 === 0) { downLast = Math.max(downLast, now + opts.downMs()); toClient.push({ at: downLast, view: clone(toRaceView(race)), time: now + serverOffset }); }
+      if (tick % 2 === 0) { downLast = Math.max(downLast, now + opts.downMs()); toClient.push({ at: downLast, view: clone(toRaceView(race)), time: now + serverOffset }); }
     }
     while (toClient.length && toClient[0].at <= now + 1e-6) { const s = toClient.shift()!; predictor.reconcile(s.view, s.time, now + serverOffset, now); buffer.push(s.view, s.time, now); }
-    if (now >= nextFlush) { channel.flush(now); nextFlush += 50; }
+    if (now >= nextFlush) { channel.flush(now); nextFlush += 16; }
     if (now >= nextFrame) {
       nextFrame += TICK + (opts.frameJitter?.() ?? 0);
       const next = driver(race, now / 1000, clientInput);

@@ -6,6 +6,7 @@ import { CHARACTERS, CPU_SKILL, KART_BODIES } from './stats';
 import { beginRespawn, collideKarts, createKartState, kartParams, speedOf, stepKart, type Drafter, type KartParams } from './physics';
 import { collectBoxes, handleItemInput, stepItems, strike } from './items';
 import { botInput, botSkill } from './ai';
+import { chaosGravity, chaosParams, CHAOS_KINDS, createChaos, stepChaos } from './chaos';
 import { getTrack } from '../tracks/index';
 import type { Input, KartBodyId, LobbyChoice, Race, RaceEvent, Racer, RacerStats, Settings } from './types';
 
@@ -44,7 +45,7 @@ export function createRace(settings: Settings, players: readonly RacePlayer[], s
   });
   return { track: settings.track, laps: settings.laps, speedClass: settings.speedClass, difficulty: settings.difficulty, items: settings.items, viewMode,
     phase: 'countdown', time: -COUNTDOWN_SECONDS, racers, entities: [], boxes: track.boxes.map(() => 0), events: [], serial: 0, rng: rng.rng,
-    firstFinish: null, endAt: null, cooldowns: { thunder: 0, comet: 0 } };
+    firstFinish: null, endAt: null, cooldowns: { thunder: 0, comet: 0 }, chaos: createChaos(settings.chaos) };
 }
 
 export function pushEvent(race: Race, event: Omit<RaceEvent, 'id' | 't'>) {
@@ -55,7 +56,7 @@ export function pushEvent(race: Race, event: Omit<RaceEvent, 'id' | 't'>) {
 export const raceRandom = (race: Race) => nextRandom(race);
 
 export function paramsFor(race: Race, racer: Racer): KartParams {
-  return kartParams(racer.character, racer.kart, race.speedClass, racer.bot ? CPU_SKILL[race.difficulty] * botSkill(race, racer) : 1);
+  return chaosParams(kartParams(racer.character, racer.kart, race.speedClass, racer.bot ? CPU_SKILL[race.difficulty] * botSkill(race, racer) : 1), race.chaos.kind);
 }
 
 export function honk(race: Race, id: string) {
@@ -69,18 +70,20 @@ export function stepRace(race: Race, inputs: ReadonlyMap<string, Input>, dt: num
   const track = getTrack(race.track);
   race.time += dt;
   if (race.phase === 'countdown' && race.time >= 0) race.phase = 'racing';
+  const chaos = stepChaos(race, track, dt, () => raceRandom(race));
+  if (chaos) pushEvent(race, { type: 'chaos', racer: '', value: CHAOS_KINDS.indexOf(chaos) });
   const drafters: Drafter[] = race.racers.map(r => ({ x: r.x, z: r.z, heading: r.heading, speed: speedOf(r) }));
   const params = race.racers.map(r => paramsFor(race, r)), finished: Racer[] = [];
   race.racers.forEach((racer, i) => {
     const autopilot = racer.bot || !racer.connected || racer.finishTime !== null;
     // seq 0 = missing input or the platform's release/stale neutral: keep the counters so it never reads as a press.
-    const given = inputs.get(racer.id), input = autopilot ? botInput(race, racer) : given?.seq ? given : { ...NEUTRAL_INPUT, hop: racer.prevHop, fire: racer.prevFire, seq: racer.lastSeq };
+    const given = inputs.get(racer.id), input = autopilot ? botInput(race, racer) : given?.seq ? given : { ...NEUTRAL_INPUT, hop: racer.prevHop, fire: racer.prevFire, seq: racer.lastSeq };   // no `fly`: never a press
     // Back from autopilot (reconnected): adopt the new controller's counters so its first input isn't read as a press.
-    if (!autopilot && racer.ai && given?.seq) { racer.prevHop = given.hop; racer.prevFire = given.fire; racer.ai = null; }
+    if (!autopilot && racer.ai && given?.seq) { racer.prevHop = given.hop; racer.prevFire = given.fire; racer.prevFly = given.fly ?? racer.prevFly; racer.ai = null; }
     if (!racer.bot) racer.lastSeq = input.seq;
     if (race.phase === 'racing' && racer.finishTime === null) handleItemInput(race, racer, input, track);
     const beforeD = racer.d, wasRespawning = racer.respawnT > 0;
-    for (const e of stepKart(racer, input, params[i], track, dt, { time: race.time, phase: race.phase, drafters: drafters.filter((_, j) => j !== i) })) {
+    for (const e of stepKart(racer, input, params[i], track, dt, { time: race.time, phase: race.phase, drafters: drafters.filter((_, j) => j !== i), gravity: chaosGravity(race.chaos.kind) })) {
       pushEvent(race, { type: e.type, racer: racer.id, ...(e.value !== undefined ? { value: e.value } : {}) });
       if (e.type === 'fall') beginRespawn(racer);
       if (e.type === 'mini-turbo') { racer.stats.miniTurbos++; if (e.value === 3) racer.stats.purpleTurbos++; }
@@ -95,7 +98,7 @@ export function stepRace(race: Race, inputs: ReadonlyMap<string, Input>, dt: num
     racer.honkT = Math.max(0, racer.honkT - dt);
   });
   if (race.phase === 'racing') {
-    for (const [a, b] of collideKarts(race.racers, params, (v, s) => strike(race, race.racers[v], 'tumble', race.racers[s].id))) pushEvent(race, { type: 'bump', racer: race.racers[a].id, other: race.racers[b].id });
+    for (const [a, b] of collideKarts(race.racers, params, (v, s) => strike(race, race.racers[v], 'tumble', race.racers[s].id), race.chaos.kind === 'mega')) pushEvent(race, { type: 'bump', racer: race.racers[a].id, other: race.racers[b].id });
     stepItems(race, track, dt);
     collectBoxes(race, track, dt);
   }

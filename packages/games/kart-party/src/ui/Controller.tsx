@@ -10,6 +10,8 @@ import type { Action, Input, RaceEventType, RaceView, RacerView } from '../sim/t
 import { InputComposer, keyBinding, keySteer, readPad, steerFromDrag, type HoldKind } from './input';
 import { HOLDABLE, ITEM_NAMES, ItemFace } from './icons';
 import { character, kartName, ordinalSuffix, Portrait, rankTone, TIER_COLORS } from './common';
+import { useTiltSteering } from './TiltSettings';
+import { CHAOS } from '../sim/chaos';
 
 type Props = GameViewProps<Input, Action, RaceView, null>;
 const TIERS = [0, ...PHYSICS.driftTiers];
@@ -35,7 +37,7 @@ function useKartInput(props: Props, me: RacerView | undefined) {
   /** Cancellation (blur, hidden tab, lost pointer, disconnect): drop the sources, release when nothing is held. */
   const cancel = (prefix = '') => { if ('k:'.startsWith(prefix)) steerKeys.current.clear(); composer.clear(prefix); if (composer.neutral) latest.current.releaseInput?.(); };
   useEffect(() => {
-    if (me) composer.seed(me.prevHop, me.prevFire, me.lastSeq);
+    if (me) composer.seed(me.prevHop, me.prevFire, me.lastSeq, me.prevFly);
     composer.flush();
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -64,9 +66,9 @@ function useKartInput(props: Props, me: RacerView | undefined) {
     let raf = 0, padHonk = false, hadPads = false;
     const poll = () => {
       const pads = [...(navigator.getGamepads?.() ?? [])].filter(p => p?.connected);
-      let steer = 0, drift = false, item = false, brake = false, horn = false;
-      for (const pad of pads) { const r = readPad(pad!); steer += r.steer; drift ||= r.drift; item ||= r.item; brake ||= r.brake; horn ||= r.honk; }
-      composer.steer('g:steer', steer); composer.hold('drift', 'g:a', drift); composer.hold('item', 'g:x', item); composer.hold('brake', 'g:b', brake);
+      let steer = 0, drift = false, item = false, brake = false, horn = false, fly = false;
+      for (const pad of pads) { const r = readPad(pad!); steer += r.steer; drift ||= r.drift; item ||= r.item; brake ||= r.brake; horn ||= r.honk; fly ||= r.fly; }
+      composer.steer('g:steer', steer); composer.hold('drift', 'g:a', drift); composer.hold('item', 'g:x', item); composer.hold('brake', 'g:b', brake); composer.hold('fly', 'g:lb', fly);
       if (horn && !padHonk) honk(); padHonk = horn;
       raf = pads.length ? requestAnimationFrame(poll) : 0;
       if (!pads.length && hadPads) cancel('g:');
@@ -167,6 +169,7 @@ function Status({ race, me }: { race: RaceView; me: RacerView }) {
         <span className={`kp2-status-cell kp2-rank-${rankTone(me.rank)}`}><small>Place</small><b className="kp-numeral">{me.rank}<sup>{ordinalSuffix(me.rank)}</sup><i>/{race.racers.length}</i></b></span>
         <span className="kp2-status-cell"><small>Lap</small><b className="kp-numeral">{lap}<i>/{race.laps}</i></b></span>
       </>}
+    {race.phase === 'racing' && race.chaos.kind && <span className="kp2-status-cell kp2-status-chaos" style={{ '--c': CHAOS[race.chaos.kind].color } as CSSProperties}><small>Chaos!</small><b>{CHAOS[race.chaos.kind].name}</b></span>}
     <span className="kp2-status-cell kp2-status-item"><small>Item</small><b>{me.rollT > 0 ? 'Rolling…' : me.item ? ITEM_NAMES[me.item] : '—'}</b></span>
   </div>;
 }
@@ -176,6 +179,7 @@ export function Controller(props: Props) {
   const me = race.racers.find(r => r.id === playerId);
   const mode = screenMode(race.viewMode, playerId, isHost), coarse = useCoarsePointer();
   const { composer, cancel } = useKartInput(props, me);
+  const tilt = useTiltSteering(composer, props.connected !== false && !!me && (mode === 'controls' || coarse));
   // Haptics and the bumper flash for this racer's own moments.
   const seen = useRef<number | null>(null);
   const [bump, setBump] = useState(0);   // id of the bumper knock currently flashing
@@ -197,7 +201,7 @@ export function Controller(props: Props) {
   const trailing = me.trailing, holdable = !!me.item && me.rollT <= 0 && HOLDABLE.includes(me.item);
   const tier = me.drift !== 0 ? me.driftTier : -1, finished = me.finishTime !== null;
   return <div className={`kp2-ctl kp2-ctl-${mode === 'controls' ? 'full' : 'overlay'}`} data-mode={mode} style={{ '--me': me.color } as CSSProperties}>
-    <SteerZone composer={composer} cancel={cancel}/>
+    {!tilt && <SteerZone composer={composer} cancel={cancel}/>}
     {mode === 'controls' && <Status race={race} me={me}/>}
     {mode === 'controls' && bump > 0 && <div key={bump} className="kp2-hud-bump"/>}
     {mode === 'controls' && <div className="kp2-ctl-center" aria-live="polite">
@@ -212,6 +216,10 @@ export function Controller(props: Props) {
         <span className="kp2-item-face">{me.item || me.rollT > 0 ? <ItemFace racer={me}/> : <span className="kp2-pad-label">Item</span>}</span>
       </PadButton>
       <PadButton kind="brake" composer={composer} cancel={cancel} label="Brake and reverse (hold)" className="kp2-brake"><span className="kp2-pad-label">Brake</span></PadButton>
+      {me.kart === 'roadster' && <PadButton kind="fly" composer={composer} cancel={cancel} label={`Fire thrusters (${Math.floor(me.tank)} bursts of air left)`}
+        className={`kp2-fly ${me.flyT > 0 ? 'is-firing' : ''} ${me.tank < PHYSICS.flyBurst ? 'is-empty' : ''}`}>
+        <span className="kp2-pad-label">Fly</span><i style={{ '--tank': me.tank / PHYSICS.flyTank } as CSSProperties}/>
+      </PadButton>}
     </div>
   </div>;
 }

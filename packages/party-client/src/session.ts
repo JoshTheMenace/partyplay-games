@@ -23,7 +23,7 @@ export class PartySession {
   constructor({ deferConnection = false } = {}) {
     try { const raw = sessionStorage.getItem(this.storageKey); if (raw) this.credentials = JSON.parse(raw); } catch { /* Private browsing may block storage; the live seat still works. */ }
     if (!deferConnection || this.credentials) this.connect(); else this.state.connection = 'idle';
-    this.inputTimer = setInterval(() => { if (this.canInput()) this.held.flush(performance.now()); else this.held.release(false); }, 50);
+    this.inputTimer = setInterval(() => { if (this.canInput()) this.held.flush(performance.now()); else this.held.release(false); }, 16);
     this.timer = setInterval(() => {
       const now = Date.now();
       if (this.socket?.readyState === WebSocket.OPEN && now - this.lastMessageAt > 15000) this.socket.close(4000, 'Connection silent');

@@ -19,6 +19,7 @@ export const KART_BODIES: readonly KartBody[] = [
   { id: 'zoomer', name: 'Zoomer', blurb: 'Balanced all-rounder' },
   { id: 'bolt', name: 'Bolt', blurb: 'Highest top speed, twitchy grip' },
   { id: 'tank', name: 'Tank', blurb: 'Quick off the line, shrugs off dirt' },
+  { id: 'roadster', name: 'Roadster', blurb: 'Fiercest launch. Thrusters fly short hops' },
 ];
 export const isKartBody = (id: unknown): id is KartBodyId => KART_BODIES.some(k => k.id === id);
 
@@ -33,6 +34,8 @@ const BODY: Record<KartBodyId, KartStats> = {
   zoomer: { speed: 1, accel: 1, handling: 1, weight: 1, traction: 1 },
   bolt: { speed: 1.03, accel: .95, handling: .95, weight: 1.05, traction: .95 },
   tank: { speed: .98, accel: 1.08, handling: 1, weight: 1.1, traction: 1.25 },
+  // Tesla Roadster (revealed 2026-10-15): the quickest launch ever claimed, a little light on grip and bite, plus cold-gas thrusters (physics.ts).
+  roadster: { speed: 1.02, accel: 1.12, handling: .95, weight: .95, traction: .92 },
 };
 export function kartStats(character: number, kart: KartBodyId): KartStats {
   const w = WEIGHT[CHARACTERS[character]?.weight ?? 'medium'], b = BODY[kart] ?? BODY.zoomer;

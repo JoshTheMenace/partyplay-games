@@ -16,6 +16,7 @@ import type { FrameInput, QualityTier, RacerPose } from './render/types';
 import { getTrack } from './tracks/index';
 import { SharedHud, ViewportHud } from './ui/Hud';
 import { resolveViewMode, screenMode } from './views';
+import { createChaos } from './sim/chaos';
 import type { KartState, RaceEvent, RaceView, Settings } from './sim/types';
 
 type Props = SceneViewProps<Settings, RaceView, null>;
@@ -24,7 +25,7 @@ type Props = SceneViewProps<Settings, RaceView, null>;
 function idleRace(settings: Settings, viewMode: 'tv' | 'personal'): RaceView {
   return { track: settings.track, laps: settings.laps, speedClass: settings.speedClass, difficulty: settings.difficulty, items: settings.items, viewMode,
     phase: 'countdown', time: -3.5, racers: [], entities: [], boxes: getTrack(settings.track).boxes.map(() => 0), events: [], serial: 0,
-    firstFinish: null, endAt: null, cooldowns: { thunder: 0, comet: 0 } };
+    firstFinish: null, endAt: null, cooldowns: { thunder: 0, comet: 0 }, chaos: createChaos() };
 }
 const readMuted = () => { try { return localStorage.getItem('party.sound.muted') === 'true'; } catch { return false; } };
 

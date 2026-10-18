@@ -182,7 +182,8 @@ function soloRainbow(d: number, v: number, difficulty: Difficulty = 'hard', { ti
   const race = newRace('rainbow-road', difficulty, 5, [], 1, speedClass), track = getTrack('rainbow-road'), bot = race.racers[0];
   const p = pointAt(track, d, sampleAt(track, d).line), q = queryTrack(track, p.x, p.z, -1, p.y);
   Object.assign(race, { time, phase: 'racing', items: 'off' });
-  Object.assign(bot, { x: p.x, y: p.y, z: p.z, heading: p.heading, vx: Math.sin(p.heading) * v, vz: Math.cos(p.heading) * v, hint: q.index, d: q.d, lateral: q.lateral, progress: track.length * lap + d, lastSafeD: d, lap });
+  // The Tank these set-piece checks were tuned on (adding the Roadster changed the seeded pick); the Roadster has its own tests.
+  Object.assign(bot, { kart: 'tank', x: p.x, y: p.y, z: p.z, heading: p.heading, vx: Math.sin(p.heading) * v, vz: Math.cos(p.heading) * v, hint: q.index, d: q.d, lateral: q.lateral, progress: track.length * lap + d, lastSafeD: d, lap });
   return { race, bot };
 }
 /** Step until the bot passes distance `to` (or 20 s pass); returns its events as `type` or `type:value`. */

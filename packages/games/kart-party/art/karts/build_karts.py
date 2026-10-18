@@ -468,6 +468,7 @@ KARTS = {
     'zoomer': dict(front=(.86, .38, .32, .98), rear=(.88, .46, .42, -.92), seat=(0, .50, -.2)),
     'bolt': dict(front=(.89, .37, .30, 1.0), rear=(.9, .42, .36, -.95), seat=(0, .44, -.24)),
     'tank': dict(front=(.84, .50, .48, .95), rear=(.84, .52, .50, -.92), seat=(0, .64, -.14)),
+    'roadster': dict(front=(.86, .34, .3, 1.08), rear=(.88, .38, .38, -.98), seat=(0, .42, -.26)),
 }
 
 def kart_zoomer(g, seat):
@@ -553,22 +554,51 @@ def kart_tank(g, seat):
     seat_back(g, seat, .56)
     column(g, seat, (0, .82, .62))
 
+def kart_roadster(g, seat):
+    # After the next-generation Tesla Roadster revealed 2026-10-15: a low wedge with an open cockpit (removable roof off),
+    # thin LED headlights, a full-width tail light, an active rear wing and four horizontal cold-gas thruster nozzles.
+    g.add(body_loft([(-1.56, .26, .62, .72), (-1.34, .2, .72, .84), (-.95, .16, .76, .86), (-.7, .15, .72, .82), (-.55, .14, .52, .78, 4, .9),
+                     (0, .14, .5, .76, 4, .88), (.36, .15, .64, .8), (.7, .16, .64, .86), (1.05, .17, .6, .86), (1.4, .19, .47, .76),
+                     (1.56, .22, .36, .54), (1.64, .25, .3, .26, 3)], 22, 5, .94), PAINT)
+    ell(g, GLASS, (0, .62, .52), (.6, .17, .26), (-24, 0, 0), 14, 6)                          # wraparound windshield
+    g.add(tube(spline([(.58, .6, .4), (.42, .76, .48), (0, .8, .5), (-.42, .76, .48), (-.58, .6, .4)], 2), .022, 6), TRIM)  # screen frame
+    for k in (1, -1):
+        for z, cy, R in ((1.08, .34, .42), (-.98, .38, .46)):                                   # flared fenders over the wheels
+            arc = [V((k * .86, cy + R * math.sin(t), z + R * math.cos(t))) for t in (math.radians(a) for a in range(14, 167, 25))]
+            g.add(tube(arc, .2, 6, flat=.3, up=(0, 1, 0)), PAINT)
+        g.add(rbox(.12, .12, .62, .08, 1), PAINT, xf((k * .76, .32, .05)))                           # door sills
+        g.add(rbox(.13, .03, .64, .02, 1), TRIM, xf((k * .75, .17, .05)))                          # black lower trim
+        ell(g, TRIM, (k * .78, .42, -.5), (.05, .09, .2), seg=8, rings=4)                         # side intake ahead of the rear wheel
+        g.add(tube([(k * .62, .5, 1.26), (k * .32, .4, 1.56)], .026, 6), LAMP)                      # thin LED headlights
+        g.add(tube([(k * .34, .74, -1.18), (k * .34, .9, -1.26), (k * .3, 1.0, -1.3)], .03, 6), TRIM)   # swan-neck wing struts
+        g.add(rbox(.02, .12, .2, .018, 1), PAINT, xf((k * .84, .98, -1.32), (-8, 0, 0)))           # wing end plates
+    g.add(rbox(.84, .028, .2, .024, 1), PAINT, xf((0, 1.02, -1.32), (-10, 0, 0)))                  # active rear wing, deployed
+    g.add(rbox(.84, .01, .04, .008, 1), TRIM, xf((0, 1.05, -1.24), (-10, 0, 0)))
+    g.add(rbox(.66, .022, .02, .02, 1), TAIL, xf((0, .63, -1.555)))                                 # full-width tail light
+    g.add(rbox(.6, .08, .12, .05, 1), TRIM, xf((0, .3, -1.5)))                                    # rear diffuser
+    for x in (.48, .18, -.18, -.48):                                                               # four cold-gas thruster nozzles
+        g.add(tube([(x, .43, -1.44), (x, .43, -1.58)], lambda u: .045 + .03 * u, 10, caps=False), CHROME)
+        ell(g, TRIM, (x, .43, -1.56), (.06, .06, .02), seg=10, rings=3)
+    g.add(rbox(.5, .03, .14, .03, 1), TRIM, xf((0, .2, 1.5)))                                    # front splitter
+    seat_back(g, seat, .44)
+    column(g, seat, (0, .6, .5))
+
 def kart(kid):
     spec = KARTS[kid]; seat = V(spec['seat'])
     root = empty(f'kart_{kid}', None)
-    body = Geo(); {'zoomer': kart_zoomer, 'bolt': kart_bolt, 'tank': kart_tank}[kid](body, seat)
+    body = Geo(); {'zoomer': kart_zoomer, 'bolt': kart_bolt, 'tank': kart_tank, 'roadster': kart_roadster}[kid](body, seat)
     mesh(f'kart_{kid}_body', body, root)
     for tag, (x, r, w, z) in (('f', spec['front']), ('r', spec['rear'])):
         for k, side in ((1, 'l'), (-1, 'r')):
             c = V((k * x, r, z)); g = Geo()
-            tyre(g, r, w, knobs=10 if kid == 'tank' else 0, seg=18 if kid == 'tank' else 20, rim=CHROME if kid != 'bolt' else TRIM, rim_frac=.72 if kid == 'bolt' else .6, side=k)
+            tyre(g, r, w, knobs=10 if kid == 'tank' else 0, seg=18 if kid in ('tank', 'roadster') else 20, rim=CHROME if kid != 'bolt' else TRIM, rim_frac=.72 if kid in ('bolt', 'roadster') else .6, side=k)
             g.v = [p + c for p in g.v]
             parent = empty(f'kart_{kid}_steer_{tag}{side}', root, c) if tag == 'f' else root
             mesh(f'kart_{kid}_wheel_{tag}{side}', g, parent, c)
     sw = Geo(); steering_wheel(sw); sw.v = [p * CS for p in sw.v]
     mesh(f'kart_{kid}_steering', sw, root, seat + WHEEL * CS, tilt=WHEEL_TILT)
     empty(f'kart_{kid}_seat', root, seat)
-    ex = {'zoomer': (.23, .6, -1.5), 'bolt': (.125, .42, -1.53), 'tank': (.48, 1.38, -1.4)}[kid]
+    ex = {'zoomer': (.23, .6, -1.5), 'bolt': (.125, .42, -1.53), 'tank': (.48, 1.38, -1.4), 'roadster': (.48, .43, -1.6)}[kid]
     for k, side in ((1, 'l'), (-1, 'r')): empty(f'kart_{kid}_exhaust_{side}', root, (k * ex[0], ex[1], ex[2]))
     return root
 
@@ -657,7 +687,7 @@ def shot(path, res=(256, 256), cam_pos=(3.9, 2.7, 5.0), target=(0, .75, 0), lens
 
 PREV.mkdir(parents=True, exist_ok=True)
 CHAR_CAM, CHAR_TGT, KART_CAM, KART_TGT = (2.5, 2.25, 3.6), (0, 1.18, .12), (3.3, 2.2, 4.1), (.12, .4, .3)
-KART_PREVIEW = {'zoomer': '#e63b3b', 'bolt': '#2f7dff', 'tank': '#ffb020'}
+KART_PREVIEW = {'zoomer': '#e63b3b', 'bolt': '#2f7dff', 'tank': '#ffb020', 'roadster': '#c8102e'}
 for i in range(8):
     paint.default_value = (*lin(shade(CHARS[i][3], .95) if CHARS[i][1] != 'penguin' else '#4a8cff'), 1)
     seat_on('kart_zoomer', f'char_{i}'); show('kart_zoomer', f'char_{i}')

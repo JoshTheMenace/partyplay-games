@@ -212,6 +212,16 @@ function schedule(m: Mixer, out: AudioNode, t: number, sound: SoundId, value: nu
       tone(m, out, t, { type: 'sawtooth', f0: 240, f1: 1500, dur: 1.4, peak: .12, attack: .5, filter: 'bandpass', cutoff: 1200, q: 1.2 });
       noise(m, out, t, { filter: 'bandpass', f0: 600, f1: 3600, q: 1.4, dur: 1.4, peak: .4, attack: .6 });
       return;
+    case 'thrust':      // cold-gas jets: a sharp valve pop, then a roaring hiss of compressed air that tails off with the burst
+      tone(m, out, t, { type: 'sine', f0: 140, f1: 60, dur: .18, peak: .16 });
+      noise(m, out, t, { filter: 'highpass', f0: 2400, f1: 5200, dur: 1.05, peak: .13, attack: .01, hold: .55 });
+      noise(m, out, t, { filter: 'bandpass', f0: 900, f1: 500, dur: .9, peak: .08, attack: .02, hold: .4 });
+      return;
+    case 'chaos':       // alarm: a two-tone siren wail, a crash of noise, then a bright fanfare stab
+      for (let i = 0; i < 3; i++) tone(m, out, t, { type: 'sawtooth', f0: 420, f1: 880, at: i * .16, dur: .16, peak: .06, filter: 'lowpass', cutoff: 2600 });
+      noise(m, out, t, { filter: 'bandpass', f0: 1800, f1: 400, at: .45, dur: .5, peak: .12, attack: .005 });
+      for (const f of [NOTE.C6, NOTE.E6, NOTE.G6]) tone(m, out, t, { type: 'square', f0: f, at: .5, dur: .5, peak: .045, hold: .12, filter: 'lowpass', cutoff: 4200 });
+      return;
     case 'lap':
       tone(m, out, t, { type: 'triangle', f0: NOTE.C6, dur: .2, peak: .18 });
       tone(m, out, t, { type: 'triangle', f0: NOTE.G6, at: .12, dur: .4, peak: .18 });

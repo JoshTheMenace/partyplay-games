@@ -11,14 +11,16 @@ import { forwardDistance, gravityScale, loopPose, moverPosition, pointAt, queryT
 import { kartStats, TOP_SPEED } from './stats';
 import type { HitKind, Input, KartBodyId, KartState, Phase, RaceEventType, SpeedClass, Surface } from './types';
 
-export type KartParams = { topSpeed: number; accel: number; handling: number; weight: number; traction: number };
+/** `fly`: the kart has thrusters (the Roadster). */
+export type KartParams = { topSpeed: number; accel: number; handling: number; weight: number; traction: number; fly?: boolean };
 /** Resolved per-racer tuning. `skill` scales CPU top speed (1 for humans). */
 export function kartParams(character: number, kart: KartBodyId, speedClass: SpeedClass, skill = 1): KartParams {
   const s = kartStats(character, kart);
-  return { topSpeed: TOP_SPEED[speedClass] * s.speed * skill, accel: s.accel, handling: s.handling, weight: s.weight, traction: s.traction };
+  return { topSpeed: TOP_SPEED[speedClass] * s.speed * skill, accel: s.accel, handling: s.handling, weight: s.weight, traction: s.traction, ...(kart === 'roadster' ? { fly: true } : {}) };
 }
 export type Drafter = { x: number; z: number; heading: number; speed: number };
-export type StepEnv = { time: number; phase: Phase; drafters: readonly Drafter[] };
+/** `gravity` scales gravity race-wide (Chaos mode's Moon Gravity); track zones still apply, the lower one wins. */
+export type StepEnv = { time: number; phase: Phase; drafters: readonly Drafter[]; gravity?: number };
 export type KartEvent = { type: RaceEventType; value?: number };
 
 /** Tuning shared with tests, CPUs and presentation. */
@@ -41,6 +43,10 @@ export const PHYSICS = {
   // up for the same back on the way down, loopSteer m/s of sideways travel at full lock, and a kart that came in wide is eased
   // into the lane at loopPull m/s.
   loopMin: .6, loopLift: 12, loopGravity: 8, loopSteer: 6, loopPull: 8,
+  // Roadster thrusters: cold gas from a compressed-air tank holding ~5 s of thrust (as reported at the 2026 reveal). A press fires a
+  // flyBurst-second burst: an upward kick of flyLaunch m/s, then flyLift m/s² against gravity (climbing to at most flyRise m/s) and
+  // flyPush m/s² forward from the rear nozzles. The onboard compressor refills flyRefill seconds of air per second on the ground.
+  flyTank: 5, flyBurst: 1, flyLaunch: 6, flyLift: 34, flyRise: 8, flyPush: 6, flyRefill: .5, flySteer: .7,
 } as const;
 const P = PHYSICS, G = P.gravity;
 /** Lateral grip (1/s) and how much of the scrubbed sideways speed is turned back into forward speed. */
@@ -51,7 +57,7 @@ export function createKartState(x: number, y: number, z: number, heading: number
   const q = queryTrack(track, x, z, -1, y);
   return { x, y, z, vx: 0, vy: 0, vz: 0, heading, steer: 0, grounded: true, air: 0, hint: q.index, d: q.d, lateral: q.lateral, surface: q.surface, offroad: false,
     lastSafeD: q.d, drift: 0, driftCharge: 0, driftTier: 0, hopT: 0, boostT: 0, boostPower: 0, slipT: 0, slipCharge: 0, trickT: 0, tricked: false,
-    spinT: 0, tumbleT: 0, starT: 0, shieldT: 0, inkT: 0, shockT: 0, respawnT: 0, invulnT: 0, stallT: 0, launch: 0, loop: 0, prevHop: 0, prevFire: 0, prevItem: false };
+    spinT: 0, tumbleT: 0, starT: 0, shieldT: 0, inkT: 0, shockT: 0, respawnT: 0, invulnT: 0, stallT: 0, launch: 0, loop: 0, prevHop: 0, prevFire: 0, prevItem: false, flyT: 0, tank: P.flyTank, prevFly: 0 };
 }
 export const speedOf = (k: KartState) => Math.hypot(k.vx, k.vz);
 export const forwardSpeed = (k: KartState) => k.vx * forwardX(k.heading) + k.vz * forwardZ(k.heading);
@@ -76,6 +82,8 @@ export function stepKart(k: KartState, input: Input, p: KartParams, track: Track
   out = null;
   let press = input.hop !== k.prevHop;
   k.prevHop = input.hop;
+  const fly = input.fly ?? k.prevFly, flyPress = fly !== k.prevFly;
+  k.prevFly = fly;
   const hurt = k.spinT > 0 || k.tumbleT > 0;
   // Steering builds smoothly but lets go fast, so releasing a key or thumb stops the turn instead of carrying it on.
   const want = hurt || k.respawnT > 0 ? 0 : clamp(input.steer, -1, 1);
@@ -108,6 +116,11 @@ export function stepKart(k: KartState, input: Input, p: KartParams, track: Track
     k.loop = 0;
   }
   if (hurt) { const f = Math.exp(-(k.tumbleT > 0 ? 1.36 : 1.05) * dt); k.vx *= f; k.vz *= f; }
+  if (p.fly) {
+    k.flyT = hurt ? 0 : Math.max(0, k.flyT - dt);
+    if (flyPress && !hurt && k.flyT <= 0 && k.tank >= P.flyBurst) { k.flyT = P.flyBurst; k.tank -= P.flyBurst; k.vy = Math.max(k.vy, P.flyLaunch); k.grounded = false; emit('thrust'); }
+    else if (k.grounded && k.flyT <= 0) k.tank = Math.min(P.flyTank, k.tank + P.flyRefill * dt);
+  }
 
   let fx = forwardX(k.heading), fz = forwardZ(k.heading);
   let fwd = k.vx * fx + k.vz * fz, lat = k.vz * fx - k.vx * fz;
@@ -151,9 +164,10 @@ export function stepKart(k: KartState, input: Input, p: KartParams, track: Track
   const bite = driftBite(k.steer, k.drift);
   if (!hurt) {
     const steer = k.drift !== 0 ? k.drift * bite : k.steer;
-    const air = k.grounded ? 1 : k.hopT > 0 ? .8 : AIR_STEER;
+    const air = k.grounded ? 1 : k.hopT > 0 ? .8 : k.flyT > 0 ? P.flySteer : AIR_STEER;
     k.heading -= steer * turnRate(Math.abs(fwd), p.topSpeed) * p.handling * (k.drift !== 0 ? DRIFT_YAW : 1) * air * Math.sign(fwd) * dt;
   }
+  if (k.flyT > 0 && fwd < p.topSpeed * 1.2) fwd += P.flyPush * dt;
   // Re-express the (world-fixed) velocity in the new heading frame, then let grip pull it into line.
   const vx = fx * fwd - fz * lat, vz = fz * fwd + fx * lat;
   fx = forwardX(k.heading); fz = forwardZ(k.heading);
@@ -186,7 +200,7 @@ export function stepKart(k: KartState, input: Input, p: KartParams, track: Track
   const entry = track.loops.length ? loopEntry(track, k, prevD, q) : undefined;
   if (entry) { enterLoop(k, p, track, entry, q); return done(); }
   // Gravity zones scale gravity in the air and for crest detection; drift hops keep full gravity so drifting feels the same everywhere.
-  const g = G * (!k.grounded && k.hopT > 0 ? 1 : gravityScale(track, q.d));
+  const g = G * (!k.grounded && k.hopT > 0 ? 1 : Math.min(gravityScale(track, q.d), env.gravity ?? 1));
   // A loop's footprint has no road of its own (the ribbon rose into the loop): only a kart that missed the entry gets here, and falls.
   const ground = (q.beyond !== 0 && q.edge === 'drop') || (track.loops.length && loopOver(track, q.d)) ? null : q.ground;
   const along = k.vx * q.tx + k.vz * q.tz, across = k.vz * q.tx - k.vx * q.tz;
@@ -202,7 +216,7 @@ export function stepKart(k: KartState, input: Input, p: KartParams, track: Track
       k.y = prevY + k.vy * dt;
     } else { k.y = ground; k.vy = followVy; }
   } else {
-    k.vy -= g * dt; k.y += k.vy * dt;
+    k.vy = k.flyT > 0 ? Math.min(P.flyRise, k.vy + (P.flyLift - g) * dt) : k.vy - g * dt; k.y += k.vy * dt;
     if (ground !== null && k.y <= ground && k.y > ground - 2) {
       k.grounded = true; k.y = ground; k.vy = followVy;
       if (k.tricked) startBoost(k, P.trickTime, P.trickPower);
@@ -469,12 +483,13 @@ export function startBoost(k: KartState, seconds: number, power: number) {
 const spine = (k: KartState, v = Math.hypot(k.vx, k.vy, k.vz) || 1) => k.loop > 0 ? [k.vx / v, k.vy / v, k.vz / v] : [forwardX(k.heading), 0, forwardZ(k.heading)];
 /** Resolve kart-to-kart overlaps in place. Each kart is a capsule along its heading (≈ the 2.2 × 3 m body, so
  * diagonal neighbours don't interpenetrate the way circles would): inverse-weight separation, restitution 0.4,
- * and a star tumbles whoever it touches (via `onStar(victim, star)`, so the race can route it through strike()).
+ * and a star tumbles whoever it touches (via `onStar(victim, star)`, so the race can route it through strike()). `mega` (Chaos mode) makes
+ * every body 1.7× larger and the bounce much stronger.
  * Road pairs compare flat positions within 1.5 m of height. When either kart rides a loop the test is in 3D along the
  * ribbon (steep and upside-down riders can be far apart in height yet touching); only looping karts move in y, and
  * rideLoop reads the push back as θ and lateral. Returns contact pairs (indices) closing faster than 3 m/s. */
-export function collideKarts(karts: KartState[], params: KartParams[], onStar = (victim: number, _star: number): unknown => applyHit(karts[victim], 'tumble')): [number, number][] {
-  const pairs: [number, number][] = [], r = P.bodyRadius, h = P.bodyHalfLength, reach = 2 * r, far = 2 * (r + h);
+export function collideKarts(karts: KartState[], params: KartParams[], onStar = (victim: number, _star: number): unknown => applyHit(karts[victim], 'tumble'), mega = false): [number, number][] {
+  const size = mega ? 1.7 : 1, pairs: [number, number][] = [], r = P.bodyRadius * size, h = P.bodyHalfLength * size, reach = 2 * r, far = 2 * (r + h);
   for (let i = 0; i < karts.length; i++) for (let j = i + 1; j < karts.length; j++) {
     const a = karts[i], b = karts[j], loop = a.loop > 0 || b.loop > 0;
     if (a.respawnT > 0 || b.respawnT > 0 || (!loop && Math.abs(a.y - b.y) >= 1.5)) continue;
@@ -497,7 +512,7 @@ export function collideKarts(karts: KartState[], params: KartParams[], onStar = 
     if (b.loop > 0) b.y += ny * overlap * ib / sum;
     const closing = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny + (b.vz - a.vz) * nz;
     if (closing < 0) {
-      const impulse = -1.4 * closing / sum;
+      const impulse = -(mega ? 2.6 : 1.4) * closing / sum;
       a.vx -= impulse * ia * nx; a.vz -= impulse * ia * nz;
       b.vx += impulse * ib * nx; b.vz += impulse * ib * nz;
       if (a.loop > 0) a.vy -= impulse * ia * ny;
@@ -512,5 +527,5 @@ export function collideKarts(karts: KartState[], params: KartParams[], onStar = 
 /** Begin a respawn (fell off / out of bounds): lifted away, then placed at lastSafeD after the timer. */
 export function beginRespawn(k: KartState) {
   k.respawnT = P.respawnTime; k.vx = k.vz = k.vy = 0; k.drift = 0; k.driftCharge = 0; k.driftTier = 0;
-  k.spinT = 0; k.tumbleT = 0; k.boostT = 0; k.boostPower = 0; k.slipCharge = 0; k.trickT = 0; k.tricked = false; k.hopT = 0; k.loop = 0;
+  k.spinT = 0; k.tumbleT = 0; k.boostT = 0; k.boostPower = 0; k.slipCharge = 0; k.trickT = 0; k.tricked = false; k.hopT = 0; k.loop = 0; k.flyT = 0;
 }

@@ -12,6 +12,7 @@ import { Lobby } from './ui/Lobby';
 import { Results } from './ui/Results';
 import { SettingsPanel } from './ui/Settings';
 import { Instructions } from './ui/Instructions';
+import { TiltSettings } from './ui/TiltSettings';
 import './ui/kart.css';
 
 type Wire = RaceWire | RaceView;
@@ -39,6 +40,7 @@ function SceneView(props: SceneViewProps<Settings, Wire, null>) {
 
 export const client: GameClientModule<Input, Action, Settings, Wire, null> = {
   immersivePhone: true, sceneRoles: ['display', 'controller'], SceneView,
+  DeviceSettingsView: TiltSettings,
   DisplayView: () => null, ControllerView: props => <Controller {...props} publicView={decodeRaceView(props.publicView)}/>, LobbyView: Lobby,
   settingsWide: true, SettingsView: SettingsPanel, InstructionsView: Instructions,
   ResultsView: props => <Results {...props} publicView={decodeRaceView(props.publicView)}/>,

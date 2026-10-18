@@ -15,20 +15,20 @@ export type Focus = { id: string; pan: number };
 export type LocalKart = { id: string; kart: KartState; events: readonly { type: RaceEventType; t: number; value?: number }[] };
 export type SoundId = 'countdown' | 'go' | 'tier' | 'mini-turbo' | 'boost-pad' | 'rocket-start' | 'stall' | 'slipstream' | 'trick' | 'wall' | 'bump'
   | 'pickup' | 'roulette-tick' | 'item-ready' | 'item' | 'hit' | 'hit-dealt' | 'shield-pop' | 'explode' | 'thunder' | 'comet' | 'lap' | 'final-lap'
-  | 'finish' | 'respawn' | 'fall' | 'honk' | 'overtake' | 'ring' | 'spring' | 'bumper' | 'loop';
+  | 'finish' | 'respawn' | 'fall' | 'honk' | 'overtake' | 'ring' | 'spring' | 'bumper' | 'loop' | 'chaos' | 'thrust';
 /** `value` meaning per sound: tier/mini-turbo → tier, item → item id, hit → hit kind, finish → rank, honk → character. */
 export type Cue = { sound: SoundId; racer: string | null; value: number | string; pan: number; gain: number };
 
 const PER_RACER: Partial<Record<RaceEvent['type'], SoundId>> = {
   'mini-turbo': 'mini-turbo', 'boost-pad': 'boost-pad', 'rocket-start': 'rocket-start', stall: 'stall', slipstream: 'slipstream', trick: 'trick',
   wall: 'wall', bump: 'bump', pickup: 'pickup', lap: 'lap', 'final-lap': 'final-lap', respawn: 'respawn', fall: 'fall', overtake: 'overtake', 'shield-pop': 'shield-pop',
-  ring: 'ring', spring: 'spring', bumper: 'bumper', loop: 'loop',
+  ring: 'ring', spring: 'spring', bumper: 'bumper', loop: 'loop', thrust: 'thrust',
 };
 /** Minimum seconds (race time) between two identical cues for the same racer. */
 const REPEAT: Partial<Record<SoundId, number>> = { wall: .15, bump: .12, overtake: .5, pickup: .1, 'boost-pad': .2, ring: .15, spring: .3, bumper: .2, loop: 1 };
 const COUNTDOWN_MARKS = [-3, -2, -1, 0];
 /** Kart events prediction reproduces exactly; a server event within this many seconds of a predicted one is its echo. */
-const PREDICTABLE = new Set<RaceEventType>(['mini-turbo', 'boost-pad', 'rocket-start', 'stall', 'slipstream', 'trick', 'wall', 'item', 'ring', 'spring', 'bumper', 'loop']), ECHO_WINDOW = .35;
+const PREDICTABLE = new Set<RaceEventType>(['mini-turbo', 'boost-pad', 'rocket-start', 'stall', 'slipstream', 'trick', 'wall', 'item', 'ring', 'spring', 'bumper', 'loop', 'thrust']), ECHO_WINDOW = .35;
 
 type Memory = { tier: number; rollT: number; tickAt: number };
 
@@ -81,13 +81,15 @@ export class CueTracker {
       const f = find(e.racer), other = find(e.other);
       if (!screen) {                                                    // phones in TV mode: only their own feedback
         if (!f) continue;
-        if (e.type === 'honk') push('honk', e.racer, this.character(view, e.racer), 0, .8);
+        if (e.type === 'chaos') push('chaos', null, e.value ?? 0, 0, .7);
+        else if (e.type === 'honk') push('honk', e.racer, this.character(view, e.racer), 0, .8);
         else if (e.type === 'hit') push('hit', e.racer, HIT_KINDS[e.value ?? 0] ?? 'spin', 0, .7);
         else if (e.type === 'pickup') push('pickup', e.racer, 0, 0, .6);
         continue;
       }
       switch (e.type) {
         case 'honk': push('honk', e.racer, this.character(view, e.racer), f?.pan ?? 0, f ? 1 : .55); break;
+        case 'chaos': push('chaos', null, e.value ?? 0, 0); break;
         case 'hit':
           if (f) push('hit', e.racer, HIT_KINDS[e.value ?? 0] ?? 'spin', f.pan);
           else if (other) push('hit-dealt', e.other!, 0, other.pan);
