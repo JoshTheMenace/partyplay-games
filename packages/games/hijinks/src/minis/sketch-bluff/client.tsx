@@ -1,7 +1,7 @@
 /* Sketch Bluff screens: the gala gallery TV (studio, unveiling, forgeries, reveals, exhibition) and the phone controller. */
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { ArcadeButton, DrawingPad, DrawingRenderer, StatusNotice } from '../../../../../party-ui/src/index';
-import type { Drawing } from '../../../../../party-contract/src/index';
+import { packDrawing, type Drawing } from '../../../../../party-contract/src/index';
 import type { MiniClient, MiniViewProps, PackPlayer } from '../../core/contract';
 import {
   Avatar, AvatarBadge, BigTitle, Confetti, PhoneDone, PhoneShell, PhoneTextEntry, PhoneWaiting, Scoreboard, Timer,
@@ -17,7 +17,7 @@ const ACCENT = '#d9a93a';
 const find = (players: readonly PackPlayer[], id: string) => players.find(p => p.id === id);
 const many = (players: readonly PackPlayer[], ids: readonly string[]) => ids.map(id => find(players, id)).filter(p => !!p);
 const plural = (n: number, one: string, more = `${one}s`) => `${n} ${n === 1 ? one : more}`;
-const art = (media: Record<string, unknown>, key?: string) => key ? media[key] as Drawing | undefined : undefined;
+const art = (media: Record<string, unknown>, key?: string) => key ? media[key] as string | undefined : undefined;
 /** Sub-steps of a beat that have started (0 before it, then 1–3). */
 const sub = (beat: Shown, t: number) => (beat.kind === 'real' ? REAL_SUB : FAKE_SUB).filter(ms => t - beat.at >= ms).length;
 
@@ -51,7 +51,7 @@ function Monocle({ className = '' }: { className?: string }) {
 }
 
 /** A gilded frame. With a drawing it shows the art; `cover` hangs a velvet drape over it; otherwise `children` fill the canvas. */
-function Frame({ drawing, label = 'A masterpiece', cover, className = '', children }: { drawing?: Drawing; label?: string; cover?: boolean; className?: string; children?: ReactNode }) {
+function Frame({ drawing, label = 'A masterpiece', cover, className = '', children }: { drawing?: Drawing | string; label?: string; cover?: boolean; className?: string; children?: ReactNode }) {
   return <figure className={`sb-frame ${className}`} data-cover={cover || undefined}>
     <div className="sb-canvas">{drawing ? <DrawingRenderer drawing={drawing} label={label} /> : children}</div>
     {cover && <div className="sb-drape" role="img" aria-label="Drawing finished"><i className="sb-tassel" /></div>}
@@ -251,7 +251,7 @@ function Standing({ view, players, player }: { view: SketchPublic; players: read
 /** Drawing pad with a persisted draft. It hands in a started drawing by itself just before time runs out. */
 function DrawPhone({ view, me, player, players, vip, now, send, sessionKey }: Phone) {
   const key = `${sessionKey}:${view.turn}:art`, [drawing, setDrawing] = useDraft<Drawing>(key, { strokes: [] }), [state, run] = useSend(), t = useNow(now, 500), auto = useRef(false);
-  const submit = () => run(() => send({ turn: view.turn, k: 'draw', drawing }));
+  const submit = () => run(() => send({ turn: view.turn, k: 'draw', drawing: packDrawing(drawing) }));
   const late = view.deadline - t < 1800;
   useEffect(() => { if (late && !me.drawn && drawing.strokes.length && !auto.current) { auto.current = true; void submit(); } });
   const shell = shellOf(view, player, vip, now);

@@ -1,7 +1,7 @@
 /* Airlock screens: the retro-futurist bridge on the TV (briefing, tests, answer boards, red alert, mission report) and the phone controller. */
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ArcadeButton, DrawingPad, DrawingRenderer, StatusNotice } from '../../../../../party-ui/src/index';
-import type { Drawing } from '../../../../../party-contract/src/index';
+import { packDrawing, type Drawing } from '../../../../../party-contract/src/index';
 import type { MiniClient, MiniViewProps, PackPlayer } from '../../core/contract';
 import {
   Avatar, AvatarBadge, Confetti, PhoneDone, PhoneShell, PhoneTextEntry, PhoneWaiting, PlayerStrip, PromptCard, Scoreboard, Timer,
@@ -171,7 +171,7 @@ function Card({ board, i, open, players, media, dense }: { board: Board; i: numb
   const a = board.answers[i]!, p = find(players, a.player)!, v = a.value;
   const body = !open ? <span className="al-wait" aria-label="Scanning"><i /><i /><i /></span>
     : v === undefined ? <em className="al-none">No answer</em>
-    : board.kind === 'draw' ? (media[String(v)] ? <DrawingRenderer drawing={media[String(v)] as Drawing} label={`Doodle by ${p.name}`} /> : <em className="al-none">Loading…</em>)
+    : board.kind === 'draw' ? (media[String(v)] ? <DrawingRenderer drawing={media[String(v)] as string} label={`Doodle by ${p.name}`} /> : <em className="al-none">Loading…</em>)
     : board.kind === 'pick' ? <span className="al-picked">{find(players, String(v)) && <Avatar avatar={find(players, String(v))!.avatar} color={find(players, String(v))!.color} size={dense ? 64 : 84} />}<b>{String(v) === a.player ? 'Themself!' : nameOf(players, String(v))}</b></span>
     : <p style={{ fontSize: fitText(String(v), dense ? 40 : few ? 60 : 50) }}>{String(v)}</p>;
   return <li className="al-card" data-open={open || undefined} data-empty={(open && v === undefined) || undefined} style={{ '--c': p.color } as CSSProperties}>
@@ -388,7 +388,7 @@ function Picker({ view, now, draftKey, kind, label, items, submit, onSend }: { v
 /** 20-second doodle with a persisted draft. A started drawing sends itself just before time runs out. */
 function DoodlePad({ view, now, send, sessionKey }: Phone) {
   const key = `${sessionKey}:${view.test}:art`, [drawing, setDrawing] = useDraft<Drawing>(key, { strokes: [] }), [state, run] = useSend(), auto = useRef(false);
-  const late = view.deadline - useNow(now, 250) < AUTO_DRAW_MS, pending = state.status === 'pending', submit = () => run(() => send({ turn: view.turn, k: 'draw', drawing }));
+  const late = view.deadline - useNow(now, 250) < AUTO_DRAW_MS, pending = state.status === 'pending', submit = () => run(() => send({ turn: view.turn, k: 'draw', drawing: packDrawing(drawing) }));
   useEffect(() => { if (late && drawing.strokes.length && !auto.current) { auto.current = true; void submit(); } });
   // Short screens: bring the whole canvas under the thumb (now and after rotating).
   const pad = useRef<HTMLDivElement>(null);

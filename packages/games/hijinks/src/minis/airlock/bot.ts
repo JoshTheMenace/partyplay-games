@@ -1,6 +1,6 @@
 /* Airlock bot (tests and QA only): answers after a beat (sometimes at the full length), aliens hack now and then, a few bots push
    the button, crew vote AIRLOCK more often than not and aliens protect each other. */
-import { DRAWING_COLORS, DRAWING_LIMITS, type Drawing } from '../../../../../party-contract/src/index';
+import { DRAWING_COLORS, DRAWING_LIMITS, packDrawing, type Drawing } from '../../../../../party-contract/src/index';
 import type { MiniBot } from '../../core/contract';
 import { MAX_ANSWER, RATING_MAX, type AirPrivate, type AirPublic } from './types';
 
@@ -11,9 +11,9 @@ const MORE = [' with extra syrup', ' and a side of beans', ' on a Tuesday', ' in
 /** Stable 0–999 per string, so a bot's one-off decisions don't flip from tick to tick. */
 const hash = (text: string) => [...text].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 1000, 7);
 
-/** A doodle of loops and zigzags; `max` fills every stroke and point the shared limits allow. */
+/** A doodle of loops and zigzags; `max` fills the shared packed-size limit. */
 export function doodle(random: () => number, max = false): Drawing {
-  const count = max ? DRAWING_LIMITS.strokes : 3 + Math.floor(random() * 5), per = max ? Math.floor(DRAWING_LIMITS.points / count) : 0;
+  const count = max ? 60 : 3 + Math.floor(random() * 5), per = max ? Math.floor(DRAWING_LIMITS.chars / count / 4) - 3 : 0;
   const clamp = (v: number) => Math.round(Math.min(.97, Math.max(.03, v)) * 1000) / 1000;
   return { strokes: Array.from({ length: count }, (_, i) => {
     const n = per || 8 + Math.floor(random() * 18), cx = .2 + random() * .6, cy = .2 + random() * .6, r = .08 + random() * .2, loop = random() < .5;
@@ -31,7 +31,7 @@ export const bot: MiniBot<AirPublic, AirPrivate> = ({ view, me, playerId, player
   const others = players.filter(p => p.id !== playerId && !view.out.includes(p.id)).map(p => p.id), kind = view.kinds.at(-1);
   if (view.phase === 'test' && me.answer === undefined && waited(THINK.test)) {
     if (me.role === 'alien' && me.scan && random() < .2) return { turn, k: 'scan' };
-    if (kind === 'draw') return { turn, k: 'draw', drawing: doodle(random, random() < .2) };
+    if (kind === 'draw') return { turn, k: 'draw', drawing: packDrawing(doodle(random, random() < .2)) };
     if (kind === 'answer') {
       // A quarter of answers run to the 40-character limit so QA screenshots show the worst case.
       const text = random() < .25 ? MORE.reduce((t, part) => t.length + part.length <= MAX_ANSWER ? t + part : t, `${one(WORDS)} and ${one(WORDS)}`) : one(WORDS);

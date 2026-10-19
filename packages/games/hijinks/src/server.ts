@@ -10,7 +10,7 @@ import { SERVERS } from './minis/registry.server';
 
 /** Decision-timer scale. Standard gives phones 60% more than each minigame's base seconds; reveals are never scaled. */
 export const PACE: Record<TimerPace, number> = { relaxed: 2.4, standard: 1.6, speedy: 1.1 };
-export const CUE_LIMIT = 24, LOCK_MS = 4000, PODIUM_MS = 12000, MAX_MINI_ACTION = 24 * 1024;
+export const CUE_LIMIT = 24, LOCK_MS = 4000, PODIUM_MS = 12000, MAX_MINI_ACTION = 31 * 1024;
 
 type Running = { server: MiniServer; state: unknown; crashed: boolean };
 export type State = {

@@ -1,6 +1,6 @@
 /* Airlock rules: up to seven crew tests on the way to Earth. Hidden aliens get a near-miss prompt; anyone can push the airlock
    button to space one suspect, and a vote with fewer ABORTs than aliens aboard opens the doors. Server only. */
-import { parseDrawing, type Drawing } from '../../../../../party-contract/src/index';
+import { packDrawing, parseDrawing, type Drawing } from '../../../../../party-contract/src/index';
 import type { MiniApi, MiniResult, MiniServer } from '../../core/contract';
 import { variant } from '../../core/narration';
 import { freshDeck } from '../../core/server/deck';
@@ -75,7 +75,7 @@ function startTest(s: AirState, api: MiniApi) {
 /** Time's up or everyone answered: drawings go public, then the answers flip on the TV. Missing answers stay empty. */
 function endTest(s: AirState, api: MiniApi) {
   const t = test(s);
-  for (const [id, drawing] of Object.entries(t.arts)) api.media.put(artKey(s.tests.length, s.ids.indexOf(id)), drawing);
+  for (const [id, drawing] of Object.entries(t.arts)) api.media.put(artKey(s.tests.length, s.ids.indexOf(id)), packDrawing(drawing));
   api.music('reveal'); api.sfx('whoosh'); api.speak(t.pair.crew);
   go(s, api, 'results', resultBeats(aboard(s).length).end);
 }

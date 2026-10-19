@@ -1,5 +1,5 @@
 /* Sketch Bluff bot (tests and QA only): scribbles shapes (sometimes at the full ink limit), forges titles, guesses and likes at random. */
-import { DRAWING_COLORS, DRAWING_LIMITS, type Drawing, type DrawingStroke } from '../../../../../party-contract/src/index';
+import { DRAWING_COLORS, DRAWING_LIMITS, packDrawing, type Drawing, type DrawingStroke } from '../../../../../party-contract/src/index';
 import type { MiniBot } from '../../core/contract';
 import { MAX_LIKES, MAX_TITLE, type SketchPrivate, type SketchPublic } from './types';
 
@@ -9,10 +9,10 @@ const NOUN = ['aardvark', 'trombone', 'noodle', 'kazoo', 'tuba', 'pudding', 'wom
 const DOING = ['eating soup', 'on holiday', 'at the opera', 'doing taxes', 'in a hurry', 'on a unicycle', 'in love', 'at midnight'];
 const MORE = [' at midnight', ' again', ' in the rain', ', sadly', ' twice'];
 
-/** A doodle of loops, squiggles and zigzags; `max` fills every stroke and point the shared limits allow. */
+/** A doodle of loops, squiggles and zigzags; `max` fills the shared packed-size limit. */
 export function doodle(random: () => number, max = false): Drawing {
-  const strokes: DrawingStroke[] = [], count = max ? DRAWING_LIMITS.strokes : 3 + Math.floor(random() * 6);
-  const per = max ? Math.floor(DRAWING_LIMITS.points / count) : 0;
+  const strokes: DrawingStroke[] = [], count = max ? 60 : 3 + Math.floor(random() * 6);
+  const per = max ? Math.floor(DRAWING_LIMITS.chars / count / 4) - 3 : 0;
   const clamp = (v: number) => Math.round(Math.min(.97, Math.max(.03, v)) * 1000) / 1000;
   for (let i = 0; i < count; i++) {
     const n = per || 8 + Math.floor(random() * 22), cx = .2 + random() * .6, cy = .2 + random() * .6, r = .06 + random() * .22, kind = Math.floor(random() * 3);
@@ -30,7 +30,7 @@ export function doodle(random: () => number, max = false): Drawing {
 export const bot: MiniBot<SketchPublic, SketchPrivate> = ({ view, me, playerId, players, random }) => {
   if (!me || me.turn !== view.turn) return null;
   const turn = view.turn, pick = <T>(list: readonly T[]) => list[Math.floor(random() * list.length)]!;
-  if (view.phase === 'draw') return me.drawn ? null : { turn, k: 'draw', drawing: doodle(random, random() < .25) };
+  if (view.phase === 'draw') return me.drawn ? null : { turn, k: 'draw', drawing: packDrawing(doodle(random, random() < .25)) };
   if (view.phase === 'title' && !me.artist && me.title === undefined) {
     if (me.suggestions?.length && random() < .15) return { turn, k: 'title', text: pick(me.suggestions) };
     const seat = Math.max(0, players.findIndex(p => p.id === playerId)), base = `a ${pick(ADJ)} ${NOUN[seat % NOUN.length]} ${pick(DOING)}`;

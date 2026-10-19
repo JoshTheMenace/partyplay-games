@@ -2,7 +2,7 @@
 type Box = { x: number; y: number; width: number; height: number };
 type Locator = { click(o?: object): Promise<void>; fill(text: string, o?: object): Promise<void>; nth(i: number): Locator; first(): Locator; boundingBox(o?: object): Promise<Box | null>; scrollIntoViewIfNeeded(o?: object): Promise<void> };
 type Page = { locator(selector: string): Locator; getByRole(role: string, o?: object): Locator; mouse: { move(x: number, y: number): Promise<void>; down(): Promise<void>; up(): Promise<void> } };
-type Stroke = { color: string; points: { x: number; y: number }[] };
+import { parseDrawing } from '../../../../../party-contract/src/index';
 const wait = { timeout: 4000 };
 
 /** Returns true when the move was made by tapping the phone; false lets the driver fall back to its socket. */
@@ -11,7 +11,7 @@ export async function ui(page: Page, a: Record<string, unknown>): Promise<boolea
     if (a.k === 'design') {
       // Trace the bot's strokes on the real pad (the pad applies its own ink limits), then hang it on the rack.
       const pad = page.locator('.ss-draw-shell .kp-drawing-surface').first();
-      for (const stroke of (a.drawing as { strokes: Stroke[] }).strokes) {
+      for (const stroke of parseDrawing(a.drawing).strokes.slice(0, 24)) {
         await page.locator(`.kp-swatch[aria-label="Ink ${stroke.color}"]`).click(wait);
         await pad.scrollIntoViewIfNeeded(wait);
         const box = await pad.boundingBox(wait), [first, ...rest] = stroke.points;

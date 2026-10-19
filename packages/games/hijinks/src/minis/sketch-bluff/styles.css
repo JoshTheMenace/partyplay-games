@@ -147,11 +147,8 @@
 .sb-pad { display: flex; flex-direction: column; gap: .55rem; }
 .sb-pad .kp-drawing-surface { width: min(100%, max(220px, 100cqh - 240px)); margin: .2rem auto; }
 .sb-pad .kp-drawing-surface .kp-drawing { max-height: none; }
-.sb-pad .kp-drawing-pad > .kp-row:first-child { flex-wrap: nowrap; gap: .45rem; }
-.sb-pad .kp-swatch { width: min(44px, calc((100vw - 4.6rem) / 6)); min-width: 0; min-height: 0; aspect-ratio: 1; }
 .sb-pad-send .kp-btn { width: 100%; min-height: 56px; margin: .3rem 0 0; }
 .sb-pad .kp-drawing { border: 4px solid #3b2605; box-shadow: 0 0 0 4px var(--sb-gold); border-radius: .3rem; }
-.sb-pad .kp-row { justify-content: center; gap: .6rem; } .sb-pad .kp-row [role=status] { font-size: .8rem; color: var(--muted-foreground); }
 .sb-rule { margin: 0; text-align: center; font-size: .9rem; font-weight: 800; color: #e9cfa8; }
 .sb-phone-frame { --art: min(56vw, 24dvh); --fw: 10px; align-self: center; margin: 0 auto; }
 .sb-phone:is([data-phase=guess], [data-phase=reveal]) .sb-phone-frame { --art: min(44vw, 20dvh); }

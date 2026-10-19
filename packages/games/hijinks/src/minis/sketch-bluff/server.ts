@@ -1,5 +1,5 @@
 /* Sketch Bluff rules: everyone draws a secret prompt, then each piece is titled by forgers and guessed by the room. Server only. */
-import { parseDrawing, type Drawing } from '../../../../../party-contract/src/index';
+import { packDrawing, parseDrawing, type Drawing } from '../../../../../party-contract/src/index';
 import type { MiniApi, MiniResult, MiniServer, SfxId } from '../../core/contract';
 import { variant } from '../../core/narration';
 import { freshDeck } from '../../core/server/deck';
@@ -71,7 +71,7 @@ function startRound(s: SketchState, api: MiniApi) {
 /** Pencils down: hang every finished drawing in a shuffled gallery (missing drawings skip their artist's turn). */
 function endDraw(s: SketchState, api: MiniApi) {
   s.order = api.shuffle(s.ids.filter(id => s.arts[id]!.drawing));
-  s.order.forEach((id, i) => api.media.put(artKey(s.round, i), s.arts[id]!.drawing));
+  s.order.forEach((id, i) => api.media.put(artKey(s.round, i), packDrawing(s.arts[id]!.drawing!)));
   if (!s.order.length) { api.sfx('aww'); return scores(s, api); }
   showPiece(s, api, 0);
 }

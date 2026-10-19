@@ -41,22 +41,35 @@ export type GameClientContext<Input, Action, PublicView, PrivateView> = {
   serverNowMs(): number; setInput(input: Input): void; releaseInput?(): void; sendAction(action: Action): Promise<ActionResult>; assetsReady(): void;
 };
 export type DrawingPoint = { x: number; y: number };
-export type DrawingStroke = { color: string; width: number; points: DrawingPoint[] };
+/** Pen by default. `erase` cuts through earlier ink; `fill` is a filled region whose rings each end on their first point. */
+export type DrawingStroke = { color: string; width: number; points: DrawingPoint[]; tool?: 'erase' | 'fill' };
 export type Drawing = { strokes: DrawingStroke[] };
-export const DRAWING_COLORS = ['#05071a', '#ff5748', '#28c6e7', '#78d955', '#b58aff', '#ffd24a'] as const;
-export const DRAWING_LIMITS = { strokes: 24, points: 480, widthMin: 0.003, widthMax: 0.04 } as const;
+/** The pad's palette. The first six keep their order: older content refers to them by index. Any #rrggbb is valid ink. */
+export const DRAWING_COLORS = ['#05071a', '#ff5748', '#28c6e7', '#78d955', '#b58aff', '#ffd24a', '#ffffff', '#9aa0b8', '#4a4e69', '#ffd9b8', '#d9a066', '#8a5a33', '#4a2c1a', '#ff9a3c', '#ff7eb6', '#d6246e', '#8b1e3f', '#c9f04f', '#2e9b4f', '#14786e', '#3a6df0', '#1e2f8a', '#6d3fd9', '#f4e9ff'] as const;
+/** `chars` caps the packed form, which keeps any legal drawing inside one 32 KiB message. */
+export const DRAWING_LIMITS = { chars: 30000, widthMin: 0.002, widthMax: 0.12 } as const;
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_', enc = (n: number) => B64[n >> 6]! + B64[n & 63]!;
+const dec = (s: string, i: number) => B64.indexOf(s[i]!) * 64 + B64.indexOf(s[i + 1]!);
+/** Compact wire form: strokes split by spaces, each `tool colour width points…` with numbers in thousandths as two base64url digits. */
+export function packDrawing(drawing: Drawing): string {
+  return drawing.strokes.map(s => (s.tool?.[0] ?? 'p') + s.color.slice(1).toLowerCase() + enc(Math.round(s.width * 1000)) + s.points.map(p => enc(Math.round(p.x * 1000)) + enc(Math.round(p.y * 1000))).join('')).join(' ');
+}
+/** Accepts a drawing object or its packed string and returns a validated drawing object. */
 export function parseDrawing(raw: unknown): Drawing {
+  if (typeof raw === 'string') {
+    if (raw.length > DRAWING_LIMITS.chars) throw new Error('Drawing is too detailed.');
+    const strokes = raw ? raw.split(' ') : [];
+    if (!strokes.every(s => /^[pef][0-9a-f]{6}[\w-]{2}(?:[\w-]{4})+$/.test(s))) throw new Error('Invalid drawing stroke.');
+    raw = { strokes: strokes.map(s => ({ ...(s[0] !== 'p' && { tool: s[0] === 'e' ? 'erase' : 'fill' }), color: `#${s.slice(1, 7)}`, width: dec(s, 7) / 1000, points: Array.from({ length: (s.length - 9) / 4 }, (_, i) => ({ x: dec(s, 9 + i * 4) / 1000, y: dec(s, 11 + i * 4) / 1000 })) })) };
+  }
   if (!raw || typeof raw !== 'object' || !Array.isArray((raw as Drawing).strokes)) throw new Error('Drawing must contain strokes.');
-  const strokes = (raw as Drawing).strokes;
-  if (strokes.length > DRAWING_LIMITS.strokes) throw new Error('Too many drawing strokes.');
-  let count = 0;
-  return { strokes: strokes.map(stroke => {
-    if (!stroke || !DRAWING_COLORS.includes(stroke.color as typeof DRAWING_COLORS[number]) || !Number.isFinite(stroke.width) || stroke.width < 0.003 || stroke.width > 0.04 || !Array.isArray(stroke.points) || !stroke.points.length) throw new Error('Invalid drawing stroke.');
-    count += stroke.points.length;
-    if (count > DRAWING_LIMITS.points) throw new Error('Drawing is too detailed.');
-    return { color: stroke.color, width: stroke.width, points: stroke.points.map(point => {
+  const drawing = { strokes: (raw as Drawing).strokes.map(stroke => {
+    if (!stroke || typeof stroke.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(stroke.color) || (stroke.tool !== undefined && stroke.tool !== 'erase' && stroke.tool !== 'fill') || !Number.isFinite(stroke.width) || stroke.width < DRAWING_LIMITS.widthMin || stroke.width > DRAWING_LIMITS.widthMax || !Array.isArray(stroke.points) || !stroke.points.length) throw new Error('Invalid drawing stroke.');
+    return { ...(stroke.tool && { tool: stroke.tool }), color: stroke.color.toLowerCase(), width: Math.round(stroke.width * 1000) / 1000, points: stroke.points.map(point => {
       if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y) || point.x < 0 || point.x > 1 || point.y < 0 || point.y > 1) throw new Error('Invalid drawing point.');
       return { x: Math.round(point.x * 1000) / 1000, y: Math.round(point.y * 1000) / 1000 };
     }) };
   }) };
+  if (packDrawing(drawing).length > DRAWING_LIMITS.chars) throw new Error('Drawing is too detailed.');
+  return drawing;
 }

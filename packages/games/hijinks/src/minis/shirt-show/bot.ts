@@ -1,15 +1,15 @@
 /* Shirt Show bot (tests and QA only): doodles 1–4 designs (sometimes at the full ink limit), writes slogans (sometimes 40
    characters), builds shirts from its hand with the odd reroll, and votes at random. */
-import { DRAWING_COLORS, DRAWING_LIMITS, type Drawing, type DrawingStroke } from '../../../../../party-contract/src/index';
+import { DRAWING_COLORS, DRAWING_LIMITS, packDrawing, type Drawing, type DrawingStroke } from '../../../../../party-contract/src/index';
 import type { MiniBot } from '../../core/contract';
 import { MAX_DESIGNS, MAX_SLOGAN, MAX_SLOGANS, SHIRT_COLORS, type ShirtPrivate, type ShirtPublic } from './types';
 
 const WORDS = ['Goose', 'Pickle', 'Waffle', 'Wizard', 'Noodle', 'Kazoo', 'Llama', 'Pudding', 'Cactus', 'Disco', 'Trombone', 'Spatula'];
 const MORE = [' Forever', ' and Proud', ' on Tuesdays', ' Club', ', Probably', ' Champion'];
 
-/** Loops, zigzags and starbursts; `max` uses every stroke and point the shared limits allow. */
+/** Loops, zigzags and starbursts; `max` fills the shared packed-size limit. */
 export function doodle(random: () => number, max = false): Drawing {
-  const strokes: DrawingStroke[] = [], count = max ? DRAWING_LIMITS.strokes : 2 + Math.floor(random() * 6), per = max ? Math.floor(DRAWING_LIMITS.points / count) : 0;
+  const strokes: DrawingStroke[] = [], count = max ? 60 : 2 + Math.floor(random() * 6), per = max ? Math.floor(DRAWING_LIMITS.chars / count / 4) - 3 : 0;
   const clamp = (v: number) => Math.round(Math.min(.97, Math.max(.03, v)) * 1000) / 1000;
   for (let i = 0; i < count; i++) {
     const n = per || 10 + Math.floor(random() * 24), cx = .25 + random() * .5, cy = .25 + random() * .5, r = .08 + random() * .2, kind = Math.floor(random() * 3);
@@ -28,7 +28,7 @@ export const bot: MiniBot<ShirtPublic, ShirtPrivate> = ({ view, me, playerId, pl
   const turn = view.turn, seat = Math.max(0, players.findIndex(p => p.id === playerId)), pick = <T>(list: readonly T[]) => list[Math.floor(random() * list.length)]!;
   // Each seat aims for its own quota (1–4 designs, 1–6 slogans) so rooms see sparse and full racks.
   if (view.phase === 'draw' && !me.finished) return (me.designs ?? 0) < 1 + (seat + view.round) % MAX_DESIGNS
-    ? { turn, k: 'design', drawing: doodle(random, random() < .2) } : { turn, k: 'done' };
+    ? { turn, k: 'design', drawing: packDrawing(doodle(random, random() < .2)) } : { turn, k: 'done' };
   if (view.phase === 'write' && !me.finished) {
     if ((me.slogans?.length ?? 0) >= 1 + (seat * 2 + view.round) % MAX_SLOGANS) return { turn, k: 'done' };
     const base = `${WORDS[(seat * 3 + (me.slogans?.length ?? 0)) % WORDS.length]} ${pick(WORDS)}`; // the first word never repeats for one seat

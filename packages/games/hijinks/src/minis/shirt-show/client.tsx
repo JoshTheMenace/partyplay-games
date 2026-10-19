@@ -1,7 +1,7 @@
 /* Shirt Show screens: the wrestling-runway arena TV (studio, ring bouts, champion, main event) and the phone controller. */
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { ArcadeButton, DrawingPad, StatusNotice } from '../../../../../party-ui/src/index';
-import { DRAWING_COLORS, type Drawing } from '../../../../../party-contract/src/index';
+import { ArcadeButton, DrawingPad, DrawingRenderer, StatusNotice } from '../../../../../party-ui/src/index';
+import { packDrawing, type Drawing } from '../../../../../party-contract/src/index';
 import type { MiniClient, MiniViewProps, PackPlayer } from '../../core/contract';
 import {
   AvatarBadge, AvatarStack, Avatar, BigTitle, Confetti, PhoneChoices, PhoneDone, PhoneShell, PhoneTextEntry, PhoneWaiting, PlayerStrip, Scoreboard, Timer,
@@ -39,14 +39,9 @@ const FOLDS = 'M118 300Q128 360 114 404M286 292Q274 352 290 406M200 420Q206 380 
 /** Slogan size (% of the shirt width) by length: short slogans shout, long ones wrap onto three lines. */
 const sloganSize = (n: number) => n <= 8 ? 10.5 : n <= 14 ? 8.6 : n <= 22 ? 7.2 : n <= 30 ? 6.2 : 5.6;
 
-/** A design as a screen print: every stroke gets a contrasting edge so it reads on any shirt colour. */
-export function Print({ packed, className = '' }: { packed: unknown; className?: string }) {
-  // Thin pens are thickened: pads draw at phone scale, prints are seen from the sofa.
-  const lines = (Array.isArray(packed) ? packed as Packed : []).map(s => ({ ink: DRAWING_COLORS[s[0]!] ?? DRAWING_COLORS[0], w: Math.max(s[1] ?? 12, 18 + (s[1] ?? 12) * .6), pts: s.slice(2).join(' ') }));
-  return <svg className={`ss-print-art ${className}`} viewBox="0 0 1000 1000" aria-hidden="true">
-    <g className="ss-print-edge">{lines.map((l, i) => <polyline key={i} points={l.pts} strokeWidth={l.w + 22} stroke={l.ink === DRAWING_COLORS[0] ? '#fff6e5' : '#05071a'} />)}</g>
-    <g>{lines.map((l, i) => <polyline key={i} points={l.pts} strokeWidth={l.w} stroke={l.ink} />)}</g>
-  </svg>;
+/** A design as a screen print: a contrasting edge (`edge`) keeps it readable on any shirt colour, and thin pens are thickened for the sofa. */
+export function Print({ packed, className = '', edge = '#05071a' }: { packed: unknown; className?: string; edge?: string }) {
+  return <DrawingRenderer drawing={typeof packed === 'string' ? packed : ''} label="" edge={edge} bold className={`ss-print-art ${className}`} />;
 }
 
 /** A finished shirt: the tee in its colour, the design on the chest and the slogan above or below it. `stand` adds the mannequin. */
@@ -57,7 +52,7 @@ export function Tee({ shirt, media, stand, className = '' }: { shirt: Pick<Shirt
       {stand && <path className="ss-tee-neck" d="M168 44V8Q200 -6 232 8V44Z" />}
       <path className="ss-tee-body" d={TEE} /><path className="ss-tee-fold" d={FOLDS} /><path className="ss-tee-collar" d="M140 30Q200 74 260 30" />
     </svg>
-    <div className="ss-print"><Print packed={media[shirt.design]} /></div>
+    <div className="ss-print"><Print packed={media[shirt.design]} edge={c.light ? '#05071a' : '#fff6e5'} /></div>
     <p className="ss-slogan" style={{ '--fs': sloganSize(shirt.slogan.length) } as CSSProperties}>{shirt.slogan}</p>
   </figure>;
 }
@@ -274,7 +269,7 @@ function Idea({ ideas, offset, label }: { ideas: readonly string[]; offset: numb
 function DrawPhone({ view, me, player, players, vip, now, send, sessionKey }: Phone) {
   const count = me.designs ?? 0, [drawing, setDrawing] = useDraft<Drawing>(`${sessionKey}:${view.turn}:d${count}`, { strokes: [] });
   const [state, run] = useSend(), [doneState, runDone] = useSend(), auto = useRef(''), pad = useRef<HTMLDivElement>(null), late = view.deadline - useNow(now, 250) < 1800;
-  const submit = () => run(() => send({ turn: view.turn, k: 'design', drawing }));
+  const submit = () => run(() => send({ turn: view.turn, k: 'design', drawing: packDrawing(drawing) }));
   // Short screens: bring the pad and its buttons into view for each new design.
   useEffect(() => { if (innerHeight < 720) pad.current?.querySelector('.kp-drawing-surface')?.scrollIntoView({ block: innerWidth > innerHeight ? 'center' : 'end' }); }, [count]);
   // A started design is handed in just before time runs out.

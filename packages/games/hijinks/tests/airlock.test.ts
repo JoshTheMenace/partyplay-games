@@ -8,6 +8,7 @@ import { LINES } from '../src/minis/airlock/narration';
 import { PAIRS, pairKey } from '../src/minis/airlock/content.server';
 import { server, type AirState } from '../src/minis/airlock/server';
 import { PACE } from '../src/server';
+import { parseDrawing } from '../../../party-contract/src/index';
 import { ICONS, KINDS, MAX_ANSWER, MIN_RESUME_MS, TESTS, TEST_S, artKey, type AirPrivate, type AirPublic, type Kind } from '../src/minis/airlock/types';
 
 const pub = (n: Night) => n.mini<AirPublic>();
@@ -380,7 +381,7 @@ test('drawings: published to media only once the answers flip, removed for the n
   assert.deepEqual(Object.keys(n.view().media).filter(k => k.startsWith('al-')), [], 'no drawing before the reveal');
   answerAll(n, n.ids.slice(1));
   at(n, 'results');
-  assert.deepEqual(n.view().media[artKey(1, 0)], DOODLE);
+  assert.deepEqual(parseDrawing(n.view().media[artKey(1, 0)]), DOODLE);
   assert.equal(pub(n).board!.answers[0]!.value, artKey(1, 0));
   at(n, 'discuss');
   for (const id of n.ids) n.send(id, { turn: pub(n).turn, k: 'ready' });

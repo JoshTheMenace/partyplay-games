@@ -2,7 +2,7 @@
 type Box = { x: number; y: number; width: number; height: number };
 type Locator = { click(o?: object): Promise<void>; fill(text: string, o?: object): Promise<void>; first(): Locator; boundingBox(o?: object): Promise<Box | null>; scrollIntoViewIfNeeded(o?: object): Promise<void> };
 type Page = { locator(selector: string): Locator; getByRole(role: string, o?: object): Locator; mouse: { move(x: number, y: number): Promise<void>; down(): Promise<void>; up(): Promise<void> } };
-type Stroke = { color: string; points: { x: number; y: number }[] };
+import { parseDrawing } from '../../../../../party-contract/src/index';
 const wait = { timeout: 4000 }, pause = (ms: number) => new Promise(done => setTimeout(done, ms));
 
 /** Returns true when the move was made by tapping the phone; false lets the driver fall back to its socket. */
@@ -17,7 +17,7 @@ export async function ui(page: Page, a: Record<string, unknown>): Promise<boolea
       await page.getByRole('button', { name: 'Lock it in', exact: true }).click(wait);
     } else if (a.k === 'draw') {
       const pad = page.locator('.al-pad .kp-drawing-surface').first();
-      for (const stroke of (a.drawing as { strokes: Stroke[] }).strokes.slice(0, 8)) {
+      for (const stroke of parseDrawing(a.drawing).strokes.slice(0, 8)) {
         await page.locator(`.kp-swatch[aria-label="Ink ${stroke.color}"]`).click(wait);
         await pad.scrollIntoViewIfNeeded(wait);
         const box = await pad.boundingBox(wait), [first, ...rest] = stroke.points;

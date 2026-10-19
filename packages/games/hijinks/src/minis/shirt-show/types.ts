@@ -1,10 +1,10 @@
 /* Shirt Show views, actions, scoring and reveal timing. Shared by server, client, bot and tests: no content banks here. */
-import { DRAWING_COLORS, type Drawing } from '../../../../../party-contract/src/index';
+import { packDrawing, type Drawing } from '../../../../../party-contract/src/index';
 
 export const ROUNDS = 2, MAX_DESIGNS = 4, MAX_SLOGANS = 6, MAX_SLOGAN = 40, HAND = 3;
-/** A design needs this many ink points in total (no stray-tap dots on the runway). */
-export const MIN_INK = 6;
-export const inkOf = (d: Drawing) => d.strokes.reduce((n, s) => n + s.points.length, 0);
+/** A design needs this much ink, in canvas widths of line (no stray-tap dots on the runway). Any paint-bucket fill counts. */
+export const MIN_INK = .03;
+export const inkOf = (d: Drawing) => d.strokes.reduce((n, s) => s.tool === 'erase' ? n : s.tool === 'fill' ? n + 1 : s.points.reduce((len, p, i) => i ? len + Math.hypot(p.x - s.points[i - 1]!.x, p.y - s.points[i - 1]!.y) : len, n), 0);
 /** Base seconds before the pack's pace setting. */
 export const DRAW_S = 75, WRITE_S = 50, MAKE_S = 60, VOTE_S = 13, FINAL_VOTE_S = 20;
 /** Readable minimum before an all-submitted phase advances. */
@@ -21,9 +21,9 @@ export const SHIRT_COLORS = [
   { name: 'Gold', hex: '#f3b92a', light: true }, { name: 'Hot pink', hex: '#f45fa9', light: true },
 ] as const;
 
-/** Drawings travel compactly: per stroke [ink index, width ×1000, x0, y0, x1, y1…] with coordinates in thousandths. */
-export type Packed = number[][];
-export const pack = (d: Drawing): Packed => d.strokes.map(s => [DRAWING_COLORS.indexOf(s.color as typeof DRAWING_COLORS[number]), Math.round(s.width * 1000), ...s.points.flatMap(p => [Math.round(p.x * 1000), Math.round(p.y * 1000)])]);
+/** Drawings travel in the shared packed form. */
+export type Packed = string;
+export const pack = packDrawing;
 
 export type Phase = 'draw' | 'write' | 'make' | 'show' | 'vote' | 'result' | 'champ' | 'final-show' | 'final-vote' | 'final-result';
 /** A finished shirt. `design` is the media key of its packed drawing. */

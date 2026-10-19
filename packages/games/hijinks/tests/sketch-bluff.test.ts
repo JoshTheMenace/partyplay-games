@@ -203,7 +203,7 @@ test('validation: stale turns, wrong phases, own titles, artists and likes', () 
   const n = start(4), turn = pub(n).turn;
   rejects(n.trySend('p0', { turn: 'old', k: 'draw', drawing: LINE }), /moved on/);
   rejects(n.trySend('p0', { turn, k: 'draw', drawing: { strokes: [] } }), /Draw something/);
-  rejects(n.trySend('p0', { turn, k: 'draw', drawing: { strokes: [{ color: '#123456', width: .01, points: [{ x: 0, y: 0 }] }] } }), /Invalid drawing/);
+  rejects(n.trySend('p0', { turn, k: 'draw', drawing: { strokes: [{ color: 'blue', width: .01, points: [{ x: 0, y: 0 }] }] } }), /Invalid drawing/);
   rejects(n.trySend('p0', { turn, k: 'draw', drawing: LINE, extra: 1 }), /Unknown field/);
   rejects(n.trySend('p0', { turn, k: 'title', text: 'early' }), /Titles are closed/);
   rejects(n.trySend('p0', { turn, k: 'dance' }), /Unknown move/);

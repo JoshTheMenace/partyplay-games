@@ -45,7 +45,7 @@ test('lobby choice and avatar assignment', () => {
 test('parseAction is strict', () => {
   assert.deepEqual(rules.parseAction({ k: 'mini', session: 2, a: { x: 1 } }), { k: 'mini', session: 2, a: { x: 1 } });
   for (const bad of [null, [], { k: 'dance' }, { k: 'lock', x: 1 }, { k: 'vote' }, { k: 'vote', game: '' }, { k: 'vote', game: 'x'.repeat(41) },
-    { k: 'skip', session: -1 }, { k: 'next', session: 1.5 }, { k: 'mini', session: 1, a: [] }, { k: 'mini', session: 1, a: { t: 'x'.repeat(30000) } }])
+    { k: 'skip', session: -1 }, { k: 'next', session: 1.5 }, { k: 'mini', session: 1, a: [] }, { k: 'mini', session: 1, a: { t: 'x'.repeat(32000) } }])
     assert.throws(() => rules.parseAction(bad), JSON.stringify(bad));
   assert.throws(() => realRules.parseInput({}));
 });
