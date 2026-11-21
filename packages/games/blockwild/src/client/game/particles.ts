@@ -57,6 +57,7 @@ export const TINTS = {
   smoke: [0.62, 0.62, 0.62], dark: [0.07, 0.07, 0.075], poof: [0.9, 0.9, 0.9], flame: [1, 0.62, 0.18], spark: [1, 0.95, 0.55], splash: [0.35, 0.55, 1], white: [1, 1, 1], heart: [1, 0.3, 0.35],
   redstone: [1, 0.12, 0.08], portal: [0.62, 0.3, 1], lava: [1, 0.45, 0.08], happy: [0.35, 1, 0.45],
   soul: [0.3, 0.85, 1], ender: [0.78, 0.36, 1], acid: [0.66, 0.22, 0.9], beam: [1, 0.82, 1],
+  firefly: [0.78, 1, 0.3], pollen: [1, 0.97, 0.8],
 } as const satisfies Record<string, Tint>;
 
 export class Particles {
@@ -147,6 +148,18 @@ export class Particles {
   /** An ender mote: a purple speck drifting out and down around endermen, portals and the dragon egg. */
   mote(x: number, y: number, z: number, tint: Tint = TINTS.ender) {
     this.spawn(x, y, z, (Math.random() - 0.5) * 0.9, -0.3 - Math.random() * 0.5, (Math.random() - 0.5) * 0.9, 0.6 + Math.random() * 0.6, 0.05 + Math.random() * 0.03, 0, tint, 1.3, this.white, -0.03, 0.8, false);
+  }
+  /** A firefly: a self-lit green-gold speck that wanders slowly for a few seconds and winks out. */
+  firefly(x: number, y: number, z: number) {
+    this.spawn(x, y, z, (Math.random() - 0.5) * 0.5, (Math.random() - 0.3) * 0.25, (Math.random() - 0.5) * 0.5, 2 + Math.random() * 2.5, 0.055, 0, TINTS.firefly, 1.7, this.white, -0.012, 0.3, false, true);
+  }
+  /** Pollen: a pale speck carried sideways on the air in daylight. */
+  pollen(x: number, y: number, z: number, light: number) {
+    this.spawn(x, y, z, 0.25 + Math.random() * 0.3, (Math.random() - 0.5) * 0.12, 0.1 + (Math.random() - 0.5) * 0.2, 3 + Math.random() * 3, 0.028, 0.01, TINTS.pollen, light, this.white, 0, 0, false, true);
+  }
+  /** A leaf let go by a canopy: a chip of the leaf texture tumbling down slowly. */
+  leaf(x: number, y: number, z: number, rect: Rect | null, light: number) {
+    if (rect) this.spawn(x, y, z, 0.2 + (Math.random() - 0.5) * 0.5, -0.25, (Math.random() - 0.5) * 0.5, 4 + Math.random() * 2, 0.09, 0.9, TINTS.white, light, this.chipFrom(rect), 0, 1.6, true);
   }
   /** One glowing speck left behind by a flying projectile (eyes of ender, pearls, dragon fireballs). */
   trail(x: number, y: number, z: number, tint: Tint, size = 0.07) {

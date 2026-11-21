@@ -14,6 +14,7 @@ import type { Target } from '../store';
 import {
   AMBIENT, END_AMBIENT, END_FLAT_SKY, END_FOG_FAR, END_FOG_NEAR, END_SKY_LIGHT, lightCurve, NETHER_AMBIENT, NETHER_FOG_FAR, NETHER_FOG_NEAR, skyState, TORCH_LIGHT,
 } from './environment';
+import { EditLayers } from './edits';
 import { newVolume, volumeIndex, type Volume } from './light';
 import { createUniforms, createWorldMaterials, GLOWS, type WorldMaterials, type WorldUniforms } from './material';
 import { Mesher } from './mesher';
@@ -132,11 +133,13 @@ export class VoxelEngine {
   private plan: number[] = [];
   private planCentre = -1;
   private planAge = Infinity;
-  /** Effective edits (authoritative + overlay) last sent to the worker. */
-  private effective = new Map<number, number>();
+  /** Effective edits (journal + tail + overlay) last sent to the worker. */
+  private readonly edits = new EditLayers();
   private daylight = 1;
   /** Sky light of the time of day (setTime); the End blends it towards its own flat light. */
   private readonly daySky = new Color(1, 1, 1);
+  private readonly dayFill = new Color(0.74, 0.74, 0.74);
+  private readonly dayDirect = new Color(0.5, 0.5, 0.5);
   private readonly scratch: [number, number, number] = [0, 0, 0];
   private readyResolve: (() => void) | null = null;
   private readonly readyPromise: Promise<void>;
@@ -171,19 +174,18 @@ export class VoxelEngine {
 
   // ── Public API ────────────────────────────────────────────────────────────
 
-  /** Authoritative edits plus the optimistic overlay (overlay wins). Only changed cells are sent to the worker. */
-  setEdits(edits: readonly (readonly [number, number])[], overlay: ReadonlyMap<number, number>) {
-    const next = new Map<number, number>();
-    for (const [index, value] of edits) next.set(index, value);
-    for (const [index, value] of overlay) next.set(index, value);
-    const changes: number[] = [];
-    for (const [index, value] of next) if (this.effective.get(index) !== value) {
-      changes.push(index, this.veiled.has(index) ? 0 : value);
-      this.world.write(index, value);
-    }
-    for (const index of this.effective.keys()) if (!next.has(index)) changes.push(index, this.veiled.has(index) ? 0 : -1);
-    this.effective = next;
+  /**
+   * The consolidated journal, the server's recent tail (flat [index, value, …], −1 = back to terrain) and the optimistic
+   * overlay (which wins). Only changed cells are sent to the worker; reverted cells get their terrain value back from it.
+   */
+  setEdits(edits: readonly (readonly [number, number])[], recent: readonly number[], overlay: ReadonlyMap<number, number>) {
+    const changes = this.edits.update(edits, recent, overlay);
     if (!changes.length) return;
+    for (let j = 0; j < changes.length; j += 2) {
+      const index = changes[j]!, value = changes[j + 1]!;
+      if (value >= 0) this.world.write(index, value);
+      if (this.veiled.has(index)) changes[j + 1] = 0;
+    }
     const array = Int32Array.from(changes);
     this.post({ type: 'edits', changes: array }, [array.buffer]);
   }
@@ -222,10 +224,15 @@ export class VoxelEngine {
     if (this.readyResolve) this.checkReady(position.x, position.z);
   }
 
-  /** Sun, sky colours, sky light and fog colour for a time of day (ticks, 0 = sunrise). */
-  setTime(dayTicks: number) {
+  /** Sun, sky colours, sky light and fog colour for a time of day (ticks, 0 = sunrise); `day` turns the moon's phase. */
+  setTime(dayTicks: number, day = 4) {
     const state = skyState(dayTicks), u = this.uniforms;
     u.uSunDir.value.set(...state.sun);
+    u.uLightDir.value.set(...state.light);
+    this.dayFill.setRGB(...state.fill);
+    this.dayDirect.setRGB(...state.direct);
+    // Eight nights from full moon to full moon; a new world's first night is a full one.
+    u.uMoonPhase.value = (((day + 4) % 8) + 8) % 8 / 8;
     u.uZenith.value.setRGB(...state.zenith);
     u.uHorizon.value.setRGB(...state.horizon);
     this.daySky.setRGB(...state.skyLight);
@@ -238,7 +245,10 @@ export class VoxelEngine {
 
   /** Sky light from the time of day, or the End's constant violet-tinted light, then the fog that matches it. */
   private applySky() {
-    const light = this.uniforms.uSkyLight.value.copy(this.daySky).lerp(END_LIGHT, this.uniforms.uEnd.value);
+    const u = this.uniforms, end = u.uEnd.value, light = u.uSkyLight.value.copy(this.daySky).lerp(END_LIGHT, end);
+    // The End's light has no direction: all of it is fill.
+    u.uSkyFill.value.copy(this.dayFill).lerp(END_LIGHT, end);
+    u.uSunLight.value.copy(this.dayDirect).multiplyScalar(1 - end);
     this.daylight = (light.r + light.g + light.b) / 3;
     this.applyFog();
   }
@@ -274,6 +284,10 @@ export class VoxelEngine {
     return [sky, block];
   }
 
+  /** Unit vector towards the sun by day and the moon by night (the direction faces are lit from). */
+  get lightDirection(): Vector3 { return this.uniforms.uLightDir.value; }
+  /** How much of the night sky shows (0 by day … 1 at night), for effects that belong to the dark. */
+  get night() { return this.uniforms.uStars.value; }
   /** True while the camera is in the Nether (the look has faded in). */
   get inNether() { return this.uniforms.uNether.value > 0.5; }
   /** True while the camera is in the End (the look has faded in). */
@@ -377,7 +391,7 @@ export class VoxelEngine {
       }
       this.veiled.delete(slide.index);
       this.lingering.push({ root: slide.root, index: slide.index, key: chunkKey(slide.x >> 4, slide.z >> 4), echoed: false, age: 0 });
-      this.post({ type: 'edits', changes: Int32Array.from([slide.index, this.effective.get(slide.index) ?? -1]) });
+      this.post({ type: 'edits', changes: Int32Array.from([slide.index, this.edits.get(slide.index) ?? -1]) });
     }
   }
   private dropLinger(i: number) {
@@ -441,7 +455,7 @@ export class VoxelEngine {
       for (let j = 0; j < changes.length; j += 2) {
         // A veiled cell keeps its real value for physics; only the worker's meshes see it as air.
         if (this.veiled.has(changes[j]!)) continue;
-        const index = changes[j]!, value = this.effective.get(index) ?? changes[j + 1]!, x = index % WORLD, z = Math.floor(index / WORLD) % WORLD;
+        const index = changes[j]!, value = this.edits.get(index) ?? changes[j + 1]!, x = index % WORLD, z = Math.floor(index / WORLD) % WORLD;
         this.world.write(index, value);
         const waiting = this.pending.get(chunkKey(x >> 4, z >> 4))?.cells;
         if (waiting) waiting[localIndex(x & 15, Math.floor(index / (WORLD * WORLD)), z & 15)] = value;
@@ -480,9 +494,7 @@ export class VoxelEngine {
       this.world.install(key, update.cells, update.light!);
       // Edits sent after the worker built this column arrive later as 'cells'; apply what we already know now.
       const [cx, cz] = chunkFromKey(key);
-      for (const [index, value] of this.effective) {
-        if ((index % WORLD) >> 4 === cx && (Math.floor(index / WORLD) % WORLD) >> 4 === cz) this.world.write(index, value);
-      }
+      for (const [index, value] of this.edits.inChunk(key) ?? []) this.world.write(index, value);
       this.columns.set(key, { cx, cz, meshes: [null, null, null] });
     }
     const column = this.columns.get(key);

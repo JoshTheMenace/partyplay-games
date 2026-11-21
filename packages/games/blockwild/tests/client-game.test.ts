@@ -20,7 +20,7 @@ import { Hand, type HandPose } from '../src/client/game/hand';
 import { EditOverlay } from '../src/client/game/overlay';
 import { Particles } from '../src/client/game/particles';
 import { LocalPlayer, STEP, wantsAutoJump } from '../src/client/game/player';
-import { closeScreen, configurePrediction, replay, sendCommand, setServerView } from '../src/client/game/predict';
+import { closeScreen, configurePrediction, replay, sendCommand, setServerView, type Carried } from '../src/client/game/predict';
 import { ItemModels, SpriteSheet } from '../src/client/game/sprites';
 import { heldAsBlock, itemSprite, texturePixels } from '../src/client/art/atlas';
 import { blockUse, doorToggle, holdUse, linkedCells, pickTarget, writesHitBodies } from '../src/client/game/targeting';
@@ -29,11 +29,18 @@ import { blockUse, doorToggle, holdUse, linkedCells, pickTarget, writesHitBodies
 function flatWorld(overrides: Record<string, number> = {}): CellReader {
   return (x, y, z) => overrides[`${Math.floor(x)},${Math.floor(y)},${Math.floor(z)}`] ?? (y < 64 ? B.stone : B.air);
 }
-const pv = (patch: Partial<PrivateView> = {}): PrivateView => ({
-  ack: 0, tp: { n: 0, x: 0, y: 0, z: 0 }, imp: { n: 0, vx: 0, vy: 0, vz: 0 }, inv: Array(36).fill(null), cursor: null, grid: Array(4).fill(null), out: null,
-  screen: null, health: 20, food: 20, saturation: 5, air: 300, dead: false, spawn: [0, 64, 0], mode: 'survival', keepInventory: true,
-  armor: [null, null, null, null], armorPoints: 0, dimension: 'overworld', ...patch,
-});
+/** What the server says a player carries (the bag plus the mode), for prediction. */
+const carried = (patch: Partial<Carried> = {}): Carried =>
+  ({ inv: Array(36).fill(null), cursor: null, grid: Array(4).fill(null), out: null, screen: null, armor: [null, null, null, null], mode: 'survival', ...patch });
+let bagRev = 0;
+/** A private view; `bag` (when given) rides along as a fresh bag revision. */
+const pv = (patch: Partial<PrivateView> = {}, bag?: Partial<Carried>): PrivateView => {
+  const { mode, ...held } = carried(bag);
+  return {
+    ack: 0, tp: { n: 0, x: 0, y: 0, z: 0 }, imp: { n: 0, vx: 0, vy: 0, vz: 0 }, bagRev: bag ? ++bagRev : bagRev, ...bag ? { bag: { rev: bagRev, ...held } } : {}, near: { p: [], m: [], i: [], a: [], f: [] },
+    health: 20, food: 20, saturation: 5, air: 300, dead: false, mode, keepInventory: true, armorPoints: 0, dimension: 'overworld', ...patch,
+  };
+};
 const source = (patch: Partial<InputSource> = {}): InputSource => ({
   body: { ...newBody(2048.5, 64, 2048.5), onGround: true }, yaw: 0.5, pitch: -0.25, sprint: false, using: false, swinging: false, dead: false,
   slot: 3, mine: null, tpAck: 0, queue: store.get().queue, ...patch,
@@ -120,7 +127,7 @@ test('the optimistic overlay holds predictions until acked, so rejected edits re
 });
 
 test('container prediction replays pending commands over the last private view', () => {
-  const base = pv({ inv: [{ id: B.oak_log, n: 3 }, { id: I.stick, n: 5 }, ...Array(34).fill(null)] });
+  const base = carried({ inv: [{ id: B.oak_log, n: 3 }, { id: I.stick, n: 5 }, ...Array(34).fill(null)] });
   const cmd = (n: number, body: object) => ({ n, ...body }) as Parameters<typeof replay>[1][number];
   // Pick up the logs, drop them into the 2×2 grid: the output previews planks at once.
   const clicked = replay(base, [cmd(1, { t: 'click', w: 'inv', i: 0, b: 0 }), cmd(2, { t: 'click', w: 'grid', i: 0, b: 1 })], false);
@@ -143,13 +150,13 @@ test('closing a chest and reopening it before the server replies still shows the
   const chest = { kind: 'chest', x: 5, y: 60, z: 5, slots: Array(27).fill(null) } as const, use = { t: 'use', x: 5, y: 60, z: 5, face: 3 } as const;
   const opened = sendCommand(use);
   acknowledge(opened);
-  setServerView(pv({ ack: opened, screen: chest }));
+  setServerView(pv({ ack: opened }, { screen: chest }));
   assert.equal(store.get().screen, 'chest');
   closeScreen();
   // The server runs the close and the second use in one tick: the same chest, open again.
   const again = sendCommand(use);
   acknowledge(again);
-  setServerView(pv({ ack: again, screen: chest }));
+  setServerView(pv({ ack: again }, { screen: chest }));
   assert.equal(store.get().screen, 'chest');
   configurePrediction(null);
 });

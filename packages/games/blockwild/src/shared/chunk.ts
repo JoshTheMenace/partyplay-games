@@ -49,6 +49,10 @@ export class ChunkCache {
  */
 export class VoxelWorld implements World {
   readonly edits = new Map<number, number>();
+  /** Changes since the journal was last consolidated: cell index → value, or −1 for "back to generated terrain". */
+  readonly recent = new Map<number, number>();
+  /** Distinct edited cells allowed right now: EDIT_LIMIT, or less once the save's byte budget runs short (sim/journal.ts). */
+  limit = EDIT_LIMIT;
   readonly cache: ChunkCache;
   constructor(source: ChunkSource, capacity = 256) {
     this.cache = new ChunkCache(source, capacity);
@@ -76,18 +80,19 @@ export class VoxelWorld implements World {
     if (outsideCell(x, y, z) !== null) return false;
     const index = cellIndex(x, y, z);
     if (value === this.generated(x, y, z)) {
-      this.edits.delete(index);
+      if (this.edits.delete(index)) this.recent.set(index, -1);
       return true;
     }
-    if (!this.edits.has(index) && this.edits.size >= EDIT_LIMIT) return false;
+    if (!this.edits.has(index) && this.edits.size >= this.limit) return false;
     this.edits.set(index, value);
+    this.recent.set(index, value);
     return true;
   }
-  /** True if setting these cells would stay within EDIT_LIMIT. */
+  /** True if setting these cells would stay within the limit. */
   canEdit(cells: readonly (readonly [number, number, number, number])[]): boolean {
     let added = 0;
     for (const [x, y, z, value] of cells) if (!this.edits.has(cellIndex(x, y, z)) && value !== this.generated(x, y, z)) added++;
-    return this.edits.size + added <= EDIT_LIMIT;
+    return this.edits.size + added <= this.limit;
   }
   /** Copy of a chunk with edits applied (for meshing or saves). */
   chunkWithEdits(cx: number, cz: number): Uint16Array {

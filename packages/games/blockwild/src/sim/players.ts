@@ -11,7 +11,7 @@ import { breakBlock, standNear } from './world';
 
 export function newPlayer(id: string, name: string, color: string, spawn: Vec3): Player {
   return {
-    id, name, color, connected: true, x: spawn[0], y: spawn[1], z: spawn[2], yaw: 0, pitch: 0,
+    id, name, color, connected: true, seat: 0, x: spawn[0], y: spawn[1], z: spawn[2], yaw: 0, pitch: 0,
     sneaking: false, flying: false, slot: 0, onGround: true, inWater: false, eyeInWater: false, movedAt: 0, walkBudget: 0, supportY: spawn[1], slack: 0, slackUntil: 0,
     // tp.n starts at 1 so a fresh client adopts the server spawn before its positions are accepted.
     tp: { n: 1, x: spawn[0], y: spawn[1], z: spawn[2] }, imp: { n: 0, vx: 0, vy: 0, vz: 0 }, fallPeak: spawn[1],
@@ -20,6 +20,7 @@ export function newPlayer(id: string, name: string, color: string, spawn: Vec3):
     inv: emptyInventory(), cursor: null, grid: emptySlots(4), out: null, screen: null, armor: emptySlots(4), fire: 0, portal: 0, portalLock: false,
     ack: 0, mine: null, breakTokens: 3, attackAt: -1,
     useStart: -1, swing: 0, hurt: 0, swingAt: 0, toast: null, stats: { mined: 0, placed: 0, crafted: 0, mobs: 0, deaths: 0, distance: 0 }, milestones: 0,
+    bagText: '', bagRev: 0, bagAck: 0,
   };
 }
 
@@ -249,10 +250,12 @@ export function wake(state: State, player: Player): boolean {
   return true;
 }
 /** Skip to morning once every connected, living player has slept for a moment; wake sleepers at dawn or when their bed breaks. */
+/** Players who must be in bed for the night to pass: everyone in a small group, half of a crowd. */
+export const sleepNeed = (active: number) => active <= 3 ? active : Math.ceil(active / 2);
 export function sleepTick(state: State) {
   for (const player of state.players) if (player.sleeping && (!canSleep(state.time) || !player.bed || cellId(state.get(...player.bed)) !== B.bed)) wake(state, player);
-  const active = activePlayers(state);
-  if (!active.length || !active.every(player => player.sleeping && state.clock - player.sleepSince >= 2.5)) return;
+  const active = activePlayers(state), rested = active.filter(player => player.sleeping && state.clock - player.sleepSince >= 2.5).length;
+  if (!active.length || rested < sleepNeed(active.length)) return;
   state.time = 0;
   state.day++;
   state.stats.days = state.day;

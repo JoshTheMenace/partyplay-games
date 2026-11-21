@@ -5,7 +5,7 @@
  */
 import { applyClick, emptySlots, equipArmor, returnToInventory, type Containers } from '../../shared/inventory';
 import { maxStack, type Slot } from '../../shared/items';
-import type { ClickTarget, Cmd, CmdBody, PrivateView, Screen } from '../../shared/protocol';
+import type { Bag, ClickTarget, Cmd, CmdBody, Mode, PrivateView, Screen } from '../../shared/protocol';
 import { craftFromInventory, craftResult } from '../../shared/recipes';
 import { enqueue, store } from '../store';
 import { hud } from './hud';
@@ -13,8 +13,10 @@ import { hud } from './hud';
 export type Predicted = { inv: (Slot | null)[]; cursor: Slot | null; grid: (Slot | null)[]; out: Slot | null; screen: Screen | null; armor: (Slot | null)[] };
 const copy = (slot: Slot | null | undefined): Slot | null => slot ? { ...slot } : null;
 
-/** Replay pending commands over a private view (pure). */
-export function replay(pv: PrivateView, cmds: readonly Cmd[], nearTable: boolean): Predicted {
+/** What the server last said a player carries, and the mode it is played in. */
+export type Carried = Omit<Bag, 'rev'> & { mode: Mode };
+/** Replay pending commands over the server's bag (pure). */
+export function replay(pv: Carried, cmds: readonly Cmd[], nearTable: boolean): Predicted {
   const c: Containers = {
     inv: pv.inv.map(copy), cursor: copy(pv.cursor), grid: pv.grid.map(copy), out: copy(pv.out),
     screen: pv.screen ? pv.screen.slots.map(copy) : null, screenKind: pv.screen?.kind ?? null, armor: (pv.armor ?? []).map(copy),
@@ -49,7 +51,7 @@ export function replay(pv: PrivateView, cmds: readonly Cmd[], nearTable: boolean
   return { inv: c.inv, cursor: c.cursor, grid: c.grid, out: c.out, screen, armor: c.armor ?? [] };
 }
 
-let base: PrivateView | null = null, signature = '', screenKey = '';
+let base: Carried | null = null, signature = '', screenKey = '';
 let nearTableTest: () => boolean = () => false;
 let wake: () => void = () => {};
 
@@ -75,9 +77,14 @@ export function repredict() {
   hud.set({ screen: predicted.screen, armor: predicted.armor });
 }
 
-/** Apply a private view after its ack was processed. Opens/closes container screens the server opened/closed. */
-export function setServerView(pv: PrivateView) {
-  base = pv;
+/**
+ * Apply a private view after its ack was processed. A view without a bag means the bag this client confirmed is still
+ * current. Opens/closes container screens the server opened/closed.
+ */
+export function setServerView(view: PrivateView) {
+  const bag = view.bag ?? base;
+  if (!bag) return;
+  const pv = base = bag === base && base.mode === view.mode ? base : { ...bag, mode: view.mode };
   const key = pv.screen ? `${pv.screen.kind}:${pv.screen.x},${pv.screen.y},${pv.screen.z}` : '';
   if (key !== screenKey && !closing()) {
     screenKey = key;

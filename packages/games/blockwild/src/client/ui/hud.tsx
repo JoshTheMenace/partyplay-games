@@ -1,10 +1,11 @@
 /** In-game HUD: crosshair, hotbar, vitals, selected-item name, toasts and the "Next goal" helper. */
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { HOTBAR_SIZE } from '../../shared/constants';
-import { itemName } from '../../shared/items';
+import { itemName, type Slot } from '../../shared/items';
 import { MOB, type PrivateView, type PubPlayer, type View } from '../../shared/protocol';
 import { fortressesOf } from '../../shared/structures/fortress';
 import { strongholdsOf } from '../../shared/structures/stronghold';
+import { feed, latestScene } from '../game/feed';
 import { hud } from '../game/hud';
 import { selectSlot } from '../game/predict';
 import { store } from '../store';
@@ -91,14 +92,16 @@ export function reachGoal(worldId: string, id: string) {
   if (!reached.has(id)) saveReached(worldId, reached.add(id));
 }
 /** Dismissible survival helper: the next step of the progression, derived from the inventory, armor, position and world state. */
+const NO_ARMOR: readonly (Slot | null)[] = [null, null, null, null];
 export function GoalChip({ view, pv, me }: { view: View; pv: PrivateView; me: PubPlayer }) {
+  const scene = latestScene(view, pv), armor = useStore(feed, s => s.bag?.armor) ?? NO_ARMOR;
   const inv = useStore(store, s => s.inv), show = useStore(store, s => s.settings.showGoals);
   const fortresses = useMemo(() => fortressesOf(view.seed), [view.seed]), strongholds = useMemo(() => strongholdsOf(view.seed), [view.seed]);
   const reached = reachedGoals(view.worldId), before = reached.size;
-  const village = view.mobs.some(mob => mob.t === MOB.villager && Math.hypot(mob.x - me.x, mob.z - me.z) < 24);
+  const village = !!scene?.mobs.some(mob => mob.t === MOB.villager && Math.hypot(mob.x - me.x, mob.z - me.z) < 24);
   // A portal lighting up nearby (its fx) completes the step that builds or opens it at once, so entering it gets its turn.
-  const lit = (kind: 'portal' | 'portalOpen', range: number) => view.fx.some(fx => fx.k === kind && Math.hypot(fx.x - me.x, fx.y - me.y, fx.z - me.z) < range);
-  const ctx = { inv, day: view.day, time: view.time, placed: view.stats.placed, armor: pv.armor, nether: pv.dimension === 'nether', portal: !!pv.portal || lit('portal', 10), village,
+  const lit = (kind: 'portal' | 'portalOpen', range: number) => !!scene?.fx.some(fx => fx.k === kind && Math.hypot(fx.x - me.x, fx.y - me.y, fx.z - me.z) < range);
+  const ctx = { inv, day: view.day, time: view.time, placed: view.stats.placed, armor, nether: pv.dimension === 'nether', portal: !!pv.portal || lit('portal', 10), village,
     end: pv.dimension === 'end', fortress: pv.dimension === 'nether' && atFortress(fortresses, me.x, me.z),
     stronghold: pv.dimension === 'overworld' && atStronghold(strongholds, me.x, me.y, me.z), endPortal: lit('portalOpen', 24), crystals: view.boss?.crystals === 0, victory: !!view.victory };
   const goal = nextGoal(ctx, reached), won = goal?.id === 'victory';

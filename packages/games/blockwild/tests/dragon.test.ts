@@ -1,6 +1,8 @@
 /** The Ender Dragon fight (DESIGN.md): flight, phases, crystals, acid, damage, death, victory, respawn and saves. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { asOldSave } from './old-save';
+import { sceneOf } from './scene';
 import { B } from '../src/shared/blocks';
 import { END_CENTER, inEnd, SPAWN_X, SPAWN_Z } from '../src/shared/constants';
 import { crystalSpot, endPillars, EXIT_PORTAL, EXIT_RIM_SIDES, EXIT_Y, PERCH_Y } from '../src/shared/end';
@@ -103,7 +105,7 @@ test('crystals heal the dragon with a beam; destroying the healing one hurts it,
   state.dragon.phaseUntil = state.clock + 60;
   run(state, 2);
   assert.ok(d.health >= 153 && d.health <= 155, `healed to ${d.health}`);
-  assert.equal(publicView(state).mobs.find(m => m.id === crystal.id)!.a, 3, 'the healing crystal shows its beam');
+  assert.equal(sceneOf(state).mobs.find(m => m.id === crystal.id)!.a, 3, 'the healing crystal shows its beam');
   const before = d.health, pillar = crystal.p - 1;
   // An arrow fired from a block 20 away at the crystal's height (as if pillared up).
   writeCell(state, Math.floor(crystal.x) + 20, crystal.y - 1, Math.floor(crystal.z), B.cobblestone);
@@ -374,8 +376,7 @@ test('saves: mid-fight health and crystals round-trip and the dragon resumes cir
   assert.deepEqual([after.end.dragon, after.end.portalActive, after.stats.dragons, after.end.victory?.by], ['dead', true, 1, ['Ada']]);
   assert.equal(after.mobs.filter(m => m.t === MOB.ender_dragon).length, 0);
   // A v9 world gets a fresh End.
-  const v9 = JSON.parse(json);
-  v9.version = 9;
+  const v9 = asOldSave(JSON.parse(json), 9) as ReturnType<typeof JSON.parse>;
   for (const key of ['end', 'victory', 'pearlPity']) delete v9[key];
   delete v9.stats.dragons;
   const fresh = game(['Ada'], parseSave(v9));

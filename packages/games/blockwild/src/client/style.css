@@ -322,15 +322,30 @@
 .bw-card[data-status='in the end'] .bw-card-status{color:#e0b3ff}
 .bw-card[data-status='in the nether'] .bw-card-status,.bw-card[data-status='on fire'] .bw-card-status{color:#ff9a5c}
 /* Six or more players: a slim column of two-line cards on the left, under the clock. */
-.bw-tv[data-compact=true]{grid-template-columns:minmax(0,18em) 1fr;grid-template-rows:auto 1fr;column-gap:1em}
-.bw-tv[data-compact=true]>.bw-tv-top{grid-column:1/-1}
-.bw-tv[data-compact=true]>.bw-tv-hint{grid-column:2;grid-row:2}
-.bw-tv[data-compact=true] .bw-cards{grid-row:2;grid-column:1;grid-template-columns:minmax(0,1fr);align-content:end;gap:.3em;font-size:max(9px,min(1em,(100vh - 220px) / 32))}
-.bw-tv[data-compact=true] .bw-card{grid-template-columns:2.1em auto minmax(0,1fr) auto;grid-template-areas:'held name name armor' 'held hearts status status';column-gap:.5em;padding:.3em .5em .3em .3em;border-radius:.6em}
-.bw-tv[data-compact=true] .bw-card-held{width:2.1em;height:2.1em}
-.bw-tv[data-compact=true] .bw-card-held .bw-icon{width:1.5em;height:1.5em}
-.bw-tv[data-compact=true] .bw-card-status{text-align:right;letter-spacing:.04em}
-.bw-tv[data-compact=true] .bw-card-hearts .bw-sprite{width:.66em;height:.66em}
+.bw-card-name small{display:block;font-size:.6em;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:var(--kp-sun)}
+.bw-tv[data-density=crowd]{grid-template-rows:auto 1fr auto auto;row-gap:.5em}
+.bw-spotlight{grid-row:3;justify-self:start;margin:0;padding:0;list-style:none;width:min(19em,60vw)}
+.bw-wall{grid-row:4;display:grid;grid-template-columns:repeat(auto-fill,minmax(calc(var(--len) * .6em + 4.6em),1fr));gap:.22em .3em;margin:0;padding:.4em;list-style:none;border-radius:.8em;background:#05071ab8;border:1px solid #fff6e51f;font-size:max(10px,min(.82em,(100vh - 200px) / (var(--n) * .42 + 6)))}
+.bw-chip-player{display:grid;grid-template-columns:.7em minmax(0,1fr) auto;align-items:center;gap:.4em;padding:.12em .45em .12em .35em;border-radius:.45em;background:#1f275799;line-height:1.25}
+.bw-chip-player i{width:.7em;height:.7em;border-radius:.18em;background:var(--player);box-shadow:0 0 0 1px #0008}
+.bw-chip-player b{font-weight:800;white-space:nowrap}
+.bw-chip-player span{display:inline-flex;align-items:center;gap:.12em;font-weight:900;font-variant-numeric:tabular-nums;color:#fff6e5cc}
+.bw-chip-player .bw-sprite{width:.8em;height:.8em;min-width:0;min-height:0}
+.bw-chip-player[data-followed=true]{background:#ffd24a33;box-shadow:0 0 0 1px var(--kp-sun)}
+.bw-chip-player[data-status=down] b,.bw-chip-player[data-status=hurt] span{color:var(--kp-coral)}
+.bw-chip-player[data-status=sleeping] b{color:var(--kp-grape)}
+.bw-chip-player[data-status=offline]{opacity:.45}
+.bw-chip-player[data-dim=nether]{background:#5a1c1499}
+.bw-chip-player[data-dim=end]{background:#3a1d5e99}
+.bw-tv[data-density=column]{grid-template-columns:minmax(0,18em) 1fr;grid-template-rows:auto 1fr;column-gap:1em}
+.bw-tv[data-density=column]>.bw-tv-top{grid-column:1/-1}
+.bw-tv[data-density=column]>.bw-tv-hint{grid-column:2;grid-row:2}
+.bw-tv[data-density=column] .bw-cards{grid-row:2;grid-column:1;grid-template-columns:minmax(0,1fr);align-content:end;gap:.3em;font-size:max(9px,min(1em,(100vh - 220px) / 32))}
+.bw-tv[data-density=column] .bw-card{grid-template-columns:2.1em auto minmax(0,1fr) auto;grid-template-areas:'held name name armor' 'held hearts status status';column-gap:.5em;padding:.3em .5em .3em .3em;border-radius:.6em}
+.bw-tv[data-density=column] .bw-card-held{width:2.1em;height:2.1em}
+.bw-tv[data-density=column] .bw-card-held .bw-icon{width:1.5em;height:1.5em}
+.bw-tv[data-density=column] .bw-card-status{text-align:right;letter-spacing:.04em}
+.bw-tv[data-density=column] .bw-card-hearts .bw-sprite{width:.66em;height:.66em}
 
 /* Room-flow views. */
 .bw-world-settings{display:grid;gap:1rem}

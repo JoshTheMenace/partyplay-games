@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { sceneOf, screenOf } from './scene';
 import { assertSerializable } from '../../../party-contract/src/serializable';
 import rules from '../src/server';
 import { B, cellId, cellState, DOOR_OPEN, DOOR_UPPER, makeCell } from '../src/shared/blocks';
@@ -11,7 +12,7 @@ import { newBody, stepBody } from '../src/shared/physics';
 import { IF, MOB, neutralInput, parseInput, PF, validateSettings, type CmdBody, type Input, type Settings } from '../src/shared/protocol';
 import { damagePlayer, explode, hostileDamage } from '../src/sim/combat';
 import { createState, setPresence, tickState } from '../src/sim/game';
-import { hostileCap, MAX_ANIMALS, newMob, populateChunk } from '../src/sim/mobs';
+import { animalCap, hostileCap, newMob, populateChunk } from '../src/sim/mobs';
 import { findPath } from '../src/sim/pathfind';
 import { primeTnt } from '../src/sim/redstone';
 import type { Player, State } from '../src/sim/state';
@@ -84,17 +85,17 @@ test('a rejected place leaves edits untouched so the optimistic overlay reverts'
   const state = game(2), player = p(state), other = p(state, 1);
   assert.equal(Math.floor(other.x), X + 1);
   player.inv[0] = { id: B.stone, n: 5 };
-  const before = [...state.world.edits], revision = state.revision;
+  const before = [...state.world.edits], revision = state.editRev;
   // Onto the other player's feet, from an empty slot, and out of reach.
   send(state, [{ t: 'place', x: X + 1, y: GROUND, z: Z, face: 3, slot: 0 }, { t: 'place', x: X + 2, y: GROUND, z: Z, face: 3, slot: 4 }, { t: 'place', x: X + 12, y: GROUND, z: Z, face: 3, slot: 0 }]);
   assert.equal(player.ack, 3);
   assert.deepEqual([...state.world.edits], before);
-  assert.equal(state.revision, revision);
+  assert.equal(state.editRev, revision);
   assert.equal(count(player.inv, B.stone), 5);
   send(state, [{ t: 'place', x: X + 2, y: GROUND, z: Z, face: 3, slot: 0 }]);
   assert.equal(state.get(X + 2, 64, Z), B.stone);
   assert.equal(count(player.inv, B.stone), 4);
-  assert.ok(state.revision > revision);
+  assert.ok(state.editRev > revision);
 });
 
 test('the edit limit rejects new cells with the building-limit toast', () => {
@@ -279,7 +280,7 @@ test('crafting table, furnace smelting over time and shared chests', () => {
   assert.equal(player.screen?.kind, 'furnace');
   run(state, {}, 20);
   assert.equal(cellId(state.get(X - 1, 64, Z - 1)), B.furnace_lit);
-  assert.equal(playerView(state, 'p0').screen?.cookMax, 10);
+  assert.equal(screenOf(state, 'p0')?.cookMax, 10);
   run(state, {}, 400);
   const furnace = state.furnaces.get(cellIndex(X - 1, 64, Z - 1))!;
   assert.deepEqual(furnace.slots[2], { id: I.iron_ingot, n: 2 });
@@ -292,7 +293,7 @@ test('crafting table, furnace smelting over time and shared chests', () => {
   send(state, [{ t: 'use', x: X - 1, y: 64, z: Z + 1, face: 3 }, { t: 'click', w: 'inv', i: 7, b: 2 }]);
   send(state, [{ t: 'use', x: X - 1, y: 64, z: Z + 1, face: 3 }], {}, 1);
   assert.equal(other.screen?.kind, 'chest');
-  assert.deepEqual(playerView(state, 'p1').screen?.slots[0], { id: B.dirt, n: 10 });
+  assert.deepEqual(screenOf(state, 'p1')?.slots[0], { id: B.dirt, n: 10 });
   breakBlock(state, X - 1, 64, Z + 1);
   run(state);
   assert.equal(other.screen, null);
@@ -366,7 +367,7 @@ test('death drops the inventory unless keepInventory; respawn restores the playe
     assert.equal(itemsOf(state, B.dirt), keepInventory ? 0 : 12);
     const view = playerView(state, 'p0');
     assert.equal(view.dead, true);
-    assert.equal(publicView(state).players[0]!.flags & PF.DEAD, PF.DEAD);
+    assert.equal(sceneOf(state).players[0]!.flags & PF.DEAD, PF.DEAD);
     // Only respawn (and close) run while dead.
     send(state, [{ t: 'drop', slot: 0 }, { t: 'respawn' }], { f: IF.NO_POS });
     assert.equal(player.dead, false);
@@ -503,7 +504,7 @@ test('idle mobs stay still, far hostiles despawn even in evicted chunks, and her
   assert.ok(herd.every(cow => state.mobs.includes(cow) && cow.vx === 0 && cow.vz === 0));
   assert.ok(!state.mobs.includes(zombie), 'a hostile 200 blocks away despawns although its chunk is not loaded');
   // At the cap, chunks that would hold a herd stay unrolled and fill once there is room again.
-  state.mobs = Array.from({ length: MAX_ANIMALS }, () => newMob(state, MOB.cow, X, 64, Z));
+  state.mobs = Array.from({ length: animalCap(state) }, () => newMob(state, MOB.cow, X, 64, Z));
   const chunks = Array.from({ length: 100 }, (_, i) => [140 + i % 10, 140 + Math.floor(i / 10)] as const);
   for (const [cx, cz] of chunks) { state.world.cache.get(cx, cz); populateChunk(state, cx, cz); }
   const waiting = chunks.filter(([cx, cz]) => !state.animalChunks.has(chunkKey(cx, cz)));
@@ -520,7 +521,7 @@ test('disconnected players freeze, cannot be hurt and are flagged offline', () =
   run(state, { p1: hold(player, { p: [player.x + 0.2, player.y, player.z] }) });
   assert.equal(player.x, x);
   assert.equal(damagePlayer(state, player, 5, 'was hurt'), false);
-  assert.equal(publicView(state).players[1]!.flags & PF.OFFLINE, PF.OFFLINE);
+  assert.equal(sceneOf(state).players[1]!.flags & PF.OFFLINE, PF.OFFLINE);
   setPresence(state, player.id, true);
   run(state, { p1: hold(player, { p: [player.x + 0.2, player.y, player.z] }) });
   assert.ok(player.x > x);
@@ -543,8 +544,9 @@ test('views pass the live JSON contract after a busy session', () => {
   assertSerializable(pub);
   for (const player of state.players) assertSerializable(playerView(state, player.id));
   assertSerializable(rules.outcome(state));
-  assert.ok(pub.fx.length > 0 && pub.mobs.some(mob => mob.s === 3));
-  assert.ok(pub.players[0]!.mine, 'crack progress is public');
+  const scene = sceneOf(state);
+  assert.ok(scene.fx.length > 0 && scene.mobs.some(mob => mob.s === 3));
+  assert.ok(scene.players[0]!.mine, 'crack progress is public');
   assert.equal(playerView(state, 'p1').deathMessage, 'Player 1 was squashed');
   assert.equal('deathMessage' in playerView(state, 'p0'), false);
   rules.finish!(state, 0);

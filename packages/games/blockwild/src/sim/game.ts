@@ -8,6 +8,7 @@ import { createRng } from '../shared/noise';
 import { bodyCollides } from '../shared/physics';
 import { returnToInventory, type Containers } from '../shared/inventory';
 import { IF, MOB, MOB_TYPES, neutralInput, MS, type Input, type Settings } from '../shared/protocol';
+import { reserveStructurePlans } from '../shared/structures/index';
 import { findSpawn, generateChunk } from '../shared/worldgen';
 import { newBlazeState } from './blaze';
 import { tickArrows } from './combat';
@@ -18,6 +19,7 @@ import { newEndState, tickExitPortal, tickVoid } from './end';
 import { newEyeState, tickEndPortalTravel } from './ender-eyes';
 import { newEndermanState } from './enderman';
 import { tickItems } from './entities';
+import { FIRST_LIMIT, foldTail, measureJournal } from './journal';
 import { newFireState, tickBurning, tickFireBlocks } from './fire';
 import { tickGrowth, trackCane } from './growth';
 import { newMob, populateChunk, tickMobs } from './mobs';
@@ -32,8 +34,11 @@ import { newStructureState, onChunkGenerated, tickSpawners } from './structures'
 import { newVillageState, restock } from './villagers';
 import { blockChanged, indexCell, makeReader, standNear } from './world';
 
-/** Chunk cache size: 10 players × 7×7 streamed chunks fit with room to spare (64 KiB each). */
-const CHUNK_CAPACITY = 640;
+/**
+ * Chunk cache size (64 KiB a chunk): every player's 7×7 streamed chunks with room to spare, so a room whose players
+ * have all walked off in different directions never evicts terrain somebody is standing on.
+ */
+const chunkCapacity = (players: number) => Math.max(640, players * 56 + 128);
 /** Chunks kept loaded around each player (mob spawning reaches 48 blocks) and the per-tick generation time budget (ms). */
 const LOAD_RADIUS = 3, GENERATE_MS = 2;
 const CREATIVE_BREAKS_PER_SECOND = 5;
@@ -53,11 +58,14 @@ export function createState(ctx: RoundContext, requested: Settings, options: Cre
     onChunkGenerated(state, cx, cz, cells);
     return cells;
   };
-  const world = new VoxelWorld(source, CHUNK_CAPACITY);
+  // Structure plans for everyone's surroundings at once (20 grid cells a player covers the 17 a player touches).
+  reserveStructurePlans(ctx.players.length * 20);
+  const world = new VoxelWorld(source, chunkCapacity(ctx.players.length));
   const state: State = {
     settings, world, worldId: save?.worldId ?? `${settings.seed}-${Math.floor(ctx.nowMs).toString(36)}`,
     get: makeReader(world, false), getLoaded: makeReader(world, true), rand: createRng((settings.seed * 7919 + ctx.seed) | 0),
-    clock: 0, time: save?.time ?? START_TICK, day: save?.day ?? 0, revision: 1, players: [], mobs: [], items: [], arrows: [], fx: [], nextId: 0, fxId: 0,
+    clock: 0, time: save?.time ?? START_TICK, day: save?.day ?? 0, revision: 1, editRev: 1, tailSince: 0, foldedAt: 0, measureAt: 0, focus: -1, focusUntil: 0, frame: null,
+    players: [], mobs: [], items: [], arrows: [], fx: [], nextId: 0, fxId: 0,
     chests: save?.chests ?? new Map(), furnaces: save?.furnaces ?? new Map(), lights: new Map(), growables, animalChunks: save?.populated ?? new Set(),
     spawn: [0, 0, 0], stats: save?.stats ?? { mined: 0, placed: 0, crafted: 0, mobs: 0, deaths: 0, days: 0, dragons: 0 }, finished: false, ticks: 0,
     pathBudget: 0, editsCache: { revision: 0, list: [] }, source, absent: [],
@@ -73,6 +81,9 @@ export function createState(ctx: RoundContext, requested: Settings, options: Cre
     indexCell(state, index, x, z, value);
     blockChanged(state, x, y, z, world.generated(x, y, z), value);
   }
+  // A loaded journal is measured at once; a new world gets the allowance every journal fits.
+  world.limit = FIRST_LIMIT;
+  if (save) measureJournal(state);
   // Saved containers on unedited cells belong to worldgen chests and furnaces; drop any the terrain no longer has.
   const holds = (index: number, ...blocks: number[]) => blocks.includes(cellId(state.get(...cellXYZ(index))));
   for (const index of state.chests.keys()) if (!holds(index, B.chest)) state.chests.delete(index);
@@ -83,7 +94,7 @@ export function createState(ctx: RoundContext, requested: Settings, options: Cre
   const names = new Map<string, number>(), matched = new Set<string>();
   for (const p of ctx.players) names.set(p.name, (names.get(p.name) ?? 0) + 1);
   ctx.players.forEach((p, i) => {
-    const player = newPlayer(p.id, p.name, p.color, standNear(state, state.spawn, i));
+    const player = Object.assign(newPlayer(p.id, p.name, p.color, standNear(state, state.spawn, i)), { seat: i });
     // Saved players match by exact, unique name.
     const saved = names.get(p.name) === 1 ? save?.players.filter(s => s.name === p.name) : undefined;
     if (saved?.length === 1) {
@@ -126,20 +137,39 @@ export const saveSource = (state: State): SaveSource => ({
 function streamChunks(state: State) {
   const cache = state.world.cache, refresh = state.ticks % 20 === 0, start = performance.now();
   let generated = 0;
-  for (const player of state.players) {
+  // Ring by ring across everyone: the chunk each player stands in comes before anybody's far ring, so the budget never
+  // leaves a player's own ground to be generated in the middle of a tick.
+  for (let r = 0; r <= LOAD_RADIUS; r++) for (const player of state.players) {
     if (!player.connected) continue;
     const pcx = Math.floor(player.x) >> 4, pcz = Math.floor(player.z) >> 4;
-    for (let r = 0; r <= LOAD_RADIUS; r++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+    for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
       if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
       const cx = pcx + dx, cz = pcz + dz;
       if (cx < 0 || cz < 0 || cx >= 256 || cz >= 256) continue;
       const loaded = cache.has(cx, cz);
-      if (!loaded && generated > 0 && performance.now() - start > GENERATE_MS) continue;
+      if (!loaded && r > 0 && generated > 0 && performance.now() - start > GENERATE_MS) continue;
       if (!loaded || refresh) cache.get(cx, cz);
       if (!loaded) generated++;
       if (!state.animalChunks.has(chunkKey(cx, cz)) && r >= 1) populateChunk(state, cx, cz);
     }
   }
+}
+
+/** Seconds the watching display stays with one player. */
+const FOCUS_SECONDS = 18;
+/**
+ * The player the watching display follows. It moves on every FOCUS_SECONDS, or at once when its player leaves or dies,
+ * to the next seat that has done something lately (swung, been hurt, walked), so the TV is drawn to the action.
+ */
+function pickFocus(state: State) {
+  const players = state.players, current = players[state.focus], ok = (player?: Player) => !!player && player.connected && !player.dead;
+  if (ok(current) && state.clock < state.focusUntil) return;
+  const busy = (player: Player) => state.clock - Math.max(player.swingAt, player.movedAt) < 6;
+  let next = -1;
+  for (let k = 1; k <= players.length && next < 0; k++) { const seat = (Math.max(0, state.focus) + k) % players.length; if (ok(players[seat]) && busy(players[seat]!)) next = seat; }
+  for (let k = 1; k <= players.length && next < 0; k++) { const seat = (Math.max(0, state.focus) + k) % players.length; if (ok(players[seat])) next = seat; }
+  state.focus = next;
+  state.focusUntil = state.clock + FOCUS_SECONDS;
 }
 
 /** Evening warnings, each day: [day tick, text, shown in peaceful]. */
@@ -172,6 +202,7 @@ export function tickState(state: State, inputs: ReadonlyMap<string, Input>, dt: 
   for (const player of state.players) {
     if (!player.connected) continue;
     const input = inputs.get(player.id) ?? neutralInput();
+    player.bagAck = input.bag ?? 0;
     // A client still loading its world sends no position; keep its spawn protection from running out meanwhile.
     if (inputs.has(player.id) && input.f & IF.NO_POS && !player.dead && isProtected(state, player)) player.protectedUntil = state.clock + PROTECT_SECONDS;
     applyMovement(state, player, input);
@@ -198,6 +229,8 @@ export function tickState(state: State, inputs: ReadonlyMap<string, Input>, dt: 
   tickVoid(state, dt);
   tickFurnaces(state, dt);
   tickGrowth(state);
+  foldTail(state);
+  pickFocus(state);
 }
 
 /** Disconnected players freeze in place, stay invulnerable and are ignored by mobs; screens close and beds release. */

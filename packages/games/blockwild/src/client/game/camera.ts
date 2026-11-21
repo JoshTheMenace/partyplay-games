@@ -99,11 +99,17 @@ export class Spectator {
 
   constructor(private readonly centre: { x: number; z: number }) {}
 
-  update(camera: PerspectiveCamera, subjects: readonly Subject[], getCell: CellReader, groundY: (x: number, z: number) => number, dt: number) {
+  /** `prefer` is the subject the server asks the display to follow; without one the camera takes turns by itself. */
+  update(camera: PerspectiveCamera, subjects: readonly Subject[], getCell: CellReader, groundY: (x: number, z: number) => number, dt: number, prefer: string | null = null) {
     this.time += dt;
     this.shotTime += dt;
     let subject = subjects.find(s => s.key === this.focus);
-    if (!subject || this.shotTime > SHOT_SECONDS) {
+    const preferred = prefer === null ? undefined : subjects.find(s => s.key === prefer);
+    if (preferred) {
+      if (preferred !== subject || this.shotTime > SHOT_SECONDS) { this.shotIndex++; this.shotTime = 0; }
+      subject = preferred;
+      this.focus = preferred.key;
+    } else if (!subject || this.shotTime > SHOT_SECONDS) {
       const index = subject ? subjects.indexOf(subject) : -1;
       subject = subjects.length ? subjects[(index + 1) % subjects.length] : undefined;
       if (subject && subject.key !== this.focus || this.shotTime > SHOT_SECONDS) this.shotIndex++;

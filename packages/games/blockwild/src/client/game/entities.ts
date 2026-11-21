@@ -11,16 +11,17 @@
  */
 import {
   AdditiveBlending, BoxGeometry, CanvasTexture, Color, Group, Mesh, MeshBasicMaterial, MeshLambertMaterial, NearestFilter, SRGBColorSpace, Sprite, SpriteMaterial, Vector3,
-  type BufferGeometry, type Material, type Object3D, type PerspectiveCamera, type Scene, type ShaderMaterial,
+  type BufferGeometry, type Material, type Object3D, type PerspectiveCamera, type ShaderMaterial,
 } from 'three';
 import { cellIndex } from '../../shared/coords';
 import { I } from '../../shared/items';
 import { wrapAngle } from '../../shared/coords';
-import { DRAGON_PARTS, DRAGON_PHASE, MOB, MOB_TYPES, MS, PF, PK, type PubArrow, type PubItem, type PubMob, type PubPlayer, type View } from '../../shared/protocol';
+import { DRAGON_PARTS, DRAGON_PHASE, MOB, MOB_TYPES, MS, PF, PK, type PubArrow, type PubItem, type PubMob, type PubPlayer, type Scene } from '../../shared/protocol';
 import type { SharedUniforms } from '../engine/index';
 import { flameGeometry, flameMaterial } from './effects';
 import { byId, damp, Interpolator, lerp, lerpAngle } from './interp';
 import { attach, detach, PROFESSIONS, villagerModel, wearArmor, type Attachment, type ModelKey, type ModelLibrary, type Pivot, type Rig } from './models';
+import { SHADOW_REACH, Shadows } from './shadows';
 import type { ItemModels } from './sprites';
 import { dragonBoxes, type MobBox } from './targeting';
 
@@ -30,6 +31,8 @@ type Light = (x: number, y: number, z: number, out: [number, number, number]) =>
 /** Interpolated, animated state shared by players and mobs. */
 export type Actor = {
   rig: Rig; seen: number; x: number; y: number; z: number; yaw: number; pitch: number; bodyYaw: number; speed: number;
+  /** Smoothed vertical speed (jumps and falls pose the limbs), a personal phase so no two bodies move in step, and when it first appeared. */
+  vy: number; air: number; phase: number; born: number;
   walk: number; swingSeen: number; swingAt: number; hurtSeen: number; hurtAt: number; deadAt: number; flags: number; state: number; height: number;
   box: [number, number, number, number, number, number];
 };
@@ -55,7 +58,7 @@ type ItemVisual = { mesh: Mesh; seen: number; item: number; x: number; y: number
 type ArrowVisual = { root: Object3D; seen: number; k: number; id: number; box: [number, number, number, number, number, number] };
 type Mini = { rig: Rig; t: number; x: number; y: number; z: number; scale: number; seen: number };
 
-const SWING_SECONDS = 0.3, HURT_SECONDS = 0.45;
+const SWING_SECONDS = 0.3, HURT_SECONDS = 0.45, ARRIVE_SECONDS = 0.35;
 /** The dragon's body centre above its position (protocol mobBoxes), death length, and the crystal heal range. */
 const DRAGON_LIFT = 2, DEATH_SECONDS = 8, TAIL = 10, NECK = 5, BEAMS = 14;
 const PERCHED = DRAGON_PHASE.PERCHED, DYING = DRAGON_PHASE.DYING, DRAGON_LEGS = ['leg_fl', 'leg_fr', 'leg_bl', 'leg_br'] as const;
@@ -75,7 +78,7 @@ const TAG_HEIGHT = 0.3, TAG_MIN_PX = 15, TAG_MAX_PX = 26, TAG_NEAR = [1.2, 2.4],
 const smoothstep = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 function newActor(rig: Rig, height: number): Actor {
-  return { rig, seen: 0, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, bodyYaw: 0, speed: 0, walk: Math.random() * 6, swingSeen: -1, swingAt: -1e9, hurtSeen: -1, hurtAt: -1e9, deadAt: 0, flags: 0, state: 0, height, box: [0, 0, 0, 0, 0, 0] };
+  return { rig, seen: 0, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, bodyYaw: 0, speed: 0, vy: 0, air: 0, phase: Math.random() * 6.28, born: -1, walk: Math.random() * 6, swingSeen: -1, swingAt: -1e9, hurtSeen: -1, hurtAt: -1e9, deadAt: 0, flags: 0, state: 0, height, box: [0, 0, 0, 0, 0, 0] };
 }
 
 function nameTag(name: string, color: string): Sprite {
@@ -138,7 +141,7 @@ function fireballMaterials([stops, ramp]: typeof FIRE_LOOK | typeof ACID_LOOK): 
 }
 
 export class Entities {
-  readonly interp = new Interpolator<View>(100);
+  readonly interp: Interpolator<Scene>;
   readonly players = new Map<string, PlayerActor>();
   readonly mobs = new Map<number, MobActor>();
   private readonly items = new Map<number, ItemVisual>();
@@ -155,6 +158,9 @@ export class Entities {
   private readonly beamMaterials = [0xffd8ff, 0xd070ff, 0xffffff].map(color => new MeshBasicMaterial({ color, blending: AdditiveBlending, transparent: true, depthWrite: false, fog: false }));
   private readonly scratch = new Vector3();
   private readonly minis = new Map<number, Mini>();
+  private readonly shadows: Shadows | null;
+  /** The local player's own feet and width, for a shadow of the body the first-person view does not draw. */
+  ownShadow: readonly [number, number, number, number] | null = null;
   private generation = 0;
   private time = 0;
   private readonly rgb: [number, number, number] = [1, 1, 1];
@@ -182,13 +188,19 @@ export class Entities {
    * `loaded` hides entities standing in columns the world has not streamed in yet (no mobs floating over the void).
    * `shared` (the engine's atlas uniforms) enables flames on burning bodies.
    */
-  constructor(scene: Scene, private readonly models: ModelLibrary, private readonly itemModels: ItemModels, private readonly light: Light, private readonly loaded: (x: number, z: number) => boolean, private readonly selfId: string | null, shared: SharedUniforms | null = null) {
+  constructor(scene: Object3D, private readonly models: ModelLibrary, private readonly itemModels: ItemModels, private readonly light: Light, private readonly loaded: (x: number, z: number) => boolean, private readonly selfId: string | null, shared: SharedUniforms | null = null, feedMs = 50,
+    /** The top of the ground at or below a point (null when there is none within reach): bodies cast a shadow on it. */
+    private readonly ground: ((x: number, y: number, z: number) => number | null) | null = null) {
+    // Playing seats get a scene every snapshot; the watching display's feed may come every fourth, so it trails further behind.
+    this.interp = feedMs <= 50 ? new Interpolator<Scene>(100) : new Interpolator<Scene>(feedMs * 1.5 + 40, feedMs + 30, feedMs * 2.5);
     scene.add(this.group);
+    this.shadows = ground ? new Shadows() : null;
+    if (this.shadows) this.group.add(this.shadows.mesh);
     this.flameGeometry = shared ? flameGeometry() : null;
     this.flameMaterial = shared ? flameMaterial(shared) : null;
   }
 
-  push(view: View, serverTime: number, arrivalMs: number) { this.interp.push(serverTime, view, arrivalMs); }
+  push(scene: Scene, serverTime: number, arrivalMs: number) { this.interp.push(serverTime, scene, arrivalMs); }
 
   /** Interpolated mob and fireball boxes for targeting (live objects; do not keep). The server's `attack` takes either id. */
   *mobBoxes(): Iterable<MobBox> {
@@ -209,7 +221,9 @@ export class Entities {
     this.time += dt;
     this.glowCount = 0;
     this.updateMinis();
-    if (!this.interp.sample(serverNowMs)) return;
+    this.shadows?.begin();
+    if (this.ownShadow) this.shade(...this.ownShadow);
+    if (!this.interp.sample(serverNowMs)) { this.shadows?.end(); return; }
     const a = this.interp.a!, b = this.interp.b!, t = this.interp.alpha, gen = ++this.generation;
     const olderPlayers = byId(a.players), olderMobs = byId(a.mobs), olderItems = byId(a.items), olderArrows = byId(a.arrows);
     for (const p of b.players) if (p.id !== this.selfId) this.updatePlayer(p, olderPlayers.get(p.id) ?? p, t, dt, gen);
@@ -222,6 +236,15 @@ export class Entities {
     for (const [id, m] of this.mobs) if (m.seen !== gen) this.fadeMob(id, m);
     for (const [id, item] of this.items) if (item.seen !== gen) { this.group.remove(item.mesh); this.items.delete(id); }
     for (const [id, arrow] of this.arrows) if (arrow.seen !== gen) { this.group.remove(arrow.root); this.arrows.delete(id); }
+    this.shadows?.end();
+  }
+
+  /** A shadow on the ground under a body at (x, y, z), if it is near enough to matter and there is ground within reach. */
+  private shade(x: number, y: number, z: number, width: number) {
+    const [vx, vy, vz] = this.viewer;
+    if (!this.shadows || !this.ground || (x - vx) ** 2 + (y - vy) ** 2 + (z - vz) ** 2 > 56 * 56) return;
+    const top = this.ground(x, y, z);
+    if (top !== null && y - top < SHADOW_REACH) this.shadows.add(x, top, z, width, y - top);
   }
 
   /** Common motion: interpolate position, derive speed/walk phase, ease the body towards the head. */
@@ -230,6 +253,10 @@ export class Entities {
     const moved = actor.seen ? Math.hypot(x - actor.x, z - actor.z) : 0;
     actor.speed += ((dt > 0 ? moved / dt : 0) - actor.speed) * damp(10, dt);
     if (actor.speed < 0.05) actor.speed = 0;
+    actor.vy += ((actor.seen && dt > 0 ? (y - actor.y) / dt : 0) - actor.vy) * damp(12, dt);
+    // In the air only once the body has kept rising or falling for a moment: one step up a stair or slab is not a jump.
+    actor.air += ((Math.abs(actor.vy) > 2.5 ? 1 : 0) - actor.air) * damp(6, dt);
+    if (actor.born < 0) actor.born = this.time;
     actor.walk += moved * 2.6;
     actor.x = x;
     actor.y = y;
@@ -348,9 +375,10 @@ export class Entities {
     actor.deadAt = dead ? actor.deadAt || this.time : 0;
     const h = sneaking ? 1.5 : 1.8;
     actor.box[0] = actor.x - 0.3; actor.box[1] = actor.y; actor.box[2] = actor.z - 0.3; actor.box[3] = actor.x + 0.3; actor.box[4] = actor.y + h; actor.box[5] = actor.z + 0.3;
-    this.place(actor, 1);
+    this.place(actor, this.arrival(actor));
     const root = actor.rig.root;
     root.visible = !(p.flags & PF.OFFLINE) && !(dead && this.time - actor.deadAt > 1.4) && this.loaded(actor.x, actor.z);
+    if (root.visible && !sleeping) this.shade(actor.x, actor.y, actor.z, 0.6);
     if (sleeping) { root.rotation.x = -Math.PI / 2; root.position.y += 0.35; }
     if (dead) root.rotation.z = Math.min(1, (this.time - actor.deadAt) / 0.45) * Math.PI / 2;
     this.animateHumanoid(actor, sneaking, !!(p.flags & PF.USING), false);
@@ -390,20 +418,35 @@ export class Entities {
     actor.heldMesh = mesh;
   }
 
+  /** How much a body is in the air (0 on the ground … 1 in a full jump or fall). */
+  private airborne(actor: Actor) { return actor.air; }
+  /** A short hop and a growing-in for a body that has just appeared, so nothing pops into view at full size. */
+  private arrival(actor: Actor) { const t = clamp((this.time - actor.born) / ARRIVE_SECONDS, 0, 1); return 0.6 + 0.4 * (1 - (1 - t) ** 3) + Math.sin(t * Math.PI) * 0.06; }
+
+  /**
+   * A two-legged body from its motion: a walk cycle that bobs and leans into a sprint, limbs flung out in the air,
+   * slow breathing when it stands, a lean back when hurt and a twist behind each swing.
+   */
   private animateHumanoid(actor: Actor, sneaking: boolean, using: boolean, undead: boolean, attacking = false) {
-    const { pivots } = actor.rig, amp = Math.min(1, actor.speed / 4.3) * 0.9, swing = Math.sin(actor.walk) * amp;
-    const since = this.time - actor.swingAt, swingT = since < SWING_SECONDS ? Math.sin(since / SWING_SECONDS * Math.PI) : 0;
-    if (pivots.leg_l) pivots.leg_l.rotation.x = swing;
-    if (pivots.leg_r) pivots.leg_r.rotation.x = -swing;
-    if (pivots.arm_l) pivots.arm_l.rotation.set(undead ? Math.PI / 2 : -swing * 0.8, using ? 0.35 : 0, 0);
-    if (pivots.arm_r) pivots.arm_r.rotation.set(undead ? Math.PI / 2 + swingT * 0.6 : swing * 0.8 + swingT * 1.5 + (using ? 1.2 : 0), -swingT * 0.3, 0);
+    const { pivots } = actor.rig, time = this.time, pace = Math.min(1, actor.speed / 4.3), air = this.airborne(actor);
+    const amp = pace * 0.9 * (1 - air * 0.6), swing = Math.sin(actor.walk) * amp, rest = 1 - pace;
+    const since = time - actor.swingAt, swingT = since < SWING_SECONDS ? Math.sin(since / SWING_SECONDS * Math.PI) : 0;
+    const breath = Math.sin(time * 1.7 + actor.phase), recoil = Math.max(0, 1 - (time - actor.hurtAt) / 0.3), sprint = clamp((actor.speed - 4.7) / 1.2, 0, 1);
+    if (pivots.leg_l) pivots.leg_l.rotation.x = swing + air * 0.4;
+    if (pivots.leg_r) pivots.leg_r.rotation.x = -swing - air * 0.25;
+    // Arms hang a little off the body and drift with each breath; in the air they fly out.
+    const hang = (0.035 + breath * 0.025) * rest + air * 0.55;
+    if (pivots.arm_l) pivots.arm_l.rotation.set(undead ? Math.PI / 2 + breath * 0.05 : -swing * 0.8 - air * 0.3, using ? 0.35 : 0, -hang);
+    if (pivots.arm_r) pivots.arm_r.rotation.set(undead ? Math.PI / 2 + swingT * 0.6 - breath * 0.05 : swing * 0.8 + swingT * 1.5 + (using ? 1.2 : 0) - air * 0.3 * (1 - swingT), -swingT * 0.3, hang);
     if (attacking && pivots.arm_r && pivots.arm_l) {
-      pivots.arm_r.rotation.x = Math.PI / 2 + Math.sin(this.time * 12) * 0.25;
-      pivots.arm_l.rotation.x = Math.PI / 2 - Math.sin(this.time * 12) * 0.25;
+      pivots.arm_r.rotation.x = Math.PI / 2 + Math.sin(time * 12) * 0.25;
+      pivots.arm_l.rotation.x = Math.PI / 2 - Math.sin(time * 12) * 0.25;
     }
-    if (pivots.head) pivots.head.rotation.set(actor.pitch, actor.yaw - actor.bodyYaw, 0, 'YXZ');
-    if (pivots.body) pivots.body.rotation.x = sneaking ? -0.4 : 0;
-    actor.rig.root.children[0]!.position.y = sneaking ? -0.15 : 0;
+    if (pivots.head) pivots.head.rotation.set(actor.pitch + breath * 0.02 * rest - recoil * 0.25, actor.yaw - actor.bodyYaw, 0, 'YXZ');
+    if (pivots.body) pivots.body.rotation.x = (sneaking ? -0.4 : 0) - sprint * 0.13 + recoil * 0.2;
+    const model = actor.rig.root.children[0]!;
+    model.position.y = (sneaking ? -0.15 : 0) + Math.abs(Math.sin(actor.walk)) * 0.05 * pace * (1 - air);
+    model.rotation.y = -swingT * 0.22;
   }
 
   private updateMob(m: PubMob, old: PubMob, t: number, dt: number, gen: number) {
@@ -428,8 +471,10 @@ export class Entities {
     this.triggers(actor, 0, m.hurt);
     const baby = !!((m.s ?? 0) & MS.BABY), scale = baby ? 0.5 : 1, half = type.w * scale / 2;
     actor.box[0] = actor.x - half; actor.box[1] = actor.y; actor.box[2] = actor.z - half; actor.box[3] = actor.x + half; actor.box[4] = actor.y + type.h * scale; actor.box[5] = actor.z + half;
-    this.place(actor, scale);
+    this.place(actor, scale * this.arrival(actor));
     actor.rig.root.visible = this.loaded(actor.x, actor.z);
+    // Flyers and the boss cast nothing: their shadows would wander the ground far below them.
+    if (actor.rig.root.visible && type.kind !== 'boss' && type.key !== 'ghast') this.shade(actor.x, actor.y, actor.z, type.w * scale);
     const { pivots, kind } = actor.rig, amp = Math.min(1, actor.speed / 2.5) * 0.8, phase = actor.walk * 1.3, s = m.s ?? 0;
     let flash = 0, shirt: number | null = null;
     // Stand-in rigs get the profession outfit and the piglin's sword; the GLBs come dressed and armed.
@@ -511,17 +556,27 @@ export class Entities {
         leg.rotation.set(0, Math.sin(p) * 0.35 * amp * side, (0.3 + Math.abs(Math.cos(p)) * 0.3 * amp) * side);
       }
     } else {
-      const swing = Math.sin(phase) * amp;
+      // (Legs swing three quarters as far as the old cycle did: at a trot the full swing read as a sprawl.)
+      const swing = Math.sin(phase) * amp * 0.75, still = 1 - Math.min(1, actor.speed / 0.5), time = this.time, model = actor.rig.root.children[0]!;
       for (const [name, sign] of [['leg_fl', 1], ['leg_br', 1], ['leg_fr', -1], ['leg_bl', -1], ['leg_l', 1], ['leg_r', -1]] as const) {
         const leg = pivots[name];
         if (leg) leg.rotation.x = swing * sign;
       }
+      // The body rides its steps, and jumps a little when hit.
+      const hop = Math.max(0, 1 - (time - actor.hurtAt) / 0.28);
+      model.position.y = Math.abs(Math.sin(phase)) * 0.035 * amp + Math.sin(hop * Math.PI) * 0.16;
       if (kind === 'chicken') {
         const flap = Math.abs(m.y - old.y) > 0.01 || actor.speed > 2 ? Math.abs(Math.sin(this.time * 18)) * 1.1 : 0;
         if (pivots.arm_l) pivots.arm_l.rotation.z = -flap;
         if (pivots.arm_r) pivots.arm_r.rotation.z = flap;
       }
-      if (pivots.head) pivots.head.rotation.x = m.a === 2 ? 0.3 : Math.sin(this.time * 0.7 + m.id) * 0.08;
+      if (pivots.head) {
+        // A standing animal looks about and, every so often, lowers its head to graze (hens peck); a walking one nods along.
+        const turn = (time * 0.07 + actor.phase) % 1, grazing = kind !== 'creeper' && still > 0.9 && turn > 0.62 ? Math.sin((turn - 0.62) / 0.38 * Math.PI) : 0;
+        const dip = kind === 'chicken' ? grazing * (0.55 + Math.sin(time * 9) * 0.3) : grazing * (0.62 + Math.sin(time * 5) * 0.05);
+        pivots.head.rotation.set(m.a === 2 ? 0.3 : dip + Math.sin(phase * 2) * 0.07 * amp + Math.sin(time * 0.7 + actor.phase) * 0.05 * still,
+          Math.sin(time * 0.31 + actor.phase * 2) * 0.4 * still * (1 - grazing), 0);
+      }
       if (pivots.wool) pivots.wool.visible = !((m.s ?? 0) & MS.SHEARED);
       if (kind === 'creeper' && m.a === 3) {
         // Fuse: swell and flash white, faster as it builds.
@@ -717,6 +772,7 @@ export class Entities {
     visual.x = lerp(old.x, item.x, t);
     visual.y = lerp(old.y, item.y, t);
     visual.z = lerp(old.z, item.z, t);
+    this.shade(visual.x, visual.y, visual.z, 0.34);
     const mesh = visual.mesh, spin = this.time * 1.6 + item.id;
     mesh.position.set(visual.x, visual.y + 0.18 + Math.sin(this.time * 2.2 + item.id) * 0.06, visual.z);
     mesh.visible = this.loaded(visual.x, visual.z);
@@ -847,6 +903,7 @@ export class Entities {
     for (const p of this.players.values()) { this.models.release(p.rig); p.tag?.material.map?.dispose(); p.tag?.material.dispose(); }
     for (const m of this.mobs.values()) this.models.release(m.rig);
     for (const [key, mini] of this.minis) this.removeMini(key, mini);
+    this.shadows?.dispose();
     for (const g of this.arrowGeometry) g.dispose();
     for (const m of this.arrowMaterials) m.dispose();
     this.flameGeometry?.dispose();

@@ -23,6 +23,12 @@ export type WorldUniforms = {
   uStars: IUniform<number>;
   uAngle: IUniform<number>;
   uSkyLight: IUniform<Color>;
+  /** Sky light split for face shading: the fill every sky-lit face gets, and the direct part for faces turned to `uLightDir`. */
+  uSkyFill: IUniform<Color>;
+  uSunLight: IUniform<Color>;
+  uLightDir: IUniform<Vector3>;
+  /** Moon phase 0..1 (0 new, 0.5 full). */
+  uMoonPhase: IUniform<number>;
   uTorch: IUniform<Color>;
   /** Current animation frame layers. */
   uWaterLayer: IUniform<number>;
@@ -45,7 +51,8 @@ export type WorldUniforms = {
 export const createUniforms = (atlas: DataArrayTexture): WorldUniforms => ({
   uAtlas: { value: atlas }, uTime: { value: 0 }, uSunDir: { value: new Vector3(0, 1, 0) },
   uZenith: { value: new Color() }, uHorizon: { value: new Color() }, uDuskColor: { value: new Color(1, 0.36, 0.1) }, uDusk: { value: 0 },
-  uDay: { value: 1 }, uStars: { value: 0 }, uAngle: { value: 0 }, uSkyLight: { value: new Color(1, 1, 1) }, uTorch: { value: new Color(...TORCH_LIGHT) },
+  uDay: { value: 1 }, uStars: { value: 0 }, uAngle: { value: 0 }, uSkyLight: { value: new Color(1, 1, 1) }, uSkyFill: { value: new Color(0.74, 0.74, 0.74) }, uSunLight: { value: new Color(0.5, 0.5, 0.5) },
+  uLightDir: { value: new Vector3(0, 1, 0) }, uMoonPhase: { value: 0.5 }, uTorch: { value: new Color(...TORCH_LIGHT) },
   uWaterLayer: { value: 0 }, uLavaLayer: { value: 0 }, uPortalLayer: { value: 0 }, uFireLayer: { value: 0 },
   uFogNear: { value: 60 }, uFogFar: { value: 96 }, uUnderwater: { value: 0 }, uWaterFog: { value: new Color(0.02, 0.07, 0.18) }, uNether: { value: 0 }, uEnd: { value: 0 },
   uGlow: { value: Array.from({ length: GLOWS }, () => new Vector4(0, -100, 0, 0)) }, uGlowColor: { value: Array.from({ length: GLOWS }, () => new Color(0, 0, 0)) },
@@ -102,6 +109,9 @@ const FRAGMENT = /* glsl */ `
 precision highp sampler2DArray;
 uniform sampler2DArray uAtlas;
 uniform vec3 uSkyLight;
+uniform vec3 uSkyFill;
+uniform vec3 uSunLight;
+uniform vec3 uLightDir;
 uniform vec3 uTorch;
 uniform float uFogNear;
 uniform float uFogFar;
@@ -150,7 +160,13 @@ void main() {
 #endif
   // The End's light is flat: no sky reaches it, so caves and the island's underside stay as readable as its top.
   float skyLevel = lightCurve(mix(vLight.x, max(vLight.x, ${END_FLAT_SKY.toFixed(3)}), uEnd));
-  vec3 light = max(skyLevel * uSkyLight, lightCurve(vLight.y) * uTorch) + mix(mix(vec3(${AMBIENT}), ${vec3(NETHER_AMBIENT)}, uNether), ${vec3(END_AMBIENT)}, uEnd);
+  // The face's own direction (flat, from the surface's screen derivatives): faces turned to the sun or moon take its
+  // direct light, the rest only the sky's fill. Crossed plants have no side to speak of and are lit as if facing up.
+  vec3 face = (vFlags & ${VF_PLANT}) != 0 ? vec3(0.0, 1.0, 0.0) : normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+  float facing = max(dot(face, uLightDir), 0.0);
+  // Torches breathe: two slow, out-of-step flickers a few percent deep, drifting from place to place.
+  float flicker = 1.0 + 0.035 * sin(uTime * 7.3 + vWorld.x * 0.21 + vWorld.z * 0.17) + 0.025 * sin(uTime * 12.7 + vWorld.z * 0.13 - vWorld.y * 0.3);
+  vec3 light = max(skyLevel * (uSkyFill + uSunLight * facing), lightCurve(vLight.y) * uTorch * flicker) + mix(mix(vec3(${AMBIENT}), ${vec3(NETHER_AMBIENT)}, uNether), ${vec3(END_AMBIENT)}, uEnd);
   for (int k = 0; k < ${GLOWS}; k++) {
     vec3 d = vWorld - uGlow[k].xyz;
     float f = max(0.0, 1.0 - dot(d, d) / max(uGlow[k].w * uGlow[k].w, 1e-4));
@@ -183,8 +199,7 @@ void main() {
   float alpha = 1.0;
 #ifdef TRANSLUCENT
   alpha = tex.a * ((vFlags & ${VF_PORTAL}) != 0 ? 0.78 : 0.82);
-  vec3 normal = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
-  if ((vFlags & ${VF_WATER}) != 0 && abs(normal.y) > 0.7 && uUnderwater < 0.5 && view.y < 0.0) {
+  if ((vFlags & ${VF_WATER}) != 0 && abs(face.y) > 0.7 && uUnderwater < 0.5 && view.y < 0.0) {
     // Water surface: sky reflection by Fresnel and a sun glint, both only where the sky reaches.
     vec3 ripple = normalize(vec3(
       sin(vWorld.x * 3.1 + uTime * 2.0) * 0.035 + sin(vWorld.z * 4.3 - uTime * 1.7) * 0.025, 1.0,
@@ -204,7 +219,9 @@ void main() {
     haze = uWaterFog * (0.15 + 0.85 * uSkyLight);
     color *= vec3(0.4, 0.65, 1.0);
   } else {
-    fog = smoothstep(uFogNear, uFogFar, length(toFrag.xz));
+    // Air has colour: a thin haze builds over the whole distance (less of it looking up or down), then the edge fog closes.
+    float reach = length(toFrag.xz);
+    fog = max(smoothstep(uFogNear, uFogFar, reach), (1.0 - exp(-reach / uFogFar * 0.9)) * 0.34 * (1.0 - abs(view.y) * 0.6));
     haze = fogColor(view);
     if (uNether > 0.0) {
       // Nether: dense haze that deepens from dark to brighter red with distance.

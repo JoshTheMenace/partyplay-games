@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { sceneOf } from './scene';
 import { B, cellId, cellState, fenceConnects, isSolid } from '../src/shared/blocks';
 import { CHUNK, EDIT_LIMIT, END, END_ARRIVAL, END_CENTER, VOID_Y } from '../src/shared/constants';
 import { cellIndex, localIndex } from '../src/shared/coords';
@@ -144,7 +145,7 @@ test('arriving: the obsidian platform is rebuilt, the player faces the island wi
   }
   assert.ok(k > 3 && k < 24, `the stairs reach the surface after ${k} steps`);
   tickState(state, new Map(), 0.05);
-  assert.equal(publicView(state).mobs.filter(m => m.t === MOB.ender_dragon).length, 1, 'the dragon wakes when the End is first visited');
+  assert.equal(sceneOf(state).mobs.filter(m => m.t === MOB.ender_dragon).length, 1, 'the dragon wakes when the End is first visited');
   assert.equal(publicView(state).boss?.crystals, 10);
 });
 

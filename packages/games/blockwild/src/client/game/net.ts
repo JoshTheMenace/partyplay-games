@@ -8,12 +8,14 @@ import { acknowledge, resetQueue } from '../store';
 export type InputSource = {
   body: Body | null; yaw: number; pitch: number; sprint: boolean; using: boolean; swinging: boolean; dead: boolean;
   slot: number; mine: [number, number, number] | null; tpAck: number; queue: readonly Cmd[];
+  /** Revision of the bag this client holds (absent or 0 = none yet). */
+  bag?: number;
 };
 
 /** The one Input sent through setInput. Without a live body (not spawned yet, dead) the position is flagged NO_POS. */
 export function buildInput(s: InputSource): Input {
   const cmds = s.queue.slice(0, MAX_CMDS), body = s.body;
-  if (!body || s.dead) return { ...neutralInput(), slot: s.slot, tpAck: s.tpAck, cmds };
+  if (!body || s.dead) return { ...neutralInput(), slot: s.slot, tpAck: s.tpAck, cmds, bag: s.bag ?? 0 };
   let f = 0;
   if (body.onGround) f |= IF.ON_GROUND;
   if (body.sneaking) f |= IF.SNEAK;
@@ -23,7 +25,7 @@ export function buildInput(s: InputSource): Input {
   if (s.swinging) f |= IF.SWINGING;
   return {
     p: [q3(body.x), q3(body.y), q3(body.z)], v: [q2(body.vx), q2(body.vy), q2(body.vz)], yaw: q3(wrapAngle(s.yaw)), pitch: q3(s.pitch), f,
-    slot: s.slot, mine: s.mine, tpAck: s.tpAck, cmds,
+    slot: s.slot, mine: s.mine, tpAck: s.tpAck, cmds, bag: s.bag ?? 0,
   };
 }
 

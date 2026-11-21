@@ -122,7 +122,7 @@ export default function BlockwildScene(props: SceneViewProps<Settings, View, Pri
         spawn[2] += 0.5;
         camera.position.set(spawn[0], spawn[1] + EYE_HEIGHT, spawn[2]);
         const runtime = new Runtime({
-          scene, camera, canvas: element, engine, sheet: world.sheet, items: world.items, models: world.models, scope: runScope, seed, spawn, sfx, music,
+          scene, camera, canvas: element, engine, sheet: world.sheet, items: world.items, models: world.models, scope: runScope, seed, spawn, sfx, music, sun,
           props: () => latest.current,
         });
         current = { world, runtime, scope: runScope };

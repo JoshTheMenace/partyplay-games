@@ -1,6 +1,7 @@
 /** Nether mobs (DESIGN.md): neutral piglins with group anger, ghasts, fireballs, spawning. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { sceneOf } from './scene';
 import { B, cellId, isAir, isFullCube, isSolid } from '../src/shared/blocks';
 import { CHUNK_CELLS, type ChunkSource } from '../src/shared/chunk';
 import { inNether, NETHER } from '../src/shared/constants';
@@ -11,7 +12,6 @@ import { createState, tickState } from '../src/sim/game';
 import { newMob } from '../src/sim/mobs';
 import { spawnNetherMobs } from '../src/sim/nether-mobs';
 import type { Mob, Player, State } from '../src/sim/state';
-import { publicView } from '../src/sim/views';
 
 const FLAT = (() => {
   const chunk = new Uint16Array(CHUNK_CELLS);
@@ -39,7 +39,7 @@ const add = (state: State, t: number, x: number, y: number, z: number): Mob => {
   state.mobs.push(mob);
   return mob;
 };
-const angry = (state: State, mob: Mob) => ((publicView(state).mobs.find(m => m.id === mob.id)?.s ?? 0) & MS.ANGRY) !== 0;
+const angry = (state: State, mob: Mob) => ((sceneOf(state).mobs.find(m => m.id === mob.id)?.s ?? 0) & MS.ANGRY) !== 0;
 
 test('zombified piglins are neutral until hit; then every piglin within 24 blocks hunts the attacker for 30 s', () => {
   const state = game(X, Z), player = state.players[0]!;

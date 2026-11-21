@@ -17,7 +17,7 @@ import { primeTnt } from './redstone';
 import { addFx, isProtected, nextId, playerById, type Arrow, type DamageCause, type Mob, type Player, type State } from './state';
 import { breakBlock, dropStacks } from './world';
 
-export const MAX_ARROWS = 32;
+export const MAX_ARROWS = 96;
 const INVULN = 0.5;
 
 /** Server-caused velocity change; the client adds it once per new `imp.n`. Also widens the movement envelope. */

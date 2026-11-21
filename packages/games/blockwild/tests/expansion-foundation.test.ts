@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { sceneOf } from './scene';
 import { assertSerializable } from '../../../party-contract/src/serializable';
 import {
   B, BLOCK_LIST, blockOf, cellId, cellState, CHEST_LOOT, chestLoot, DOOR_UPPER, faceTexture, isFullCube, isOpaque, makeCell, PISTON_EXTENDED, PORTAL_Z, TEXTURE_KEYS,
@@ -297,12 +298,12 @@ test('server: views carry armor, burning, portal and dimension; hooks run end to
   player.fire = 10;
   state.mobs.push(Object.assign(newMob(state, MOB.villager, X + 3, 64, Z), { p: 3 }), newMob(state, MOB.tnt, X - 3, 64, Z));
   for (let i = 0; i < 40; i++) send(state, []);
-  const view = publicView(state), me = view.players[0]!, pv = playerView(state, 'p0');
+  const view = publicView(state), scene = sceneOf(state), me = scene.players[0]!, pv = playerView(state, 'p0'), bag = pv.bag!;
   assert.deepEqual(me.armor, [I.iron_helmet, 0, 0, 0]);
   assert.ok(me.flags & PF.BURNING);
-  assert.equal(view.mobs.find(m => m.t === MOB.villager)?.p, 3);
-  assert.deepEqual([pv.armor[0]?.id, pv.armorPoints, pv.portal, pv.dimension], [I.iron_helmet, 2, undefined, 'overworld']);
-  assert.ok(pv.burning! > 0 && pv.armor[0]!.d! > 5, 'fire and the TNT blast burn and wear the helmet');
+  assert.equal(scene.mobs.find(m => m.t === MOB.villager)?.p, 3);
+  assert.deepEqual([bag.armor[0]?.id, pv.armorPoints, pv.portal, pv.dimension], [I.iron_helmet, 2, undefined, 'overworld']);
+  assert.ok(pv.burning! > 0 && bag.armor[0]!.d! > 5, 'fire and the TNT blast burn and wear the helmet');
   assertSerializable(view);
   assertSerializable(pv);
   Object.assign(player, { x: NETHER.x0 + 100, z: 100 });
@@ -396,7 +397,7 @@ test('save v9 round-trips armor and villagers; v8 saves still load', () => {
   const villager = Object.assign(newMob(state, MOB.villager, X + 4.5, 64, Z + 1.5), { p: 2, home: [X + 6, 64, Z] as [number, number, number], uses: [1, 0, 3], seed: 12345 });
   state.mobs.push(villager, Object.assign(newMob(state, MOB.villager, X + 1.5, 64, Z + 1.5), { p: 0, seed: 7 }), newMob(state, MOB.tnt, X, 64, Z), newMob(state, MOB.ghast, X, 80, Z));
   const save = exportSave(saveSource(state)), json = JSON.stringify(save);
-  assert.equal(save.version, 10);
+  assert.equal(save.version, 11);
   assert.equal(save.animals.length, 0, 'villagers, TNT and ghasts are not animals');
   assert.deepEqual(save.villagers, [{ x: X + 4.5, y: 64, z: Z + 1.5, p: 2, uses: [1, 0, 3], seed: 12345, home: [X + 6, 64, Z] }, { x: X + 1.5, y: 64, z: Z + 1.5, p: 0, uses: [], seed: 7 }]);
   const ctx = { roomId: 'room', roundId: 'r2', seed: 7, nowMs: 0, players: [{ id: 'q', name: 'Ada', color: '#fff' }] };

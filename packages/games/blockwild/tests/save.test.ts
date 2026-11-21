@@ -4,7 +4,7 @@ import { MAX_SAVE_BYTES } from '../../../party-contract/src/index';
 import { assertSerializable } from '../../../party-contract/src/serializable';
 import rules from '../src/server';
 import { B, makeCell } from '../src/shared/blocks';
-import { EDIT_LIMIT } from '../src/shared/constants';
+import { EDIT_BYTES, EDIT_LIMIT } from '../src/shared/constants';
 import { CHUNK_CELLS } from '../src/shared/chunk';
 import { cellIndex } from '../src/shared/coords';
 import { emptySlots } from '../src/shared/inventory';
@@ -13,45 +13,94 @@ import { MOB, validateSettings } from '../src/shared/protocol';
 import { MAX_CHESTS, MAX_FURNACES } from '../src/sim/containers';
 import { createState, saveSource } from '../src/sim/game';
 import { newMob } from '../src/sim/mobs';
-import { exportSave, MAX_SAVED_VILLAGERS, OLD_SAVE_MESSAGE, parseSave, unpackEdits, type SaveSource } from '../src/sim/save';
+import { packEdits, unpackEdits as unpackJournal } from '../src/sim/journal';
+import { exportSave, MAX_SAVED_ANIMALS, MAX_SAVED_PLAYERS, MAX_SAVED_VILLAGERS, OLD_SAVE_MESSAGE, parseSave, unpackEdits, type SaveSource } from '../src/sim/save';
 import type { State } from '../src/sim/state';
 import { writeCell } from '../src/sim/world';
 
 const ctx = (names: string[]) => ({ roomId: 'room', roundId: 'round', seed: 3, nowMs: 0, players: names.map((name, i) => ({ id: `p${i}`, name, color: '#28c6e7' })) });
 const damaged = (id: number, d: number): Slot => ({ id, n: 1, d });
 
-test('the worst legal save stays under 256 KiB and loads back', () => {
-  const edits = new Map<number, number>();
-  // Chests and furnaces must sit on edited cells; the rest fill the edit limit with the largest values.
-  for (let i = 0; i < EDIT_LIMIT; i++) {
-    const id = i < MAX_CHESTS ? B.chest : i < MAX_CHESTS + MAX_FURNACES ? B.furnace_lit : B.stone_brick_stairs;
-    edits.set(cellIndex(4095 - (i % 4096), 127 - Math.floor(i / 4096 / 16), 4095 - (Math.floor(i / 4096) % 16)), makeCell(id, 7));
+const FLAT = new Uint16Array(CHUNK_CELLS).fill(B.stone, 0, 16 * 16 * 64);
+const blank = () => createState(ctx(['Ada']), validateSettings({ seed: 5 }), { source: () => FLAT, spawn: [2048, 64, 2048] });
+/** Write cells until the building limit refuses one (a refusal right after a measurement is final); returns how many went in. */
+function fill(state: State, cell: (i: number) => [number, number, number, number]): number {
+  for (let i = 0, refused = false; ; i++) {
+    if (writeCell(state, ...cell(i))) { refused = false; continue; }
+    if (refused) return state.world.edits.size;
+    // The limit is an allowance from the last measurement: let it measure again and try this cell once more.
+    refused = true;
+    state.clock += 2;
+    i--;
   }
-  const indices = [...edits.keys()];
+}
+
+test('the journal limit follows the packed size: scattered cells stop early, tidy building reaches the cell limit', () => {
+  // The worst journal: single cells scattered over the whole world, each a different block (seven raw bytes apiece).
+  const worst = blank(), blocks = [B.stone, B.dirt, B.cobblestone, B.oak_planks, B.bricks, B.sandstone, B.terracotta, B.obsidian, B.glass, B.iron_block, B.gold_block, B.coal_block, B.quartz_block, B.end_stone, B.netherrack, B.bookshelf];
+  let seed = 12345;
+  const random = () => (seed = Math.imul(seed, 1103515245) + 12345 >>> 0) / 2 ** 32;
+  const scattered = fill(worst, () => [Math.floor(random() * 4096), 64 + Math.floor(random() * 64), Math.floor(random() * 4096), blocks[Math.floor(random() * 16)]!]);
+  const packed = packEdits(worst.world.edits).length;
+  console.log(`scattered journal: ${scattered} edits in ${(packed / 1024).toFixed(1)} KiB packed`);
+  assert.ok(scattered >= 16384, `any 16,384 edits fit (${scattered})`);
+  assert.ok(scattered < EDIT_LIMIT && packed <= EDIT_BYTES, `${packed} bytes`);
+  assert.deepEqual([...unpackJournal(packEdits(worst.world.edits))].sort(([a], [b]) => a - b), [...worst.world.edits].sort(([a], [b]) => a - b), 'packing round-trips');
+  // What people build: walls, floors and tunnels are runs of the same block.
+  const tidy = blank(), built = fill(tidy, i => [2000 + i % 64, 64 + Math.floor(i / 4096), 2000 + Math.floor(i / 64) % 64, i % 4096 < 2048 ? B.oak_planks : B.cobblestone]);
+  console.log(`tidy journal: ${built} edits in ${(packEdits(tidy.world.edits).length / 1024).toFixed(1)} KiB packed`);
+  assert.equal(built, EDIT_LIMIT);
+});
+
+test('the worst legal save stays under 256 KiB and loads back', () => {
+  // The fullest journal the limit allows, with chests and furnaces on its first cells.
+  const state = blank(), edits = state.world.edits;
+  let seed = 99;
+  const random = () => (seed = Math.imul(seed, 1103515245) + 12345 >>> 0) / 2 ** 32;
+  const count = fill(state, i => [Math.floor(random() * 4096), 64 + Math.floor(random() * 64), Math.floor(random() * 4096), makeCell(i < MAX_CHESTS ? B.chest : i < MAX_CHESTS + MAX_FURNACES ? B.furnace_lit : B.stone_brick_stairs, i % 8)]);
+  const chests = [...edits].filter(([, value]) => (value & 255) === B.chest).map(([index]) => index), furnaces = [...edits].filter(([, value]) => (value & 255) === B.furnace_lit).map(([index]) => index);
+  assert.deepEqual([chests.length, furnaces.length], [MAX_CHESTS, MAX_FURNACES]);
+  // Sixteen characters of three bytes each: the longest name a room hands out.
+  const big = 999999999, name = (i: number) => `${'\u4e16'.repeat(14)}${String(i).padStart(2, '0')}`;
   const fullSlots = (n: number) => Array.from({ length: n }, (_, i) => damaged(I.diamond_pickaxe + (i % 5), 1000 + i));
-  const players = Array.from({ length: 24 }, (_, i) => ({
-    name: `${'W'.repeat(22)}${String(i).padStart(2, '0')}`, x: 4095.99, y: 127.99, z: 4095.99, yaw: -3.141, pitch: -1.571, health: 19.5, food: 19, saturation: 19.99,
-    inv: fullSlots(36), armor: [I.diamond_helmet, I.diamond_chestplate, I.diamond_leggings, I.diamond_boots].map(id => damaged(id, 360)), bed: [4095, 127, 4095] as [number, number, number], stats: { mined: 999999999, placed: 999999999, crafted: 999999999, mobs: 999999999, deaths: 999999999, distance: 999999999 }, milestones: 127, dead: false,
+  const players = Array.from({ length: MAX_SAVED_PLAYERS }, (_, i) => ({
+    name: name(i), x: 4095.99, y: 127.99, z: 4095.99, yaw: -3.141, pitch: -1.571, health: 19.5, food: 19, saturation: 19.99,
+    inv: fullSlots(36), armor: [I.diamond_helmet, I.diamond_chestplate, I.diamond_leggings, I.diamond_boots].map(id => damaged(id, 360)), bed: [4095, 127, 4095] as [number, number, number],
+    stats: { mined: big, placed: big, crafted: big, mobs: big, deaths: big, distance: big }, milestones: 2 ** 30,
   }));
+  // Every other chunk populated: the bitset that deflates worst is not the full one.
   const source: SaveSource = {
-    settings: validateSettings({ seed: 999999, mode: 'creative', difficulty: 'peaceful', keepInventory: false }), worldId: `999999-${'z'.repeat(57)}`, time: 23999, day: 999999999, edits, players,
-    chests: new Map(indices.slice(0, MAX_CHESTS).map(i => [i, fullSlots(27)])),
-    furnaces: new Map(indices.slice(MAX_CHESTS, MAX_CHESTS + MAX_FURNACES).map(i => [i, { slots: [{ id: B.iron_ore, n: 64 }, { id: B.coal_block, n: 64 }, { id: I.iron_ingot, n: 64 }], burn: 799.99, burnMax: 800, cook: 9.99 }])),
-    animals: Array.from({ length: 48 }, (_, i) => ({ t: MOB.sheep, x: 4095.99 - i, y: 127.99, z: 4095.99, s: 3 })),
+    settings: validateSettings({ seed: 999999, mode: 'creative', difficulty: 'peaceful', keepInventory: false }), worldId: `999999-${'z'.repeat(57)}`, time: 23999, day: big, edits, players,
+    chests: new Map(chests.map(i => [i, fullSlots(27)])),
+    furnaces: new Map(furnaces.map(i => [i, { slots: [{ id: B.iron_ore, n: 64 }, { id: B.coal_block, n: 64 }, { id: I.iron_ingot, n: 64 }], burn: 799.99, burnMax: 800, cook: 9.99 }])),
+    animals: Array.from({ length: MAX_SAVED_ANIMALS }, (_, i) => ({ t: MOB.sheep, x: 4095.99 - i, y: 127.99, z: 4095.99, s: 3 })),
     villagers: Array.from({ length: MAX_SAVED_VILLAGERS }, (_, i) => ({ x: 4095.99 - i, y: 127.99, z: 4095.99, p: 4, home: [4095, 127, 4095 - i] as [number, number, number], uses: Array(8).fill(999999), seed: 2 ** 31 - 1 - i })),
-    populated: new Set(Array.from({ length: 65536 }, (_, i) => i)), stats: { mined: 999999999, placed: 999999999, crafted: 999999999, mobs: 999999999, deaths: 999999999, days: 999999999, dragons: 999999999 },
+    populated: new Set(Array.from({ length: 65536 }, (_, i) => i).filter(() => random() < 0.5)), stats: { mined: big, placed: big, crafted: big, mobs: big, deaths: big, days: big, dragons: big },
+    end: { dragon: 'alive', health: 199.99, crystals: [9, 8, 7, 6, 5, 4, 3, 2, 1, 0], portalActive: true, egg: true },
+    victory: { day: big, tick: 23999, by: players.map(player => player.name) }, pearlPity: 999999,
   };
   const save = exportSave(source), json = JSON.stringify(save), bytes = Buffer.byteLength(json);
-  console.log(`worst-case save: ${(bytes / 1024).toFixed(1)} KiB`);
+  console.log(`worst-case save: ${(bytes / 1024).toFixed(1)} KiB with ${count} scattered edits and ${MAX_SAVED_PLAYERS} players`);
   assert.ok(bytes < MAX_SAVE_BYTES, `${bytes} bytes`);
   assertSerializable(save);
   const parsed = parseSave(JSON.parse(json));
-  assert.equal(parsed.edits.size, EDIT_LIMIT);
-  assert.equal(parsed.players.length, 24);
+  assert.equal(parsed.edits.size, count);
+  assert.equal(parsed.players.length, MAX_SAVED_PLAYERS);
   assert.equal(parsed.chests.size, MAX_CHESTS);
   assert.equal(parsed.villagers.length, MAX_SAVED_VILLAGERS);
-  assert.deepEqual(parsed.players[23]!.armor[3], damaged(I.diamond_boots, 360));
-  assert.deepEqual(parsed.chests.get(indices[0]!)![26], damaged(I.diamond_pickaxe + 1, 1026));
+  assert.equal(parsed.victory!.by.length, MAX_SAVED_PLAYERS);
+  assert.deepEqual(parsed.players.at(-1)!.armor[3], damaged(I.diamond_boots, 360));
+  assert.deepEqual(parsed.chests.get(chests[0]!)![26], damaged(I.diamond_pickaxe + 1, 1026));
+});
+
+test('a world saved by version 10 (before this format) still loads with everything in it', async () => {
+  const { readFileSync } = await import('node:fs'), old = JSON.parse(readFileSync(new URL('./fixtures/v10-save.json', import.meta.url), 'utf8'));
+  assert.equal(old.version, 10);
+  const loaded = rules.loadSave!(ctx(['Host', 'Pocket Explorer']), old, validateSettings({})).state;
+  assert.deepEqual([loaded.settings.seed, Math.floor(loaded.time), loaded.world.edits.size], [11, 18000, 16]);
+  assert.deepEqual(loaded.players.map(player => player.inv[0]), [{ id: B.torch, n: 32 }, { id: I.diamond_pickaxe, n: 1 }]);
+  assert.equal(loaded.mobs.filter(mob => mob.t <= MOB.chicken && mob.t >= MOB.cow).length, 6, 'its animals come along');
+  assert.equal((rules.exportSave!(loaded) as { version: number }).version, 11, 'and it saves in the new format');
 });
 
 /** A world with some history: edits, containers, a bed, animals, inventories and stats. */
@@ -154,7 +203,7 @@ test('old, foreign, future and damaged saves are rejected with clear messages', 
   assert.equal(OLD_SAVE_MESSAGE, 'This world was made with the previous version of Blockwild and cannot be loaded.');
   assert.throws(load({ format: 'kart', version: 8 }), /not a Blockwild world/);
   assert.throws(load(null), /not a Blockwild world/);
-  assert.throws(load({ format: 'blockwild', version: 11 }), /newer version/);
+  assert.throws(load({ format: 'blockwild', version: 12 }), /newer version/);
   const good = rules.exportSave!(playedWorld()) as Record<string, unknown>;
   const broken = (patch: Record<string, unknown>) => load({ ...good, ...patch });
   assert.throws(broken({ edits: 'AAAA' }), /damaged \(edits\)/);

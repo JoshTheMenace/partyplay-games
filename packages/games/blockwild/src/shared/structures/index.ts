@@ -53,8 +53,13 @@ const MARGIN = 24;
 // Starts and the per-seed cache
 
 const caches = new Map<number, Map<string, Built | null>>();
-/** Planned structures kept per seed (up to ~140 KB each; a player's surroundings touch about 17 grid cells at a time). */
-const BUILT_CAP = 64;
+/**
+ * Planned structures kept per seed (up to ~140 KB each, most grid cells hold none; a player's surroundings touch about
+ * 17 grid cells at a time). 64 suits one screen; a server reserves room for its whole roster, or players spread over
+ * the world would plan the same villages and mineshafts again and again.
+ */
+let builtCap = 64;
+export function reserveStructurePlans(count: number) { builtCap = Math.max(builtCap, Math.min(2048, Math.ceil(count))); }
 function cacheFor(seed: number) {
   let cache = caches.get(seed);
   if (!cache) {
@@ -88,7 +93,7 @@ function built(seed: number, grid: Grid, gx: number, gz: number): Built | null {
     const clash = grid.kind === 'desert_temple' && near(seed, gridOf('village'), bounds[0], bounds[2], bounds[3], bounds[5]).length > 0;
     if (!clash && clearOfEdges(bounds)) result = { kind: grid.kind, center: plan.center, bounds, chunks: plan.bp.bake(), ...plan.village ? { village: plan.village } : {} };
   }
-  if (cache.size >= BUILT_CAP) cache.delete(cache.keys().next().value!);
+  if (cache.size >= builtCap) cache.delete(cache.keys().next().value!);
   cache.set(key, result);
   return result;
 }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { B, I, ITEM_LIST, type Slot } from '../src/shared/items';
-import { PF, type PrivateView, type PubPlayer, type TradeOffer, type View } from '../src/shared/protocol';
+import { encodePlayer, encodeRoster, PF, type PrivateView, type PubPlayer, type RosterEntry, type TradeOffer, type View, type WireScene } from '../src/shared/protocol';
 import { awards, bubbles, dayPhase, itemDetails, itemHint, meterIcons, offerState, playerStatus, untilChange, wear, wornArmor } from '../src/client/ui/format';
 import { atFortress, atStronghold, GOALS, nextGoal, parseReached, serializeReached, shelterDue, type GoalContext } from '../src/client/ui/goals';
 import { clickButton, stickVector } from '../src/client/ui/input';
@@ -9,6 +9,7 @@ import { filterRecipes, paletteTab, ingredientLabel, ingredientSummary, missingT
 import { recipeById } from '../src/shared/recipes';
 import type { Fortress } from '../src/shared/structures/fortress';
 import { defaultSettings, loadSettings, store } from '../src/client/store';
+import { readRoster } from '../src/client/game/feed';
 import { hud as hudStore } from '../src/client/game/hud';
 import { isNightWarning, sanitizeSettings, updateSettings } from '../src/client/ui/state';
 
@@ -246,10 +247,20 @@ test('day clock and player status read the public view', () => {
   assert.equal(playerStatus(player({ y: 20 })), 'caving');
 });
 
-const view = (players: number): View => ({
-  seed: 42, worldId: '42-test', mode: 'survival', difficulty: 'normal', time: 14000, day: 2, revision: 1, edits: [], mobs: [], items: [], arrows: [], fx: [], sleeping: 0,
+type Seat = Omit<RosterEntry, 'seat'>;
+const seat = (i: number): Seat => ({ x: 0, y: 64, z: 0, held: i ? B.torch : 0, flags: i === 3 ? 32 : 0, health: 13, armor: 0 });
+/** A public view with `players` seats; `change` moves or dresses single seats on the roster. */
+const view = (players: number, change: (i: number) => Partial<Seat> = () => ({})): View => ({
+  seed: 42, worldId: '42-test', mode: 'survival', difficulty: 'normal', time: 14000, day: 2, revision: 1, edits: [], recent: [], er: 1, sleeping: 0, sleepNeed: players,
   stats: { mined: 1234, placed: 56, crafted: 7, mobs: 8, deaths: 1, days: 2, dragons: 0 },
-  players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `Explorer_${String(i).padStart(2, '0')}_long`, color: '#ff5748', x: 0, y: 64, z: 0, yaw: 0, pitch: 0, held: i ? B.torch : 0, swing: 0, hurt: 0, health: 13, flags: i === 3 ? 32 : 0, armor: [0, 0, 0, 0] })),
+  who: Array.from({ length: players }, (_, i) => [`p${i}`, `Explorer_${String(i).padStart(2, '0')}_long`, '#ff5748']),
+  roster: Array.from({ length: players }, (_, i) => encodeRoster({ seat: i, ...seat(i), ...change(i) })),
+});
+/** What seat 0's own screen is sent: just itself. */
+const near = (flags = 0): WireScene => ({ p: [encodePlayer(0, { x: 0, y: 64, z: 0, yaw: 0, pitch: 0, held: 0, swing: 0, hurt: 0, health: 13, flags, armor: [0, 0, 0, 0] })], m: [], i: [], a: [], f: [] });
+const privateView = (patch: Partial<PrivateView> = {}): PrivateView => ({
+  ack: 0, tp: { n: 0, x: 0, y: 0, z: 0 }, imp: { n: 0, vx: 0, vy: 0, vz: 0 }, bagRev: 1, near: near(), health: 20, food: 20, saturation: 5, air: 300, dead: false,
+  mode: 'survival', keepInventory: false, armorPoints: 0, dimension: 'overworld', ...patch,
 });
 test('views render complete markup for a full roster', async () => {
   const { renderToString: render } = await import('react-dom/server');
@@ -259,16 +270,26 @@ test('views render complete markup for a full roster', async () => {
   const [{ DisplayView }, { ControllerView }, { ResultsView, SettingsView }] = await Promise.all([import('../src/client/ui/display'), import('../src/client/ui/controller'), import('../src/client/ui/lobby')]);
   const client = { DisplayView, ControllerView, ResultsView, SettingsView };
   const base = { roomId: 'r', roundId: 'x', viewRole: 'display' as const, isHost: false, privateView: null, serverNowMs: () => 0, setInput() {}, sendAction: async () => ({ accepted: true }), assetsReady() {} };
-  const tv = renderToString(createElement(client.DisplayView, { ...base, playerId: null, publicView: view(10) }));
+  // The TV draws its cards from the newest roster, which the scene (here: the test) feeds it.
+  const display = (publicView: View) => { readRoster(publicView); return renderToString(createElement(client.DisplayView, { ...base, playerId: null, publicView })); };
+  const tv = display(view(10));
   assert.equal(tv.match(/class="bw-card"/g)?.length, 10);
   assert.match(tv, /Explorer_09_long/);
   assert.match(tv, /Day 3/);
-  assert.match(tv, /data-compact="true"/, 'big rosters use the side column');
-  assert.match(renderToString(createElement(client.DisplayView, { ...base, playerId: null, publicView: view(5) })), /data-compact="false"/);
-  const pv: PrivateView = { ack: 0, tp: { n: 0, x: 0, y: 0, z: 0 }, imp: { n: 0, vx: 0, vy: 0, vz: 0 }, inv: inventory({ id: I.stone_pickaxe, n: 1, d: 40 }, { id: B.dirt, n: 32 }), cursor: null,
-    grid: [null, null, null, null], out: null, screen: null, health: 7, food: 20, saturation: 5, air: 300, dead: false, spawn: [0, 0, 0], mode: 'survival', keepInventory: false, protectedTicks: 40,
-    armor: [null, null, null, null], armorPoints: 0, dimension: 'overworld' };
-  store.set({ inv: pv.inv });
+  assert.match(tv, /data-density="column"/, 'six to twelve players use the side column');
+  assert.match(display(view(5)), /data-density="row"/);
+  // A crowd: every name on the wall in full, and the followed player on a card of their own.
+  hudStore.set({ focus: 'p7' });
+  const crowd = display(view(64));
+  hudStore.set({ focus: null });
+  assert.match(crowd, /data-density="crowd"/);
+  assert.equal(crowd.match(/class="bw-chip-player"/g)?.length, 64);
+  assert.match(crowd, /Explorer_63_long/);
+  assert.equal(crowd.match(/class="bw-card"/g)?.length, 1, 'one spotlight card');
+  assert.match(crowd, /On camera/);
+  assert.match(crowd, /63\/64 exploring/);
+  const pv = privateView({ health: 7, protectedTicks: 40 });
+  store.set({ inv: inventory({ id: I.stone_pickaxe, n: 1, d: 40 }, { id: B.dirt, n: 32 }) });
   const hud = renderToString(createElement(client.ControllerView, { ...base, viewRole: 'controller', playerId: 'p0', publicView: view(2), privateView: pv }));
   assert.equal(hud.match(/bw-slot bw-hot/g)?.length, 9);
   assert.match(hud, /Health 3\.5 of 10 hearts/);
@@ -276,8 +297,9 @@ test('views render complete markup for a full roster', async () => {
   assert.match(hud, /Protected/);
   const drowning = renderToString(createElement(client.ControllerView, { ...base, viewRole: 'controller', playerId: 'p0', publicView: view(2), privateView: { ...pv, air: 90 } }));
   assert.equal(drowning.match(/bw-sprite-bubble"[^>]*visibility:hidden/g)?.length, 7, 'spent bubbles pop, three remain');
-  const asleep = { ...view(2), players: view(2).players.map((p, i) => i ? p : { ...p, flags: 2 }), sleeping: 1 };
-  assert.match(renderToString(createElement(client.ControllerView, { ...base, viewRole: 'controller', playerId: 'p0', publicView: asleep, privateView: pv })), /Leave bed/);
+  const asleep = renderToString(createElement(client.ControllerView, { ...base, viewRole: 'controller', playerId: 'p0', publicView: { ...view(2), sleeping: 1 }, privateView: { ...pv, near: near(2) } }));
+  assert.match(asleep, /Leave bed/);
+  assert.match(asleep, /1 of the 2 needed in bed/);
   const dead = renderToString(createElement(client.ControllerView, { ...base, viewRole: 'controller', playerId: 'p0', publicView: view(2), privateView: { ...pv, dead: true } }));
   assert.match(dead, /items were dropped/);
   const results = renderToString(createElement(client.ResultsView, { outcome: { complete: true, winners: ['p0'], rows: [{ playerId: 'p0', label: 'Mined 4' }] }, publicView: view(1), playerId: 'p0' }));
@@ -289,7 +311,7 @@ test('views render complete markup for a full roster', async () => {
   assert.doesNotMatch(random, /id="bw-seed"/, 'no number field until a fixed seed is chosen');
 
   // Expansion: HUD armor bar, inventory armor column and preview, trade screen, TV armor and Nether cards.
-  const armored: PrivateView = { ...pv, armor: [{ id: I.iron_helmet, n: 1 }, null, null, null], armorPoints: 7 };
+  const armored: PrivateView = { ...pv, armorPoints: 7 }, worn = [{ id: I.iron_helmet, n: 1 }, null, null, null];
   const controller = (privateView: PrivateView) => renderToString(createElement(client.ControllerView, { ...base, viewRole: 'controller', playerId: 'p0', publicView: view(2), privateView }));
   const withArmor = controller(armored);
   assert.match(withArmor, /Armor 7 of 20/);
@@ -297,7 +319,7 @@ test('views render complete markup for a full roster', async () => {
   assert.doesNotMatch(hud, /bw-sprite-armor/, 'no armor bar without armor');
   try {
     store.set({ screen: 'inventory' });
-    hudStore.set({ armor: armored.armor });
+    hudStore.set({ armor: worn });
     const inv = controller(armored);
     assert.equal(inv.match(/aria-label="(Helmet|Chestplate|Leggings|Boots): /g)?.length, 4);
     assert.match(inv, /aria-label="Helmet: Iron Helmet"/);
@@ -321,8 +343,7 @@ test('views render complete markup for a full roster', async () => {
     store.set({ screen: null });
     hudStore.set({ screen: null, armor: [null, null, null, null] });
   }
-  const netherView = { ...view(10), players: view(10).players.map((p, i) => i === 1 ? { ...p, x: 3700, z: 50, y: 40, armor: [I.iron_helmet, I.iron_chestplate, I.iron_leggings, I.iron_boots] as PubPlayer['armor'] } : p) };
-  const tvNether = renderToString(createElement(client.DisplayView, { ...base, playerId: null, publicView: netherView }));
+  const tvNether = display(view(10, i => i === 1 ? { x: 3700, z: 50, y: 40, armor: 15 } : {}));
   assert.match(tvNether, /in the nether/);
   assert.equal(tvNether.match(/data-dim="nether"/g)?.length, 1);
   assert.match(tvNether, /aria-label="Armor 15"/);
@@ -378,7 +399,7 @@ test('the boss bar, the once-per-world celebration and the dragon results', asyn
 
   const base = { roomId: 'r', roundId: 'x', isHost: false, serverNowMs: () => 0, setInput() {}, sendAction: async () => ({ accepted: true }), assetsReady() {} };
   const won: View = { ...view(10), boss: { name: 'Ender Dragon', health: 60, max: 200, crystals: 0 }, victory: { day: 11, tick: 4000, by: ['Explorer_00_long', 'Explorer_02_long'] },
-    stats: { ...view(10).stats, dragons: 1 }, players: view(10).players.map((p, i) => i < 3 ? { ...p, x: 3840, z: 3840 } : p) };
+    stats: { ...view(10).stats, dragons: 1 }, roster: view(10, i => i < 3 ? { x: 3840, z: 3840 } : {}).roster! };
   const party = renderToString(createElement(Celebration, { view: won, onClose() {} }));
   assert.match(party, /The Ender Dragon has been defeated!/);
   assert.match(party, /Final blows by <b>Explorer_00_long and Explorer_02_long<\/b>/);
@@ -389,29 +410,29 @@ test('the boss bar, the once-per-world celebration and the dragon results', asyn
   assert.equal(party.match(/<li aria-hidden="true" class="bw-victory-player"/g)?.length, 10);
   assert.equal(party.match(/>Dragon slayer</g)?.length, 4);
   assert.doesNotMatch(party, /aria-modal/, 'never traps focus away from the Room menu');
-  const journal = victoryJournal({ ...won, stats: { ...won.stats, deaths: 0 }, journal: won.players.map((p, i) => ({ id: p.id, mined: i ? 1 : 900, placed: 0, crafted: 0, mobs: 0, deaths: 1, distance: 0 })) });
+  const journal = victoryJournal({ ...won, stats: { ...won.stats, deaths: 0 }, journal: won.who.map(([id], i) => ({ id, mined: i ? 1 : 900, placed: 0, crafted: 0, mobs: 0, deaths: 1, distance: 0 })) });
   assert.equal(journal.world[0], '12 days from the first tree to the last blow');
   assert.ok(journal.world.includes('Nobody fell along the way'));
   assert.deepEqual(journal.players[0]!.titles, ['Dragon slayer', 'Top miner']);
   assert.deepEqual(journal.players[1]!.titles, ['Explorer']);
 
-  const pv: PrivateView = { ack: 0, tp: { n: 0, x: 0, y: 0, z: 0 }, imp: { n: 0, vx: 0, vy: 0, vz: 0 }, inv: inventory(), cursor: null, grid: [null, null, null, null], out: null, screen: null,
-    health: 20, food: 20, saturation: 5, air: 300, dead: false, spawn: [0, 0, 0], mode: 'survival', keepInventory: false, armor: [null, null, null, null], armorPoints: 0, dimension: 'end' };
+  const pv = privateView({ dimension: 'end' });
   const inEnd = renderToString(createElement(ControllerView, { ...base, viewRole: 'controller', playerId: 'p0', publicView: won, privateView: pv }));
   assert.match(inEnd, /class="bw-boss"/);
   assert.match(inEnd, /No crystals left/);
   assert.doesNotMatch(renderToString(createElement(ControllerView, { ...base, viewRole: 'controller', playerId: 'p0', publicView: won, privateView: { ...pv, dimension: 'overworld' } })), /bw-boss/,
     'only players in the End see the bar');
+  readRoster(won);
   const tvRender = () => renderToString(createElement(DisplayView, { ...base, viewRole: 'display', playerId: null, privateView: null, publicView: won }));
   assert.doesNotMatch(tvRender(), /class="bw-boss"/, 'the TV shows the bar only while its camera follows someone in the End');
-  hudStore.set({ focus: won.players[0]!.id });
+  hudStore.set({ focus: won.who[0]![0] });
   const tv = tvRender();
   hudStore.set({ focus: null });
   assert.match(tv, /class="bw-boss"/);
   assert.equal(tv.match(/data-dim="end"/g)?.length, 3);
   assert.equal(tv.match(/>in the end</g)?.length, 3);
   const results = renderToString(createElement(ResultsView, { outcome: { complete: true, winners: ['p0'], rows: [{ playerId: 'p0' }, { playerId: 'p1' }] },
-    publicView: { ...won, journal: won.players.map(p => ({ id: p.id, mined: 0, placed: 0, crafted: 0, mobs: 0, deaths: 1, distance: 0 })) }, playerId: 'p0' }));
+    publicView: { ...won, journal: won.who.map(([id]) => ({ id, mined: 0, placed: 0, crafted: 0, mobs: 0, deaths: 1, distance: 0 })) }, playerId: 'p0' }));
   assert.match(results, /Ender Dragon defeated on day 12 by Explorer_00_long and Explorer_02_long/);
   assert.equal(results.match(/class="bw-award">Dragon slayer</g)?.length, 1, 'p0 is a slayer, p1 is not');
 });

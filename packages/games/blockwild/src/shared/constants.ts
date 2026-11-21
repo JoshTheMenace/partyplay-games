@@ -32,8 +32,13 @@ export const TICK_HZ = 20;
 export const DAY_TICKS = 24000;
 export const START_TICK = 1000;
 
-/** Maximum distinct edited cells per world. */
-export const EDIT_LIMIT = 16384;
+/**
+ * Most distinct edited cells a world may ever hold. The real ceiling is the save: the packed journal must fit
+ * EDIT_BYTES, which tidy building reaches far later than scattered single cells (never before 16,384 edits).
+ */
+export const EDIT_LIMIT = 65536;
+/** Bytes the packed (deflated) edit journal may take inside a 256 KiB save. */
+export const EDIT_BYTES = 100_000;
 export const EDIT_LIMIT_TOAST = 'This world has reached its building limit.';
 /** Reach from the eye to the nearest point of a block or mob. */
 export const REACH = { survival: 4.5, creative: 5 } as const;

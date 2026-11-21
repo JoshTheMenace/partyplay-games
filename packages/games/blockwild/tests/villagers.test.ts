@@ -1,6 +1,7 @@
 /** Villagers (DESIGN.md): spawning per bed, day/night routine, fleeing, zombies hunting them, trades, restock and saves. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { screenOf } from './scene';
 import { B, DOOR_OPEN, DOOR_UPPER, makeCell } from '../src/shared/blocks';
 import { CHUNK_CELLS, type ChunkSource } from '../src/shared/chunk';
 import { chunkKey, localIndex, type Vec3 } from '../src/shared/coords';
@@ -13,7 +14,6 @@ import { createState, saveSource, tickState } from '../src/sim/game';
 import { newMob } from '../src/sim/mobs';
 import { exportSave, parseSave } from '../src/sim/save';
 import type { Mob, State } from '../src/sim/state';
-import { playerView } from '../src/sim/views';
 import { restock, spawnVillagers, thinkVillager } from '../src/sim/villagers';
 import { writeCell } from '../src/sim/world';
 
@@ -171,7 +171,7 @@ test('trading consumes exact items, respects uses, restocks at dawn and survives
   const state = game(), player = state.players[0]!, mob = villagerAt(state, X + 2, Z, 0, 4242);
   const [buy] = offersFor(0, 4242), buyIndex = 0, sellIndex = offersFor(0, 4242).findIndex(o => o.buy.id === I.emerald);
   send(state, [{ t: 'interact', id: mob.id }]);
-  const screen = () => playerView(state, 'p0').screen;
+  const screen = () => screenOf(state, 'p0');
   assert.deepEqual([screen()?.kind, screen()?.villager, screen()?.profession, screen()?.offers?.length], ['trade', mob.id, 0, offersFor(0, 4242).length]);
 
   // Not enough goods: nothing happens.

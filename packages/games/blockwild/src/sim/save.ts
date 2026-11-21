@@ -1,43 +1,49 @@
 /**
- * World saves (format version 10; version 9 still loads). Edits are packed little-endian
- * (uint32 cell index, uint16 value) and base64 encoded; slots are compact [index, id, n, d?] tuples. `parseSave`
- * validates everything and throws a readable message.
+ * World saves (format version 11; versions 9 and 10 still load). Everything bulky is binary in base64: the edit
+ * journal is packed and deflated (sim/journal.ts), slot lists are 6-byte records (slot, item id, count, damage) and
+ * the populated-chunk bitset is deflated. Versions 9 and 10 wrote 6-byte edits, [index, id, n, d?] slot tuples and a
+ * raw bitset; `parseSave` reads both, validates everything and throws a readable message.
  */
+import { deflateRawSync, inflateRawSync } from 'node:zlib';
 import { B, BLOCKS, cellId } from '../shared/blocks';
-import { CHEST_SIZE, DAY_TICKS, EDIT_LIMIT, HEIGHT, inEnd, INVENTORY_SIZE, MAX_FOOD, MAX_HEALTH, WORLD } from '../shared/constants';
+import { CHEST_SIZE, DAY_TICKS, HEIGHT, inEnd, INVENTORY_SIZE, MAX_FOOD, MAX_HEALTH, WORLD } from '../shared/constants';
 import { cellXYZ, isCellIndex, type Vec3 } from '../shared/coords';
 import { emptySlots } from '../shared/inventory';
 import { armorOf, durabilityOf, isItem, maxStack, type Slot } from '../shared/items';
 import { MOB_TYPES, MS, q2, q3, validateSettings, type Settings, type Stats, type Victory } from '../shared/protocol';
 import { PROFESSIONS } from '../shared/trades';
 import { MAX_CHESTS, MAX_FURNACES } from './containers';
+import { packEdits, unpackEdits as unpackJournal } from './journal';
 import type { Furnace, PlayerStats, SavedPlayerState } from './state';
 
-export const SAVE_VERSION = 10;
+export const SAVE_VERSION = 11;
 /**
  * Oldest version that still loads. Edits only record differences from generated terrain, so a world saved before the
  * expansion generator (version 8) would silently grow lava caves and structures through its builds: it is refused.
  */
 const MIN_VERSION = 9;
 export const OLD_SAVE_MESSAGE = 'This world was made with the previous version of Blockwild and cannot be loaded.';
-const MAX_SAVED_PLAYERS = 24, MAX_SAVED_ANIMALS = 48, CHUNK_BITS = (WORLD / 16) ** 2;
+/** A full room of 64 and half as many again who played earlier and may come back for their things. */
+export const MAX_SAVED_PLAYERS = 96, MAX_SAVED_ANIMALS = 160;
+/** Names are the room's (16 characters at most there); a longer one could push a full save over its size limit. */
+const CHUNK_BITS = (WORLD / 16) ** 2, MAX_NAME = 16;
 export const MAX_SAVED_VILLAGERS = 64;
 const MAX_OFFERS = 8;
 /** The End (save v10): ten obsidian pillars (0..9) can hold a crystal; the dragon has 200 health. */
 export const END_PILLARS = 10, DRAGON_HEALTH = 200;
 
-/** [slot index, item id, count] or [slot index, item id, count, damage]. */
-export type SlotTuple = [number, number, number] | [number, number, number, number];
+/** Slots as base64 of 6-byte records: slot index, item id (16 bits), count, damage (16 bits), little-endian. */
+export type PackedSlots = string;
 export type SavedPlayer = {
   name: string; x: number; y: number; z: number; yaw: number; pitch: number; health: number; food: number; saturation: number;
-  inv: SlotTuple[];
-  /** Worn armor (slot 0 head .. 3 feet); absent means none. */
-  armor?: SlotTuple[];
+  inv: PackedSlots;
+  /** Worn armor (slot 0 head .. 3 feet). */
+  armor: PackedSlots;
   /** Bed cell used as the respawn point, or null for the world spawn. */
   spawn: Vec3 | null;
   stats: PlayerStats; milestones: number;
 };
-export type SavedFurnace = { i: number; slots: SlotTuple[]; burn: number; burnMax: number; cook: number };
+export type SavedFurnace = { i: number; slots: PackedSlots; burn: number; burnMax: number; cook: number };
 export type SavedAnimal = { t: number; x: number; y: number; z: number; s: number };
 /** A villager: profession, home bed cell (if any), uses per offer and the seed its offers derive from. */
 export type SavedVillager = { x: number; y: number; z: number; p: number; home?: Vec3; uses: number[]; seed: number };
@@ -46,12 +52,12 @@ export type VillagerState = Omit<SavedVillager, 'home'> & { home: Vec3 | null };
 /** The End's progress (v10): the dragon's life and health, pillars (0..9) that still hold crystals, the exit portal and the egg. */
 export type SavedEnd = { dragon: 'alive' | 'dead'; health: number; crystals: number[]; portalActive: boolean; egg: boolean };
 export type SaveData = {
-  format: 'blockwild'; version: 10; seed: number;
+  format: 'blockwild'; version: 11; seed: number;
   /** Stable world identity (derived from the seed when missing). */
   worldId: string; mode: Settings['mode']; difficulty: Settings['difficulty']; keepInventory: boolean;
   time: number; day: number; edits: string;
-  players: SavedPlayer[]; chests: { i: number; slots: SlotTuple[] }[]; furnaces: SavedFurnace[]; animals: SavedAnimal[]; villagers: SavedVillager[];
-  /** Base64 bitset of chunks whose animals were already rolled (so loading does not repopulate them). */
+  players: SavedPlayer[]; chests: { i: number; slots: PackedSlots }[]; furnaces: SavedFurnace[]; animals: SavedAnimal[]; villagers: SavedVillager[];
+  /** Deflated bitset (base64) of chunks whose animals were already rolled (so loading does not repopulate them). */
   populated: string; stats: Stats;
   /** v10: the End, the victory (null until the dragon dies) and the ender pearl pity counter. */
   end: SavedEnd; victory: Victory | null; pearlPity: number;
@@ -78,19 +84,14 @@ export type SaveSource = {
 const toBase64 = (bytes: Uint8Array) => Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('base64');
 const fromBase64 = (text: string) => new Uint8Array(Buffer.from(text, 'base64'));
 
-export function packEdits(edits: ReadonlyMap<number, number>): string {
-  const bytes = new Uint8Array(edits.size * 6), view = new DataView(bytes.buffer);
-  let offset = 0;
-  for (const index of [...edits.keys()].sort((a, b) => a - b)) {
-    view.setUint32(offset, index, true);
-    view.setUint16(offset + 4, edits.get(index)!, true);
-    offset += 6;
-  }
-  return toBase64(bytes);
-}
+/** The journal of a version 11 save. */
 export function unpackEdits(text: string): Map<number, number> {
+  try { return unpackJournal(fromBase64(text)); } catch { throw invalid('edits'); }
+}
+/** Versions 9 and 10: little-endian (uint32 cell index, uint16 value) records, at most 16,384 of them. */
+function unpackOldEdits(text: string): Map<number, number> {
   const bytes = fromBase64(text);
-  if (bytes.length % 6 || bytes.length / 6 > EDIT_LIMIT) throw invalid('edits');
+  if (bytes.length % 6 || bytes.length / 6 > 16384) throw invalid('edits');
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), edits = new Map<number, number>();
   for (let offset = 0; offset < bytes.length; offset += 6) {
     const index = view.getUint32(offset, true), value = view.getUint16(offset + 4, true), block = BLOCKS[cellId(value)];
@@ -100,19 +101,22 @@ export function unpackEdits(text: string): Map<number, number> {
   return edits;
 }
 
-const packSlots = (slots: readonly (Slot | null)[]): SlotTuple[] =>
-  slots.flatMap((slot, i): SlotTuple[] => !slot ? [] : slot.d ? [[i, slot.id, slot.n, slot.d]] : [[i, slot.id, slot.n]]);
+function packSlots(slots: readonly (Slot | null)[]): PackedSlots {
+  const filled = slots.flatMap((slot, i) => slot ? [[i, slot] as const] : []), bytes = new Uint8Array(filled.length * 6);
+  filled.forEach(([i, slot], k) => bytes.set([i, slot.id & 255, slot.id >> 8, slot.n, (slot.d ?? 0) & 255, (slot.d ?? 0) >> 8], k * 6));
+  return toBase64(bytes);
+}
 const packBits = (keys: ReadonlySet<number>) => {
   const bytes = new Uint8Array(CHUNK_BITS / 8);
   for (const key of keys) if (key >= 0 && key < CHUNK_BITS) bytes[key >> 3]! |= 1 << (key & 7);
-  return toBase64(bytes);
+  return toBase64(deflateRawSync(bytes));
 };
 
 export function exportSave(source: SaveSource): SaveData {
   const { settings } = source;
   return {
     format: 'blockwild', version: SAVE_VERSION, seed: settings.seed, worldId: source.worldId, mode: settings.mode, difficulty: settings.difficulty, keepInventory: settings.keepInventory,
-    time: Math.floor(source.time), day: source.day, edits: packEdits(source.edits),
+    time: Math.floor(source.time), day: source.day, edits: toBase64(packEdits(source.edits)),
     players: source.players.slice(0, MAX_SAVED_PLAYERS).map(p => ({
       name: p.name, x: q2(p.x), y: q2(p.y), z: q2(p.z), yaw: q3(p.yaw), pitch: q3(p.pitch),
       // Dead players come back at full health (respawned on load); their items were already dropped or kept.
@@ -153,9 +157,16 @@ function list(value: unknown, max: number, what: string): unknown[] {
   if (!Array.isArray(value) || value.length > max) throw invalid(what);
   return value;
 }
+/** Slots from packed records (version 11) or [index, id, n, d?] tuples (older saves). */
 function slots(value: unknown, size: number, what: string): (Slot | null)[] {
   const out = emptySlots(size);
-  for (const raw of list(value, size, what)) {
+  let tuples: unknown[];
+  if (typeof value === 'string') {
+    const bytes = fromBase64(value);
+    if (bytes.length % 6 || bytes.length / 6 > size) throw invalid(what);
+    tuples = Array.from({ length: bytes.length / 6 }, (_, k) => { const o = k * 6, d = bytes[o + 4]! | bytes[o + 5]! << 8; return [bytes[o]!, bytes[o + 1]! | bytes[o + 2]! << 8, bytes[o + 3]!, ...d ? [d] : []]; });
+  } else tuples = list(value, size, what);
+  for (const raw of tuples) {
     const tuple = list(raw, 4, what);
     if (tuple.length < 3) throw invalid(what);
     const i = integer(tuple[0], 0, size - 1, what), id = integer(tuple[1], 1, 65535, what);
@@ -190,7 +201,7 @@ export function parseSave(raw: unknown): ParsedSave {
   if (settings.seed < 1 || settings.seed !== raw.seed || settings.mode !== raw.mode || settings.difficulty !== raw.difficulty || settings.keepInventory !== raw.keepInventory) throw invalid('settings');
   if (raw.worldId !== undefined && (typeof raw.worldId !== 'string' || !/^[a-z0-9-]{1,64}$/.test(raw.worldId))) throw invalid('settings');
   if (typeof raw.edits !== 'string' || typeof raw.populated !== 'string') throw invalid('edits');
-  const edits = unpackEdits(raw.edits);
+  const edits = raw.version >= 11 ? unpackEdits(raw.edits) : unpackOldEdits(raw.edits);
   // Before v10 the End's corner was ordinary overworld: whatever was built or left there does not come along.
   const legacy = raw.version < 10, stale = (x: number, z: number) => legacy && inEnd(x, z);
   for (const index of legacy ? edits.keys() : []) {
@@ -199,7 +210,7 @@ export function parseSave(raw: unknown): ParsedSave {
   }
 
   const players = list(raw.players, MAX_SAVED_PLAYERS, 'players').map(value => {
-    if (!isObject(value) || typeof value.name !== 'string' || value.name.length > 64) throw invalid('players');
+    if (!isObject(value) || typeof value.name !== 'string' || value.name.length > MAX_NAME) throw invalid('players');
     // y −1 means "no usable spot" (saved falling through the void, or inside a pre-End save's End): they load at the world spawn.
     const x = number(value.x, 0, WORLD, 'players'), z = number(value.z, 0, WORLD, 'players'), bed = value.spawn === null ? null : vec3(value.spawn, 'spawn');
     return {
@@ -239,7 +250,9 @@ export function parseSave(raw: unknown): ParsedSave {
       seed: integer(value.seed, 0, 2 ** 31 - 1, 'villagers'),
     };
   }).filter(v => !stale(v.x, v.z));
-  const bits = fromBase64(raw.populated), populated = new Set<number>();
+  const populated = new Set<number>();
+  let bits = fromBase64(raw.populated);
+  try { if (raw.version >= 11) bits = inflateRawSync(bits, { maxOutputLength: CHUNK_BITS / 8 }); } catch { throw invalid('chunks'); }
   if (bits.length !== CHUNK_BITS / 8) throw invalid('chunks');
   bits.forEach((byte, i) => { for (let b = 0; b < 8; b++) if (byte & (1 << b)) populated.add(i * 8 + b); });
   return {
@@ -260,7 +273,7 @@ function victoryOf(value: unknown): Victory | null {
   if (value === null) return null;
   if (!isObject(value)) throw invalid('victory');
   const by = list(value.by, MAX_SAVED_PLAYERS, 'victory').map(name => {
-    if (typeof name !== 'string' || name.length > 64) throw invalid('victory');
+    if (typeof name !== 'string' || name.length > MAX_NAME) throw invalid('victory');
     return name;
   });
   return { day: integer(value.day, 0, 1e9, 'victory'), tick: integer(value.tick, 0, DAY_TICKS - 1, 'victory'), by };

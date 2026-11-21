@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { MAX_SAVE_BYTES } from '../../../party-contract/src/index';
+import { asOldSave } from './old-save';
+import { sceneOf } from './scene';
 import { fillRegion, newRegion, RA, RX } from '../src/client/engine/light';
 import { S_AIR, S_END_FRAME, S_FENCE, S_PANE, SHAPE } from '../src/client/engine/tables';
 import { ClientWorld } from '../src/client/engine/world';
@@ -29,7 +30,7 @@ import { generateChunk } from '../src/shared/worldgen';
 import { killMob } from '../src/sim/combat';
 import { createState, saveSource, tickState } from '../src/sim/game';
 import { newMob } from '../src/sim/mobs';
-import { exportSave, parseSave, type SaveSource } from '../src/sim/save';
+import { exportSave, parseSave } from '../src/sim/save';
 import type { Player, State } from '../src/sim/state';
 import { outcome, playerView, publicView } from '../src/sim/views';
 import { writeCell } from '../src/sim/world';
@@ -282,10 +283,10 @@ test('server: endgame mobs tick through their hooks; views carry dimension, pitc
   assert.ok(pushed.every(mob => state.mobs.includes(mob)), 'the dragon never despawns, far from players over unloaded chunks');
   assert.equal(state.mobs.filter(m => m.t === MOB.ender_dragon).length, 1, 'one dragon (ensureDragon adopts it)');
   assert.equal(playerView(state, player.id).dimension, 'end');
-  const view = publicView(state), pub = view.mobs.find(m => m.id === dragon.id)!;
+  const view = publicView(state), scene = sceneOf(state, player.id), pub = scene.mobs.find(m => m.id === dragon.id)!;
   assert.equal(typeof pub.pt, 'number');
   assert.equal(typeof pub.ph, 'number');
-  assert.equal(view.mobs.find(m => m.t === MOB.enderman)!.ph, undefined);
+  assert.equal(scene.mobs.find(m => m.t === MOB.enderman)!.ph, undefined);
   assert.equal(view.boss?.name, 'Ender Dragon');
   assert.ok(!('victory' in view));
   assert.equal(view.stats.dragons, 0);
@@ -382,7 +383,7 @@ test('save v10 round-trips the End, the victory, dragons and the pearl pity; v9 
   live.stats.dragons = 1;
   writeCell(live, X + 3, 64, Z, B.end_portal_frame | FRAME_EYE << 8);
   const save = exportSave(saveSource(live)), json = JSON.stringify(save);
-  assert.equal(save.version, 10);
+  assert.equal(save.version, 11);
   assert.deepEqual(save.end, { dragon: 'dead', health: 0, crystals: [2, 7], portalActive: true, egg: true });
   assert.deepEqual([save.victory, save.pearlPity, save.stats.dragons], [{ day: 5, tick: 777, by: ['Ada', 'Bo'] }, 2, 1]);
   const loaded = createState(ctx(['Ada', 'Bo']), parseSave(JSON.parse(json)).settings, { source: flat, save: parseSave(JSON.parse(json)) });
@@ -391,8 +392,7 @@ test('save v10 round-trips the End, the victory, dragons and the pearl pity; v9 
   assert.equal(loaded.get(X + 3, 64, Z), B.end_portal_frame | FRAME_EYE << 8);
 
   // The same world as version 9 wrote it: no End, no victory, no pity, no dragons stat.
-  const v9 = JSON.parse(json);
-  v9.version = 9;
+  const v9 = asOldSave(JSON.parse(json), 9) as ReturnType<typeof JSON.parse>;
   delete v9.end;
   delete v9.victory;
   delete v9.pearlPity;
@@ -423,39 +423,12 @@ test('saves load players lost in the void, and a pre-End save leaves nothing beh
   assert.ok(loaded.players[0]!.y >= 0 && Math.abs(loaded.players[0]!.x - X) < 16, `Ada comes back at the world spawn (${[loaded.players[0]!.x, loaded.players[0]!.y]})`);
   assert.deepEqual([loaded.world.edits.size, loaded.players[1]!.bed], [live.world.edits.size, bo.bed], 'v10 keeps End builds and beds');
 
-  const v9 = JSON.parse(json);
-  v9.version = 9;
+  const v9 = asOldSave(JSON.parse(json), 9) as ReturnType<typeof JSON.parse>;
   for (const key of ['end', 'victory', 'pearlPity']) delete v9[key];
   delete v9.stats.dragons;
   const old = createState(ctx(['Ada', 'Bo']), parseSave(v9).settings, { source: flat, save: parseSave(v9) }), oldBo = old.players[1]!;
   assert.equal(old.world.edits.size, live.world.edits.size - 1, 'the edit in the End corner is dropped');
   assert.ok(oldBo.bed === null && dimensionAt(oldBo.x, oldBo.z) === 'overworld', 'Bo loads at the world spawn without the End bed');
-});
-
-test('the worst legal v10 save stays under 256 KiB', () => {
-  const edits = new Map<number, number>();
-  for (let i = 0; i < 16384; i++) edits.set(4095 - (i % 4096) + 4096 * (4095 - (Math.floor(i / 4096) % 16) + 4096 * (127 - Math.floor(i / 4096 / 16))), makeCell(i < 64 ? B.chest : i < 96 ? B.furnace_lit : B.stone_brick_stairs, 7));
-  const indices = [...edits.keys()], big = 999999999, name = (i: number) => `${'W'.repeat(62)}${String(i).padStart(2, '0')}`;
-  const fullSlots = (n: number) => Array.from({ length: n }, (_, i) => ({ id: I.diamond_pickaxe + (i % 5), n: 1, d: 1000 + i }));
-  const source: SaveSource = {
-    settings: validateSettings({ seed: 999999, mode: 'creative', difficulty: 'peaceful', keepInventory: false }), worldId: `999999-${'z'.repeat(57)}`, time: 23999, day: big, edits,
-    players: Array.from({ length: 24 }, (_, i) => ({
-      name: name(i), x: 4095.99, y: 127.99, z: 4095.99, yaw: -3.141, pitch: -1.571, health: 19.5, food: 19, saturation: 19.99, inv: fullSlots(36),
-      armor: [I.diamond_helmet, I.diamond_chestplate, I.diamond_leggings, I.diamond_boots].map(id => ({ id, n: 1, d: 360 })), bed: [4095, 127, 4095] as [number, number, number],
-      stats: { mined: big, placed: big, crafted: big, mobs: big, deaths: big, distance: big }, milestones: 2 ** 30, dead: false,
-    })),
-    chests: new Map(indices.slice(0, 64).map(i => [i, fullSlots(27)])),
-    furnaces: new Map(indices.slice(64, 96).map(i => [i, { slots: [{ id: B.iron_ore, n: 64 }, { id: B.coal_block, n: 64 }, { id: I.iron_ingot, n: 64 }], burn: 799.99, burnMax: 800, cook: 9.99 }])),
-    animals: Array.from({ length: 48 }, (_, i) => ({ t: MOB.sheep, x: 4095.99 - i, y: 127.99, z: 4095.99, s: 3 })),
-    villagers: Array.from({ length: 64 }, (_, i) => ({ x: 4095.99 - i, y: 127.99, z: 4095.99, p: 4, home: [4095, 127, 4095 - i] as [number, number, number], uses: Array(8).fill(999999), seed: 2 ** 31 - 1 - i })),
-    populated: new Set(Array.from({ length: 65536 }, (_, i) => i)), stats: { mined: big, placed: big, crafted: big, mobs: big, deaths: big, days: big, dragons: big },
-    end: { dragon: 'alive', health: 199.99, crystals: [9, 8, 7, 6, 5, 4, 3, 2, 1, 0], portalActive: true, egg: true },
-    victory: { day: big, tick: 23999, by: Array.from({ length: 24 }, (_, i) => name(i)) }, pearlPity: 999999,
-  };
-  const save = exportSave(source), bytes = Buffer.byteLength(JSON.stringify(save));
-  console.log(`worst-case v10 save: ${(bytes / 1024).toFixed(1)} KiB`);
-  assert.ok(bytes < MAX_SAVE_BYTES, `${bytes} bytes`);
-  assert.equal(parseSave(JSON.parse(JSON.stringify(save))).victory!.by.length, 24);
 });
 
 // Worldgen compatibility ---------------------------------------------------------------------------------------------

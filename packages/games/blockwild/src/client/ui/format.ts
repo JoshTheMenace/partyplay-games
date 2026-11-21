@@ -70,7 +70,7 @@ export function skyAngle(time: number): { body: 'sun' | 'moon'; angle: number } 
 }
 
 /** One-word activity for a player card on the TV (location words when idle: caving, in the nether, in the end). */
-export function playerStatus(player: PubPlayer): string {
+export function playerStatus(player: Pick<PubPlayer, 'flags' | 'held' | 'x' | 'y' | 'z' | 'health'> & { mine?: unknown }): string {
   if (player.flags & PF.OFFLINE) return 'offline';
   if (player.flags & PF.DEAD) return 'down';
   if (player.flags & PF.BURNING) return 'on fire';

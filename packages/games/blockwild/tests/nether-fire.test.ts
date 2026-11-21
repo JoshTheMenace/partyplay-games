@@ -1,6 +1,7 @@
 /** Fire and burning (DESIGN.md), beds and water in the Nether. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { sceneOf } from './scene';
 import { B, cellId, makeCell } from '../src/shared/blocks';
 import { CHUNK_CELLS, type ChunkSource } from '../src/shared/chunk';
 import { NETHER } from '../src/shared/constants';
@@ -11,7 +12,7 @@ import { BURN_SECONDS, igniteEntity } from '../src/sim/fire';
 import { createState, tickState } from '../src/sim/game';
 import { newMob } from '../src/sim/mobs';
 import type { Player, State } from '../src/sim/state';
-import { playerView, publicView } from '../src/sim/views';
+import { playerView } from '../src/sim/views';
 import { writeCell } from '../src/sim/world';
 
 const FLAT = (() => {
@@ -73,7 +74,7 @@ test('burning: 1 damage a second for its duration, shown in both views; water pu
   run(state, 2.5);
   assert.equal(player.health, 17, 'hits at 0, 1 and 2 s');
   assert.ok(playerView(state, 'p0').burning! > 100);
-  assert.ok(publicView(state).players[0]!.flags & PF.BURNING);
+  assert.ok(sceneOf(state).players[0]!.flags & PF.BURNING);
   run(state, 6);
   assert.equal(player.fire, 0);
   assert.equal(player.health, 12, 'eight hits over eight seconds');
@@ -124,7 +125,7 @@ test('mobs burn too, but zombified piglins and ghasts are fireproof', () => {
   igniteEntity(state, piglin, 3);
   writeCell(state, X - 5, 64, Z, B.lava);
   assert.equal(piglin.fire, 0);
-  assert.ok(publicView(state).mobs.find(m => m.id === cow.id)!.s! & MS.BURNING);
+  assert.ok(sceneOf(state).mobs.find(m => m.id === cow.id)!.s! & MS.BURNING);
   run(state, 2.6);
   assert.ok(cow.health <= 7, `cow at ${cow.health}`);
   assert.equal(piglin.health, 20);

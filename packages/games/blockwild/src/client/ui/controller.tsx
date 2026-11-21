@@ -2,6 +2,7 @@
 import { useEffect, useRef } from 'react';
 import type { GameViewProps } from '../../../../../party-ui/src/index';
 import { PF, type Action, type Input, type PrivateView, type PubPlayer, type View } from '../../shared/protocol';
+import { selfIn } from '../game/feed';
 import { hud } from '../game/hud';
 import { closeScreen, sendCommand } from '../game/predict';
 import { store, touch } from '../store';
@@ -59,7 +60,7 @@ function Screens({ view, me, worldId, host }: { view: PrivateView; me: PubPlayer
 function Sleeping({ view }: { view: View }) {
   const leaving = useStore(store, s => s.queue.some(cmd => cmd.t === 'wake'));
   return <div className="bw-sleep">
-    <p className="kp-hud-text">Sleeping… {view.sleeping} of {view.players.filter(p => !(p.flags & (PF.OFFLINE | PF.DEAD))).length} in bed</p>
+    <p className="kp-hud-text">Sleeping… {view.sleeping} of the {view.sleepNeed} needed in bed</p>
     <button type="button" className="bw-chip" disabled={leaving} onClick={() => sendCommand({ t: 'wake' })}>Leave bed</button>
   </div>;
 }
@@ -82,7 +83,7 @@ export function ControllerView({ publicView, privateView, playerId, connected, i
   // Leaving the round: never strand an open screen or a held touch in the next one.
   useEffect(() => () => store.set({ screen: null, quickMove: false }), []);
 
-  const me = publicView.players.find(player => player.id === playerId);
+  const me = privateView ? selfIn(publicView, privateView, playerId) : undefined;
   if (!privateView || !me) return <div className="bw-hud"><p className="bw-waiting kp-hud-text">Joining the world…</p></div>;
   const playing = !screen && !dead, sleeping = !!(me.flags & PF.SLEEPING);
   // The touch look layer fills the screen, so it renders first and every later control sits above it.

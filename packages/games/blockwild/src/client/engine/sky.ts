@@ -1,5 +1,6 @@
 /**
- * Sky dome (gradient, square sun and moon, twinkling stars) and a drifting layer of blocky 3D clouds at y = 140.
+ * Sky dome (gradient, a round sun with rays, a pixel moon with phases, twinkling stars) and a drifting layer of blocky
+ * 3D clouds at y = 140, lit warm from below at dusk.
  * Both read the shared world uniforms, so they always match the fog and water reflections. In the Nether the dome
  * shows only the fog colour and the clouds hide; in the End it is a still, purple-black void full of faint stars and
  * drifting violet nebulae, all the way round (below the island too).
@@ -22,19 +23,18 @@ void main() {
 const DOME_FRAGMENT = /* glsl */ `
 uniform float uStars;
 uniform float uAngle;
+uniform float uMoonPhase;
 in vec3 vDir;
 ${SKY_GLSL}
 
 float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 
-/** Square MC-style body: returns 1 inside a square of half-size r around direction c. */
-vec2 square(vec3 d, vec3 c, float r) {
+/** A body's own flat coordinates: where direction d falls on the plane facing c (x along the horizon, y up), in radians near c. */
+vec2 around(vec3 d, vec3 c) {
   float along = dot(d, c);
-  if (along <= 0.0) return vec2(0.0, 99.0);
+  if (along <= 0.0) return vec2(99.0);
   vec3 u = normalize(cross(c, vec3(0.0, 0.0, 1.0)));
-  vec3 v = cross(u, c);
-  vec2 p = vec2(dot(d, u), dot(d, v)) / along;
-  return vec2(step(max(abs(p.x), abs(p.y)), r), length(p));
+  return vec2(dot(d, u), dot(d, cross(u, c))) / along;
 }
 
 /** Value noise on a cube face grid (smooth), for the End's nebulae. */
@@ -84,17 +84,20 @@ void main() {
       color += vec3(0.85, 0.9, 1.0) * smoothstep(0.35, 0.05, dist) * (h - 0.985) * 66.0 * twinkle * uStars * horizon;
     }
   }
-  vec2 sun = square(d, uSunDir, 0.085);
-  color += vec3(1.0, 0.93, 0.75) * exp(-sun.y * 9.0) * 0.35 * horizon * (uDay + uDusk);
-  color = mix(color, vec3(1.6, 1.45, 1.1), sun.x * horizon);
-  vec2 moon = square(d, -uSunDir, 0.055);
-  if (moon.x > 0.0) {
-    vec3 u = normalize(cross(-uSunDir, vec3(0.0, 0.0, 1.0)));
-    vec2 p = floor(vec2(dot(d, u), dot(d, cross(u, -uSunDir))) / dot(d, -uSunDir) / 0.055 * 4.0);
-    float crater = hash(vec3(p, 3.0)) > 0.7 ? 0.78 : 1.0;
-    color = mix(color, vec3(0.82, 0.86, 0.95) * crater, horizon * (0.35 + 0.65 * uStars));
+  // The sun: a round disc in a soft corona, with slow rays that show most when it sits low.
+  vec2 sun = around(d, uSunDir);
+  float sunAway = length(sun), rays = pow(0.5 + 0.5 * cos(atan(sun.y, sun.x) * 8.0 + uTime * 0.04), 5.0);
+  color += vec3(1.0, 0.9, 0.7) * (exp(-sunAway * 8.0) * 0.38 + exp(-sunAway * 20.0) * 0.4 * (0.55 + 0.45 * rays)) * horizon * (uDay + uDusk);
+  color = mix(color, mix(vec3(1.9, 1.15, 0.55), vec3(1.7, 1.55, 1.15), uDay), (1.0 - smoothstep(0.066, 0.074, sunAway)) * horizon);
+  // The moon: a round disc drawn in big pixels, lit from one side by its phase (0 new, 0.5 full), craters in its lit part.
+  vec2 moon = around(d, -uSunDir) / 0.058, cell = (floor(moon * 5.5) + 0.5) / 5.5;
+  if (dot(cell, cell) < 1.0) {
+    float edge = cos(uMoonPhase * 6.2832) * sqrt(max(1.0 - cell.y * cell.y, 0.0));
+    float lit = uMoonPhase < 0.5 ? step(edge, cell.x) : step(cell.x, -edge);
+    float crater = hash(vec3(cell * 5.5, 3.0)) > 0.72 ? 0.8 : 1.0;
+    color = mix(color, vec3(0.84, 0.88, 0.97) * crater * mix(0.07, 1.0, lit), horizon * (0.3 + 0.7 * uStars));
   }
-  color += vec3(0.7, 0.8, 1.0) * exp(-moon.y * 7.0) * 0.08 * uStars * horizon;
+  color += vec3(0.7, 0.8, 1.0) * exp(-length(moon) * 0.42) * 0.09 * uStars * horizon * (0.25 + 0.75 * sin(uMoonPhase * 3.1416));
   // No sun, moon or stars in the Nether: only its fog colour.
   color = mix(color, skyColor(d), uNether);
   if (uEnd > 0.0) color = mix(color, endSky(d), uEnd);
@@ -125,6 +128,9 @@ void main() {
   float distance = length(toFrag.xz);
   vec3 lit = mix(vec3(0.022, 0.027, 0.048), vec3(1.0), uDay) + uDuskColor * uDusk * 0.5;
   vec3 color = lit * vShade;
+  // A low sun lights clouds from below and from its own side: warm bellies, brighter towards the sunset.
+  float towardSun = max(dot(normalize(toFrag.xz + 1e-4), normalize(uSunDir.xz + 1e-4)), 0.0);
+  color += uDuskColor * uDusk * ((vShade < 0.75 ? 0.75 : 0.15) + 0.35 * towardSun * towardSun);
   float fade = 1.0 - smoothstep(uFogFar * 1.2, uFogFar * 2.6 + 80.0, distance);
   color = mix(fogColor(normalize(toFrag)), color, 0.35 + 0.65 * fade);
   gl_FragColor = vec4(color, 0.8 * fade);

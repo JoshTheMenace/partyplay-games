@@ -1,7 +1,7 @@
 /** Room-flow views: world settings, instructions and the results journal. */
 import { useEffect, useState, type CSSProperties } from 'react';
 import { ArcadeButton, ToggleRow, type InstructionsViewProps, type ResultsViewProps, type SettingsViewProps } from '../../../../../party-ui/src/index';
-import type { Difficulty, Mode, Settings, View } from '../../shared/protocol';
+import { seatsOf, type Difficulty, type Mode, type Settings, type View } from '../../shared/protocol';
 import { nameList } from './endgame';
 import { awards, formatDistance } from './format';
 
@@ -73,7 +73,7 @@ export function InstructionsView({ role }: InstructionsViewProps) {
 /** World journal: days survived, world totals, and each explorer's highlights and awards. */
 export function ResultsView({ outcome, publicView, playerId }: ResultsViewProps<View>) {
   const view = publicView, journal = view.journal ?? [];
-  const players = view.players, victory = view.victory;
+  const players = seatsOf(view.who), victory = view.victory;
   const won = awards(journal, players.filter(player => victory?.by.includes(player.name)).map(player => player.id));
   const rows = outcome.rows.map(row => ({ row, player: players.find(p => p.id === row.playerId), entry: journal.find(e => e.id === row.playerId) }));
   const days = view.stats.days;

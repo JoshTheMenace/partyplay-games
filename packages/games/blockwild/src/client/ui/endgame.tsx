@@ -1,7 +1,7 @@
 /** The endgame's HUD and TV pieces: the Ender Dragon's boss bar and the once-per-world victory celebration. */
 import { useEffect, useState, type CSSProperties } from 'react';
 import { I } from '../../shared/items';
-import type { BossView, View } from '../../shared/protocol';
+import { seatsOf, type BossView, type View } from '../../shared/protocol';
 import { awards } from './format';
 import { ItemIcon, spriteUrl } from './icons';
 
@@ -50,12 +50,12 @@ const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n ==
 /** The celebration's scrolling journal: world totals, then each explorer's highlights (awards once the journal is published). */
 export function victoryJournal(view: View): { world: string[]; players: { id: string; name: string; color: string; titles: string[] }[] } {
   const { stats } = view, days = (view.victory?.day ?? view.day) + 1, by = view.victory?.by ?? [];
-  const slayers = view.players.filter(player => by.includes(player.name)).map(player => player.id);
+  const seats = seatsOf(view.who), slayers = seats.filter(player => by.includes(player.name)).map(player => player.id);
   const won = awards(view.journal ?? [], slayers);
   return {
     world: [`${plural(days, 'day')} from the first tree to the last blow`, `${plural(stats.mined, 'block')} mined, ${stats.placed.toLocaleString()} placed`,
       `${plural(stats.crafted, 'thing')} crafted`, `${plural(stats.mobs, 'mob')} defeated`, stats.deaths ? `${plural(stats.deaths, 'fall')} along the way` : 'Nobody fell along the way'],
-    players: view.players.map(player => {
+    players: seats.map(player => {
       const titles = won.filter(award => award.ids.includes(player.id)).map(award => award.title);
       return { id: player.id, name: player.name, color: player.color, titles: titles.length ? titles : [slayers.includes(player.id) ? 'Dragon slayer' : 'Explorer'] };
     }),

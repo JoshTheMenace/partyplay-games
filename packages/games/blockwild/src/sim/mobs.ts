@@ -21,18 +21,25 @@ import { BURN_SECONDS, igniteEntity } from './fire';
 import { moveBody } from './motion';
 import { spawnNetherMobs, thinkNetherMob } from './nether-mobs';
 import { findPath } from './pathfind';
+import { MAX_SAVED_ANIMALS } from './save';
 import { thinkTnt } from './redstone';
 import { thinkSilverfish } from './silverfish';
 import { activePlayers, addFx, isNight, isProtected, nextId, playerById, type Mob, type Player, type State } from './state';
 import { preyFor, spawnVillagers, thinkVillager } from './villagers';
 import { blockLight, isLoaded, skyExposed, surfaceY } from './world';
 
-export const MAX_ANIMALS = 48, BABY_SECONDS = 300;
-/** Hostile cap: 8 solo, 14 for two, +6 per extra player up to 50; halved on easy and softer on the first day. */
-export function hostileCap(state: State) {
-  const scale = (state.settings.difficulty === 'easy' ? 0.5 : 1) * (state.day === 0 ? 0.6 : 1);
-  return Math.round(Math.min(50, 2 + 6 * activePlayers(state).length) * scale);
-}
+export const BABY_SECONDS = 300;
+/** Animals a world keeps: 48 for a party of ten, 4 more for each further player, never more than a save holds. */
+export const animalCap = (state: State) => Math.min(MAX_SAVED_ANIMALS, 48 + 4 * Math.max(0, state.players.length - 10));
+/**
+ * Hostile caps, scaled by difficulty and the first day. A group is capped as before (8 solo, 14 for two, +6 per extra
+ * player up to 50) but counted around each player (`CROWD` blocks for company, `HORDE` for monsters), so a big room
+ * spread over the world gives every party its own night; the world total stops at 144.
+ */
+const CROWD = 64, HORDE = 72;
+const hostileScale = (state: State) => (state.settings.difficulty === 'easy' ? 0.5 : 1) * (state.day === 0 ? 0.6 : 1);
+export const hostileCap = (state: State, company = activePlayers(state).length) => Math.round(Math.min(50, 2 + 6 * company) * hostileScale(state));
+export const worldHostileCap = (state: State) => Math.round(Math.min(144, 2 + 6 * activePlayers(state).length) * hostileScale(state));
 /** Walking speed per mob type (m/s). */
 export const SPEED: readonly number[] = [2.4, 2.5, 3.0, 2.3, 1.4, 1.5, 1.4, 1.4, 1.6, 2.3, 1.2, 0, 1.2, 3.0, 0, 0, 2.6];
 /** Every-tick AI of the types owned by feature modules: returns the desired horizontal velocity, or null when it moved the mob itself. */
@@ -77,13 +84,13 @@ export function roomFor(state: State, t: number, x: number, y: number, z: number
  */
 export function populateChunk(state: State, cx: number, cz: number) {
   const key = chunkKey(cx, cz), seed = state.settings.seed, herd = rand2(seed + 101, cx, cz) < 0.1;
-  if (state.animalChunks.has(key) || herd && state.mobs.filter(isAnimal).length >= MAX_ANIMALS) return;
+  if (state.animalChunks.has(key) || herd && state.mobs.filter(isAnimal).length >= animalCap(state)) return;
   state.animalChunks.add(key);
   spawnVillagers(state, cx, cz);
   if (!herd) return;
   const t = ANIMALS[Math.floor(rand2(seed + 102, cx, cz) * ANIMALS.length)]!, count = 2 + Math.floor(rand2(seed + 103, cx, cz) * 3);
   for (let i = 0; i < count; i++) {
-    if (state.mobs.filter(isAnimal).length >= MAX_ANIMALS) return;
+    if (state.mobs.filter(isAnimal).length >= animalCap(state)) return;
     const x = cx * 16 + Math.floor(rand3(seed + 104, cx, i, cz) * 16), z = cz * 16 + Math.floor(rand3(seed + 105, cx, i, cz) * 16);
     const y = surfaceY(state.getLoaded, x, z);
     if (cellId(state.getLoaded(x, y, z)) !== B.grass_block || !roomFor(state, t, x + 0.5, y + 1, z + 0.5)) continue;
@@ -109,24 +116,32 @@ const inTemple = (state: State, x: number, y: number, z: number) =>
  * first day's safe zone around the world spawn or a desert temple, and by day never where a player could watch it appear).
  */
 function spawnHostiles(state: State) {
-  const players = activePlayers(state), cap = hostileCap(state), get = state.getLoaded, r = state.rand, night = isNight(state.time);
+  const players = activePlayers(state), get = state.getLoaded, r = state.rand, night = isNight(state.time);
   // The Nether and the End have their own spawning (nether-mobs.ts, blaze.ts, enderman.ts) and caps.
   const overworld = (x: number, z: number) => dimensionAt(x, z) === 'overworld';
-  let hostiles = state.mobs.filter(mob => isHostile(mob) && overworld(mob.x, mob.z)).length;
-  for (const player of players) for (let attempt = 0; attempt < 3 && hostiles < cap && overworld(player.x, player.z); attempt++) {
-    const angle = r() * Math.PI * 2, d = 24 + r() * 24, x = Math.floor(player.x + Math.cos(angle) * d), z = Math.floor(player.z + Math.sin(angle) * d);
-    if (!isLoaded(state, x, z) || !overworld(x, z)) continue;
-    const surface = surfaceY(get, x, z);
-    let y = r() < 0.5 ? surface + 1 : Math.min(surface, Math.floor(player.y) + Math.floor(r() * 25) - 12);
-    for (let scan = 0; scan < 12 && y > 1 && !(isOpaque(get(x, y - 1, z)) && !isOpaque(get(x, y, z))); scan++) y--;
-    const t = pickHostile(state), sx = x + 0.5, sz = z + 0.5;
-    if (!isOpaque(get(x, y - 1, z)) || !roomFor(state, t, sx, y, sz)) continue;
-    if (state.players.some(p => p.connected && (p.x - sx) ** 2 + (p.y - y) ** 2 + (p.z - sz) ** 2 < SPAWN_GAP ** 2)) continue;
-    if (state.day === 0 && (state.spawn[0] - sx) ** 2 + (state.spawn[2] - sz) ** 2 < SAFE_START ** 2) continue;
-    if (!dark(state, x, y, z, night) || inTemple(state, x, y, z)) continue;
-    if (!night && players.some(p => lineOfSight(state, p.x, p.y + 1.6, p.z, sx, y + 1, sz))) continue;
-    state.mobs.push(newMob(state, t, sx, y, sz));
-    hostiles++;
+  const hostiles = state.mobs.filter(mob => isHostile(mob) && overworld(mob.x, mob.z)), worldCap = worldHostileCap(state);
+  const around = (list: readonly { x: number; z: number }[], x: number, z: number, range: number) => list.reduce((n, other) => n + ((other.x - x) ** 2 + (other.z - z) ** 2 < range * range ? 1 : 0), 0);
+  for (const player of players) {
+    if (!overworld(player.x, player.z)) continue;
+    const cap = hostileCap(state, around(players, player.x, player.z, CROWD));
+    let near = around(hostiles, player.x, player.z, HORDE);
+    for (let attempt = 0; attempt < 3 && near < cap && hostiles.length < worldCap; attempt++) {
+      const angle = r() * Math.PI * 2, d = 24 + r() * 24, x = Math.floor(player.x + Math.cos(angle) * d), z = Math.floor(player.z + Math.sin(angle) * d);
+      if (!isLoaded(state, x, z) || !overworld(x, z)) continue;
+      const surface = surfaceY(get, x, z);
+      let y = r() < 0.5 ? surface + 1 : Math.min(surface, Math.floor(player.y) + Math.floor(r() * 25) - 12);
+      for (let scan = 0; scan < 12 && y > 1 && !(isOpaque(get(x, y - 1, z)) && !isOpaque(get(x, y, z))); scan++) y--;
+      const t = pickHostile(state), sx = x + 0.5, sz = z + 0.5;
+      if (!isOpaque(get(x, y - 1, z)) || !roomFor(state, t, sx, y, sz)) continue;
+      if (state.players.some(p => p.connected && (p.x - sx) ** 2 + (p.y - y) ** 2 + (p.z - sz) ** 2 < SPAWN_GAP ** 2)) continue;
+      if (state.day === 0 && (state.spawn[0] - sx) ** 2 + (state.spawn[2] - sz) ** 2 < SAFE_START ** 2) continue;
+      if (!dark(state, x, y, z, night) || inTemple(state, x, y, z)) continue;
+      if (!night && players.some(p => (p.x - sx) ** 2 + (p.z - sz) ** 2 < 96 * 96 && lineOfSight(state, p.x, p.y + 1.6, p.z, sx, y + 1, sz))) continue;
+      const mob = newMob(state, t, sx, y, sz);
+      state.mobs.push(mob);
+      hostiles.push(mob);
+      near++;
+    }
   }
 }
 
@@ -228,7 +243,7 @@ function think(state: State, mob: Mob) {
 function breed(state: State, a: Mob, b: Mob) {
   a.loveUntil = b.loveUntil = 0;
   a.breedAt = b.breedAt = state.clock + 300;
-  if (state.mobs.filter(isAnimal).length >= MAX_ANIMALS) return;
+  if (state.mobs.filter(isAnimal).length >= animalCap(state)) return;
   state.mobs.push(newMob(state, a.t, (a.x + b.x) / 2, Math.max(a.y, b.y), (a.z + b.z) / 2, true));
   addFx(state, 'levelup', a.x, a.y + 1, a.z);
 }

@@ -28,6 +28,8 @@ export type DamageCause = 'mob' | 'arrow' | 'fireball' | 'explosion' | 'cactus' 
 
 export type Player = {
   id: string; name: string; color: string; connected: boolean;
+  /** Index in `State.players` (the seat number on the wire). */
+  seat: number;
   /** Last accepted position and look. */
   x: number; y: number; z: number; yaw: number; pitch: number;
   sneaking: boolean; flying: boolean; slot: number; onGround: boolean; inWater: boolean; eyeInWater: boolean;
@@ -73,6 +75,11 @@ export type Player = {
   stats: PlayerStats;
   /** Bitmask of one-off milestones already celebrated (first tool of each tier...). */
   milestones: number;
+  /**
+   * The bag (inventory, cursor, grid, armor, open screen) as last projected: its JSON, a revision that grows when it
+   * changes, and the revision the client last confirmed in its input. The bag is sent only while those differ.
+   */
+  bagText: string; bagRev: number; bagAck: number;
 };
 
 export type Mob = {
@@ -118,6 +125,10 @@ export type Arrow = {
 };
 export type Furnace = { slots: (Slot | null)[]; burn: number; burnMax: number; cook: number };
 type FxEntry = { fx: Fx; at: number };
+/** One tick's entities as wire tuples with the fields the interest filter reads beside them. */
+export type Frame = {
+  tick: number; players: number[][]; mobs: number[][]; mobRange: number[]; items: number[][]; arrows: number[][]; fx: number[][]; fxRange: number[];
+};
 
 export type State = {
   /** Settings with the real seed (a random-world seed 0 is resolved at creation). */
@@ -133,8 +144,19 @@ export type State = {
   clock: number;
   /** Day time in ticks (0..DAY_TICKS, fractional) and the day counter. */
   time: number; day: number;
-  /** Bumped on every edit change (snapshot cache key). */
-  revision: number;
+  /**
+   * The edit journal reaches clients in two tiers (see sim/journal.ts): `revision` is the snapshot cache key of the
+   * consolidated list and changes only when the tail (`world.recent`) is folded in; `editRev` counts every change.
+   */
+  revision: number; editRev: number;
+  /** When the oldest change in the tail was made and when the tail was last folded (sim seconds). */
+  tailSince: number; foldedAt: number;
+  /** When the journal's packed size may next be measured (the byte budget behind `world.limit`). */
+  measureAt: number;
+  /** The seat the watching display follows, and when it moves on. */
+  focus: number; focusUntil: number;
+  /** Wire tuples of this tick, built once and filtered per screen (sim/views.ts). */
+  frame: Frame | null;
   players: Player[]; mobs: Mob[]; items: ItemEntity[]; arrows: Arrow[]; fx: FxEntry[];
   nextId: number; fxId: number;
   chests: Map<number, (Slot | null)[]>; furnaces: Map<number, Furnace>;
@@ -167,12 +189,14 @@ export type SavedPlayerState = {
 
 export type NewGame = { ctx: RoundContext; settings: Settings; source?: ChunkSource };
 
+/** Effects kept at once (each lives 1.5 s); screens receive only the ones near them. */
+export const MAX_FX = 256;
 export function nextId(state: State) { return ++state.nextId; }
 export const playerById = (state: State, id: string) => state.players.find(player => player.id === id);
 export function addFx(state: State, k: FxKind, x: number, y: number, z: number, a?: number) {
   const fx: Fx = a === undefined ? { id: ++state.fxId, k, x: q2(x), y: q2(y), z: q2(z) } : { id: ++state.fxId, k, x: q2(x), y: q2(y), z: q2(z), a };
   state.fx.push({ fx, at: state.clock });
-  if (state.fx.length > 64) state.fx.shift();
+  if (state.fx.length > MAX_FX) state.fx.shift();
 }
 /** Drop effects older than 1.5 s. */
 export function pruneFx(state: State) {

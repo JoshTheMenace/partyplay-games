@@ -6,13 +6,13 @@
 import { Vector3, type PerspectiveCamera, type Scene } from 'three';
 import type { SceneViewProps } from '../../../../../party-ui/src/index';
 import type { ResourceScope } from '../../../../../party-runtime/src/index';
-import { B, blockOf, cellId, cellState, faceTexture, isAir, isSolid, makeCell, pistonFacing, PISTON_STICKY, PORTAL_Z, wirePower } from '../../shared/blocks';
+import { B, blockOf, cellId, cellState, faceTexture, isAir, isSolid, isWater, makeCell, pistonFacing, PISTON_STICKY, PORTAL_Z, wirePower } from '../../shared/blocks';
 import type { CellReader } from '../../shared/chunk';
 import { DAY_TICKS, EYE_HEIGHT, REACH } from '../../shared/constants';
 import { cellIndex, FACES, inWorld, wrapAngle, type Vec3 } from '../../shared/coords';
 import { I } from '../../shared/items';
 import { eyeInWater, newBody, type Body } from '../../shared/physics';
-import { MOB_TYPES, PF, type Fx, type PrivateView, type Settings, type View } from '../../shared/protocol';
+import { MOB_TYPES, nearEvery, PF, tvEvery, type Fx, type PrivateView, type PubPlayer, type Scene as Feed, type Settings, type View } from '../../shared/protocol';
 import { raycastBlocks } from '../../shared/raycast';
 import { collisionBoxes, selectionBoxes } from '../../shared/shapes';
 import { surfaceHeight } from '../../shared/worldgen';
@@ -26,6 +26,7 @@ import { reducedMotion, Spectator, ViewEffects, type Subject, type ViewState } f
 import { Controls } from './controls';
 import { ScreenFx } from './effects';
 import { Entities, type EntityEmit } from './entities';
+import { feed, nearScene, readBag, readRoster, resetFeed, tvScene } from './feed';
 import { Hand, type HandPose } from './hand';
 import { hud } from './hud';
 import { Interaction, type Frame } from './interact';
@@ -33,6 +34,7 @@ import type { ModelLibrary } from './models';
 import { buildInput, NetSync } from './net';
 import { EditOverlay } from './overlay';
 import { Particles, TINTS } from './particles';
+import { SHADOW_REACH } from './shadows';
 import { LocalPlayer } from './player';
 import { configurePrediction, sendCommand, setServerView } from './predict';
 import type { ItemModels, SpriteSheet } from './sprites';
@@ -43,6 +45,8 @@ export type RuntimeDeps = {
   scene: Scene; camera: PerspectiveCamera; canvas: HTMLCanvasElement; engine: VoxelEngine;
   sheet: SpriteSheet; items: ItemModels; models: ModelLibrary; sfx: Sfx; music: HostMusic | null;
   scope: ResourceScope;
+  /** The light that shades entity models; it follows the sun and the moon so bodies are lit from the same side as the land. */
+  sun?: { position: Vector3 };
   /** The world seed the engine was built for (the view's real seed). */
   seed: number;
   /** Estimated world spawn (feet), the spectator's flyover centre before anyone plays. */
@@ -54,6 +58,7 @@ const INPUT_MS = 50, BODY_PUBLISH_MS = 250, EMITTER_SCAN = 0.5, STEP_DISTANCE = 
 /** Blocks that give off particles (and a few ambient sounds) near the camera. */
 const EMITTERS = new Set<number>([B.torch, B.furnace_lit, B.lantern, B.jack_o_lantern, B.redstone_torch, B.redstone_wire, B.fire, B.monster_spawner, B.lava, B.nether_portal,
   B.soul_torch, B.end_portal, B.dragon_egg]);
+const LEAVES = new Set<number>([B.oak_leaves, B.birch_leaves, B.spruce_leaves]);
 /** Emitters sampled evenly from the area instead of kept nearest-first (they come in seas and sheets). */
 const SAMPLED = new Set<number>([B.lava, B.nether_portal, B.end_portal]);
 /** Acid clouds drawn at once (x, y, z, radius, seconds left each), how long one lingers, and boss-fight shake reach. */
@@ -79,7 +84,7 @@ export class Runtime {
   private pv: PrivateView | null = null;
   private viewTime = 0;
   private viewAt = 0;
-  private sentRevision = -1;
+  private sentEdits = -1;
   private sentOverlay = -1;
   private lastFx = -1;
   private readonly recent = new Map<number, number>();
@@ -100,8 +105,11 @@ export class Runtime {
   private readonly light = (x: number, y: number, z: number) => this.d.engine.lightAt(x, y, z);
   private portalSound = 0;
   private screen: ScreenFx | null = null;
-  private editsView: View | null = null;
-  private readonly editValues = new Map<number, number>();
+  /** The newest scene (around this seat, or the display's feed) and its effects still to play this frame. */
+  private scene: Feed | null = null;
+  private pendingFx: Fx[] = [];
+  /** The seat the server asks the watching display to follow (-1: nobody). */
+  private focusSeat = -1;
   private readonly cracks: Crack[] = [];
   private readonly subjects: Subject[] = [];
   private renderDistance = 0;
@@ -132,7 +140,9 @@ export class Runtime {
     const world = d.engine.world;
     // The engine writes authoritative edits and the overlay into these cells synchronously in setEdits.
     this.getCell = (x, y, z) => world.getCell(x, y, z);
-    this.entities = new Entities(d.scene, d.models, d.items, (x, y, z, out) => d.engine.lightRgb(x, y, z, out), (x, z) => d.engine.world.isLoaded(x, z), this.controller ? props.playerId : null, d.engine.shared);
+    resetFeed();
+    this.entities = new Entities(d.scene, d.models, d.items, (x, y, z, out) => d.engine.lightRgb(x, y, z, out), (x, z) => d.engine.world.isLoaded(x, z), this.controller ? props.playerId : null, d.engine.shared,
+      (this.controller ? nearEvery(props.players.length) : tvEvery(props.players.length)) * 50, (x, y, z) => this.groundBelow(x, y, z));
     this.entities.onStep = (x, y, z) => this.footstep(x, y, z, 0.35, false);
     this.entities.onFuse = (x, y, z) => d.sfx.play('fuse', { at: [x, y + 1, z], volume: 0.9 });
     this.entities.onFireball = (x, y, z, dt) => {
@@ -175,23 +185,30 @@ export class Runtime {
     // The private view first: its ack prunes the overlay before the same snapshot's edits are applied.
     if (p.privateView && p.privateView !== this.pv) this.onPrivate(p.privateView);
     if (p.publicView && p.publicView !== this.view) this.onView(p.publicView, p.snapshotTime ?? p.serverNowMs());
+    // Edits first, so the effects of the same snapshot (piston slides, break chips) read the cells they changed.
     this.syncEdits();
+    for (const fx of this.pendingFx) this.playFx(fx);
+    this.pendingFx.length = 0;
     const serverNow = p.serverNowMs();
     this.d.music?.update(this.view?.time, p.connected);
-    if (this.view) this.d.engine.setTime((this.viewTime + Math.min(40, Math.max(0, (performance.now() - this.viewAt) / 50))) % DAY_TICKS);
+    if (this.view) this.d.engine.setTime((this.viewTime + Math.min(40, Math.max(0, (performance.now() - this.viewAt) / 50))) % DAY_TICKS, this.view.day);
+    // Never from below the shoulders: a body lit only from the side would lose its top.
+    this.d.sun?.position.copy(this.d.engine.lightDirection).setY(Math.max(0.35, this.d.engine.lightDirection.y));
     const distance = store.get().settings.renderDistance;
     if (distance !== this.renderDistance) { this.renderDistance = distance; this.d.engine.setRenderDistance(distance); }
     if (this.controller) this.updateLocal(dt, p);
     else this.updateSpectator(dt);
     if (this.loading !== hud.get().loading) hud.set({ loading: this.loading });
-    const eye = this.d.camera.position;
+    const eye = this.d.camera.position, own = this.player?.render;
     this.entities.viewer = [eye.x, eye.y, eye.z];
+    this.entities.ownShadow = own && !this.pv?.dead ? [own.x, own.y, own.z, 0.6] : null;
     this.entities.update(serverNow, dt);
     this.d.engine.setGlows(this.entities.glows, this.entities.glowCount);
     this.entities.labels(this.d.camera, this.d.canvas.clientHeight);
     this.updateCracks();
     this.updateEmitters(dt);
     this.updateClouds(dt);
+    this.ambient(dt);
     this.buffet();
     this.particles.update(dt, this.getCell);
     this.d.engine.update(this.d.camera, dt);
@@ -202,20 +219,28 @@ export class Runtime {
 
   // Snapshots -------------------------------------------------------------------------------------------------
   private onView(view: View, serverTime: number) {
-    const first = !this.view;
     this.view = view;
     this.viewTime = view.time;
     this.viewAt = performance.now();
-    this.entities.push(view, serverTime, performance.now());
-    if (first) this.lastFx = view.fx.reduce((max, fx) => Math.max(max, fx.id), -1);
-    else for (const fx of view.fx) if (fx.id > this.lastFx) { this.lastFx = fx.id; this.playFx(fx); }
+    readRoster(view);
+    // A playing seat draws the scene in its private view (the same snapshot); the display draws the public feed.
+    const scene = this.controller ? this.pv && nearScene(view, this.pv) : tvScene(view);
+    if (scene && scene !== this.scene) this.onScene(scene, serverTime);
     const self = this.self();
     if (self && self.color !== this.shirt) { this.shirt = self.color; this.hand?.setShirt(self.color); }
+  }
+  private onScene(scene: Feed, serverTime: number) {
+    const first = !this.scene;
+    if (this.view?.tv) this.focusSeat = this.view.tv.focus;
+    this.scene = scene;
+    this.entities.push(scene, serverTime, performance.now());
+    // Effect ids only grow: play each once, and none of the ones already in the air when this screen joined.
+    for (const fx of scene.fx) if (fx.id > this.lastFx) { this.lastFx = fx.id; if (!first) this.pendingFx.push(fx); }
   }
 
   /** True while a playing seat waits for the world around it: frozen, sending no position. */
   get loading() { return this.controller && !this.player; }
-  private self() { return this.controller ? this.view?.players.find(pl => pl.id === this.d.props().playerId) : undefined; }
+  private self(): PubPlayer | undefined { return this.controller ? this.scene?.players.find(pl => pl.id === this.d.props().playerId) : undefined; }
 
   /** Before the player appears: watch from its server position so the engine streams that area, then spawn there. */
   private waitForWorld() {
@@ -233,7 +258,8 @@ export class Runtime {
     const previous = this.pv;
     this.pv = pv;
     const events = this.net.receive(pv, this.player?.body ?? null);
-    if (this.overlay.prune(pv.ack) || events.first) this.sentRevision = -1;
+    if (this.overlay.prune(pv.ack) || events.first) this.sentEdits = -1;
+    readBag(pv);
     setServerView(pv);
     if (events.teleport) {
       this.player?.snap();
@@ -253,10 +279,10 @@ export class Runtime {
   /** Send authoritative edits plus the overlay to the engine only when either changed. */
   private syncEdits() {
     if (!this.view) return;
-    if (this.view.revision === this.sentRevision && this.overlay.version === this.sentOverlay) return;
-    this.sentRevision = this.view.revision;
+    if (this.view.er === this.sentEdits && this.overlay.version === this.sentOverlay) return;
+    this.sentEdits = this.view.er;
     this.sentOverlay = this.overlay.version;
-    this.d.engine.setEdits(this.view.edits, this.overlay.values);
+    this.d.engine.setEdits(this.view.edits, this.view.recent, this.overlay.values);
   }
 
   // Local player ----------------------------------------------------------------------------------------------
@@ -354,7 +380,7 @@ export class Runtime {
     this.sendInput(p, body);
   }
 
-  private selfFlags() { return this.view?.players.find(pl => pl.id === this.d.props().playerId)?.flags ?? 0; }
+  private selfFlags() { return this.self()?.flags ?? 0; }
 
   private sendInput(p: Props, body: Body | null) {
     const now = performance.now();
@@ -365,7 +391,7 @@ export class Runtime {
     p.setInput(buildInput({
       body, yaw: this.controls?.yaw ?? 0, pitch: this.controls?.pitch ?? 0, sprint: this.controls?.sprinting ?? false,
       using: !!i?.using, swinging: !!i?.swinging, dead: !!this.pv?.dead, slot: state.selected, mine: i?.mine ?? null,
-      tpAck: this.net.tpAck, queue: state.queue,
+      tpAck: this.net.tpAck, queue: state.queue, bag: feed.get().bag?.rev ?? 0,
     }));
   }
 
@@ -425,8 +451,19 @@ export class Runtime {
     }
     this.subjects.length = count;
     const seed = this.d.seed;
-    this.spectator.update(this.d.camera, this.subjects, this.getCell, (x, z) => this.groundY(seed, x, z), dt);
+    const focus = this.view?.who[this.focusSeat]?.[0] ?? null;
+    this.spectator.update(this.d.camera, this.subjects, this.getCell, (x, z) => this.groundY(seed, x, z), dt, focus);
     hud.set({ focus: this.spectator.focus });
+  }
+  /** The top of the nearest solid surface at or under a point (within a shadow's reach), or null. */
+  private groundBelow(x: number, y: number, z: number, reach = SHADOW_REACH): number | null {
+    const bx = Math.floor(x), bz = Math.floor(z);
+    for (let cy = Math.floor(y + 0.3), stop = cy - reach; cy >= stop; cy--) {
+      let top = -Infinity;
+      for (const box of collisionBoxes(this.getCell(bx, cy, bz))) if (cy + box[4] <= y + 0.35) top = Math.max(top, cy + box[4]);
+      if (top > -Infinity) return top;
+    }
+    return null;
   }
   private groundY(seed: number, x: number, z: number) {
     const world = this.d.engine.world, bx = Math.floor(x), bz = Math.floor(z);
@@ -445,7 +482,7 @@ export class Runtime {
     const mine = this.interaction?.mine;
     if (mine && this.interaction!.progress > 0) add(mine[0], mine[1], mine[2], crackStage(this.interaction!.progress));
     const self = this.d.props().playerId;
-    if (this.view) for (const pl of this.view.players) if (pl.mine && pl.id !== self) add(pl.mine[0], pl.mine[1], pl.mine[2], pl.mine[3]);
+    if (this.scene) for (const pl of this.scene.players) if (pl.mine && pl.id !== self) add(pl.mine[0], pl.mine[1], pl.mine[2], pl.mine[3]);
     this.cracks.length = count;
     this.d.engine.visuals.cracks(this.cracks);
   }
@@ -472,6 +509,32 @@ export class Runtime {
     if (portal >= 0 && (this.portalSound -= EMITTER_SCAN) <= 0) {
       this.portalSound = 4 + Math.random() * 6;
       this.d.sfx.synth('portal', { at: [sampled[portal - 3]! + 0.5, sampled[portal - 2]! + 0.5, sampled[portal - 1]! + 0.5], volume: 0.25 });
+    }
+  }
+
+  /**
+   * Life in the air near the camera, where the sky reaches: fireflies over the ground at night, pollen on the breeze by
+   * day and the odd leaf dropping from a canopy. A few a second in all, and none under reduced motion.
+   */
+  private ambient(dt: number) {
+    const { engine, camera, sheet } = this.d;
+    if (this.still || engine.inNether || engine.inEnd || hud.get().underwater) return;
+    const c = camera.position, night = engine.night;
+    for (let n = dt * 16; n > 0; n--) {
+      if (n < 1 && Math.random() > n) break;
+      const x = c.x + (Math.random() - 0.5) * 26, z = c.z + (Math.random() - 0.5) * 26, bx = Math.floor(x), bz = Math.floor(z);
+      const top = this.groundBelow(x, c.y + 6, z, 14);
+      if (top === null || engine.world.lightLevels(bx, Math.floor(top + 0.5), bz)[0] < 11) continue;
+      const leaves = (cell: number) => LEAVES.has(cellId(cell));
+      let y = Math.floor(top + 0.5) - 1;
+      const canopy = this.getCell(bx, y, bz), light = engine.lightAt(x, top + 1, z);
+      if (leaves(canopy)) {
+        // The ground found is a canopy's top: now and then a leaf drops from its underside.
+        while (leaves(this.getCell(bx, y, bz))) y--;
+        if (isAir(this.getCell(bx, y, bz)) && Math.random() < 0.35) this.particles.leaf(x, y + 0.9, z, sheet.tile(faceTexture(canopy, 2)), engine.lightAt(x, y + 0.5, z));
+      } else if (isWater(this.getCell(bx, Math.floor(top + 0.5), bz))) continue;
+      else if (night > 0.6) { if (Math.random() < 0.5) this.particles.firefly(x, top + 0.4 + Math.random() * 1.6, z); }
+      else if (night < 0.1 && Math.random() < 0.45) this.particles.pollen(x, top + 0.5 + Math.random() * 3, z, light);
     }
   }
 
@@ -533,16 +596,6 @@ export class Runtime {
     }
   }
 
-  /** New values of the latest snapshot's edits (built only when an effect needs them, once per snapshot). */
-  private editValue(x: number, y: number, z: number) {
-    if (this.view && this.editsView !== this.view) {
-      this.editsView = this.view;
-      this.editValues.clear();
-      for (const [index, value] of this.view.edits) this.editValues.set(index, value);
-    }
-    return this.editValues.get(cellIndex(x, y, z)) ?? this.getCell(x, y, z);
-  }
-
   /**
    * Piston effect: a = moved direction + 8 × moved blocks, at the base. Extending, the head and pushed blocks slide out
    * one cell; retracting, the head slides back in (and a sticky piston's block with it). The world already holds the
@@ -552,7 +605,7 @@ export class Runtime {
     const x = Math.floor(fx.x), y = Math.floor(fx.y), z = Math.floor(fx.z), a = fx.a ?? 0, dir = a & 7, moved = a >> 3, base = this.getCell(x, y, z), id = cellId(base);
     if (id !== B.piston && id !== B.sticky_piston || dir > 5) return;
     const [dx, dy, dz] = FACES[dir]!, facing = pistonFacing(cellState(base)), engine = this.d.engine;
-    const slide = (tx: number, ty: number, tz: number, cell = this.editValue(tx, ty, tz), veil = true) => { if (inWorld(tx, ty, tz)) engine.slide(tx, ty, tz, cell, dx, dy, dz, PISTON_SLIDE, veil); };
+    const slide = (tx: number, ty: number, tz: number, cell = this.getCell(tx, ty, tz), veil = true) => { if (inWorld(tx, ty, tz)) engine.slide(tx, ty, tz, cell, dx, dy, dz, PISTON_SLIDE, veil); };
     if (facing === dir) for (let k = 1; k <= moved + 1; k++) slide(x + dx * k, y + dy * k, z + dz * k);
     else {
       slide(x, y, z, makeCell(B.piston_head, facing | (id === B.sticky_piston ? PISTON_STICKY : 0)), false);

@@ -9,6 +9,7 @@ import { bodyCollides } from '../shared/physics';
 import { canSurvive, fenceUpdates, isCrop, isSapling, type CellWrite } from '../shared/placement';
 import { collisionTop } from '../shared/shapes';
 import { spawnItem } from './entities';
+import { ensureRoom } from './journal';
 import { onBlockChanged as fireChanged } from './fire';
 import { onBlockChanged as portalChanged } from './portals';
 import { onBlockChanged as redstoneChanged } from './redstone';
@@ -66,14 +67,15 @@ export function blockChanged(state: State, x: number, y: number, z: number, old:
 }
 
 /**
- * Write one cell with all bookkeeping (revision, lights, growth, containers, resting items, neighbouring fence
+ * Write one cell with all bookkeeping (the journal, lights, growth, containers, resting items, neighbouring fence
  * connections) and notify the feature hooks. Every simulation write goes through here. False when the edit limit is hit.
  */
 export function writeCell(state: State, x: number, y: number, z: number, value: number): boolean {
   const old = state.get(x, y, z);
   if (old === value) return true;
+  ensureRoom(state);
   if (!state.world.setCell(x, y, z, value)) return false;
-  state.revision++;
+  state.editRev++;
   const index = cellIndex(x, y, z);
   indexCell(state, index, x, z, value);
   const oldId = cellId(old), newId = cellId(value);
@@ -92,6 +94,7 @@ export function writeCell(state: State, x: number, y: number, z: number, value: 
 }
 /** Write several cells all-or-nothing (false when the edit limit would be exceeded). */
 export function writeCells(state: State, writes: readonly CellWrite[]): boolean {
+  ensureRoom(state, writes.length);
   if (!state.world.canEdit(writes)) return false;
   for (const [x, y, z, value] of writes) writeCell(state, x, y, z, value);
   return true;
@@ -178,9 +181,12 @@ export function standY(get: CellReader, x: number, z: number, top?: number): num
   return y + Math.max(collisionTop(get(x, y, z)), isWater(get(x, y, z)) ? 1 : 0);
 }
 
-const SPREAD: readonly [number, number][] = [[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [0, 2], [-2, 0]];
-/** A free standing spot near `around` (within 3 blocks), for spawning players spread out. Each column is
- *  searched downward from the feet height of `around`, so a spawn under a tree lands on the ground, not the canopy. */
+/** Columns around a point, nearest first (the first twelve in their historical order): 121 spots within 5 blocks, so a full room of 64 never spawns stacked. */
+const NEAREST: readonly [number, number][] = [[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [0, 2], [-2, 0]];
+const SPREAD: readonly [number, number][] = [...NEAREST, ...Array.from({ length: 121 }, (_, i): [number, number] => [i % 11 - 5, Math.floor(i / 11) - 5])
+  .filter(([x, z]) => !NEAREST.some(([nx, nz]) => nx === x && nz === z)).sort(([ax, az], [bx, bz]) => ax * ax + az * az - (bx * bx + bz * bz) || az - bz || ax - bx)];
+/** A free standing spot near `around` (the index-th nearest column that works), for spawning players spread out. Each
+ *  column is searched downward from the feet height of `around`, so a spawn under a tree lands on the ground, not the canopy. */
 export function standNear(state: State, around: Vec3, index = 0): Vec3 {
   for (let k = 0; k < SPREAD.length; k++) {
     const [dx, dz] = SPREAD[(index + k) % SPREAD.length]!, x = Math.floor(around[0]) + dx, z = Math.floor(around[2]) + dz;

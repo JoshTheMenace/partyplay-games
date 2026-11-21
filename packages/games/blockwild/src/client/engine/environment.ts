@@ -21,6 +21,12 @@ export type SkyState = {
   skyLight: Rgb;
   /** Rotation of the celestial sphere (radians). */
   angle: number;
+  /**
+   * Sky light split in two for the terrain shader: `fill` reaches every face the sky can see, `direct` is added to
+   * faces turned towards `light` (the sun by day, the moon by night; it fades to nothing while they trade places).
+   * A face square to the light gets about what `skyLight` alone gave before.
+   */
+  fill: Rgb; direct: Rgb; light: Rgb;
 };
 
 const linear = (hex: number): Rgb => [hex >> 16, hex >> 8 & 255, hex & 255].map(c => (c / 255) ** 2.2) as Rgb;
@@ -44,7 +50,15 @@ export function skyState(tick: number): SkyState {
   horizon = mix(horizon, DUSK_HORIZON, dusk * 0.45);
   const warm = 0.35 + 0.65 * day, dusky: Rgb = [DUSK_LIGHT[0] * warm, DUSK_LIGHT[1] * warm, DUSK_LIGHT[2] * warm];
   const skyLight = mix(mix(NIGHT_LIGHT, DAY_LIGHT, day), dusky, dusk * 0.5);
-  return { sun, day, dusk, stars: 1 - smoothstep(-0.25, 0.02, height), zenith, horizon, skyLight, angle };
+  // Low sun: long warm light on the faces it reaches and a cooler fill in their shade. The moon does the same, faintly.
+  const sunUp = smoothstep(-0.06, 0.1, height), moonUp = smoothstep(-0.06, 0.1, -height), low = 1 - smoothstep(0.05, 0.55, height);
+  const sunTint = mix([1, 0.97, 0.9], [1.25, 0.8, 0.5], low), strength = sunUp * (0.5 + 0.25 * low) + moonUp * 0.45;
+  const fillTint = mix([0.9, 0.96, 1.1], [0.8, 0.86, 1.15], low * sunUp), fillLevel = 0.74 - 0.12 * low * sunUp;
+  const tint = sunUp >= moonUp ? sunTint : [0.8, 0.9, 1.2] as Rgb;
+  const fill: Rgb = [skyLight[0] * fillTint[0] * fillLevel, skyLight[1] * fillTint[1] * fillLevel, skyLight[2] * fillTint[2] * fillLevel];
+  const direct: Rgb = [skyLight[0] * tint[0] * strength, skyLight[1] * tint[1] * strength, skyLight[2] * tint[2] * strength];
+  const light: Rgb = sunUp >= moonUp ? sun : [-sun[0], -sun[1], -sun[2]];
+  return { sun, day, dusk, stars: 1 - smoothstep(-0.25, 0.02, height), zenith, horizon, skyLight, angle, fill, direct, light };
 }
 
 /**

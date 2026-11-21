@@ -58,6 +58,8 @@ export type Input = {
   tpAck: number;
   /** Unacknowledged commands, ascending n, at most MAX_CMDS. */
   cmds: Cmd[];
+  /** The newest `PrivateView.bag.rev` this client holds (absent or 0 = none): the server resends the bag until it matches. */
+  bag?: number;
 };
 
 export type PubPlayer = {
@@ -107,13 +109,34 @@ export type Victory = { day: number; tick: number; by: string[] };
 /** One player's totals for the results journal (distance = blocks walked). */
 export type JournalEntry = { id: string; mined: number; placed: number; crafted: number; mobs: number; deaths: number; distance: number };
 
+/**
+ * Entities on the wire are number tuples (see the encode/decode pairs below); `Scene` is what a screen draws after decoding.
+ * p players, m mobs, i items, a arrows, f effects. A scene holds only what is near its viewer.
+ */
+export type WireScene = { p: number[][]; m: number[][]; i: number[][]; a: number[][]; f: number[][] };
+export type Scene = { players: PubPlayer[]; mobs: PubMob[]; items: PubItem[]; arrows: PubArrow[]; fx: Fx[] };
+/** A seat's identity; `View.who` lists every player of the round in seat order (the index is the seat number). */
+export type Who = [id: string, name: string, color: string];
+/** One player on the TV's roster: where they are and how they are doing, without the per-frame detail. */
+export type RosterEntry = { seat: number; x: number; y: number; z: number; health: number; held: number; flags: number; armor: number };
+
 export type View = {
   /** The real world seed (never 0) and a world identity that stays stable across saves and loads. */
   seed: number; worldId: string; mode: Mode; difficulty: Difficulty; time: number; day: number;
-  revision: number; edits: [number, number][];
-  players: PubPlayer[]; mobs: PubMob[]; items: PubItem[]; arrows: PubArrow[]; fx: Fx[];
-  /** Players currently in bed. */
-  sleeping: number;
+  /**
+   * The edit journal in two tiers. `edits` is the consolidated journal and `revision` its revision (the snapshot cache
+   * key, so it changes only when the server folds the tail in); `recent` holds what changed since as flat
+   * [cellIndex, value, …] pairs (value −1: back to generated terrain) and `er` counts every change.
+   */
+  revision: number; edits: [number, number][]; recent: number[]; er: number;
+  /** Seat identities (cached with `edits`): tuples everywhere else refer to players by seat. */
+  who: Who[];
+  /** Everyone's whereabouts as [seat, x, y, z, health, held, flags, armor points] (whole blocks), a few times a second. */
+  roster?: number[][];
+  /** The watching display's feed: what is around the player its camera follows (`focus` is a seat, −1 for nobody). */
+  tv?: WireScene & { focus: number };
+  /** Players currently in bed, and how many must be for the night to pass. */
+  sleeping: number; sleepNeed: number;
   stats: Stats;
   /** Per-player totals, published once the dragon falls or the host finishes the session. */
   journal?: JournalEntry[];
@@ -129,11 +152,9 @@ export type Screen = {
   kind: ScreenKind; x: number; y: number; z: number; slots: (Slot | null)[]; burn?: number; burnMax?: number; cook?: number; cookMax?: number;
   offers?: TradeOffer[]; villager?: number; profession?: number;
 };
-export type PrivateView = {
-  ack: number;
-  /** Server teleport, applied once per new n; `yaw` (portal arrivals) also turns the view. */
-  tp: { n: number; x: number; y: number; z: number; yaw?: number };
-  imp: { n: number; vx: number; vy: number; vz: number };
+/** Everything a player carries or has open. It is sent only while the client's `Input.bag` lags behind `rev`. */
+export type Bag = {
+  rev: number;
   /** 36 slots: 0..8 hotbar, 9..35 main. */
   inv: (Slot | null)[];
   cursor: Slot | null;
@@ -141,17 +162,26 @@ export type PrivateView = {
   grid: (Slot | null)[];
   out: Slot | null;
   screen: Screen | null;
+  /** Worn armor: head, chest, legs, feet. */
+  armor: (Slot | null)[];
+};
+export type PrivateView = {
+  ack: number;
+  /** Server teleport, applied once per new n; `yaw` (portal arrivals) also turns the view. */
+  tp: { n: number; x: number; y: number; z: number; yaw?: number };
+  imp: { n: number; vx: number; vy: number; vz: number };
+  /** The current bag revision, and the bag itself while this client has not confirmed it. */
+  bagRev: number; bag?: Bag;
+  /** What is around this player (the player's own tuple included), in the snapshots that carry a scene (`nearEvery`). */
+  near?: WireScene;
   health: number; food: number; saturation: number;
   /** 0..300 ticks. */
   air: number;
   dead: boolean; deathMessage?: string;
-  spawn: [number, number, number];
   toast?: { n: number; text: string };
   mode: Mode; keepInventory: boolean;
   /** Spawn/respawn protection ticks remaining (no damage, hostiles ignore you); omitted when 0. */
   protectedTicks?: number;
-  /** Worn armor: head, chest, legs, feet. */
-  armor: (Slot | null)[];
   /** Sum of worn armor points (0..20). */
   armorPoints: number;
   /** Burning ticks left; omitted at 0. */
@@ -224,6 +254,73 @@ export function mobBoxes(mob: Pick<PubMob, 't' | 'x' | 'y' | 'z' | 's' | 'yaw' |
 export const q2 = (n: number) => Math.round(n * 100) / 100 + 0;
 export const q3 = (n: number) => Math.round(n * 1000) / 1000 + 0;
 
+/**
+ * Wire tuples. Positions keep 2 decimals, angles 2 (about half a degree). Counters wrap at 256 (clients only test for change).
+ * Player: [seat, x, y, z, yaw, pitch, held, swing, hurt, health, flags] (+ 4 worn armor ids, + mine x, y, z, stage).
+ * Mob: [id, t, x, y, z, yaw, hurt, a, s, p, pt, ph], trailing zeros dropped. Item: [id, item, n, x, y, z].
+ * Arrow: [id, x, y, z, vx, vy, vz, k] (k dropped for arrows). Effect: [id, kind index, x, y, z, a?].
+ */
+const trim = (tuple: number[], min: number) => {
+  let length = tuple.length;
+  while (length > min && !tuple[length - 1]) length--;
+  tuple.length = length;
+  return tuple;
+};
+export function encodePlayer(seat: number, p: Omit<PubPlayer, 'id' | 'name' | 'color'>): number[] {
+  const tuple = [seat, q2(p.x), q2(p.y), q2(p.z), q2(p.yaw), q2(p.pitch), p.held, p.swing & 255, p.hurt & 255, q2(p.health), p.flags];
+  const worn = p.armor.some(Boolean);
+  if (worn || p.mine) tuple.push(...p.armor);
+  if (p.mine) tuple.push(...p.mine);
+  return tuple;
+}
+const NOBODY: Who = ['', 'Explorer', '#ffffff'];
+export function decodePlayer(t: readonly number[], who: readonly Who[]): PubPlayer {
+  const [id, name, color] = who[t[0]!] ?? NOBODY;
+  const player: PubPlayer = {
+    id: id || `seat-${t[0]}`, name, color, x: t[1]!, y: t[2]!, z: t[3]!, yaw: t[4]!, pitch: t[5]!, held: t[6]!, swing: t[7]!, hurt: t[8]!, health: t[9]!, flags: t[10]!,
+    armor: [t[11] ?? 0, t[12] ?? 0, t[13] ?? 0, t[14] ?? 0],
+  };
+  if (t.length >= 19) player.mine = [t[15]!, t[16]!, t[17]!, t[18]!];
+  return player;
+}
+export const encodeMob = (m: PubMob): number[] => trim([m.id, m.t, q2(m.x), q2(m.y), q2(m.z), q2(m.yaw), m.hurt & 255, m.a, m.s ?? 0, m.p ?? 0, q2(m.pt ?? 0), m.ph ?? 0], 8);
+export function decodeMob(t: readonly number[]): PubMob {
+  const mob: PubMob = { id: t[0]!, t: t[1]!, x: t[2]!, y: t[3]!, z: t[4]!, yaw: t[5]!, hurt: t[6]!, a: t[7]! };
+  if (t[8]) mob.s = t[8];
+  if (t[9] || t[1] === MOB.villager) mob.p = t[9] ?? 0;
+  if (t[10]) mob.pt = t[10];
+  if (t[11] || t[1] === MOB.ender_dragon) mob.ph = t[11] ?? 0;
+  return mob;
+}
+export const encodeItem = (i: PubItem): number[] => [i.id, i.item, i.n, q2(i.x), q2(i.y), q2(i.z)];
+export const decodeItem = (t: readonly number[]): PubItem => ({ id: t[0]!, item: t[1]!, n: t[2]!, x: t[3]!, y: t[4]!, z: t[5]! });
+export const encodeArrow = (a: PubArrow): number[] => trim([a.id, q2(a.x), q2(a.y), q2(a.z), q2(a.vx), q2(a.vy), q2(a.vz), a.k ?? 0], 7);
+export function decodeArrow(t: readonly number[]): PubArrow {
+  const arrow: PubArrow = { id: t[0]!, x: t[1]!, y: t[2]!, z: t[3]!, vx: t[4]!, vy: t[5]!, vz: t[6]! };
+  if (t[7]) arrow.k = t[7];
+  return arrow;
+}
+export const encodeFx = (fx: Fx): number[] => fx.a === undefined ? [fx.id, FX_KINDS.indexOf(fx.k), fx.x, fx.y, fx.z] : [fx.id, FX_KINDS.indexOf(fx.k), fx.x, fx.y, fx.z, fx.a];
+export function decodeFx(t: readonly number[]): Fx {
+  const fx: Fx = { id: t[0]!, k: FX_KINDS[t[1]!] ?? 'hit', x: t[2]!, y: t[3]!, z: t[4]! };
+  if (t.length > 5) fx.a = t[5]!;
+  return fx;
+}
+export const decodeScene = (wire: WireScene, who: readonly Who[]): Scene =>
+  ({ players: wire.p.map(t => decodePlayer(t, who)), mobs: wire.m.map(decodeMob), items: wire.i.map(decodeItem), arrows: wire.a.map(decodeArrow), fx: wire.f.map(decodeFx) });
+/**
+ * Snapshots between entity feeds. Rooms of up to 16 get a scene in every snapshot; bigger rooms get one in every
+ * second snapshot (seats take turns, so the work and the traffic stay even) and draw a little further behind.
+ */
+export const nearEvery = (players: number) => players <= 16 ? 1 : 2;
+/** Snapshots between the watching display's feeds, and between roster updates: live in small rooms, a few a second in big ones. */
+export const tvEvery = (players: number) => players <= 8 ? 1 : players <= 16 ? 2 : 4;
+export const rosterEvery = (players: number) => players <= 10 ? 4 : 10;
+export const encodeRoster = (e: RosterEntry): number[] => [e.seat, Math.round(e.x), Math.round(e.y), Math.round(e.z), Math.ceil(e.health), e.held, e.flags, e.armor];
+/** Seat identities as objects (id, name, colour). */
+export const seatsOf = (who: readonly Who[]) => who.map(([id, name, color]) => ({ id, name, color }));
+export const decodeRoster = (t: readonly number[]): RosterEntry => ({ seat: t[0]!, x: t[1]!, y: t[2]!, z: t[3]!, health: t[4]!, held: t[5]!, flags: t[6]!, armor: t[7]! });
+
 const MODES: readonly Mode[] = ['survival', 'creative'], DIFFICULTIES: readonly Difficulty[] = ['peaceful', 'easy', 'normal'];
 const pick = <T>(value: unknown, options: readonly T[], fallback: T): T => options.includes(value as T) ? value as T : fallback;
 /** Deterministic defaults: survival, seed 0 (random world), normal, keepInventory. */
@@ -233,7 +330,7 @@ export function validateSettings(raw: unknown): Settings {
   return { mode: pick(r.mode, MODES, 'survival'), seed, difficulty: pick(r.difficulty, DIFFICULTIES, 'normal'), keepInventory: typeof r.keepInventory === 'boolean' ? r.keepInventory : true };
 }
 
-export const neutralInput = (): Input => ({ p: [0, 0, 0], v: [0, 0, 0], yaw: 0, pitch: 0, f: IF.NO_POS, slot: 0, mine: null, tpAck: 0, cmds: [] });
+export const neutralInput = (): Input => ({ p: [0, 0, 0], v: [0, 0, 0], yaw: 0, pitch: 0, f: IF.NO_POS, slot: 0, mine: null, tpAck: 0, cmds: [], bag: 0 });
 export const parseAction = (): Action => ({ type: 'noop' });
 
 const num = (value: unknown, min: number, max: number, fallback = 0) => typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
@@ -304,6 +401,6 @@ export function parseInput(raw: unknown): Input {
   return {
     p: p ?? [0, 0, 0], v: vec(r.v, VEL) ?? [0, 0, 0], yaw: wrapAngle(num(r.yaw, -1e6, 1e6)), pitch: num(r.pitch, -Math.PI / 2, Math.PI / 2), f,
     slot: int(r.slot, 0, HOTBAR_SIZE - 1) ?? 0, mine: mine && mine.every(Number.isInteger) ? mine : null, tpAck: int(r.tpAck, 0, ID_MAX) ?? 0,
-    cmds: cmds.slice(0, MAX_CMDS),
+    cmds: cmds.slice(0, MAX_CMDS), bag: int(r.bag, 0, ID_MAX) ?? 0,
   };
 }

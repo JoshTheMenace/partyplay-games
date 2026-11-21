@@ -27,8 +27,9 @@ export class Interpolator<T> {
     this.alpha = alpha;
     return a;
   };
-  constructor(delayMs = 100) {
-    this.buffer = new SnapshotBuffer<T>(delayMs, 32, { adaptive: { minMs: 75, maxMs: 200 }, monotonic: true, resetGapMs: 2000 });
+  /** `delayMs` behind the newest snapshot, adapting to jitter between `minMs` and `maxMs` (a slower feed needs more). */
+  constructor(delayMs = 100, minMs = 75, maxMs = 200) {
+    this.buffer = new SnapshotBuffer<T>(delayMs, 32, { adaptive: { minMs, maxMs }, monotonic: true, resetGapMs: 2000 });
   }
   push(time: number, value: T, arrivalMs: number) { this.buffer.push(time, value, arrivalMs); }
   /** Returns false when nothing has arrived yet. */

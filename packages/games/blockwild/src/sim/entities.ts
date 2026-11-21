@@ -5,7 +5,8 @@ import { maxStack, type Slot } from '../shared/items';
 import { moveBody } from './motion';
 import { addFx, nextId, type ItemEntity, type State } from './state';
 
-export const MAX_ITEMS = 128;
+/** Dropped stacks a world keeps (the oldest go first); a full room mining and dying needs more than a party of ten did. */
+export const MAX_ITEMS = 256;
 const DESPAWN_SECONDS = 600, MAGNET = 1.5, PICKUP = 0.9, ITEM_SIZE = 0.25;
 
 export type SpawnItemOptions = { vx?: number; vy?: number; vz?: number; scatter?: boolean; delay?: number; owner?: string };

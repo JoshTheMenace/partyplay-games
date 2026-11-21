@@ -4,7 +4,7 @@ import test from 'node:test';
 import { PerspectiveCamera, Scene, type Object3D } from 'three';
 import { B, DAYLIGHT_INVERTED, FRAME_EYE, makeCell } from '../src/shared/blocks';
 import { I } from '../src/shared/items';
-import { DRAGON_HEAD, DRAGON_PHASE, MOB, mobBoxes, MS, PK, type PubMob, type View } from '../src/shared/protocol';
+import { DRAGON_HEAD, DRAGON_PHASE, MOB, mobBoxes, MS, PK, type PubArrow, type PubMob, type Scene as Feed } from '../src/shared/protocol';
 import { heldAsBlock, itemSprite, texturePixels } from '../src/client/art/atlas';
 import { mobRange, mobSynth } from '../src/client/audio/sounds';
 import { ViewEffects, type ViewState } from '../src/client/game/camera';
@@ -13,17 +13,14 @@ import { ModelLibrary } from '../src/client/game/models';
 import { ItemModels, SpriteSheet } from '../src/client/game/sprites';
 import { blockUse, dragonBoxes, pickTarget, useWrites, type MobBox } from '../src/client/game/targeting';
 
-const view = (mobs: PubMob[], arrows: View['arrows'] = []): View => ({
-  seed: 1, mode: 'survival', time: 0, day: 1, players: [], mobs, items: [], arrows, edits: [], revision: 0, fx: [],
-  stats: { mined: 0, placed: 0, crafted: 0, mobs: 0, deaths: 0, days: 0, dragons: 0 },
-} as unknown as View);
+const view = (mobs: PubMob[], arrows: PubArrow[] = []): Feed => ({ players: [], mobs, items: [], arrows, fx: [] });
 const mob = (id: number, t: number, patch: Partial<PubMob> = {}): PubMob => ({ id, t, x: 3840, y: 80, z: 3840, yaw: 0, hurt: 0, a: 0, ...patch });
 
 /**
  * Entities fed snapshots 50 ms apart, sampled `frames` times while the render clock crawls through them (animation runs at
  * 60 fps); returns them with what they emitted.
  */
-function run(views: View[], frames = 30, viewer: readonly [number, number, number] = [3840, 80, 3840]) {
+function run(views: Feed[], frames = 30, viewer: readonly [number, number, number] = [3840, 80, 3840]) {
   const scene = new Scene(), models = new ModelLibrary(), items = new ItemModels(new SpriteSheet({ tile: texturePixels, item: itemSprite, cube: heldAsBlock }));
   const entities = new Entities(scene, models, items, (_x, _y, _z, out) => { out[0] = out[1] = out[2] = 0.6; return out; }, () => true, null);
   const emitted = new Set<EntityEmit>(), cues: DragonCue[] = [];

@@ -6,22 +6,19 @@ import { B, BUTTON_PRESSED, DOOR_UPPER, LEVER_ON, makeCell, PISTON_EXTENDED, rep
 import type { CellReader } from '../src/shared/chunk';
 import { I } from '../src/shared/items';
 import { newBody } from '../src/shared/physics';
-import type { PrivateView } from '../src/shared/protocol';
 import { SOUND_FILES, mobPitch, mobSynth, mobVoice } from '../src/client/audio/sounds';
 import { ViewEffects, type ViewState } from '../src/client/game/camera';
 import { ScreenFx } from '../src/client/game/effects';
 import { ARMOR_BOXES } from '../src/client/art/atlas';
 import { attach, detach, ModelLibrary, PROFESSIONS, villagerModel, wearArmor } from '../src/client/game/models';
-import { replay } from '../src/client/game/predict';
+import { replay, type Carried } from '../src/client/game/predict';
 import { blockUse, breakWrites, useWrites } from '../src/client/game/targeting';
 
 /** Stone below y = 64, air above, plus overrides keyed "x,y,z". */
 const world = (overrides: Record<string, number> = {}): CellReader => (x, y, z) => overrides[`${x},${y},${z}`] ?? (y < 64 ? B.stone : B.air);
-const pv = (patch: Partial<PrivateView> = {}): PrivateView => ({
-  ack: 0, tp: { n: 0, x: 0, y: 0, z: 0 }, imp: { n: 0, vx: 0, vy: 0, vz: 0 }, inv: Array(36).fill(null), cursor: null, grid: Array(4).fill(null), out: null,
-  screen: null, health: 20, food: 20, saturation: 5, air: 300, dead: false, spawn: [0, 64, 0], mode: 'survival', keepInventory: true,
-  armor: [null, null, null, null], armorPoints: 0, dimension: 'overworld', ...patch,
-});
+/** What the server says a player carries (the bag plus the mode), for prediction. */
+const carried = (patch: Partial<Carried> = {}): Carried =>
+  ({ inv: Array(36).fill(null), cursor: null, grid: Array(4).fill(null), out: null, screen: null, armor: [null, null, null, null], mode: 'survival', ...patch });
 
 test('right-click classes for the new blocks and items follow the shared rules', () => {
   assert.equal(blockUse(B.lever, B.air, 0, false), 'lever');
@@ -64,7 +61,7 @@ test('predicted breaks pop unsupported redstone parts, take linked halves and re
 });
 
 test('armor clicks and right-click equipping are predicted like the server does them', () => {
-  const view = pv({ inv: [{ id: I.iron_helmet, n: 1 }, { id: I.diamond_boots, n: 1 }, ...Array(34).fill(null)], armor: [null, null, null, { id: I.leather_boots, n: 1 }] });
+  const view = carried({ inv: [{ id: I.iron_helmet, n: 1 }, { id: I.diamond_boots, n: 1 }, ...Array(34).fill(null)], armor: [null, null, null, { id: I.leather_boots, n: 1 }] });
   const next = replay(view, [{ n: 1, t: 'click', w: 'inv', i: 0, b: 2 }, { n: 2, t: 'useItem', slot: 1 }], false);
   assert.deepEqual(next.armor.map(slot => slot?.id ?? 0), [I.iron_helmet, 0, 0, I.diamond_boots]);
   assert.deepEqual(next.inv.slice(0, 2), [null, { id: I.leather_boots, n: 1 }], 'the old boots come back to the hand slot');
