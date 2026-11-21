@@ -2,6 +2,8 @@
 export const CONTRACT_VERSION = '1.0' as const;
 export const MAX_MESSAGE_BYTES = 32 * 1024;
 export const MAX_SAVE_BYTES = 256 * 1024;
+/** Seats in one room, and the highest `players.max` a manifest may declare. Regularly exercised at 32 concurrent players. */
+export const MAX_ROOM_PLAYERS = 64;
 export type SnapshotCachePolicy = { revisionField: string; fields: readonly string[]; keyedPairsFields?: readonly string[] };
 export type PlayerId = string;
 export type GameManifest = {
