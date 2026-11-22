@@ -52,7 +52,7 @@ test('crew extinguish fires, which hurt them; untended fires spread and wreck sy
 });
 
 test('breaches and a dead oxygen system drain air; crew suffocate; breaches get patched', () => {
-  const me = ship('me', 'wayfarer'), w = battle([me, foe()]);
+  const me = ship('me', 'wayfarer'), w = battle([me, foe()], {}, true, true);
   room(me, 'cloak').breach = true;
   run(w, 5000);
   assert.ok(room(me, 'cloak').oxygen < 85 && room(me, 'weapons').oxygen === 100);

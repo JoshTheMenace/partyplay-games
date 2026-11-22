@@ -5,46 +5,63 @@ import { SYSTEMS, weaponDef } from '../src/defs/catalog';
 import { PLAYER_HULLS, hullDef } from '../src/defs/hulls';
 import { rules } from '../src/server';
 import type { State } from '../src/run/state';
+import { publicView, wingView } from '../src/run/view';
+import { decode, seat } from '../src/wire';
 
 export type Move = Action extends infer A ? A extends Action ? Omit<A, 'turn'> : never : never;
 const NAMES = ['Mira', 'Oskar', 'Zed', 'Ana'], COLORS = ['#ff5748', '#28c6e7', '#78d955', '#b58aff'];
 /** Seconds a table spends on each non-combat decision screen (map vote, event, event result, loot, store). */
 export const SCREEN_S = 25;
-export const roster = (n: number, prefix = 'p') => Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i}`, name: NAMES[i], color: COLORS[i] }));
+export const roster = (n: number, prefix = 'p') => Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i}`, name: NAMES[i] ?? `Captain ${i + 1}`, color: COLORS[i % COLORS.length] }));
 const frac = (s: ShipView) => s.hull / s.maxHull;
 const sys = (s: ShipView, id: RoomState['system']) => s.rooms.find(r => r.system === id && r.tier);
 
 export class Run {
-  state: State; now = 1000; view!: PublicView; paused = new Set<string>(); beats = new Set<string>(); volley = false; done = new Set<string>(); maxBytes = 0; rejected: string[] = [];
+  state: State; now = 1000; view!: PublicView; paused = new Set<string>(); beats = new Set<string>(); volleys = new Map<number, boolean>(); done = new Set<string>(); maxBytes = 0; rejected: string[] = [];
+  /** Per-wing phone views of a fleet of several wings, rebuilt after every step. */ private wingViews = new Map<number, PublicView>();
+  /** Largest private snapshot and largest uncached part of a public one (bytes of JSON); every battle tick's cost (ms). */ maxOwn = 0; maxLive = 0; maxSave = 0; ticks: number[] = [];
   /** Combat ms of every finished battle (bosses: Flagship battles only), and the number of non-combat decision screens seen. */
   fights: number[] = []; bosses: number[] = []; screens = 0; private seen = '';
+  /** One captain in `orders` gives battle orders (0: nobody); the rest only vote, loot, shop and refit, like a distracted room. */ orders = 1;
   constructor(players: number, settings: Settings, seed: number, public hulls = PLAYER_HULLS.map(h => h.id)) {
     this.state = rules.create({ roomId: 'r', roundId: 'r1', players: roster(players), seed, nowMs: this.now }, rules.validateSettings(settings));
     this.refresh();
   }
   refresh(check = false) {
-    this.view = rules.publicView(this.state, { nowMs: this.now, phase: 'playing' });
-    if (check) { assertSerializable(this.view); this.maxBytes = Math.max(this.maxBytes, JSON.stringify(this.view).length); for (const c of this.view.captains) if (c.playerId) assertSerializable(rules.playerView(this.state, c.playerId, { nowMs: this.now, phase: 'playing' })); }
+    this.view = publicView(this.state);
+    if (check) {
+      const at = { nowMs: this.now, phase: 'playing' as const }, wire = rules.publicView(this.state, at); assertSerializable(wire); this.maxBytes = Math.max(this.maxBytes, JSON.stringify(wire).length);
+      this.maxLive = Math.max(this.maxLive, JSON.stringify({ ...wire, who: 0, map: 0, scene: 0, craft: 0 }).length);
+      this.maxSave = Math.max(this.maxSave, JSON.stringify(rules.exportSave!(this.state)).length);
+      for (const c of this.view.captains) if (c.playerId && (c.id === 'c0' || c.wing !== this.view.captains[0].wing)) { const own = rules.playerView(this.state, c.playerId, at); assertSerializable(own); this.maxOwn = Math.max(this.maxOwn, JSON.stringify(own).length); seat(decode(wire), own); }
+    }
     const v = this.view, key = `${v.turn}:${v.event?.result !== null && v.event ? 'r' : ''}`;
     if (key !== this.seen && ['map', 'event', 'loot', 'store'].includes(v.phase)) this.screens++;
     this.seen = key;
     return v;
   }
-  act(playerId: string, move: Move) { rules.applyAction(this.state, playerId, rules.parseAction({ ...move, turn: this.view.turn }), this.now); this.done.add(move.type); this.refresh(); }
+  act(playerId: string, move: Move) { rules.applyAction(this.state, playerId, rules.parseAction({ ...move, turn: this.view.turn }), this.now); this.done.add(move.type); this.wingViews.clear(); this.refresh(); }
+  /** What a captain's phone shows: everything for a single wing, else the fleet plus that captain's own wing's engagement. */
+  sight(playerId: string): PublicView {
+    if (!this.view.fleet) return this.view;
+    const k = this.view.captains.find(c => c.playerId === playerId)!.wing; let v = this.wingViews.get(k);
+    if (!v) { const d = wingView(this.state, k); this.wingViews.set(k, v = { ...this.view, captains: this.state.captains.map((c, i) => ({ ...this.view.captains[i], cargo: this.state.combat ? [] : c.cargo })), ships: d.ships, crew: d.crew, combat: this.view.combat && { ...this.view.combat, projectiles: d.projectiles, events: d.events } }); }
+    return v;
+  }
   /** For moves whose validity depends on the sim (e.g. firing): record the reason instead of failing. */
   try(playerId: string, move: Move) { try { this.act(playerId, move); return true; } catch (error) { this.rejected.push((error as Error).message); return false; } }
   step(dt = .1) {
     const battle = this.state.combat;
-    this.now += dt * 1000; rules.tick(this.state, new Map(), dt, this.now);
+    const t0 = performance.now(); this.now += dt * 1000; rules.tick(this.state, new Map(), dt, this.now); if (battle) this.ticks.push(performance.now() - t0); this.wingViews.clear();
     if (battle && this.state.combat !== battle) { this.fights.push(battle.t); if (battle.objective === 'boss') this.bosses.push(battle.t); }
   }
-  me(playerId: string) { const c = this.view.captains.find(x => x.playerId === playerId)!; return { c, ship: this.view.ships.find(s => s.id === c.shipId) ?? null }; }
+  me(playerId: string) { const v = this.sight(playerId), c = v.captains.find(x => x.playerId === playerId)!; return { c, ship: v.ships.find(s => s.id === c.shipId) ?? null }; }
   /** Estimated table time: combat plus SCREEN_S per decision screen. */
   get minutes() { return (this.fights.reduce((a, b) => a + b, 0) / 1000 + this.screens * SCREEN_S) / 60; }
 
   /** One decision pass for one scripted captain. */
   play(playerId: string) {
-    const v = this.view, { c, ship } = this.me(playerId), seat = v.captains.indexOf(c);
+    const v = this.sight(playerId), { c, ship } = this.me(playerId), seat = v.captains.indexOf(c);
     if (!c.connected) return;
     switch (v.phase) {
       case 'hangar': return !c.shipId ? this.act(playerId, { type: 'hangar', hullId: this.hulls[seat % this.hulls.length], name: '', paint: c.color }) : c.ready ? undefined : this.act(playerId, { type: 'ready', ready: true });
@@ -58,15 +75,15 @@ export class Run {
         // Blue options (a fleet capability, not a bribe) two times in three.
         const open = ev.choices.filter(ch => ch.available), blue = open.filter(ch => ch.badge && !ch.badge.endsWith('scrap each')), pool = blue.length && (v.turn + seat) % 3 ? blue : open;
         return c.vote ? undefined : this.act(playerId, { type: 'choose', choiceId: pool[v.turn % pool.length].id }); }
-      case 'combat': return this.fight(playerId, ship!);
-      case 'loot': { const loot = v.loot!, free = loot.items.find(i => !loot.claims[i.id] && (i.kind === 'weapon' || !ship!.augments.includes(i.defId)));
+      case 'combat': return this.orders && seat % this.orders === 0 ? this.fight(playerId, ship!) : undefined;
+      case 'loot': { const loot = v.loot!, free = loot.items.find(i => !loot.claims[i.id] && (i.wing ?? 0) === c.wing && (i.kind === 'weapon' || !ship!.augments.includes(i.defId)));
         if (free && ship!.augments.length < 4 && this.try(playerId, { type: 'claim', itemId: free.id })) return;
         this.refit(playerId); return c.ready ? undefined : this.act(playerId, { type: 'ready', ready: true }); }
       case 'store': { const store = v.store!;
         if (ship!.hull < ship!.maxHull * .8 && c.scrap >= store.repairPrice) return this.act(playerId, { type: 'repair', amount: 40 });
         if (ship!.ammo < 4 && ship!.weapons.some(w => weaponDef(w.defId).ammo) && c.scrap >= store.ammoPrice + 20) return this.act(playerId, { type: 'ammo' });
         if (this.refit(playerId)) return;
-        const deal = store.offers.find(o => !o.soldTo && o.price <= c.scrap && (o.kind === 'augment' ? !ship!.augments.includes(o.defId) && ship!.augments.length < 4 : o.kind === 'weapon' && weaponDef(o.defId).tier >= 2 && weaponDef(o.defId).kind !== 'support'));
+        const deal = store.offers.find(o => !o.soldTo && o.wing === c.wing && o.price <= c.scrap && (o.kind === 'augment' ? !ship!.augments.includes(o.defId) && ship!.augments.length < 4 : o.kind === 'weapon' && weaponDef(o.defId).tier >= 2 && weaponDef(o.defId).kind !== 'support'));
         if (deal && this.try(playerId, { type: 'buy', offerId: deal.id })) return;
         return c.ready ? undefined : this.act(playerId, { type: 'ready', ready: true }); }
     }
@@ -94,7 +111,7 @@ export class Run {
    * Crew rush boarders, fires, breaches and damage; soldiers board through a teleporter; captains pause once, escape when losing.
    */
   fight(playerId: string, ship: ShipView) {
-    const v = this.view, combat = v.combat!, { c } = this.me(playerId);
+    const v = this.sight(playerId), combat = v.combat!, { c } = this.me(playerId);
     if (combat.outcome || ship.status !== 'active') return;
     if (combat.paused) { if (combat.pausedBy === c.name) this.act(playerId, { type: 'pause', paused: false }); return; }
     if (combat.t > 8000 && !this.paused.has(combat.id) && v.captains.indexOf(c) === 0) { this.paused.add(combat.id); return this.act(playerId, { type: 'pause', paused: true }); }
@@ -115,7 +132,7 @@ export class Run {
     const auto = manual.find(w => w.auto); if (auto) return this.act(playerId, { type: 'autofire', weapon: auto.uid, auto: false });
     // Fire with the fleet, or alone when this ship's own charged bolts already outnumber the target's layers.
     const mine = manual.filter(w => w.powered && w.charge >= .999);
-    if (mine.length && (this.volley || mine.length === manual.filter(w => w.powered).length && bolts(mine) > focus.shields + focus.tempShield)) return void this.try(playerId, { type: 'fire' });
+    if (mine.length && (this.volleys.get(c.wing) || mine.length === manual.filter(w => w.powered).length && bolts(mine) > focus.shields + focus.tempShield)) return void this.try(playerId, { type: 'fire' });
     const losing = frac(ship) < .3 || friends.reduce((n, s) => n + frac(s), 0) / friends.length < .4;
     if (combat.ftl >= 1 && combat.objective !== 'boss' && losing && !combat.jumpVotes.includes(c.id)) this.try(playerId, { type: 'jump', vote: true });
   }
@@ -124,7 +141,7 @@ export class Run {
    * board the focus's least-defended shields/weapons room while its shields are up → stations. Returns true if it acted.
    */
   crew(playerId: string, ship: ShipView, focus: ShipView) {
-    const v = this.view, combat = v.combat!, { c } = this.me(playerId), beat = `${combat.id}:${c.id}:${Math.floor(combat.t / 1500)}`;
+    const v = this.sight(playerId), combat = v.combat!, { c } = this.me(playerId), beat = `${combat.id}:${c.id}:${Math.floor(combat.t / 1500)}`;
     if (this.beats.has(beat)) return false;
     this.beats.add(beat);
     const mine = v.crew.filter(k => k.ownerId === c.id), home = mine.filter(k => k.shipId === ship.id && !k.path.length), away = mine.filter(k => k.shipId !== ship.id);
@@ -150,8 +167,11 @@ export class Run {
   }
   /** One 100 ms beat: every captain decides, then the room ticks. The fleet fires together once every held weapon in it is charged. */
   turn(check = false) {
-    const held = this.view.combat ? this.view.ships.filter(s => s.faction === 'ally' && s.status === 'active').flatMap(s => s.weapons.filter(w => !w.auto && w.powered && w.target)) : [];
-    this.volley = held.length > 0 && held.every(w => w.charge >= .999);
+    this.volleys.clear();
+    if (this.view.combat) for (const c of this.view.captains) if (c.playerId && !this.volleys.has(c.wing)) {
+      const held = this.sight(c.playerId).ships.filter(s => s.faction === 'ally' && s.wing === c.wing && s.status === 'active').flatMap(s => s.weapons.filter(w => !w.auto && w.powered && w.target));
+      this.volleys.set(c.wing, held.length > 0 && held.every(w => w.charge >= .999));
+    }
     for (const c of this.view.captains) if (c.playerId) this.play(c.playerId);
     this.step();
     this.refresh(check);
@@ -166,8 +186,8 @@ export class Run {
 export type Row = { players: number; settings: Settings; seeds: number; wins: number; median: number; fightMedian: number; fightP90: number; longestFight: number; slowFights: number };
 const at = (list: number[], q: number) => [...list].sort((a, b) => a - b)[Math.floor(list.length * q)] ?? 0;
 /** Play `seeds` runs and summarize: wins, median table minutes, and battle combat seconds (median, 90th percentile, longest, count over 4 minutes). */
-export function campaign(players: number, settings: Settings, seeds: number, hulls?: string[]): Row {
-  const runs = Array.from({ length: seeds }, (_, i) => { const run = new Run(players, settings, (i + 1) * 7919, hulls); run.finish(400000, 400); return run; }), fights = runs.flatMap(r => r.fights).map(t => t / 1000);
+export function campaign(players: number, settings: Settings, seeds: number, hulls?: string[], orders = 1): Row {
+  const runs = Array.from({ length: seeds }, (_, i) => { const run = new Run(players, settings, (i + 1) * 7919, hulls); run.orders = orders; run.finish(400000, 400); return run; }), fights = runs.flatMap(r => r.fights).map(t => t / 1000);
   return { players, settings, seeds, wins: runs.filter(r => r.state.result === 'victory').length, median: at(runs.map(r => r.minutes), .5),
     fightMedian: at(fights, .5), fightP90: at(fights, .9), longestFight: Math.max(...fights), slowFights: fights.filter(t => t > 240).length };
 }

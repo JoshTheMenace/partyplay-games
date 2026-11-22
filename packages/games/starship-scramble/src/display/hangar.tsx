@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
 import { Smartphone } from 'lucide-react';
-import type { CaptainView, PublicView } from '../contracts';
+import { wingCount, type CaptainView, type PublicView } from '../contracts';
 import { hullDef } from '../defs/hulls';
+import { Countdown } from '../../../../party-ui/src/index';
 import { Readiness, ShipCanvas, backdrop, itemInfo, previewCrew, previewShip, shipOf, tint } from './common';
+import { FleetHangar } from './wings';
 
 function Bay({ view, captain }: { view: PublicView; captain: CaptainView }) {
   const live = shipOf(view, captain), hullId = live?.hullId ?? captain.hullId, paint = live?.paint ?? captain.color;
@@ -27,15 +29,16 @@ function Bay({ view, captain }: { view: PublicView; captain: CaptainView }) {
   </article>;
 }
 
-export function Hangar({ view }: { view: PublicView }) {
+const LENGTH = { short: 'Short run', standard: 'Standard run', long: 'Long run' } as const;
+export function Hangar({ view, serverNowMs }: { view: PublicView; serverNowMs(): number }) {
   const n = view.captains.length;
   return <section className="ss-screen ss-hangar ss-bg" style={backdrop('hangar')}>
     <header className="ss-screen-head">
-      <div><p className="kp-eyebrow">Fleet hangar · {view.settings.difficulty === 'cadet' ? 'Cadet' : 'Captain'} difficulty · {view.settings.length === 'short' ? 'Short run' : 'Standard run'}</p>
+      <div><p className="kp-eyebrow">Fleet hangar · {view.settings.difficulty === 'cadet' ? 'Cadet' : 'Captain'} difficulty · {LENGTH[view.settings.length]}{view.fleet ? ` · ${n} captains in ${wingCount(n)} wings` : ''}</p>
         <h1 className="kp-title">Choose your ships</h1></div>
-      <p className="ss-head-note">Pick a hull, name it and paint it.<br/>Launch when every captain is ready.</p>
+      <p className="ss-head-note">Pick a hull, name it and paint it.<br/>{view.fleet ? 'Wings of up to four fight side by side. Launch 30 seconds after half the fleet is ready.' : 'Launch when every captain is ready.'}</p>
     </header>
-    <div className={`ss-bays ss-bays-${Math.min(n, 4)}`}>{view.captains.map(c => <Bay key={c.id} view={view} captain={c}/>)}</div>
-    <Readiness captains={view.captains} prompt="Waiting for captains…"/>
+    {view.fleet ? <FleetHangar view={view}/> : <div className={`ss-bays ss-bays-${Math.min(n, 4)}`}>{view.captains.map(c => <Bay key={c.id} view={view} captain={c}/>)}</div>}
+    <Readiness captains={view.captains} prompt={view.voteDeadline ? <>Launching in <Countdown deadline={view.voteDeadline} serverNowMs={serverNowMs}/></> : 'Waiting for captains…'}/>
   </section>;
 }

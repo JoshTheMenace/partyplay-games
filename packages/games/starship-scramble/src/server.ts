@@ -1,6 +1,7 @@
 import type { GameRules } from '../../../party-contract/src/index';
 import { assertSerializable } from '../../../party-contract/src/serializable';
-import { RUN_SECTORS, type Action, type ActionType, type Captain, type Phase, type PrivateView, type PublicView, type Settings } from './contracts';
+import { MAX_ROOM_PLAYERS } from '../../../party-contract/src/index';
+import { RUN_SECTORS, wingCount, wingOf, type Action, type ActionType, type Captain, type Phase, type Settings } from './contracts';
 import { SYSTEMS } from './defs/catalog';
 import { PLAYER_HULLS } from './defs/hulls';
 import { applyCombatCommand, orderCrew, stepIdle, type CombatWorld } from './sim';
@@ -9,8 +10,9 @@ import { VOTE_MS, available, badge, choicesOf, eventDef } from './run/events';
 import { ammo, buy, claim, equip, repair, sell, unequip, upgrade } from './run/fleet';
 import { commission, enterSector, launch, leave, tickEvent, tickMap } from './run/flow';
 import { exportSave, loadSave } from './run/save';
-import { allReady, currentNode, say, shipById, shipOf, type State } from './run/state';
-import { publicView } from './run/view';
+import { currentNode, say, settled, shipById, shipOf, wings, type State } from './run/state';
+import { publicView, wingView } from './run/view';
+import { encode, encodeOwn, type Own, type Wire } from './wire';
 
 type Field = (v: unknown) => boolean;
 const id: Field = v => typeof v === 'string' && v.length <= 64 && /^[\w-]+$/.test(v);
@@ -24,10 +26,27 @@ const FIELDS: { [K in ActionType]: Record<Exclude<keyof Extract<Action, { type: 
   ready: { ready: bool }, vote: { nodeId: id }, choose: { choiceId: id },
   target: { weapon: id, shipId: id, roomId: id }, untarget: { weapon: id }, autofire: { weapon: id, auto: bool }, fire: {},
   crew: { crewIds, roomId: id }, stations: {}, teleport: { crewIds, shipId: id, roomId: id }, recall: { shipId: id }, cloak: {},
-  pause: { paused: bool }, jump: { vote: bool }, claim: { itemId: id }, buy: { offerId: id }, sell: { itemId: id }, repair: { amount: between(1, 40) }, ammo: {},
+  pause: { paused: bool }, assist: { on: bool }, jump: { vote: bool }, claim: { itemId: id }, buy: { offerId: id }, sell: { itemId: id }, repair: { amount: between(1, 40) }, ammo: {},
   upgrade: { system: among(SYSTEMS) }, equip: { itemId: id, slot: between(0, 5) }, unequip: { slot: between(0, 5) },
 };
 const MANAGE: Phase[] = ['map', 'event', 'loot', 'store'];
+/** Orders that check everything before they change anything; the rest run on a copy of the state so a rejection can never half-apply. */
+const ATOMIC = new Set<ActionType>(['ready', 'vote', 'choose', 'target', 'untarget', 'autofire', 'fire', 'stations', 'teleport', 'recall', 'cloak', 'pause', 'assist', 'jump']);
+/** In a fleet of several wings a pause is a breather, not a brake: it ends by itself and each captain has one per battle. */
+const PAUSE_MS = 20000;
+/** Big fleets close the hangar, salvage and store this long after half the captains are ready. */
+const LAUNCH_MS = 30000, LOOT_MS = 30000, STORE_MS = 45000;
+/**
+ * Wingmates receive the same engagement, and building it is most of what a big room's snapshot costs. Every change the room makes to a state
+ * bumps its version; one version's wing views are built once per wing and shared by its seats.
+ */
+const versions = new WeakMap<State, number>(), shared = new WeakMap<State, { version: number; wings: Map<number, Own['wing']> }>();
+const touch = (s: State) => void versions.set(s, (versions.get(s) ?? 0) + 1);
+function wingOwn(s: State, wing: number) {
+  const version = versions.get(s) ?? 0; let cache = shared.get(s);
+  if (cache?.version !== version) shared.set(s, cache = { version, wings: new Map() });
+  return cache.wings.get(wing) ?? cache.wings.set(wing, encodeOwn(null, [], wingView(s, wing)).wing).get(wing)!;
+}
 
 function parseAction(raw: unknown): Action {
   assertSerializable(raw);
@@ -41,7 +60,7 @@ function parseAction(raw: unknown): Action {
 
 function validateSettings(raw: unknown): Settings {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Settings must be an object.');
-  const { difficulty = 'captain', length = 'standard', ...rest } = raw as Record<string, unknown>;
+  const { difficulty = 'cadet', length = 'standard', ...rest } = raw as Record<string, unknown>;
   if (Object.keys(rest).length || (difficulty !== 'cadet' && difficulty !== 'captain') || typeof length !== 'string' || !Object.hasOwn(RUN_SECTORS, length)) throw new Error('Unknown Starship Scramble settings.');
   return { difficulty, length: length as Settings['length'] };
 }
@@ -73,7 +92,14 @@ function act(s: State, c: Captain, a: Action, nowMs: number) {
       if (!available(s, choice)) throw new Error(`The fleet needs ${badge(s, choice.requires!)} for that.`);
       return vote(choice.id);
     }
-    case 'pause': { const combat = battle(); combat.paused = a.paused; combat.pausedBy = a.paused ? c.name : null; return say(s, `${c.name} ${a.paused ? 'paused' : 'resumed'} the battle`); }
+    case 'pause': { const combat = battle(), fight = s.fight!;
+      if (a.paused && wings(s) > 1) {
+        if (combat.paused) throw new Error('The battle is already paused.');
+        if (fight.paused?.includes(c.id)) throw new Error('You have used your pause for this battle.');
+        fight.paused = [...fight.paused ?? [], c.id]; fight.resumeAt = nowMs + PAUSE_MS;
+      } else fight.resumeAt = null;
+      combat.paused = a.paused; combat.pausedBy = a.paused ? c.name : null; return say(s, `${c.name} ${a.paused ? 'paused' : 'resumed'} the battle`); }
+    case 'assist': only(['map', 'event', 'combat', 'loot', 'store'], 'Launch first.'); shipOf(s, c).assist = a.on; return;
     case 'jump': {
       const combat = battle();
       if (combat.objective === 'boss') throw new Error('There is no running from the Flagship.');
@@ -100,16 +126,16 @@ function act(s: State, c: Captain, a: Action, nowMs: number) {
   }
 }
 
-export const rules: GameRules<State, null, Action, Settings, PublicView, PrivateView> = {
+export const rules: GameRules<State, null, Action, Settings, Wire, Own> = {
   validateSettings, parseAction, parseInput: () => null, neutralInput: () => null,
   create(ctx, settings) {
     const cadet = settings.difficulty === 'cadet';
     const s: State = {
       settings, phase: 'hangar', turn: 0, rng: ctx.seed | 0, nextId: 1, ships: [], crew: [], combat: null, fight: null,
-      captains: ctx.players.slice(0, 4).map((p, i) => ({ id: `c${i}`, playerId: p.id, name: p.name, color: p.color, connected: true, shipId: null, hullId: null, scrap: cadet ? 50 : 20,
+      captains: ctx.players.slice(0, MAX_ROOM_PLAYERS).map((p, i, all) => ({ id: `c${i}`, playerId: p.id, name: p.name, color: p.color, connected: true, wing: wingOf(i, Math.min(all.length, MAX_ROOM_PLAYERS)), shipId: null, hullId: null, scrap: cadet ? 50 : 20,
         ready: false, vote: null, cargo: [], stats: { damage: 0, kills: 0, repairs: 0, scrapEarned: 0, saves: 0 } })),
       sectors: [], sectorIndex: 0, map: null!, revealed: false, event: null, loot: null, offers: null, pending: [], deadline: null,
-      reserves: cadet ? 3 : 2, scrapCarry: 0, flags: [], seen: [], message: 'Choose your ships', result: null, fleetStats: { jumps: 0, kills: 0, scrap: 0, lostShips: 0 },
+      reserves: (cadet ? 3 : 2) * wingCount(ctx.players.length), scrapCarry: 0, flags: [], seen: [], message: 'Choose your ships', result: null, fleetStats: { jumps: 0, kills: 0, scrap: 0, lostShips: 0 },
     };
     enterSector(s, 'rustbelt');
     return s;
@@ -119,27 +145,30 @@ export const rules: GameRules<State, null, Action, Settings, PublicView, Private
     if (index < 0) throw new Error('You are watching this expedition from the stands.');
     if (s.phase === 'over') throw new Error('The expedition is over.');
     if (action.turn !== s.turn) throw new Error('That moment has passed.');
-    // Rejected actions must never half-apply: act on a copy and commit only on success.
+    // Rejected actions must never half-apply: act on a copy and commit only on success (battle orders validate first and skip the copy).
+    touch(s);
+    if (ATOMIC.has(action.type) || action.type === 'crew' && s.phase === 'combat') return act(s, s.captains[index], action, nowMs);
     const next = structuredClone(s);
     act(next, next.captains[index], action, nowMs);
     Object.assign(s, next);
   },
   tick(s, _inputs, dtSeconds, nowMs) {
-    const ms = dtSeconds * 1000;
-    if (s.phase === 'hangar') { if (allReady(s)) launch(s); return; }
+    const ms = dtSeconds * 1000; touch(s);
+    if (s.phase === 'hangar') { if (settled(s, nowMs, LAUNCH_MS)) launch(s); return; }
     if (s.phase === 'combat') return tickCombat(s, ms, nowMs);
     if (s.phase === 'over') return;
     stepIdle(s, ms);
-    if (s.phase === 'map') tickMap(s, nowMs); else if (s.phase === 'event') tickEvent(s, nowMs); else if (allReady(s)) leave(s);
+    if (s.phase === 'map') tickMap(s, nowMs); else if (s.phase === 'event') tickEvent(s, nowMs); else if (settled(s, nowMs, s.phase === 'store' ? STORE_MS : LOOT_MS)) leave(s);
   },
   onPresenceChange(s, playerId, connected) {
     const c = s.captains.find(x => x.playerId === playerId);
     if (!c) return;
-    c.connected = connected;
+    c.connected = connected; touch(s);
     const ship = shipById(s, c.shipId); if (ship) ship.autopilot = !connected;
   },
-  publicView: s => publicView(s),
-  playerView: (s, playerId) => ({ captainId: s.captains.find(c => c.playerId === playerId)?.id ?? null }),
+  // What travels is packed (src/wire.ts); every screen decodes it back into the PublicView the UI is written against.
+  publicView: s => encode(publicView(s)),
+  playerView: (s, playerId) => { const c = s.captains.find(x => x.playerId === playerId); return { ...encodeOwn(c?.id ?? null, s.combat ? [] : c?.cargo ?? [], null), wing: c && wings(s) > 1 ? wingOwn(s, c.wing) : null }; },
   outcome: s => ({
     complete: s.result !== null,
     winners: s.result === 'victory' ? s.captains.flatMap(c => c.playerId ? [c.playerId] : []) : [],
@@ -147,7 +176,7 @@ export const rules: GameRules<State, null, Action, Settings, PublicView, Private
   }),
   exportSave,
   loadSave: (ctx, raw) => loadSave(ctx, raw),
-  finish(s) { if (s.result === null) { s.result = 'suspended'; say(s, 'Expedition saved. Resume any time.'); } },
+  finish(s) { touch(s); if (s.result === null) { s.result = 'suspended'; say(s, 'Expedition saved. Resume any time.'); } },
   dispose() {},
 };
 export default rules;

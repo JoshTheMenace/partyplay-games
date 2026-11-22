@@ -8,12 +8,14 @@ import { ALL_VOTED_MS, available, choicesOf, eventDef, pickEvent, resolveChoice 
 import { openLoot, openStore, refit } from './fleet';
 import { COLUMNS, SHORT_COLUMNS, generateMap } from './map';
 import { pick } from './rng';
-import { allReady, currentNode, enter, fleet, online, recruit, runDepth, say, shipOf, type State } from './state';
+import { allReady, currentNode, enter, fleet, hurry, online, recruit, runDepth, say, shipOf, wing, type State } from './state';
 
 /** Put a captain's chosen hull on the pad (a crewless preview until launch). Unnamed ships are "<captain>'s <hull>" when that fits 16 characters. */
 export function commission(s: State, c: Captain, hullId: string, name: string, paint: string) {
-  const hull = hullDef(hullId), slot = s.captains.indexOf(c), id = `s${slot}`, mine = `${c.name}'s ${hull.name}`;
-  const ship = createShip({ id, faction: 'ally', captainId: c.id, enemyId: null, hullId, name: name || (mine.length <= 16 ? mine : hull.name), paint, slot, weapons: hull.startWeapons, ammo: hull.startAmmo, augments: [], ai: null, fleeBelow: 0, phases: [] });
+  const hull = hullDef(hullId), id = `s${s.captains.indexOf(c)}`, mine = `${c.name}'s ${hull.name}`, old = s.ships.find(other => other.id === id);
+  // Damage control starts on for cadets; a captain's own switch survives a change of hull.
+  const ship = createShip({ id, faction: 'ally', captainId: c.id, enemyId: null, hullId, name: name || (mine.length <= 16 ? mine : hull.name), paint, wing: c.wing, slot: wing(s, c.wing).indexOf(c),
+    assist: old?.assist ?? s.settings.difficulty === 'cadet', weapons: hull.startWeapons, ammo: hull.startAmmo, augments: [], ai: null, fleeBelow: 0, phases: [] });
   ship.autopilot = !c.connected;
   const at = s.ships.findIndex(other => other.id === id);
   if (at >= 0) s.ships[at] = ship; else s.ships.push(ship);
@@ -22,14 +24,15 @@ export function commission(s: State, c: Captain, hullId: string, name: string, p
 export function launch(s: State) {
   s.captains.forEach((c, i) => { if (!c.shipId) commission(s, c, PLAYER_HULLS[i % PLAYER_HULLS.length].id, '', c.color); });
   for (const c of s.captains) { const ship = shipOf(s, c); for (const k of hullDef(ship.hullId).startCrew) recruit(s, c.id, ship, k.species, k.role); refit(s, ship); }
-  s.ships.sort((a, b) => a.slot - b.slot);
+  s.ships.sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)));
   enter(s, 'map'); say(s, `The fleet launches into ${s.map.name}`);
 }
 
-/** Plurality of cast votes once the deadline passes (1.5 s after every connected captain voted, else 20 s after the first vote); seeded ties. */
+/** Plurality of cast votes once the deadline passes (1.5 s after every connected captain voted, else 20 s after the first vote, or 5 s after a big fleet's quorum); seeded ties. */
 function tallyVotes(s: State, options: string[], nowMs: number) {
   if (s.deadline === null) return null;
   if (online(s).every(c => c.vote !== null)) s.deadline = Math.min(s.deadline, nowMs + ALL_VOTED_MS);
+  else hurry(s, online(s).filter(c => c.vote !== null).length, nowMs);
   if (nowMs < s.deadline) return null;
   const counts = options.map(id => s.captains.filter(c => c.vote === id).length), best = Math.max(...counts);
   if (best > 0) return pick(s, options.filter((_, i) => counts[i] === best));
@@ -43,7 +46,7 @@ export function tickMap(s: State, nowMs: number) {
 }
 export function tickEvent(s: State, nowMs: number) {
   const ev = s.event!;
-  if (ev.outcome) { if (allReady(s) || nowMs >= s.deadline!) proceed(s); return; }
+  if (ev.outcome) { hurry(s, online(s).filter(c => c.ready).length, nowMs); if (allReady(s) || nowMs >= s.deadline!) proceed(s); return; }
   const choices = choicesOf(eventDef(ev.defId)).filter(ch => available(s, ch)), winner = tallyVotes(s, choices.map(ch => ch.id), nowMs);
   if (!winner) return;
   resolveChoice(s, choices.find(ch => ch.id === winner)!, nowMs);
@@ -82,7 +85,7 @@ function proceed(s: State) {
   if (next?.kind === 'event') return openEvent(s, next.eventId);
   if (next?.kind === 'combat') return startFight(s, next, defId === 'armada-ambush');
   if (next?.kind === 'store') return openStore(s);
-  if (s.pending.length) return openLoot(s, 0, 0);
+  if (s.pending.length) return openLoot(s, 0);
   enter(s, 'map');
 }
 /** Loot and store end when every connected captain is ready. */

@@ -93,8 +93,8 @@ export function store(): PublicView {
   const view = fleet(4, 'store');
   const offers = [['weapon', 'flak-cannon', 70, null], ['weapon', 'breach-missile', 70, 'cap1'], ['weapon', 'medic-pulse', 40, null], ['augment', 'auto-loader', 60, null], ['augment', 'hull-welders', 55, 'cap3'], ['augment', 'missile-recycler', 45, null], ['system', 'teleporter', 75, null]] as const;
   view.captains.forEach((c, i) => { c.ready = i === 2; });
-  const recruit = { id: 'of7', kind: 'crew' as const, defId: 'engineer', price: 45, soldTo: null, crew: { name: 'Bartholomew', species: 'bastion' as const, role: 'engineer' as const } };
-  return { ...view, store: { offers: [...offers.map(([kind, defId, price, soldTo], i) => ({ id: `of${i}`, kind, defId, price, soldTo })), recruit], repairPrice: 2, ammoPrice: 12 } };
+  const recruit = { id: 'of7', kind: 'crew' as const, defId: 'engineer', price: 45, soldTo: null, wing: 0, crew: { name: 'Bartholomew', species: 'bastion' as const, role: 'engineer' as const } };
+  return { ...view, store: { offers: [...offers.map(([kind, defId, price, soldTo], i) => ({ id: `of${i}`, kind, defId, price, soldTo, wing: 0 })), recruit], repairPrice: 2, ammoPrice: 12 } };
 }
 
 export function over(result: 'victory' | 'defeat' = 'victory'): PublicView {

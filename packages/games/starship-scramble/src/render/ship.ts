@@ -9,6 +9,7 @@ import { toScreen, type Box, type ShipLayout } from '../defs/geometry';
 import { HULLS, hullDef } from '../defs/hulls';
 import { loadBackdrops, loadImage } from './backdrop';
 import { SYSTEM_COLORS, drawGlyph } from './glyphs';
+import { glow } from './fx';
 import { NOZZLE_X, canvas, hash, proceduralHull } from './hullart';
 import { mountPoint, shieldEllipse } from './scene';
 export { mountPoint } from './scene';
@@ -50,6 +51,22 @@ export function hullSprite(hullId: string, paint: string) {
     g.globalCompositeOperation = 'multiply'; g.drawImage(layer, 0, 0); g.globalCompositeOperation = 'destination-in'; g.drawImage(src.hull, 0, 0); }
   if (tints.size > 48) tints.delete(tints.keys().next().value!);
   tints.set(key, out); return out;
+}
+
+const plans = new Map<string, HTMLCanvasElement>();
+/**
+ * A hull in its paint with the deck plan sketched in, `width` device pixels wide: what the fleet broadcast, the event scene and the crowd
+ * screens draw instead of a live interior. facing −1 mirrors it (enemies).
+ */
+export function hullPlan(hullId: string, paint: string, width: number, facing: 1 | -1 = 1) {
+  const key = `${hullId}|${paint}|${Math.round(width)}|${facing}|${art.has(hullId) ? 1 : 0}`, hit = plans.get(key); if (hit) return hit;
+  const src = hullSprite(hullId, paint), hull = hullDef(hullId), c = canvas(width, width * src.height / src.width), g = c.getContext('2d')!, cell = c.width / (hull.gridW + 4);
+  if (facing === -1) { g.translate(c.width, 0); g.scale(-1, 1); }
+  g.drawImage(src, 0, 0, c.width, c.height);
+  g.fillStyle = 'rgba(46,70,132,.5)'; g.strokeStyle = 'rgba(150,185,255,.38)'; g.lineWidth = Math.max(1, cell * .05);
+  for (const r of hull.rooms) { g.fillRect((r.x + 2) * cell + 1, (r.y + 1.5) * cell + 1, r.w * cell - 2, r.h * cell - 2); g.strokeRect((r.x + 2) * cell + 1.5, (r.y + 1.5) * cell + 1.5, r.w * cell - 3, r.h * cell - 3); }
+  if (plans.size > 200) plans.clear();
+  plans.set(key, c); return c;
 }
 
 const level = (ship: ShipView, room: RoomState) => room.ionMs > 0 ? 0 : Math.min(ship.levels[room.system!] ?? room.tier - room.damage, room.tier - room.damage);
@@ -179,7 +196,10 @@ function drawLiveRooms(ctx: CanvasRenderingContext2D, ship: ShipView, layout: Sh
     const b = layout.rooms[r.id]; if (!b) return;
     if (r.damage) { ctx.fillStyle = 'rgba(255,40,40,1)'; ctx.globalAlpha = hash(Math.floor(now / 85) + i * 9) > .78 ? .2 : .06; ctx.fillRect(b.x, b.y, b.w, b.h); ctx.globalAlpha = 1; }
     if (r.fire > 0) {
-      ctx.fillStyle = '#ff6a1a'; ctx.globalAlpha = .13 + .06 * Math.sin(now * .01 + i); ctx.fillRect(b.x, b.y, b.w, b.h); ctx.globalAlpha = 1;
+      ctx.fillStyle = '#ff6a1a'; ctx.globalAlpha = .13 + .06 * Math.sin(now * .01 + i); ctx.fillRect(b.x, b.y, b.w, b.h);
+      // Firelight spills past the bulkheads and flickers.
+      const lit = Math.max(b.w, b.h) * (.9 + .12 * r.fire) * (1 + .08 * Math.sin(now * .023 + i * 3)); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = .2 + .07 * r.fire;
+      ctx.drawImage(glow('#ff7a1a'), b.x + b.w / 2 - lit, b.y + b.h / 2 - lit, lit * 2, lit * 2); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
       const def = layout.hull.rooms.find(d => d.id === r.id)!;
       for (let c = 0; c < def.w * def.h; c++) for (let k = 0; k < r.fire; k++) {
         const seed = c * 5 + k * 13 + i, fx = (c % def.w + .25 + .5 * hash(seed)) * cell, fy = (Math.floor(c / def.w) + .75) * cell, x = layout.facing === 1 ? b.x + fx : b.x + b.w - fx, y = b.y + fy;
@@ -208,6 +228,9 @@ export function drawShip(ctx: CanvasRenderingContext2D, ship: ShipView, crew: re
   if (!(layout.cell > 0)) return;
   const o = options, now = o.nowMs, base = baseFor(ctx, ship, layout, o.detail ?? 'tv'), { sprite, cell, facing } = layout, alive = ship.status === 'active', cloaked = ship.cloakMs > 0;
   ctx.save(); if (!alive) ctx.globalAlpha = .35; else if (cloaked) ctx.globalAlpha = .4;
+  // A soft pool of the captain's colour (red for hostiles) lifts the hull off the backdrop and says whose it is.
+  if (alive && o.detail !== 'thumb') { const tint = ship.faction === 'enemy' ? '#ff3b3b' : /^#[0-9a-f]{6}$/i.test(o.ownerColors[ship.captainId ?? ''] ?? '') ? o.ownerColors[ship.captainId!] : ship.paint, a = ctx.globalAlpha;
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a * (ship.faction === 'enemy' ? .1 : .16); ctx.drawImage(glow(tint), sprite.x - sprite.w * .08, sprite.y - sprite.h * .2, sprite.w * 1.16, sprite.h * 1.4); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = a; }
   const engines = alive && ship.rooms.find(r => r.system === 'engines'), power = engines ? level(ship, engines) : 0, def = engines && layout.hull.rooms.find(d => d.id === engines.id);
   if (def && power > 0) { ctx.globalCompositeOperation = 'lighter';
     for (let y = def.y; y < def.y + def.h; y++) { const p = toScreen(layout, NOZZLE_X, y + .5), len = cell * (.8 + power * .16) * (1 + .12 * Math.sin(now * .031 + y * 1.7)), cx = p.x - facing * len / 2;
@@ -219,6 +242,14 @@ export function drawShip(ctx: CanvasRenderingContext2D, ship: ShipView, crew: re
     for (let i = 0; i < slices; i++) { ctx.globalAlpha = .1; ctx.drawImage(base.canvas, 0, i * sh, base.canvas.width, sh, sprite.x + Math.sin(now * .006 + i * 1.3) * cell * .25, sprite.y + i * sh / base.scale, base.canvas.width / base.scale, sh / base.scale); }
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = .4; }
   drawLiveRooms(ctx, ship, layout, o);
+  // A hull below a third trails smoke astern and spits sparks: trouble that reads from across the room.
+  const hurt = alive ? 1 - ship.hull / Math.max(1, ship.maxHull) : 0;
+  if (hurt > .65 && o.detail !== 'thumb') { const a = ctx.globalAlpha, n = hurt > .8 ? 7 : 4;
+    for (let k = 0; k < n; k++) { const t = (now / 1700 + k / n + hash(k + ship.slot)) % 1, r = layout.rooms[ship.rooms[(k * 3 + ship.slot) % ship.rooms.length].id]; if (!r) continue;
+      ctx.globalAlpha = a * (1 - t) * .5; ctx.fillStyle = '#2a2c36'; ctx.beginPath(); ctx.arc(r.x + r.w / 2 - facing * t * cell * 2.4, r.y + r.h / 2 - t * cell * .5 + Math.sin(k * 2.1) * cell * .2, cell * (.16 + .5 * t), 0, Math.PI * 2); ctx.fill(); }
+    if (hash(Math.floor(now / 110) + ship.slot * 7) > .7) { const r = layout.rooms[ship.rooms[Math.floor(hash(Math.floor(now / 110)) * ship.rooms.length)].id]; if (r) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a;
+      ctx.drawImage(glow('#ffe08a'), r.x + r.w * hash(now) - cell * .3, r.y + r.h * hash(now + 1) - cell * .3, cell * .6, cell * .6); ctx.globalCompositeOperation = 'source-over'; } }
+    ctx.globalAlpha = a; }
   if (alive) ship.weapons.forEach((w, i) => { if (!w.powered) return; const p = mountPoint(layout, i), x = p.x + facing * cell * .5, kind = weaponDef(w.defId).kind, ready = w.charge >= 1;
     ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = KIND_COLORS[kind]; ctx.globalAlpha = (ready ? .45 + .3 * Math.sin(now * .012 + i) : .25) * (cloaked ? .4 : 1);
     ctx.beginPath(); ctx.arc(x, p.y, cell * (.08 + .2 * Math.min(1, w.charge)), 0, Math.PI * 2); ctx.fill();

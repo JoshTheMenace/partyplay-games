@@ -7,6 +7,8 @@ import { SYSTEMS, weaponDef } from '../src/defs/catalog';
 import { PLAYER_HULLS, hullDef } from '../src/defs/hulls';
 import { rules } from '../src/server';
 import type { State } from '../src/run/state';
+import { expandSave } from '../src/run/save';
+import { publicView } from '../src/run/view';
 
 type Move = Action extends infer A ? A extends Action ? Omit<A, 'turn'> : never : never;
 const NAMES = ['Mira', 'Oskar', 'Zed', 'Ana'], COLORS = ['#ff5748', '#28c6e7', '#78d955', '#b58aff'];
@@ -19,8 +21,8 @@ class Run {
     this.refresh();
   }
   refresh(check = false) {
-    this.view = rules.publicView(this.state, { nowMs: this.now, phase: 'playing' });
-    if (check) { assertSerializable(this.view); this.maxBytes = Math.max(this.maxBytes, JSON.stringify(this.view).length); for (const c of this.view.captains) if (c.playerId) assertSerializable(rules.playerView(this.state, c.playerId, { nowMs: this.now, phase: 'playing' })); }
+    this.view = publicView(this.state);
+    if (check) { const wire = rules.publicView(this.state, { nowMs: this.now, phase: 'playing' }); assertSerializable(wire); this.maxBytes = Math.max(this.maxBytes, JSON.stringify(wire).length); for (const c of this.view.captains) if (c.playerId) assertSerializable(rules.playerView(this.state, c.playerId, { nowMs: this.now, phase: 'playing' })); }
     return this.view;
   }
   act(playerId: string, move: Move) { rules.applyAction(this.state, playerId, rules.parseAction({ ...move, turn: this.view.turn }), this.now); this.done.add(move.type); this.refresh(); }
@@ -165,13 +167,14 @@ test('save → load mid-battle reseats new players, pauses the battle and plays 
 });
 
 test('saves are validated strictly', () => {
-  const run = midBattle(), good = () => JSON.parse(JSON.stringify(rules.exportSave!(run.state))), load = (raw: unknown) => rules.loadSave!(ctx(roster(4), 5), raw, { difficulty: 'captain', length: 'standard' });
+  // Breakages are written against the keyed (version 1) shape, which every packed save expands to before it is checked.
+  const run = midBattle(), good = () => expandSave(JSON.parse(JSON.stringify(rules.exportSave!(run.state)))) as any, load = (raw: unknown) => rules.loadSave!(ctx(roster(4), 5), raw, { difficulty: 'captain', length: 'standard' });
   load(good());
   const broken: ((save: any) => void)[] = [
-    save => { save.v = 2; }, save => { save.state.ships[0].hullId = 'x-wing'; }, save => { save.state.ships[0].weapons[0].defId = 'death-ray'; },
+    save => { save.v = 3; }, save => { save.state.ships[0].hullId = 'x-wing'; }, save => { save.state.ships[0].weapons[0].defId = 'death-ray'; },
     save => { save.state.captains.push({ ...save.state.captains[0], id: 'c9' }); }, save => { save.state.captains = []; }, save => { save.state.crew[0].shipId = 'nowhere'; },
     save => { save.state.ships[0].hull = 'lots'; }, save => { save.state.extra = 1; }, save => { save.state.map.nodes[0].links.push('n9-9'); }, save => { save.state.phase = 'loot'; },
-    save => { save.state.combat.projectiles = Array(300).fill(save.state.combat.projectiles[0] ?? {}); }, save => { save.state.captains[0].cargo.push({ id: 'i1', kind: 'weapon', defId: 'ion-cannon-9000', ownerId: null }); },
+    save => { save.state.combat.projectiles = Array(5000).fill(save.state.combat.projectiles[0] ?? {}); }, save => { save.state.captains[0].cargo.push({ id: 'i1', kind: 'weapon', defId: 'ion-cannon-9000', ownerId: null }); },
     save => { save.state.event = { defId: 'not-an-event', outcome: null, next: null }; }, save => { delete save.state.ships[1].rooms; },
     // Review findings: prototype keys, runaway loot bonus, bad boss phase, empty enemy lists, missing hull/enemy refs, reused id counter.
     save => { save.state.crew[0].constructor = 'x'; }, save => { save.state.fight.bonus = 1e9; }, save => { save.state.ships.at(-1).phase = -2; },

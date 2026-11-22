@@ -32,7 +32,7 @@ test('defeat when every ally is gone; survive objective wins on the timer', () =
 });
 
 test('enemies flee after a 15 s countdown that pauses while they cannot fly; allied crew aboard come home', () => {
-  const me = ship('me', 'corsair'), drone = ship('foe', 'drone', 'enemy', { weapons: [], fleeBelow: .5 }), w = battle([me, drone]);
+  const me = ship('me', 'corsair'), drone = ship('foe', 'drone', 'enemy', { weapons: [], fleeBelow: .5 }), w = battle([me, drone], {}, true, true);
   const [a] = w.crew.filter(m => m.role === 'soldier');
   drone.hull = 5; stepCombat(w, 50);
   assert.equal(drone.fleeAtMs, w.combat.t + 15000);
@@ -41,7 +41,7 @@ test('enemies flee after a 15 s countdown that pauses while they cannot fly; all
   run(w, 1100);
   assert.equal(drone.status, 'fled'); assert.equal(events(w, 'flee').length, 1); assert.equal(w.combat.outcome, 'victory');
   assert.equal(a.shipId, 'me'); assert.equal(a.state === 'dead', false);
-  const raider = ship('foe', 'raider', 'enemy', { weapons: [], fleeBelow: .5 }), p = battle([ship('me', 'wayfarer'), raider]);
+  const raider = ship('foe', 'raider', 'enemy', { weapons: [], fleeBelow: .5 }), p = battle([ship('me', 'wayfarer'), raider], {}, true, true);
   raider.hull = 3; stepCombat(p, 50);
   const at = raider.fleeAtMs!;
   run(p, 20000);
@@ -81,7 +81,7 @@ test('hazards: asteroids every 6 s, solar flares start fires, ion storms slow sh
 });
 
 test('the fleet FTL drive charges from allied engines', () => {
-  const w = battle([ship('me', 'wayfarer'), ship('foe', 'raider', 'enemy', { weapons: [] })]);
+  const w = battle([ship('me', 'wayfarer'), ship('foe', 'raider', 'enemy', { weapons: [] })], {}, true, true);
   run(w, 45000);
   assert.ok(Math.abs(w.combat.ftl - 1) < .01);
 });

@@ -19,15 +19,16 @@ export function Scrap({ n, sign }: { n: number; sign?: boolean }) {
 export function CaptainChip({ captain, children }: { captain: CaptainView; children?: ReactNode }) {
   return <span className="ss-chip" style={tint(captain.color)}><i/>{captain.name}{children}</span>;
 }
-/** Voter initials in captain colors, with full names for assistive tech. */
+/** Voter initials in captain colors, with full names for assistive tech; a crowd becomes a count with a few colour dots. */
 export function Votes({ ids, captains }: { ids: readonly string[]; captains: readonly CaptainView[] }) {
   const voters = captains.filter(c => ids.includes(c.id));
+  if (voters.length > 6) return <span className="ss-votes ss-votes-many" aria-label={`${voters.length} votes`}>{voters.slice(0, 4).map(c => <i key={c.id} style={tint(c.color)}/>)}<b className="kp-numeral">{voters.length}</b></span>;
   return voters.length ? <span className="ss-votes" aria-label={`Votes: ${voters.map(c => c.name).join(', ')}`}>{voters.map(c => <i key={c.id} style={tint(c.color)} title={c.name}>{[...c.name][0]?.toUpperCase()}</i>)}</span> : null;
 }
 /** "Waiting for captains…" count: disconnected captains are on autopilot and never block. */
-export function Readiness({ captains, prompt }: { captains: readonly CaptainView[]; prompt: ReactNode }) {
+export function Readiness({ captains, prompt, closing }: { captains: readonly CaptainView[]; prompt: ReactNode; /** A big fleet's countdown once half are ready. */ closing?: ReactNode }) {
   const live = captains.filter(c => c.connected), ready = live.filter(c => c.ready).length;
-  return <footer className="ss-readiness"><span className="ss-readiness-prompt">{ready === live.length && live.length ? 'All captains ready' : prompt} <b className="kp-numeral">{ready}/{live.length}</b></span></footer>;
+  return <footer className="ss-readiness"><span className="ss-readiness-prompt">{ready === live.length && live.length ? 'All captains ready' : closing ?? prompt} <b className="kp-numeral">{ready}/{live.length}</b></span></footer>;
 }
 
 // ---------- items ----------
@@ -56,7 +57,7 @@ export function ItemIcon({ info }: { info: ItemInfo }) {
 export function previewShip(hullId: string, paint: string, id = `preview-${hullId}`): ShipView {
   const hull = hullDef(hullId), rooms = hull.rooms.map(r => ({ id: r.id, system: r.system, tier: r.system ? hull.startSystems[r.system] ?? 0 : 0, damage: 0, ionMs: 0, fire: 0, breach: false, oxygen: 100, repair: 0 }));
   const levels: Partial<Record<SystemId, number>> = Object.fromEntries(rooms.filter(r => r.system && r.tier).map(r => [r.system, r.tier]));
-  return { id, faction: 'ally', captainId: null, enemyId: null, hullId, name: hull.name, paint, slot: 0, hull: hull.maxHull, maxHull: hull.maxHull, shields: levels.shields ?? 0, shieldCharge: 1, tempShield: 0, tempShieldMs: 0,
+  return { id, faction: 'ally', captainId: null, enemyId: null, hullId, name: hull.name, paint, wing: 0, slot: 0, assist: false, scale: 1, hull: hull.maxHull, maxHull: hull.maxHull, shields: levels.shields ?? 0, shieldCharge: 1, tempShield: 0, tempShieldMs: 0,
     rooms, weapons: hull.startWeapons.map((defId, i) => ({ uid: `${id}-w${i}`, defId, charge: 1, target: null, auto: true, powered: i < (levels.weapons ?? 0) })), ammo: hull.startAmmo, augments: [],
     status: 'active', cloakMs: 0, cloakCooldownMs: 0, teleportCooldownMs: 0, defenseCooldownMs: 0, fleeAtMs: null, phase: 0, phases: [], ai: null, fleeBelow: 0, autopilot: false, lastHitBy: null, evasion: 0, maxShields: levels.shields ?? 0, levels };
 }
@@ -79,7 +80,8 @@ export function ShipCanvas({ ship, crew, colors, className = '' }: { ship: ShipV
       const dpr = Math.min(2, devicePixelRatio || 1), w = canvas.clientWidth, h = canvas.clientHeight, { ship, crew, colors } = props.current;
       if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
-      if (w && h) drawShip(ctx, ship, crew, shipLayout(hullDef(ship.hullId), { x: 0, y: 0, w, h }), { nowMs: now, ownerColors: colors, detail: 'tv' });
+      // Inset so the shield bubble, which is wider than the hull art, stays inside the canvas.
+      if (w && h) drawShip(ctx, ship, crew, shipLayout(hullDef(ship.hullId), { x: w * .05, y: h * .03, w: w * .9, h: h * .94 }), { nowMs: now, ownerColors: colors, detail: 'tv' });
       frame = requestAnimationFrame(draw);
     };
     frame = requestAnimationFrame(draw);

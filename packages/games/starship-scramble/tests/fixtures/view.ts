@@ -9,7 +9,7 @@ export function fixtureShip(id: string, hullId: string, faction: 'ally' | 'enemy
   const hull = hullDef(hullId);
   const rooms = hull.rooms.map(room => ({ id: room.id, system: room.system, tier: room.system ? hull.startSystems[room.system] ?? 0 : 0, damage: 0, ionMs: 0, fire: 0, breach: false, oxygen: 100, repair: 0 }));
   const levels = Object.fromEntries(rooms.filter(r => r.system && r.tier).map(r => [r.system, r.tier])) as Partial<Record<SystemId, number>>;
-  return { id, faction, captainId, enemyId: faction === 'enemy' ? hullId : null, hullId, name, paint: hull.paint, slot, hull: hull.maxHull, maxHull: hull.maxHull,
+  return { id, faction, captainId, enemyId: faction === 'enemy' ? hullId : null, hullId, name, paint: hull.paint, wing: 0, slot, assist: false, scale: 1, hull: hull.maxHull, maxHull: hull.maxHull,
     shields: levels.shields ?? 0, shieldCharge: 0, tempShield: 0, tempShieldMs: 0, rooms,
     weapons: hull.startWeapons.map((defId, i) => ({ uid: `${id}-w${i}`, defId, charge: (i * .37) % 1, target: null, auto: true, powered: i < (levels.weapons ?? 0) })),
     ammo: hull.startAmmo, augments: [], status: 'active', cloakMs: 0, cloakCooldownMs: 0, teleportCooldownMs: 0, defenseCooldownMs: 0, fleeAtMs: null, phase: 0, phases: [],
@@ -22,7 +22,7 @@ export function fixtureCrew(ship: ShipView, ownerId: string | null, faction: 'al
 }
 /** A combat view with `allies` captains (1–4, one of each hull) against `enemies` enemy hulls. Long names exercise layout limits. */
 export function fixtureCombat(allies = 4, enemies = 3, boss = false): PublicView {
-  const captains: CaptainView[] = Array.from({ length: allies }, (_, i) => ({ id: `cap${i}`, playerId: `p${i}`, name: ['Captain Longname Q', 'Mira', 'Oskar the Bold', 'Zed'][i].slice(0, 16), color: COLORS[i], connected: true,
+  const captains: CaptainView[] = Array.from({ length: allies }, (_, i) => ({ id: `cap${i}`, playerId: `p${i}`, name: ['Captain Longname Q', 'Mira', 'Oskar the Bold', 'Zed'][i].slice(0, 16), color: COLORS[i], connected: true, wing: 0,
     shipId: `ally${i}`, hullId: PLAYER_HULLS[i].id, scrap: 40 + i * 13, ready: false, vote: null, cargo: [], stats: { damage: 0, kills: 0, repairs: 0, scrapEarned: 0, saves: 0 }, status: 'flying' }));
   const ships = captains.map((c, i) => ({ ...fixtureShip(c.shipId!, c.hullId!, 'ally', i, c.id, `${c.name.split(' ')[0]}'s ${PLAYER_HULLS[i].name}`), paint: c.color }));
   const foes = boss ? [fixtureShip('boss', 'flagship', 'enemy', 0, null)] : Array.from({ length: enemies }, (_, i) => fixtureShip(`enemy${i}`, ENEMY_HULLS[i % 5].id, 'enemy', i, null));
@@ -32,7 +32,7 @@ export function fixtureCombat(allies = 4, enemies = 3, boss = false): PublicView
   const crew = ships.flatMap(s => fixtureCrew(s, s.captainId));
   ships[0].weapons[0].target = { shipId: foes[0].id, roomId: foes[0].rooms.find(r => r.system === 'shields')!.id };
   const t = 42000;
-  return { phase: 'combat', turn: 7, settings: { difficulty: 'captain', length: 'standard' }, captains, ships, crew,
+  return { phase: 'combat', turn: 7, settings: { difficulty: 'captain', length: 'standard' }, captains, ships, crew, fleet: null, route: ['The Rustbelt'],
     combat: { id: 'c1', t, paused: false, pausedBy: null, hazard: 'none', objective: boss ? 'boss' : 'destroy', surviveUntilMs: null, ftl: .6, jumpVotes: [],
       projectiles: [{ id: 'p1', kind: 'laser', weaponId: 'burst-laser', fromShipId: 'ally0', toShipId: foes[0].id, roomId: foes[0].rooms[0].id, mount: 0, launchMs: t - 500, arriveMs: t + 900 },
         { id: 'p2', kind: 'missile', weaponId: 'swift-missile', fromShipId: foes[0].id, toShipId: 'ally0', roomId: 'weapons', mount: 0, launchMs: t - 300, arriveMs: t + 1500 }],

@@ -1,6 +1,6 @@
 import { ArrowBigRight, CircleHelp, Cloud, Crosshair, Crown, Home, Mountain, PackageOpen, RadioTower, ShoppingBag, Skull, Sun, Tornado, Wrench, Zap, type LucideIcon } from 'lucide-react';
 import { Countdown } from '../../../../party-ui/src/index';
-import type { Hazard, MapNode, NodeKind, PublicView } from '../contracts';
+import { WING_COLORS, wingCount, type Hazard, type MapNode, type NodeKind, type PublicView } from '../contracts';
 import { Votes, backdrop, tint } from './common';
 
 const NODE: Record<NodeKind, { label: string; Icon: LucideIcon; color: string }> = {
@@ -46,7 +46,7 @@ function SectorMap({ view }: { view: PublicView }) {
         {Hz && <g transform={`translate(${R * .72} ${R * .72})`}><circle r={15} className="ss-node-hazard"/><Hz x={-10} y={-10} width={20} height={20}/></g>}
         {n.dest ? <text className="ss-node-dest" x={Math.min(0, W - 8 - p.x - n.dest.name.length * 5.6)} y={R + 26} textAnchor="middle">{n.dest.name}</text> : state === 'reach' && <text className="ss-node-label" y={R + 30} textAnchor="middle">{meta.label}</text>}
         {voters.length > 0 && <foreignObject x={-90} y={-R - 58} width={180} height={46}><Votes ids={voters} captains={view.captains}/></foreignObject>}
-        {state === 'current' && <g className="ss-fleet"><circle className="ss-fleet-ring" r={R + 16}/>{view.captains.map((c, i, all) => { const a = -Math.PI / 2 + (i - (all.length - 1) / 2) * .62; return <circle key={c.id} cx={Math.cos(a + Math.PI) * (R + 16)} cy={Math.sin(a + Math.PI) * (R + 16)} r={10} fill={c.color} className="ss-fleet-dot"/>; })}</g>}
+        {state === 'current' && <g className="ss-fleet"><circle className="ss-fleet-ring" r={R + 16}/>{(view.fleet ? Array.from({ length: wingCount(view.captains.length) }, (_, k) => ({ id: `w${k}`, color: WING_COLORS[k % WING_COLORS.length] })) : view.captains).map((c, i, all) => { const a = all.length > 5 ? i / all.length * Math.PI * 2 : -Math.PI / 2 + (i - (all.length - 1) / 2) * .62; return <circle key={c.id} cx={Math.cos(a + Math.PI) * (R + 16)} cy={Math.sin(a + Math.PI) * (R + 16)} r={all.length > 8 ? 7 : 10} fill={c.color} className="ss-fleet-dot"/>; })}</g>}
       </g>; })}
   </svg>;
 }

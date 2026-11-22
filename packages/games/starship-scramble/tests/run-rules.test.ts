@@ -19,10 +19,11 @@ import { COLUMNS, SHORT_COLUMNS, generateMap, mapView } from '../src/run/map';
 import { pick } from '../src/run/rng';
 import { publicView } from '../src/run/view';
 import { living, type State } from '../src/run/state';
+import { decode } from '../src/wire';
 
 const NAMES = ['Mira', 'Oskar', 'Zed', 'Ana'];
 const create = (n = 2, settings: Partial<Settings> = {}, seed = 1) =>
-  rules.create({ roomId: 'r', roundId: 'r1', players: NAMES.slice(0, n).map((name, i) => ({ id: `p${i}`, name, color: ['#ff5748', '#28c6e7', '#78d955', '#b58aff'][i] })), seed, nowMs: 0 }, rules.validateSettings(settings));
+  rules.create({ roomId: 'r', roundId: 'r1', players: NAMES.slice(0, n).map((name, i) => ({ id: `p${i}`, name, color: ['#ff5748', '#28c6e7', '#78d955', '#b58aff'][i] })), seed, nowMs: 0 }, rules.validateSettings({ difficulty: 'captain', ...settings }));
 let now = 0;
 const act = (s: State, player: string, action: Record<string, unknown>) => rules.applyAction(s, player, rules.parseAction({ turn: s.turn, ...action }), now);
 const tick = (s: State, ms = 100) => { for (let t = 0; t < ms; t += 100) { now += 100; rules.tick(s, new Map(), .1, now); } };
@@ -39,7 +40,7 @@ const fight = (s: State, enemies: string[] = ['raider-skiff']) => { startFight(s
 const killAll = (s: State, faction: 'ally' | 'enemy') => { for (const x of s.ships) if (x.faction === faction && x.status === 'active') { x.hull = 0; x.phases = []; } tick(s, 200); };
 
 test('settings default and reject unknown values', () => {
-  assert.deepEqual(rules.validateSettings({}), { difficulty: 'captain', length: 'standard' });
+  assert.deepEqual(rules.validateSettings({}), { difficulty: 'cadet', length: 'standard' });
   assert.deepEqual(rules.validateSettings({ difficulty: 'cadet', length: 'short' }), { difficulty: 'cadet', length: 'short' });
   for (const bad of [null, [], 'cadet', { difficulty: 'hard' }, { length: 'epic' }, { length: 'toString' }, { difficulty: 'cadet', extra: 1 }]) assert.throws(() => rules.validateSettings(bad));
   assert.equal(rules.parseInput({ anything: 1 }), null); assert.equal(rules.neutralInput(), null);
@@ -263,7 +264,7 @@ test('store and refits: buy, sell, repair, missiles, recruits, upgrade, install,
   assert.throws(() => act(s, 'p0', { type: 'repair', amount: 1 }), /per hull point/);
   c().scrap = 500;
   act(s, 'p0', { type: 'ammo' }); assert.equal(w().ammo, hullDef('wayfarer').startAmmo + 3);
-  s.offers!.push({ id: 'o-crew', kind: 'crew', defId: 'soldier', price: 50, soldTo: null, crew: { name: 'Wren', species: 'ember', role: 'soldier' } });
+  s.offers!.push({ id: 'o-crew', kind: 'crew', defId: 'soldier', price: 50, soldTo: null, wing: 0, crew: { name: 'Wren', species: 'ember', role: 'soldier' } });
   act(s, 'p0', { type: 'buy', offerId: 'o-crew' }); assert.equal(living(s, 'c0').length, 4); assert.ok(living(s, 'c0').some(k => k.name === 'Wren' && k.species === 'ember' && k.role === 'soldier'));
   const price = systemDef('shields').upgradePrices[0], scrap = c().scrap;
   act(s, 'p0', { type: 'upgrade', system: 'shields' }); assert.equal(room('shields').tier, 2); assert.equal(c().scrap, scrap - price); assert.equal(w().shields, 2);
@@ -310,7 +311,7 @@ test('destroyed captains are rebuilt from reserves, then fly lifeboats', () => {
   fight(s);
   const away = living(s, 'c0')[0]; Object.assign(away, { shipId: ship(s, 1).id, roomId: ship(s, 1).rooms[0].id });
   w.hull = 0; tick(s, 200);
-  assert.equal(w.status, 'destroyed'); assert.equal(rules.publicView(s, { nowMs: now, phase: 'playing' }).captains[0].status, 'wrecked');
+  assert.equal(w.status, 'destroyed'); assert.equal(decode(rules.publicView(s, { nowMs: now, phase: 'playing' })).captains[0].status, 'wrecked');
   killAll(s, 'enemy'); tick(s, 2600);
   const rebuilt = ship(s);
   assert.equal(s.phase, 'loot'); assert.equal(s.reserves, 1); assert.equal(s.fleetStats.lostShips, 1);
@@ -322,7 +323,7 @@ test('destroyed captains are rebuilt from reserves, then fly lifeboats', () => {
   fight(s); ship(s).hull = 0; tick(s, 200); killAll(s, 'enemy'); tick(s, 2600);
   const boat = ship(s);
   assert.equal(boat.hullId, 'lifeboat'); assert.equal(boat.hull, hullDef('lifeboat').maxHull); assert.equal(living(s, 'c0').length, 2);
-  assert.equal(rules.publicView(s, { nowMs: now, phase: 'playing' }).captains[0].status, 'lifeboat');
+  assert.equal(decode(rules.publicView(s, { nowMs: now, phase: 'playing' })).captains[0].status, 'lifeboat');
 });
 const leaveLoot = (s: State) => { s.captains.forEach(c => act(s, c.playerId!, { type: 'ready', ready: true })); tick(s); };
 

@@ -2,6 +2,7 @@ import { Crosshair, Hexagon, Package, Radio, Rocket, ShieldAlert, Skull, Sparkle
 import { Countdown } from '../../../../party-ui/src/index';
 import type { PublicView } from '../contracts';
 import { Readiness, Votes, backdrop } from './common';
+import { Vista } from './vista';
 
 /** Effect lines are plain text from the run engine; pick an icon and tone from their wording. */
 const LINE: [RegExp, LucideIcon][] = [[/scrap/i, Hexagon], [/hull|repair/i, Wrench], [/crew|joins|recruit/i, UserPlus], [/missile|ammo/i, Rocket], [/armada|ambush/i, Skull], [/weapon|augment|salvage|item/i, Package], [/fight|combat|hostile/i, Crosshair], [/damage|fire|breach|dies|lost/i, ShieldAlert]];
@@ -12,6 +13,7 @@ export function EventScreen({ view, serverNowMs }: { view: PublicView; serverNow
   const event = view.event; if (!event) return null;
   const deadline = view.voteDeadline ?? event.deadlineMs, top = Math.max(0, ...event.choices.map(c => c.votes.length)), live = view.captains.filter(c => c.connected);
   return <section className="ss-screen ss-event ss-bg" style={backdrop(view.map.sectorId)}>
+    <Vista view={view}/>
     <article className={`ss-event-card ${event.result ? 'ss-event-done' : ''}`}>
       <div className="ss-event-story">
         <p className="kp-eyebrow"><Radio aria-hidden/> {view.map.name} · incoming transmission</p>
@@ -19,7 +21,7 @@ export function EventScreen({ view, serverNowMs }: { view: PublicView; serverNow
         <p className="ss-event-text">{event.result ?? event.text}</p>
       </div>
       {event.result ? <ul className="ss-event-lines">{event.resultLines.map((line, i) => { const Icon = lineIcon(line); return <li key={i} className={`ss-line-${tone(line)}`} style={{ animationDelay: `${.25 + i * .12}s` }}><Icon aria-hidden/>{line}</li>; })}</ul>
-        : <ol className="ss-choices">{event.choices.map((c, i) => <li key={c.id} className={`ss-choice ${!c.available ? 'ss-choice-off' : ''} ${top && c.votes.length === top ? 'ss-choice-lead' : ''}`}>
+        : <ol className="ss-choices">{event.choices.map((c, i) => <li key={c.id} className={`ss-choice ${!c.available ? 'ss-choice-off' : ''} ${top && c.votes.length === top ? 'ss-choice-lead' : ''}`} style={{ '--share': live.length ? c.votes.length / live.length : 0 } as React.CSSProperties}>
           <span className="ss-choice-n kp-numeral">{i + 1}</span>
           <span className="ss-choice-body">{c.badge && <em className="ss-badge">{c.badge}</em>}<span>{c.label}</span>{!c.available && <small>Your fleet can't do this yet</small>}</span>
           <Votes ids={c.votes} captains={view.captains}/>

@@ -2,7 +2,7 @@
 import type { Crew, HullDef, RoomState, Ship } from '../contracts';
 import { speciesDef } from '../defs/catalog';
 import { doorBetween, neighbors, roomPath } from '../defs/geometry';
-import { type Ctx, alive, context, crewOn, dest, emit, freeCells, has, hullOf, level, pick, rand, roomDef, slotsOf, space, stationOf, systemRoom } from './core';
+import { type Ctx, alive, context, crewOn, dest, emit, freeCells, has, hullOf, level, pick, rand, reach, roomDef, slotsOf, space, stationOf, systemRoom } from './core';
 import type { World } from './index';
 
 /** Per-ms rates. */
@@ -124,15 +124,16 @@ function burn(ctx: Ctx, ship: Ship, dt: number) {
 }
 
 /**
- * Crew AI for enemy and autopilot ships (full) and for everyone out of combat (repairs only):
- * retreat to medbay when badly hurt, answer boarders → fires → breaches → damage with the nearest free crew, then return to stations.
+ * Crew AI for enemy and autopilot ships (full), for a captain's ship with damage control on, and for everyone out of combat (repairs only):
+ * retreat to medbay when badly hurt (full), answer boarders → fires → breaches → damage with the nearest free crew, then return to stations (full)
+ * or, in battle, to the room damage control took them from.
  */
 export function planCrew(ctx: Ctx, ship: Ship, full: boolean) {
   const hull = hullOf(ship), c = ctx.c, list = crewOn(ctx, ship).filter(alive);
   const mine = list.filter(m => m.faction === ship.faction && (ship.faction === 'enemy' || m.ownerId === ship.captainId));
   if (!mine.length) return;
   const team = full && c ? boarders(ctx, ship, mine) : [], medbay = systemRoom(ship, 'medbay');
-  let idle = mine.filter(m => !team.includes(m) && !m.path.length && (m.state === 'idle' || m.state === 'manning' || m.state === 'healing') && !(m.roomId === medbay?.id && m.hp < m.maxHp));
+  let idle = mine.filter(m => !team.includes(m) && !m.beam && !m.path.length && (m.state === 'idle' || m.state === 'manning' || m.state === 'healing') && !(m.roomId === medbay?.id && m.hp < m.maxHp));
   if (full && medbay && level(medbay)) for (const m of mine)
     if (m.hp < m.maxHp * .3 && dest(m) !== medbay.id && !team.includes(m) && space(ship, medbay.id, m.faction, list) > 0) { send(ship, m, medbay.id); idle = idle.filter(o => o !== m); }
   const jobs = ship.rooms.map(r => {
@@ -140,9 +141,10 @@ export function planCrew(ctx: Ctx, ship: Ship, full: boolean) {
     return { r, rank: foes ? 0 : r.fire ? 1 : r.breach ? 2 : 3, need: foes ? foes + 1 : r.fire ? Math.min(2, r.fire) : r.breach || r.damage ? 1 : 0 };
   }).filter(j => j.need).sort((a, b) => a.rank - b.rank);
   for (const { r, need } of jobs) for (let have = mine.filter(m => dest(m) === r.id).length; have < need && idle.length && space(ship, r.id, ship.faction, list) > 0; have++) {
-    const m = nearest(hull, idle, r.id); send(ship, m, r.id); idle = idle.filter(o => o !== m);
+    const m = nearest(hull, idle, r.id); if (!full && c) m.back ??= m.roomId; send(ship, m, r.id); idle = idle.filter(o => o !== m);
   }
   if (full) for (const m of idle) { const st = stationOf(ship, m); if (st && dest(m) !== st && space(ship, st, m.faction, list) > 0) send(ship, m, st); }
+  else for (const m of idle) if (m.back) { if (m.back !== m.roomId && space(ship, m.back, m.faction, list) > 0) send(ship, m, m.back); delete m.back; }
 }
 /** Pilots are pulled off the helm last. */
 const nearest = (hull: HullDef, crew: Crew[], roomId: string) => crew.reduce((best, m) => cost(hull, m, roomId) < cost(hull, best, roomId) ? m : best);
@@ -157,7 +159,7 @@ function boarders(ctx: Ctx, ship: Ship, mine: Crew[]): Crew[] {
   if (team.length < 2) return [];
   for (const m of team) if (dest(m) !== tp.id) send(ship, m, tp.id);
   if (ship.teleportCooldownMs <= 0 && team.every(m => m.roomId === tp.id && m.state !== 'walking' && !m.path.length)) {
-    const to = pick(c, ctx.world.ships.filter(s => s.status === 'active' && s.faction !== ship.faction));
+    const to = pick(c, reach(ctx.world.ships.filter(s => s.status === 'active'), ship));
     const room = to && (rand(c) < .5 ? ['weapons', 'shields'] as const : ['shields', 'weapons'] as const).map(id => systemRoom(to, id)).find(r => r && space(to, r.id, ship.faction, crewOn(ctx, to)) >= 2);
     if (room) beam(ctx, ship, team, to, room.id);
   }
@@ -184,7 +186,7 @@ export function beam(ctx: Ctx, user: Ship, crew: Crew[], to: Ship, roomId: strin
 }
 function relocate(ctx: Ctx, m: Crew, to: Ship, roomId: string, at: { x: number; y: number }) {
   const old = ctx.aboard.get(m.shipId); old?.splice(old.indexOf(m), 1); ctx.aboard.get(to.id)?.push(m);
-  Object.assign(m, { shipId: to.id, roomId, x: at.x, y: at.y, path: [], state: 'idle' });
+  Object.assign(m, { shipId: to.id, roomId, x: at.x, y: at.y, path: [], state: 'idle' }); delete m.back;
 }
 /** Allied crew aboard a ship that jumps away are beamed home (any free cell), or lost if their captain has no ship. */
 export function rescue(ctx: Ctx, m: Crew) {
@@ -208,7 +210,7 @@ export function orderCrew(world: World, captainId: string, crewIds: readonly str
   if (!roomDef(ship, roomId)) throw new Error("That room isn't on this ship.");
   const moving = list.filter(m => dest(m) !== roomId);
   if (space(ship, roomId, list[0].faction, world.crew.filter(m => m.shipId === ship.id)) < moving.length) throw new Error('Not enough space in that room.');
-  for (const m of list) delete m.beam; // a new order cancels a queued teleport
+  for (const m of list) { delete m.beam; delete m.back; } // a new order cancels a queued teleport and damage control's errand
   for (const m of moving) send(ship, m, roomId);
 }
 /** Out of combat: crew walk, heal and fix damage; oxygen refills; ion wears off. */

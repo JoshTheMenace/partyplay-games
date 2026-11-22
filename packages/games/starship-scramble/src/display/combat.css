@@ -62,3 +62,22 @@
 @keyframes ss-scene-pop{0%{opacity:0;transform:translate(-50%,-50%) scale(.6)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}}
 @keyframes ss-scene-toast{0%{opacity:0;transform:translateY(calc(var(--u)*14))}8%,85%{opacity:1;transform:none}100%{opacity:0}}
 @media (prefers-reduced-motion:reduce){.ss-combat-scene *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition:none!important}:where(.ss-combat-scene) .ss-callout,:where(.ss-combat-scene) .ss-feed__item{animation:none}}
+
+/* fleet broadcast: the fleet's strength against the line where it breaks */
+:where(.ss-combat-scene) .ss-strength{display:grid;grid-template-columns:auto auto;align-items:center;gap:calc(var(--u)*3) calc(var(--u)*12);margin-right:auto;margin-left:calc(var(--u)*30)}
+:where(.ss-combat-scene) .ss-strength__label{font-family:var(--font-display);font-size:calc(var(--u)*22);text-transform:uppercase;letter-spacing:.03em;color:#d7def7;text-shadow:0 2px 0 var(--kp-ink)}
+:where(.ss-combat-scene) .ss-strength__label b{font-weight:400;color:var(--kp-lime);font-size:1.3em}
+:where(.ss-combat-scene) .ss-strength__note{font-weight:900;font-size:calc(var(--u)*15);text-transform:uppercase;letter-spacing:.06em;color:#ff9a8a;text-shadow:0 2px 0 var(--kp-ink)}
+:where(.ss-combat-scene) .ss-strength__bar{grid-column:1/-1;position:relative;display:block;width:calc(var(--u)*380);height:calc(var(--u)*14);border-radius:calc(var(--u)*7);background:#05071acc;border:calc(var(--u)*2) solid #78d95566;overflow:visible}
+:where(.ss-combat-scene) .ss-strength__bar i{position:absolute;inset:0 auto 0 0;border-radius:inherit;background:linear-gradient(90deg,#4fd08a,#9be36b);transition:width .5s}
+:where(.ss-combat-scene) .ss-strength__bar em{position:absolute;top:calc(var(--u)*-5);bottom:calc(var(--u)*-5);width:calc(var(--u)*4);border-radius:2px;background:var(--kp-coral);box-shadow:0 0 calc(var(--u)*8) var(--kp-coral)}
+:where(.ss-combat-scene) .ss-strength.is-low .ss-strength__label b{color:var(--kp-coral)}
+:where(.ss-combat-scene) .ss-strength.is-low .ss-strength__bar{border-color:var(--kp-coral);animation:ss-scene-breathe .8s ease-in-out infinite}
+:where(.ss-combat-scene) .ss-strength.is-low .ss-strength__bar i{background:linear-gradient(90deg,#ff2d55,#ff5748)}
+.ss-fleet-scene .ss-feed{bottom:calc(var(--u)*10)}
+
+/* life in the scene: a slow backdrop drift and an alarm on a ship about to break */
+.ss-combat-scene .ss-scene__layer:first-of-type{transform:scale(1.05);animation:ss-scene-drift 70s ease-in-out infinite alternate}
+@keyframes ss-scene-drift{from{transform:scale(1.05) translate(-1.6%,-.8%)}to{transform:scale(1.05) translate(1.6%,.8%)}}
+:where(.ss-combat-scene) .ss-plate.is-critical{border-color:var(--kp-coral);animation:ss-scene-alarm .7s ease-in-out infinite}
+@keyframes ss-scene-alarm{50%{box-shadow:0 0 calc(var(--u)*22) #ff574899,0 calc(var(--u)*6) calc(var(--u)*18) #0008}}

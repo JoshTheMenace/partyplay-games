@@ -1,5 +1,5 @@
 /** Server-only run state and the small helpers every run module shares. */
-import { RUN_SECTORS, type Captain, type Combat, type CrewRole, type Item, type Loot, type Offer, type Phase, type PublicView, type SectorMap, type Settings, type Ship, type SpeciesId } from '../contracts';
+import { RUN_SECTORS, wingCount, type Captain, type Combat, type CrewRole, type Item, type Loot, type Offer, type Phase, type PublicView, type SectorMap, type Settings, type Ship, type SpeciesId } from '../contracts';
 import type { EventEffect } from '../content/types';
 import { sectorDef } from '../content/sectors';
 import { createCrew, type World } from '../sim';
@@ -7,8 +7,11 @@ import { pick } from './rng';
 
 export type Next = Extract<EventEffect, { kind: 'event' | 'combat' | 'store' }>;
 export type EventState = { defId: string; outcome: { choiceId: string; text: string; lines: string[] } | null; next: Next | null };
-/** Per-battle bookkeeping. endAt is wall-clock ms (the outcome beat before leaving combat); counted holds processed combat event ids. */
-export type Fight = { bonus: number; ambush: boolean; endAt: number | null; counted: string[] };
+/**
+ * Per-battle bookkeeping. endAt is wall-clock ms (the outcome beat before leaving combat); counted holds processed combat event ids.
+ * In a fleet of several wings a pause ends by itself at resumeAt and each captain in `paused` has used theirs.
+ */
+export type Fight = { bonus: number; ambush: boolean; endAt: number | null; counted: string[]; resumeAt?: number | null; paused?: string[] };
 export type State = World & {
   settings: Settings; phase: Phase; turn: number; rng: number; nextId: number;
   captains: Captain[]; combat: Combat | null; fight: Fight | null;
@@ -39,6 +42,25 @@ export const fleet = (s: State) => s.ships.filter(ship => ship.faction === 'ally
 export const living = (s: State, ownerId: string) => s.crew.filter(k => k.ownerId === ownerId && k.state !== 'dead' && k.hp > 0);
 export const online = (s: State) => s.captains.filter(c => c.connected);
 export const allReady = (s: State) => online(s).length > 0 && online(s).every(c => c.ready);
+export const wings = (s: State) => wingCount(s.captains.length);
+/** The captains of one wing, in seat order. */
+export const wing = (s: State, k: number) => s.captains.filter(c => c.wing === k);
+/** A crowd does not wait its full time for stragglers: in a fleet of several wings, once four in five connected captains have acted, a step closes in QUORUM_MS. */
+export const QUORUM_MS = 5000;
+export function hurry(s: State, acted: number, nowMs: number) {
+  if (s.deadline !== null && wings(s) > 1 && acted * 5 >= online(s).length * 4) s.deadline = Math.min(s.deadline, nowMs + QUORUM_MS);
+}
+/**
+ * Is a ready-up screen done? Everyone connected is ready; or, in a fleet of several wings, `ms` after half of them were, sooner at a quorum
+ * (one slow phone must not hold thirty captains). The countdown shows as the view's voteDeadline.
+ */
+export function settled(s: State, nowMs: number, ms: number) {
+  const live = online(s), ready = live.filter(c => c.ready).length;
+  if (allReady(s)) return true;
+  if (wings(s) < 2 || ready * 2 < live.length || !ready) { s.deadline = null; return false; }
+  s.deadline ??= nowMs + ms; hurry(s, ready, nowMs);
+  return nowMs >= s.deadline;
+}
 export const say = (s: State, message: string) => { s.message = message; };
 /** Credit scrap to a captain (Scrap Magnet: +15%). */
 export function earn(s: State, c: Captain, amount: number) {

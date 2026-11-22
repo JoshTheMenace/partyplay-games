@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowBigRight, Check, ChevronLeft, ChevronRight, CircleHelp, Cloud, Coins, Crosshair, Crown, Home, Package, PackageOpen, RadioTower, ShoppingBag, Skull, Tornado, UserPlus, Wrench, type LucideIcon } from 'lucide-react';
 import { ArcadeButton, Countdown, Panel, TextInput } from '../../../../party-ui/src/index';
-import type { CaptainView, ClientProps, MapNode, NodeKind, Phase, PublicView, ShipView } from '../contracts';
+import { WING_COLORS, wingCount, wingLetter, wingName, type CaptainView, type ClientProps, type MapNode, type NodeKind, type Phase, type PublicView, type ShipView } from '../contracts';
 import { PAINTS, augmentDef, systemDef, weaponDef } from '../defs/catalog';
 import { PLAYER_HULLS, hullDef } from '../defs/hulls';
 import { captainById, Dot, itemInfo, Meter, myCaptain, Notices, Pips, previewShip, shipOf, Spin, type Actions } from './common';
@@ -11,7 +11,15 @@ import { ShipThumb } from './stage';
 type Ctx = { props: ClientProps; view: PublicView; me: CaptainView; ship: ShipView | null; actions: Actions };
 const Busy = ({ on, children }: { on: boolean; children: React.ReactNode }) => <>{on && <Spin/>}{children}</>;
 const Price = ({ value, scrap }: { value: number; scrap: number }) => <span className="sp-price" data-short={value > scrap || undefined}><Coins size={13} aria-hidden="true"/>{value}</span>;
-const Voters = ({ view, ids }: { view: PublicView; ids: readonly string[] }) => ids.length ? <span className="sp-voters">{ids.map(id => { const c = captainById(view, id); return c && <Dot key={id} color={c.color} label={c.name}/>; })}</span> : null;
+const Voters = ({ view, ids }: { view: PublicView; ids: readonly string[] }) => !ids.length ? null : ids.length > 6 ? <span className="sp-voters sp-voters-many" aria-label={`${ids.length} votes`}>{ids.length}</span>
+  : <span className="sp-voters">{ids.map(id => { const c = captainById(view, id); return c && <Dot key={id} color={c.color} label={c.name}/>; })}</span>;
+/** In a fleet of several wings: which wing this captain flies in, and with whom. */
+function WingLine({ view, me }: { view: PublicView; me: CaptainView }) {
+  if (!view.fleet) return null;
+  const mates = view.captains.filter(c => c.wing === me.wing && c.id !== me.id);
+  return <p className="sp-wing" style={{ '--c': WING_COLORS[me.wing % WING_COLORS.length] } as React.CSSProperties}><b>{wingLetter(me.wing)}</b><span>{wingName(me.wing)} wing{mates.length ? <> · with {mates.map(c => c.name).join(', ')}</> : ' · flying alone'}</span>
+    <small>{view.captains.length} captains · {wingCount(view.captains.length)} wings</small></p>;
+}
 function ReadyButton({ me, actions, label = 'Ready', waiting }: { me: CaptainView; actions: Actions; label?: string; waiting: number }) {
   return <div className="sp-ready"><ArcadeButton tone={me.ready ? 'lime' : 'sun'} size="lg" aria-pressed={me.ready} disabled={actions.busy('ready')} onClick={() => actions.act({ type: 'ready', ready: !me.ready })}>
     <Busy on={actions.busy('ready')}>{me.ready ? <><Check size={18} aria-hidden="true"/> {label}</> : label}</Busy></ArcadeButton>
@@ -20,20 +28,27 @@ function ReadyButton({ me, actions, label = 'Ready', waiting }: { me: CaptainVie
 const notReady = (view: PublicView) => view.captains.filter(c => c.connected && !c.ready).length;
 
 function Hangar({ props, view, me, ship, actions }: Ctx) {
-  const [draft, setDraft] = useState(() => ({ hullId: me.hullId ?? PLAYER_HULLS[0].id, name: ship && ship.name !== hullDef(ship.hullId).name && ship.name !== `${me.name}'s ${hullDef(ship.hullId).name}` ? ship.name : '', paint: ship?.paint ?? PAINTS.find(p => p === me.color) ?? PAINTS[0] }));
+  // Each seat starts on a different hull, so a fleet that just taps Ready is still a mixed one.
+  const [draft, setDraft] = useState(() => ({ hullId: me.hullId ?? PLAYER_HULLS[view.captains.indexOf(me) % PLAYER_HULLS.length].id, name: ship && ship.name !== hullDef(ship.hullId).name && ship.name !== `${me.name}'s ${hullDef(ship.hullId).name}` ? ship.name : '', paint: ship?.paint ?? PAINTS.find(p => p === me.color) ?? PAINTS[0] }));
   const index = Math.max(0, PLAYER_HULLS.findIndex(h => h.id === draft.hullId)), hull = PLAYER_HULLS[index], locked = me.ready, timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const send = (next: typeof draft) => actions.act({ type: 'hangar', hullId: next.hullId, name: next.name.trim(), paint: next.paint });
   const update = (patch: Partial<typeof draft>, delay = 0) => { const next = { ...draft, ...patch }; setDraft(next); clearTimeout(timer.current); timer.current = setTimeout(() => void send(next), delay); };
   useEffect(() => () => clearTimeout(timer.current), []);
+  // The hull on this phone goes on the TV's pad at once, not only after the first change.
+  useEffect(() => { if (!me.shipId) void send(draft); }, []);
   const preview = previewShip(hull, draft.paint, draft.name || (ship?.hullId === hull.id ? ship.name : hull.name));
   const cycle = (d: number) => { const h = PLAYER_HULLS[(index + d + PLAYER_HULLS.length) % PLAYER_HULLS.length]; update({ hullId: h.id }); };
   const ready = async () => { if (!me.ready) { clearTimeout(timer.current); if (!await send(draft)) return; } void actions.act({ type: 'ready', ready: !me.ready }); };
   return <section className="sp-hangar" aria-label="Hangar">
-    <div className="sp-carousel">
+    <div className="sp-hangar-pick"><div className="sp-carousel">
       <button type="button" className="sp-icon-btn" aria-label="Previous hull" disabled={locked} onClick={() => cycle(-1)}><ChevronLeft aria-hidden="true"/></button>
       <div className="sp-hull-view"><ShipThumb view={view} ship={preview.ship} crew={preview.crew} serverNowMs={props.serverNowMs} detail="phone"/>
         <p className="sp-hull-index" aria-live="polite">{hull.name} · {index + 1}/{PLAYER_HULLS.length}</p></div>
       <button type="button" className="sp-icon-btn" aria-label="Next hull" disabled={locked} onClick={() => cycle(1)}><ChevronRight aria-hidden="true"/></button>
+    </div>
+      {/* Launch sits with the ship, in reach on arrival; name and paint are optional extras below or beside it. */}
+      <div className="sp-ready"><ArcadeButton tone={me.ready ? 'lime' : 'sun'} size="lg" aria-pressed={me.ready} disabled={actions.busy('ready') || actions.busy('hangar')} onClick={ready}>
+        <Busy on={actions.busy('ready')}>{me.ready ? 'Ready · tap to change' : 'Launch ready'}</Busy></ArcadeButton><small>{notReady(view) ? `${notReady(view)} captain${notReady(view) > 1 ? 's' : ''} still choosing` : 'All captains ready'}{view.voteDeadline ? <> · launching in <Countdown deadline={view.voteDeadline} serverNowMs={props.serverNowMs}/>s</> : null}</small></div>
     </div>
     <div className="sp-hull-info">
       <p className="kp-eyebrow">{hull.role}</p><h2 className="sp-h">{hull.name}</h2><p className="sp-blurb">{hull.blurb}</p>
@@ -43,9 +58,7 @@ function Hangar({ props, view, me, ship, actions }: Ctx) {
       {hull.rooms.some(r => r.system && !hull.startSystems[r.system]) && <p className="sp-kit"><b>Room to install</b> {hull.rooms.flatMap(r => r.system && !hull.startSystems[r.system] ? [systemDef(r.system).name] : []).join(' · ')}</p>}
       <label className="sp-field">Ship name<TextInput value={draft.name} placeholder={ship?.hullId === hull.id ? ship.name : hull.name} maxLength={16} disabled={locked} autoComplete="off" onChange={e => update({ name: e.target.value.slice(0, 16) }, 600)}/></label>
       <div className="sp-swatches" role="radiogroup" aria-label="Paint">{PAINTS.map(p => <button key={p} type="button" role="radio" className="kp-swatch" aria-checked={draft.paint === p} aria-label={`Paint ${p}`} disabled={locked} style={{ background: p }} onClick={() => update({ paint: p })}/>)}</div>
-      <div className="sp-ready"><ArcadeButton tone={me.ready ? 'lime' : 'sun'} size="lg" aria-pressed={me.ready} disabled={actions.busy('ready') || actions.busy('hangar')} onClick={ready}>
-        <Busy on={actions.busy('ready')}>{me.ready ? 'Ready · tap to change' : 'Launch ready'}</Busy></ArcadeButton><small>{notReady(view) ? `${notReady(view)} captain${notReady(view) > 1 ? 's' : ''} still choosing` : 'All captains ready'}</small></div>
-      <ul className="sp-fleet">{view.captains.map(c => <li key={c.id}><Dot color={c.color}/>{c.name}<small>{c.hullId ? hullDef(c.hullId).name : 'choosing'}</small>{c.ready && <Check size={14} aria-label="ready"/>}</li>)}</ul>
+      <ul className="sp-fleet">{view.captains.filter(c => c.wing === me.wing).map(c => <li key={c.id}><Dot color={c.color}/>{c.name}<small>{c.hullId ? hullDef(c.hullId).name : 'choosing'}</small>{c.ready && <Check size={14} aria-label="ready"/>}</li>)}</ul>
     </div>
   </section>;
 }
@@ -99,15 +112,15 @@ function EventCard({ props, view, me, actions }: Ctx) {
 }
 
 function LootTable({ view, me, actions }: Ctx) {
-  const loot = view.loot!;
+  const loot = view.loot!, items = loot.items.filter(item => (item.wing ?? 0) === me.wing);
   return <section className="sp-loot" aria-label="Salvage">
     <div className="sp-panel-head"><h2 className="sp-h">Salvage</h2><p className="sp-vote-state"><Coins size={15} aria-hidden="true"/> +{loot.scrapEach} scrap each</p></div>
-    <div className="sp-cards">{loot.items.map(item => { const info = itemInfo(item.kind, item.defId), owner = captainById(view, loot.claims[item.id] ?? item.ownerId), Icon = item.kind === 'weapon' ? KIND_ICON[weaponDef(item.defId).kind] : Package;
+    <div className="sp-cards">{items.map(item => { const info = itemInfo(item.kind, item.defId), owner = captainById(view, loot.claims[item.id] ?? item.ownerId), Icon = item.kind === 'weapon' ? KIND_ICON[weaponDef(item.defId).kind] : Package;
       return <article key={item.id} className="sp-card" data-claimed={owner ? true : undefined}><h3><Icon size={16} aria-hidden="true"/>{info.name}</h3><p>{info.blurb}</p>
         {owner ? <p className="sp-claimed"><Dot color={owner.color}/>{owner.id === me.id ? 'Yours' : `Claimed by ${owner.name}`}</p>
           : <ArcadeButton size="sm" tone="sky" disabled={actions.busy(`claim-${item.id}`)} onClick={() => actions.act({ type: 'claim', itemId: item.id }, `claim-${item.id}`)}><Busy on={actions.busy(`claim-${item.id}`)}>Claim</Busy></ArcadeButton>}</article>; })}
-      {!loot.items.length && <p className="sp-hint">No salvageable gear this time.</p>}</div>
-    <p className="sp-hint">Unclaimed items are left behind when the fleet departs.</p>
+      {!items.length && <p className="sp-hint">No salvageable gear this time.</p>}</div>
+    <p className="sp-hint">{view.fleet ? "This is your wing's salvage: split it with your wingmates. " : ''}Unclaimed items are left behind when the fleet departs.</p>
     <ReadyButton me={me} actions={actions} label="Ready to jump" waiting={notReady(view)}/>
   </section>;
 }
@@ -118,7 +131,7 @@ function StoreFront({ view, me, ship, actions }: Ctx) {
   return <section className="sp-store" aria-label="Store">
     <div className="sp-panel-head"><h2 className="sp-h">Trading post</h2><p className="sp-vote-state"><Coins size={15} aria-hidden="true"/> {scrap} scrap</p></div>
     <div className="sp-tabs" role="tablist">{(['buy', 'services', 'sell'] as const).map(t => <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>{t === 'buy' ? 'Buy' : t === 'services' ? 'Services' : 'Sell'}</button>)}</div>
-    {tab === 'buy' && <div className="sp-cards">{store.offers.map(o => { const info = itemInfo(o.kind, o.defId, o.crew), buyer = captainById(view, o.soldTo), room = o.kind === 'system' ? ship?.rooms.find(r => r.system === o.defId) : null;
+    {tab === 'buy' && <div className="sp-cards">{store.offers.filter(o => o.wing === me.wing).map(o => { const info = itemInfo(o.kind, o.defId, o.crew), buyer = captainById(view, o.soldTo), room = o.kind === 'system' ? ship?.rooms.find(r => r.system === o.defId) : null;
       const blocked = o.kind === 'system' ? !room ? 'No room for it on your hull' : room.tier > 0 ? 'Already installed' : null : null, Icon = o.kind === 'weapon' ? KIND_ICON[weaponDef(o.defId).kind] : o.kind === 'system' ? Wrench : o.kind === 'crew' ? UserPlus : Package;
       return <article key={o.id} className="sp-card" data-claimed={buyer ? true : undefined}><h3><Icon size={16} aria-hidden="true"/>{info.name}<Price value={o.price} scrap={scrap}/></h3>{info.tag && <p className="sp-tag">For hire · {info.tag}</p>}<p>{info.blurb}</p>
         {buyer ? <p className="sp-claimed"><Dot color={buyer.color}/>Sold to {buyer.id === me.id ? 'you' : buyer.name}</p> : blocked ? <p className="sp-claimed">{blocked}</p>
@@ -165,12 +178,12 @@ function Shipyard({ me, ship, actions }: Ctx) {
   </section>;
 }
 
-function Summary({ view }: { view: PublicView }) {
+function Summary({ view, me }: { view: PublicView; me: CaptainView | null }) {
   const s = view.fleetStats;
   return <section className="sp-over" aria-label="Run summary" data-result={view.result ?? undefined}><p className="kp-eyebrow">{view.result === 'victory' ? 'Victory' : view.result === 'defeat' ? 'Defeat' : 'Run suspended'}</p><h2 className="sp-h">{view.result === 'victory' ? 'The Armada is broken' : view.result === 'defeat' ? 'The fleet is lost' : 'Expedition saved'}</h2><p>{view.message}</p>
     <dl className="sp-specs"><div><dt>Jumps</dt><dd>{s.jumps}</dd></div><div><dt>Kills</dt><dd>{s.kills}</dd></div><div><dt>Scrap</dt><dd>{s.scrap}</dd></div><div><dt>Ships lost</dt><dd>{s.lostShips}</dd></div></dl>
     <table className="sp-table"><thead><tr><th>Captain</th><th>Damage</th><th>Kills</th><th>Repairs</th><th>Scrap</th></tr></thead>
-      <tbody>{view.captains.map(c => <tr key={c.id}><td><span className="sp-cap"><Dot color={c.color}/>{c.name}</span></td><td>{c.stats.damage}</td><td>{c.stats.kills}</td><td>{c.stats.repairs}</td><td>{c.stats.scrapEarned}</td></tr>)}</tbody></table></section>;
+      <tbody>{view.captains.filter(c => !me || c.wing === me.wing).map(c => <tr key={c.id}><td><span className="sp-cap"><Dot color={c.color}/>{c.name}</span></td><td>{c.stats.damage}</td><td>{c.stats.kills}</td><td>{c.stats.repairs}</td><td>{c.stats.scrapEarned}</td></tr>)}</tbody></table></section>;
 }
 
 const PANELS: Partial<Record<Phase, [string, (ctx: Ctx) => React.ReactNode]>> = { map: ['Map', SectorMap], event: ['Event', EventCard], loot: ['Salvage', LootTable], store: ['Store', StoreFront] };
@@ -180,12 +193,13 @@ export function MenuController(props: ClientProps & { actions: Actions }) {
   const panel = PANELS[view.phase], View = panel?.[1], onShip = !!panel && tab.phase === view.phase && tab.ship;
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => { scrollTo(0, 0); root.current?.scrollTo(0, 0); }, [view.phase, view.turn]); // each new screen starts at its heading (window on phones, the drawer on the host screen)
-  if (view.phase === 'over') return <div className="ss-phone sp-menu"><Summary view={view}/></div>;
+  if (view.phase === 'over') return <div className="ss-phone sp-menu"><Summary view={view} me={view.fleet ? me : null}/></div>;
   if (!me) return <div className="ss-phone sp-menu"><Panel className="sp-watch"><p className="kp-display">Watching the run</p><p>You are not captaining a ship. Follow the fleet on the TV; you can join the next run.</p></Panel></div>;
   const ctx: Ctx = { props, view, me, ship, actions: props.actions };
   return <div ref={root} className="ss-phone sp-menu">
     {panel && <div className="sp-tabs sp-tabs-main" role="tablist">{[false, true].map(s => <button key={String(s)} type="button" role="tab" aria-selected={onShip === s} onClick={() => setTab({ phase: view.phase, ship: s })}>{s ? 'Ship' : panel[0]}</button>)}</div>}
     <Notices actions={props.actions} connected={props.connected}/>
+    <WingLine view={view} me={me}/>
     {view.phase === 'hangar' ? <Hangar {...ctx}/> : onShip ? <Shipyard {...ctx}/> : View && <View {...ctx}/>}
   </div>;
 }

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Regenerate Starship Scramble art. Usage: sh art/render-all.sh [ships] [backdrops] [icons]  (default: all)
+# Regenerate Starship Scramble art. Usage: sh art/render-all.sh [ships] [backdrops] [icons] [sites]  (default: all)
 # BLENDER overrides the Blender binary; contact sheets land in output/ss-dev/art (ignored by git).
 set -e
 ART=$(cd "$(dirname "$0")" && pwd)
@@ -12,12 +12,12 @@ blend() {
   "$BLENDER" -b --factory-startup --python-exit-code 1 -P "$ART/$script.py" -- "$@" > "$LOG" 2>&1 || { cat "$LOG"; exit 1; }
   grep -E 'Saved|WARNING' "$LOG" || true
 }
-for stage in ${*:-ships backdrops icons}; do
+for stage in ${*:-ships backdrops icons sites}; do
   case $stage in
     ships)
       (cd "$ROOT" && node --import tsx -e "import('./packages/games/starship-scramble/src/defs/hulls.ts').then(m => console.log(JSON.stringify(m.HULLS)))") > "$ART/hulls.json"
       blend ships "$PUB"; blend contact "$PUB" "$ROOT/output/ss-dev/art" ;;
-    backdrops|icons) blend "$stage" "$PUB" ;;
+    backdrops|icons|sites) blend "$stage" "$PUB" ;;
     *) echo "unknown stage $stage" >&2; exit 1 ;;
   esac
 done

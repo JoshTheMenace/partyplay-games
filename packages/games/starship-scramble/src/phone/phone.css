@@ -121,7 +121,7 @@
 @media (min-height:360px){:where(.ss-phone,.ss-personal) .sp-crew{min-height:48px}:where(.ss-phone,.ss-personal) .sp-weapon-name{font-size:13.5px}:where(.ss-phone,.ss-personal) .sp-weapon-aim{font-size:12px}:where(.ss-phone,.ss-personal) .sp-weapon{padding:8px 10px}}
 
 /* ---------- menus (portrait or landscape) ---------- */
-.ss-phone.sp-menu{display:grid;grid-template-columns:minmax(0,1fr);align-content:start;gap:10px;max-width:780px;margin:0 auto;padding-bottom:8px;max-height:100%;overflow-y:auto}
+.ss-phone.sp-menu{display:grid;grid-template-columns:minmax(0,1fr);align-content:start;gap:10px;max-width:780px;margin:0 auto;padding-bottom:8px;max-height:100%;overflow-y:auto;container-type:inline-size}
 .ss-phone.sp-menu>section{display:grid;gap:12px;align-content:start;padding:14px;border-radius:18px;background:linear-gradient(160deg,rgba(26,36,92,.94),rgba(9,14,44,.96));border:1px solid var(--line);box-shadow:0 18px 40px #0006,inset 0 1px rgba(255,255,255,.08)}
 :where(.ss-phone,.ss-personal) .sp-h{font-family:var(--font-display);font-weight:400;font-size:clamp(22px,5vw,30px);line-height:1;margin:0}
 :where(.ss-phone,.ss-personal) .sp-sub{margin:4px 0 -4px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--hud)}
@@ -167,7 +167,9 @@
 :where(.ss-phone,.ss-personal) .sp-fleet{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
 :where(.ss-phone,.ss-personal) .sp-fleet li{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);font-size:13px;font-weight:800}
 :where(.ss-phone,.ss-personal) .sp-fleet small{color:var(--dim)}
-@media (orientation:landscape) and (min-width:560px){:where(.ss-phone,.ss-personal) .sp-hangar{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);align-items:start}:where(.ss-phone,.ss-personal) .sp-carousel{position:sticky;top:0}}
+:where(.ss-phone,.ss-personal) .sp-hangar-pick{display:grid;gap:8px;min-width:0}
+/* Two columns by the room the menu really has (a phone in landscape), not the window: the host's console drawer is a narrow column on a wide screen. */
+@container (min-width:560px){:where(.ss-phone,.ss-personal) .sp-hangar{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);align-items:start}:where(.ss-phone,.ss-personal) .sp-hangar-pick{position:sticky;top:0}:where(.ss-phone,.ss-personal) .sp-hull-view .sp-thumb{max-height:34dvh}}
 
 /* sector map */
 :where(.ss-phone,.ss-personal) .sp-map-body{display:grid;gap:10px}
@@ -271,7 +273,8 @@
 :where(.ss-phone,.ss-personal) .sp-scene .sp-caption{left:50%;bottom:10px;transform:translateX(-50%);font-size:14px;padding:6px 16px}
 :where(.ss-phone,.ss-personal) .sp-scene .sp-banner{top:14px;font-size:26px;padding:6px 24px}
 :where(.ss-phone,.ss-personal) .sp-scene .sp-toast{top:70px;font-size:15px}
-:where(.ss-phone,.ss-personal) .sp-deck{zoom:var(--deck,1);display:grid;grid-template-columns:minmax(300px,440px) minmax(0,1fr) 200px;grid-template-rows:44px 104px;gap:6px;padding:8px;background:linear-gradient(180deg,#0e1540,#070b26);border-top:1px solid var(--line-hi)}
+:where(.ss-phone,.ss-personal) .sp-scene .ss-feed{bottom:58px}
+:where(.ss-phone,.ss-personal) .sp-deck{zoom:var(--deck,1);display:grid;grid-template-columns:minmax(300px,440px) minmax(0,1fr) 200px;grid-template-rows:44px 152px;gap:6px;padding:8px;background:linear-gradient(180deg,#0e1540,#070b26);border-top:1px solid var(--line-hi)}
 :where(.ss-phone,.ss-personal) .sp-deck-top{grid-column:1/-1;display:flex;gap:6px}
 :where(.ss-phone,.ss-personal) .sp-deck-side .sp-roster,:where(.ss-phone,.ss-personal) .sp-deck-side .sp-crew-group{grid-template-columns:repeat(2,minmax(0,1fr))}
 :where(.ss-phone,.ss-personal) .sp-deck-side .sp-crew-group,:where(.ss-phone,.ss-personal) .sp-deck-side .sp-away{grid-column:1/-1}
@@ -284,3 +287,15 @@
 :where(.ss-phone,.ss-personal) .sp-deck .sp-weapon-aim{font-size:13px}
 :where(.ss-phone,.ss-personal) .sp-deck .sp-charge{height:8px}
 :where(.ss-phone,.ss-personal) .sp-deck.sp-watch{display:grid;place-content:center}
+
+/* wings */
+:where(.ss-phone,.ss-personal) .sp-wing{display:flex;align-items:center;gap:8px;margin:0;padding:6px 10px;border-radius:12px;background:color-mix(in srgb,var(--c) 14%,transparent);border:1px solid color-mix(in srgb,var(--c) 55%,transparent);font-size:13px;font-weight:800;line-height:1.25}
+:where(.ss-phone,.ss-personal) :is(.sp-wing>b,.sp-wingbadge){flex:none;display:grid;place-items:center;width:24px;height:24px;border-radius:7px;background:var(--c);color:#05071a;font:400 15px/1 var(--font-display)}
+:where(.ss-phone,.ss-personal) .sp-wing span{flex:1;min-width:0}
+:where(.ss-phone,.ss-personal) .sp-wing small{color:var(--dim);white-space:nowrap}
+:where(.ss-phone,.ss-personal) .sp-voters-many{padding:1px 8px;border-radius:99px;background:var(--kp-sun);color:#05071a;font-weight:900;font-size:13px}
+:where(.ss-phone,.ss-personal) .sp-assist{grid-column:1/-1;display:flex;align-items:center;gap:6px;width:100%;min-height:44px;padding:2px 10px;white-space:nowrap;border-radius:10px;border:1px solid var(--line);background:#0b1030;color:inherit;font:800 13px/1.1 var(--font-body);text-align:left;cursor:pointer}
+:where(.ss-phone,.ss-personal) .sp-assist span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+:where(.ss-phone,.ss-personal) .sp-assist b{padding:2px 8px;border-radius:99px;background:#fff6e51f;font-weight:900}
+:where(.ss-phone,.ss-personal) .sp-assist[aria-pressed=true]{border-color:var(--kp-lime)}
+:where(.ss-phone,.ss-personal) .sp-assist[aria-pressed=true] b{background:var(--kp-lime);color:#05071a}

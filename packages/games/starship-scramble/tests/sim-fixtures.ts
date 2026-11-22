@@ -13,11 +13,12 @@ export function ship(id: string, hullId: string, faction: 'ally' | 'enemy' = 'al
 export function addCrew(world: World, s: Ship, specs: readonly { species: SpeciesId; role: CrewRole }[] = hullDef(s.hullId).startCrew): Crew[] {
   return specs.map(spec => { const m = createCrew({ id: `${s.id}-c${world.crew.length}`, name: 'Crew', ...spec, faction: s.faction, ownerId: s.captainId }, s, world); world.crew.push(m); return m; });
 }
-/** A battle already past its intro. Ships keep whatever crew is added. */
-export function battle(ships: Ship[], opts: Partial<StartOptions> = {}, crew = true): CombatWorld {
+/** A battle already past its intro. Ships keep whatever crew is added. `hold` switches allied weapons off Auto: the ship's computer still aims them but never fires them. */
+export function battle(ships: Ship[], opts: Partial<StartOptions> = {}, crew = true, hold = false): CombatWorld {
   const world: World = { ships, crew: [] };
   if (crew) for (const s of ships) if (s.faction === 'ally') addCrew(world, s);
   const w = { ...world, combat: startCombat(world, { id: 'c', seed: 1, hazard: 'none', objective: 'destroy', ...opts }) };
+  if (hold) for (const s of ships) if (s.faction === 'ally') for (const weapon of s.weapons) weapon.auto = false;
   stepCombat(w, 3000);
   return w;
 }

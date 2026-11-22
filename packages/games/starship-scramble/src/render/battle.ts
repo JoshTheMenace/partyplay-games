@@ -70,6 +70,10 @@ export class BattleRenderer {
     for (const s of view.ships) { const was = this.ships.get(s.id); if (s.status !== 'active' && (!was || was.status === 'active')) this.left.set(s.id, was ? now : -Infinity); if (s.status === 'active') this.left.delete(s.id); }
     this.ships = new Map(view.ships.map(s => [s.id, s]));
     if (combat?.outcome === 'escaped' && prev?.combat?.outcome !== 'escaped') this.escapedAt = prev ? now : -Infinity; else if (combat?.outcome !== 'escaped') this.escapedAt = 0;
+    // Victory: every surviving ally lights up in its captain's colour.
+    if (combat?.outcome === 'victory' && prev?.combat && !prev.combat.outcome && !document.hidden) for (const s of view.ships) { const at = s.faction === 'ally' && s.status === 'active' ? this.pos(s.id) : null; if (!at) continue;
+      const color = hex(this.opts.ownerColors[s.captainId ?? ''] ?? s.paint), u = input.scene.unit;
+      for (let k = 0; k < 3; k++) { this.fx.add({ k: 'ring', x: at.x, y: at.y, r: (150 + k * 70) * u, color, w: 7 * u, dur: 900, at: now + k * 160 }); this.fx.burst(at.x, at.y, 14, Kind.Ember, k % 2 ? '#fff6e5' : color, 260 * u, 1500, 3 * u); } }
     const live = new Set(combat?.projectiles.map(p => p.id)); for (const id of this.shots.keys()) if (!live.has(id)) this.shots.delete(id);
     // Muzzle flashes come from new projectiles (the full list), so the capped event window can never drop one.
     // A hidden tab pauses the frame loop, so stale effects are only marked seen; they would otherwise all burst at once on return.

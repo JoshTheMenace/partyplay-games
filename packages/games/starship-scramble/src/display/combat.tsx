@@ -1,10 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { overheat, type CaptainView, type Combat, type PublicView, type ShipView } from '../contracts';
+import { overheat, routLine, type CaptainView, type Combat, type PublicView, type ShipView } from '../contracts';
 import { weaponDef } from '../defs/catalog';
 import { manifest } from '../manifest';
 import { useCombatAudio } from '../audio/sfx';
 import { BattleRenderer } from '../render/battle';
-import { arrivalMs, isBoss, sceneLayout, type SceneShip } from '../render/scene';
+import { arrivalMs, sceneLayout, type SceneShip } from '../render/scene';
 import { KIND_COLORS } from '../render/ship';
 import './combat.css';
 
@@ -16,13 +16,30 @@ export type CombatSceneProps = {
 };
 const HAZARDS: Record<string, string> = { asteroids: 'Asteroid field', solar: 'Solar flares', 'ion-storm': 'Ion storm', nebula: 'Nebula' };
 const OUTCOMES = { victory: ['Victory', 'The squadron is broken'], escaped: ['FTL jump', 'The fleet got away'], defeat: ['Fleet lost', 'Every ship is down'] } as const;
-type Toast = { id: number; text: string };
+export type Toast = { id: number; text: string };
 /** Who paused the battle: the run stores the captain's name (ids also resolve); null after a save loads. */
 export const pauser = (view: PublicView) => { const p = view.combat?.pausedBy; return p ? view.captains.find(c => c.id === p || c.playerId === p)?.name ?? p : null; };
 
+/** The message feed and the Flagship's phase banner, shared by the battle scene and the fleet broadcast. */
+export function useBattleFeed(view: PublicView) {
+  const [toasts, setToasts] = useState<Toast[]>([]), [banner, setBanner] = useState<Toast | null>(null);
+  const lastMessage = useRef(view.message), phase = useRef<string | null>(null), nextId = useRef(0), timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  const later = (fn: () => void, ms: number) => { const id = setTimeout(() => { timers.current.delete(id); fn(); }, ms); timers.current.add(id); };
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  useEffect(() => {
+    const boss = (view.fleet?.ships ?? view.ships).find(s => s.hullId === 'flagship'), now = boss && view.combat ? `${view.combat.id}:${boss.phase}` : null;
+    if (phase.current && now && now !== phase.current && boss!.phase > 0) { const b = { id: nextId.current++, text: view.message || 'The Flagship reforms its hull!' }; setBanner(b); later(() => setBanner(x => x === b ? null : x), 4500); }
+    phase.current = now;
+    if (!view.message || view.message === lastMessage.current) return; lastMessage.current = view.message;
+    const toast = { id: nextId.current++, text: view.message }; setToasts(list => [...list.slice(-2), toast]);
+    later(() => setToasts(list => list.filter(x => x !== toast)), 5200);
+  }, [view]);
+  return { toasts, banner };
+}
+
 export function CombatScene({ view, onRoomClick, highlight, selectedCrew }: CombatSceneProps) {
   const root = useRef<HTMLDivElement>(null), bg = useRef<HTMLCanvasElement>(null), main = useRef<HTMLCanvasElement>(null), renderer = useRef<BattleRenderer | null>(null);
-  const [size, setSize] = useState({ w: 0, h: 0 }), [toasts, setToasts] = useState<Toast[]>([]), [banner, setBanner] = useState<Toast | null>(null), [hovering, setHovering] = useState(false);
+  const [size, setSize] = useState({ w: 0, h: 0 }), { toasts, banner } = useBattleFeed(view), [hovering, setHovering] = useState(false);
   const shape = view.ships.map(s => `${s.id}:${s.faction}:${s.slot}:${s.hullId}:${s.phases.length}`).join();
   const scene = useMemo(() => sceneLayout(view, size.w, size.h), [shape, size]);
   useLayoutEffect(() => {
@@ -32,17 +49,6 @@ export function CombatScene({ view, onRoomClick, highlight, selectedCrew }: Comb
   }, []);
   useEffect(() => { renderer.current?.set({ view, scene, highlight, selectedCrew }); });
   useCombatAudio(view); // one scene per device (TV display or host PersonalView), so every cue plays exactly once
-  const lastMessage = useRef(view.message), phases = useRef<Set<string> | null>(null), nextId = useRef(0), timers = useRef(new Set<ReturnType<typeof setTimeout>>());
-  const later = (fn: () => void, ms: number) => { const id = setTimeout(() => { timers.current.delete(id); fn(); }, ms); timers.current.add(id); };
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
-  useEffect(() => {
-    const combat = view.combat, fresh = combat?.events.filter(e => e.type === 'phase' && !phases.current?.has(e.id)) ?? [];
-    if (phases.current && fresh.length) { const b = { id: nextId.current++, text: view.message || 'The Flagship reforms its hull!' }; setBanner(b); later(() => setBanner(x => x === b ? null : x), 4500); }
-    phases.current = new Set(combat?.events.filter(e => e.type === 'phase').map(e => e.id));
-    if (!view.message || view.message === lastMessage.current) return; lastMessage.current = view.message;
-    const toast = { id: nextId.current++, text: view.message }; setToasts(list => [...list.slice(-2), toast]);
-    later(() => setToasts(list => list.filter(x => x !== toast)), 5200);
-  }, [view]);
   const pick = (e: { clientX: number; clientY: number }) => { const r = renderer.current, box = root.current!.getBoundingClientRect(); return r?.pick(e.clientX - box.left, e.clientY - box.top) ?? null; };
   const combat = view.combat, captains = new Map(view.captains.map(c => [c.id, c]));
   return <div ref={root} className={`ss-combat-scene${combat?.paused ? ' is-paused' : ''}${hovering ? ' is-pointing' : ''}`} style={{ '--u': `${scene.ui}px` } as CSSProperties}
@@ -58,14 +64,20 @@ export function CombatScene({ view, onRoomClick, highlight, selectedCrew }: Comb
   </div>;
 }
 
-function Header({ view, combat }: { view: PublicView; combat: Combat }) {
-  const foes = view.ships.filter(s => s.faction === 'enemy'), alive = foes.filter(s => s.status === 'active').length, boss = foes.find(isBoss);
-  const objective = combat.objective === 'boss' && boss ? `Destroy the ${boss.name} · phase ${boss.phase + 1} of ${boss.phases.length || 1}`
+/** Sector, objective and the fleet's meters. A fleet of several wings (view.fleet) also shows how many of its ships still fly against the line where it breaks. */
+export function Header({ view, combat }: { view: PublicView; combat: Combat }) {
+  const all = view.fleet?.ships ?? view.ships, foes = all.filter(s => s.faction === 'enemy'), alive = foes.filter(s => s.status === 'active').length, boss = foes.find(s => s.hullId === 'flagship');
+  const objective = combat.objective === 'boss' && boss ? `Destroy the ${boss.name} · phase ${boss.phase + 1} of ${(typeof boss.phases === 'number' ? boss.phases : boss.phases.length) || 1}`
     : combat.objective === 'survive' && combat.surviveUntilMs !== null ? `Survive the onslaught · ${Math.max(0, Math.ceil((combat.surviveUntilMs - combat.t) / 1000))}s`
-    : `Destroy the squadron · ${alive} of ${foes.length} left`;
+    : `Destroy the squadron${view.fleet ? 's' : ''} · ${alive} of ${foes.length} left`;
   const voters = view.captains.filter(c => c.connected).length, ready = combat.ftl >= 1, heat = overheat(combat);
+  const fleet = view.fleet?.ships.filter(s => s.faction === 'ally'), flying = fleet?.filter(s => s.status === 'active').length ?? 0, line = fleet ? routLine(fleet.length) : 0;
   return <header className="ss-hud">
     <div className="ss-hud__where"><span className="ss-hud__sector">{view.map.name}</span><span className="ss-hud__objective">{objective}</span></div>
+    {fleet && <div className={`ss-strength${flying <= line + Math.ceil(fleet.length / 8) ? ' is-low' : ''}`} aria-label={`${flying} of ${fleet.length} ships flying; the fleet breaks at ${line}`}>
+      <span className="ss-strength__label">Fleet <b>{flying}</b>/{fleet.length} flying</span>
+      <span className="ss-strength__bar"><i style={{ width: `${flying / fleet.length * 100}%` }}/><em style={{ left: `${line / fleet.length * 100}%` }}/></span>
+      <span className="ss-strength__note">breaks at {line}</span></div>}
     {combat.paused && <div className="ss-hud__pause">{pauser(view) ? `Paused by ${pauser(view)}` : 'Paused'}</div>}
     <div className="ss-hud__side">
       {combat.hazard !== 'none' && <span className="ss-hud__chip">{HAZARDS[combat.hazard]}</span>}
@@ -83,7 +95,7 @@ function Plate({ ship, at, captain, t, hidden }: { ship: ShipView; at: SceneShip
   const flee = ship.fleeAtMs !== null && !gone ? Math.max(0, Math.ceil((ship.fleeAtMs - t) / 1000)) : null;
   const style = { left: at.plate.x, top: at.plate.y, width: at.plate.w, '--c': ally ? captain?.color ?? ship.paint : '#ff5d5d', '--n': Math.max(1, ship.maxHull),
     '--hc': frac > .5 ? 'var(--kp-lime)' : frac > .25 ? 'var(--kp-sun)' : 'var(--kp-coral)' } as CSSProperties;
-  return <div className={`ss-plate ${ally ? 'is-ally' : 'is-enemy'}${gone ? ' is-gone' : ''}${hidden ? ' is-hidden' : ''}`} style={style}>
+  return <div className={`ss-plate ${ally ? 'is-ally' : 'is-enemy'}${gone ? ' is-gone' : ''}${hidden ? ' is-hidden' : ''}${!gone && ally && frac <= .25 ? ' is-critical' : ''}`} style={style}>
     <div className="ss-plate__top"><span className="ss-plate__name">{ship.name}</span>
       {flee !== null ? <span className="ss-plate__flee">Jumping {flee}s</span> : !gone && <span className="ss-plate__ev">EV {Math.round(ship.evasion)}%</span>}</div>
     {gone ? <div className="ss-plate__gone">{ship.status === 'fled' ? 'Escaped' : 'Destroyed'}</div> : <>
@@ -101,8 +113,8 @@ function Plate({ ship, at, captain, t, hidden }: { ship: ShipView; at: SceneShip
   </div>;
 }
 
-function Callout({ view, combat, banner }: { view: PublicView; combat: Combat; banner: Toast | null }) {
-  const boss = view.ships.find(s => s.faction === 'enemy' && isBoss(s)), [title, sub] = combat.outcome ? OUTCOMES[combat.outcome]
-    : banner ? ['Flagship phase shift', banner.text] : combat.t < combat.introUntilMs ? [boss ? boss.name : 'Battle stations', boss ? 'Break the Armada' : `${view.ships.filter(s => s.faction === 'enemy').length} hostiles inbound · ${view.map.name}`] : [null, null];
+export function Callout({ view, combat, banner }: { view: PublicView; combat: Combat; banner: Toast | null }) {
+  const all = view.fleet?.ships ?? view.ships, boss = all.find(s => s.faction === 'enemy' && s.hullId === 'flagship'), [title, sub] = combat.outcome ? view.fleet && combat.outcome === 'defeat' ? ['Fleet broken', 'Too few ships are left to hold the line'] as const : OUTCOMES[combat.outcome]
+    : banner ? ['Flagship phase shift', banner.text] : combat.t < combat.introUntilMs ? [boss ? boss.name : 'Battle stations', boss ? 'Break the Armada' : `${all.filter(s => s.faction === 'enemy').length} hostiles inbound · ${view.map.name}`] : [null, null];
   return title ? <div key={`${title}${banner?.id ?? ''}`} className={`ss-callout${combat.outcome ? ` is-${combat.outcome}` : ''}`}><strong>{title}</strong><span>{sub}</span></div> : null;
 }

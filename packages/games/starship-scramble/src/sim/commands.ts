@@ -1,6 +1,6 @@
 /** Captain combat orders. Every check runs before anything changes. */
 import type { Ship } from '../contracts';
-import { alive, context, crewOn, dest, level, roomDef, slotsOf, space, stationOf, wdef } from './core';
+import { alive, context, crewOn, dest, level, meets, reach, roomDef, slotsOf, space, stationOf, wdef } from './core';
 import { beam, orderCrew, send, teleportCapacity } from './crew';
 import { cloak, fire } from './combat';
 import type { CombatCommand, CombatWorld } from './index';
@@ -17,6 +17,7 @@ export function applyCombatCommand(world: CombatWorld, captainId: string, comman
       const w = weapon(command.weapon), ally = wdef(w.defId).target === 'ally', to = ctx.ships.get(command.shipId);
       if (to?.status !== 'active') fail('That ship is out of the fight.');
       if (ally !== (to.faction === ship.faction)) fail(ally ? 'Support weapons target allies.' : 'Target an enemy ship.');
+      if (ally ? !meets(ship, to) : !reach(world.ships.filter(s => s.status === 'active'), ship).includes(to)) fail(ally ? 'That ship flies with another wing.' : "Finish your own wing's fight first.");
       if (!roomDef(to, command.roomId)) fail("That room isn't on that ship.");
       w.target = { shipId: to.id, roomId: command.roomId };
       return;
@@ -27,6 +28,7 @@ export function applyCombatCommand(world: CombatWorld, captainId: string, comman
     case 'stations':
       for (const m of crewOn(ctx, ship)) {
         const st = m.ownerId === captainId && stationOf(ship, m);
+        if (st) delete m.back;
         if (st && dest(m) !== st && space(ship, st, m.faction, crewOn(ctx, ship)) > 0) send(ship, m, st);
       }
       return;
@@ -51,6 +53,7 @@ export function applyCombatCommand(world: CombatWorld, captainId: string, comman
       if (crew.length > capacity) fail(`Your teleporter carries ${capacity} crew.`);
       if (to?.status !== 'active') fail('That ship is out of the fight.');
       if (to === ship) fail('Pick another ship.');
+      if (!meets(ship, to)) fail("That ship is in another wing's fight.");
       if (!roomDef(to, command.roomId)) fail("That room isn't on that ship.");
       if (space(to, command.roomId, 'ally', crewOn(ctx, to)) < crew.length) fail('Not enough space in that room.');
       if (level(pad) && ship.teleportCooldownMs <= 0 && crew.every(m => m.roomId === pad.id && !m.path.length)) return beam(ctx, ship, crew, to, command.roomId);

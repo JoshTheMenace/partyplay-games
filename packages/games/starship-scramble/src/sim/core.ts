@@ -19,6 +19,10 @@ export const level = (r: RoomState) => r.ionMs > 0 ? 0 : Math.max(0, r.tier - r.
 export const lv = (ship: Ship, system: SystemId) => { const r = systemRoom(ship, system); return r ? level(r) : 0; };
 export const has = (ship: Ship, augment: string) => ship.augments.includes(augment);
 export const crossed = (t0: number, t1: number, period: number) => Math.floor(t0 / period) !== Math.floor(t1 / period);
+/** Do two ships meet in the same engagement? The Flagship (wing −1) meets everyone. */
+export const meets = (a: Ship, b: Ship) => a.wing < 0 || b.wing < 0 || a.wing === b.wing;
+/** The opponents a ship may fight: those of its own engagement, or, once none is left there, any other (a wing that wins its fight reinforces the rest). */
+export function reach(active: readonly Ship[], s: Ship) { const foes = active.filter(o => o.faction !== s.faction), near = foes.filter(o => meets(s, o)); return near.length ? near : foes; }
 
 /** mulberry32 over combat.rng. */
 export function rand(c: Combat) {
@@ -46,7 +50,7 @@ export function derive(ship: Ship, aboard: readonly Crew[], nebula: boolean): De
   const pilots = helmCrew(ship, aboard);
   const base = Math.min(60, levels.helm && (pilots.length || hullOf(ship).automated)
     ? (levels.engines ?? 0) * 5 + levels.helm * 3 + (pilots.some(m => m.role === 'pilot') ? 5 : 0) + (has(ship, 'thruster-kit') ? 7 : 0) + (nebula ? 10 : 0) : 0);
-  return { levels, maxShields: levels.shields ?? 0, evasion: ship.cloakMs > 0 ? Math.min(90, base + 60) : base };
+  return { levels, maxShields: (levels.shields ?? 0) * ship.scale, evasion: ship.cloakMs > 0 ? Math.min(90, base + 60) : base };
 }
 /** Living crew of the ship's own faction standing at the helm. */
 export function helmCrew(ship: Ship, aboard: readonly Crew[]) {
@@ -85,11 +89,11 @@ export function createShip(spec: ShipSpec): Ship {
   const maxHull = spec.maxHull ?? hull.maxHull;
   const rooms: RoomState[] = hull.rooms.map(r => ({ id: r.id, system: r.system, tier: r.system ? systems[r.system] ?? 0 : 0, damage: 0, ionMs: 0, fire: 0, breach: false, oxygen: 100, repair: 0 }));
   return {
-    id: spec.id, faction: spec.faction, captainId: spec.captainId, enemyId: spec.enemyId, hullId: hull.id, name: spec.name, paint: spec.paint, slot: spec.slot,
-    hull: Math.min(spec.hull ?? maxHull, maxHull), maxHull, shields: systems.shields ?? 0, shieldCharge: 0, tempShield: 0, tempShieldMs: 0, rooms,
+    id: spec.id, faction: spec.faction, captainId: spec.captainId, enemyId: spec.enemyId, hullId: hull.id, name: spec.name, paint: spec.paint, wing: spec.wing ?? 0, slot: spec.slot,
+    hull: Math.min(spec.hull ?? maxHull, maxHull), maxHull, shields: (systems.shields ?? 0) * (spec.scale ?? 1), shieldCharge: 0, tempShield: 0, tempShieldMs: 0, rooms,
     weapons: weaponStates(spec.id, spec.weapons, systems.weapons ?? 0), ammo: spec.ammo, augments: [...spec.augments],
     status: 'active', cloakMs: 0, cloakCooldownMs: 0, teleportCooldownMs: 0, defenseCooldownMs: 0, fleeAtMs: null,
-    phase: 0, phases: spec.phases, ai: spec.ai, fleeBelow: spec.fleeBelow, autopilot: false, lastHitBy: null,
+    phase: 0, phases: spec.phases, ai: spec.ai, fleeBelow: spec.fleeBelow, autopilot: false, assist: spec.assist ?? false, scale: spec.scale ?? 1, lastHitBy: null,
   };
 }
 export const weaponStates = (prefix: string, ids: readonly string[], powered: number) =>

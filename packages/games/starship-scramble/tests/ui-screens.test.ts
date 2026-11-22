@@ -6,10 +6,11 @@ import { build } from 'esbuild';
 import { createElement, type ComponentType } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { GameClientModule } from '../../../party-ui/src/index';
-import type { Action, ClientProps, Input, PrivateView, PublicView, Settings } from '../src/contracts';
+import type { Action, ClientProps, Input, PublicView, Settings } from '../src/contracts';
 import { AUGMENTS, SYSTEMS, WEAPONS } from '../src/defs/catalog';
 import { PLAYER_HULLS } from '../src/defs/hulls';
 import { NAMES, NOW, SCREENS } from './fixtures/screens';
+import { encode, type Own, type Wire } from '../src/wire';
 
 /** Bundle browser entry points the way the client build does (CSS stripped) and report every source file they pull in. */
 async function load<T>(entry: string) {
@@ -95,15 +96,15 @@ test('victory and defeat debriefs list every captain and star tied leaders', () 
 });
 
 // The client module pulls in the phone and audio owners' code; load it lazily so a broken sibling fails only these tests.
-const clientModule = load<{ client: GameClientModule<Input, Action, Settings, PublicView, PrivateView> }>('../src/client.tsx').then(m => ({ client: m.exports.client, inputs: m.inputs }));
+const clientModule = load<{ client: GameClientModule<Input, Action, Settings, Wire, Own> }>('../src/client.tsx').then(m => ({ client: m.exports.client, inputs: m.inputs }));
 clientModule.catch(() => {});
 test('client module is browser-safe and gates portrait to menus', async () => {
   const { client, inputs } = await clientModule;
   assert.deepEqual(inputs.filter(path => /starship-scramble\/src\/(content|sim|run|server)/.test(path)), []);
   assert.equal(client.immersivePhone, true);
   assert.equal(client.allowPortraitController!(null), false);
-  for (const [name, make] of Object.entries(SCREENS)) assert.equal(client.allowPortraitController!(make()), true, name);
-  assert.equal(client.allowPortraitController!({ ...SCREENS.map(), phase: 'combat' }), false);
+  for (const [name, make] of Object.entries(SCREENS)) assert.equal(client.allowPortraitController!(encode(make())), true, name);
+  assert.equal(client.allowPortraitController!(encode({ ...SCREENS.map(), phase: 'combat' })), false);
 });
 
 test('settings, instructions and results render their copy', async () => {
@@ -113,6 +114,6 @@ test('settings, instructions and results render their copy', async () => {
   assert.match(settings, /aria-checked="true"[^>]*aria-label="Cadet difficulty/); assert.match(settings, /<option value="standard" selected="">Standard/);
   for (const text of ['Short · 1 sector', 'Long · 5 sectors']) assert.ok(settings.includes(text), text);
   assert.notEqual(html(createElement(client.InstructionsView, { role: 'display' })), html(createElement(client.InstructionsView, { role: 'controller' })));
-  const results = html(createElement(client.ResultsView!, { outcome: { complete: true, winners: [], rows: [] }, publicView: SCREENS.defeat(), playerId: null }));
+  const results = html(createElement(client.ResultsView!, { outcome: { complete: true, winners: [], rows: [] }, publicView: encode(SCREENS.defeat()), playerId: null }));
   for (const text of ['Defeat', ...NAMES, 'Damage']) assert.ok(results.includes(text), text);
 });

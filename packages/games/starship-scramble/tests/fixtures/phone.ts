@@ -56,10 +56,10 @@ export function phoneLoot(): PublicView {
 }
 export function phoneStore(): PublicView {
   const v = menu('store', { store: { repairPrice: 3, ammoPrice: 12, offers: [
-    { id: 'o1', kind: 'weapon', defId: 'flak-cannon', price: 70, soldTo: null }, { id: 'o2', kind: 'weapon', defId: 'breach-missile', price: 70, soldTo: 'cap2' },
-    { id: 'o3', kind: 'weapon', defId: 'aegis-projector', price: 55, soldTo: null }, { id: 'o4', kind: 'augment', defId: 'auto-loader', price: 60, soldTo: null },
-    { id: 'o5', kind: 'augment', defId: 'fire-suppressant', price: 40, soldTo: null }, { id: 'o6', kind: 'system', defId: 'teleporter', price: 75, soldTo: null },
-    { id: 'o7', kind: 'crew', defId: 'soldier', price: 50, soldTo: null, crew: { name: 'Wilhelmina', species: 'ember', role: 'soldier' } }] } });
+    { id: 'o1', kind: 'weapon', defId: 'flak-cannon', price: 70, soldTo: null, wing: 0 }, { id: 'o2', kind: 'weapon', defId: 'breach-missile', price: 70, soldTo: 'cap2', wing: 0 },
+    { id: 'o3', kind: 'weapon', defId: 'aegis-projector', price: 55, soldTo: null, wing: 0 }, { id: 'o4', kind: 'augment', defId: 'auto-loader', price: 60, soldTo: null, wing: 0 },
+    { id: 'o5', kind: 'augment', defId: 'fire-suppressant', price: 40, soldTo: null, wing: 0 }, { id: 'o6', kind: 'system', defId: 'teleporter', price: 75, soldTo: null, wing: 0 },
+    { id: 'o7', kind: 'crew', defId: 'soldier', price: 50, soldTo: null, wing: 0, crew: { name: 'Wilhelmina', species: 'ember', role: 'soldier' } }] } });
   v.ships[0].augments = ['scrap-magnet', 'hull-welders'];
   return v;
 }

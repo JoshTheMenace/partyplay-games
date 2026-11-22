@@ -5,7 +5,7 @@ import { EVENTS } from '../content/events';
 import { ROLES, SPECIES, augmentDef, speciesDef, systemDef, weaponDef } from '../defs/catalog';
 import { berths, item, refit } from './fleet';
 import { pick, weighted } from './rng';
-import { LIMITS, captainById, currentNode, earn, fleet, living, recruit, runDepth, scrapScale, sector, shipOf, type State } from './state';
+import { LIMITS, captainById, currentNode, earn, fleet, living, recruit, runDepth, scrapScale, sector, shipOf, wing, wings, type State } from './state';
 
 const CONTINUE: ChoiceDef = { id: 'continue', label: 'Continue', outcomes: [{ weight: 1, text: '', effects: [] }] };
 const KIND_NAMES: Record<WeaponKind, string> = { laser: 'Laser', missile: 'Missile', beam: 'Beam', ion: 'Ion', flak: 'Flak', support: 'Support' };
@@ -22,7 +22,7 @@ const STEPS = new Set(EVENTS.filter(e => e.choices.some(ch => ch.outcomes.some(o
  */
 export function pickEvent(s: State, kind: NodeKind): EventDef | null {
   const late = s.sectorIndex === runDepth(s) - 1 && currentNode(s).col >= s.map.columns - 2;
-  const pool = EVENTS.filter(e => e.kinds.includes(kind) && (e.sectors === 'any' || e.sectors.includes(sector(s).id)) && !(e.unique && s.seen.includes(e.id)) && (!e.requiresFlag || s.flags.includes(e.requiresFlag)) && !(late && STEPS.has(e.id)));
+  const pool = EVENTS.filter(e => e.kinds.includes(kind) && s.captains.length >= (e.fleet ?? 1) && (e.sectors === 'any' || e.sectors.includes(sector(s).id)) && !(e.unique && s.seen.includes(e.id)) && (!e.requiresFlag || s.flags.includes(e.requiresFlag)) && !(late && STEPS.has(e.id)));
   const due = pool.filter(e => e.requiresFlag);
   return pool.length ? weighted(s, due.length ? due : pool, e => s.seen.includes(e.id) ? e.weight / 4 : e.weight) : null;
 }
@@ -80,12 +80,15 @@ export function resolveChoice(s: State, choice: ChoiceDef, nowMs: number) {
 const signed = (n: number) => n >= 0 ? `+${n}` : `−${-n}`;
 const plural = (n: number, word: string) => `${Math.abs(n)} ${word}${Math.abs(n) === 1 ? '' : 's'}`;
 export const shipLabel = (s: State, ship: Ship) => { const own = `${captainById(s, ship.captainId)?.name ?? 'The fleet'}'s `; return ship.name.startsWith(own) ? ship.name : own + ship.name; };
+/** 'random' and 'weakest' pick one ship in every wing, so a big fleet feels an event as much as a small one. */
 function targets(s: State, who: Who) {
   const ships = fleet(s);
   if (who === 'fleet' || !ships.length) return ships;
-  return [who === 'random' ? pick(s, ships) : ships.reduce((a, b) => b.hull / b.maxHull < a.hull / a.maxHull ? b : a)];
+  return Array.from({ length: wings(s) }, (_, k) => ships.filter(ship => ship.wing === k)).filter(list => list.length)
+    .map(list => who === 'random' ? pick(s, list) : list.reduce((a, b) => b.hull / b.maxHull < a.hull / a.maxHull ? b : a));
 }
-const onShips = (s: State, ships: Ship[], who: Who, text: string) => !ships.length ? null : who === 'fleet' && ships.length > 1 ? `Every ship ${text}` : ships.map(ship => `${shipLabel(s, ship)} ${text}`).join(' · ');
+const onShips = (s: State, ships: Ship[], who: Who, text: string) => !ships.length ? null : who === 'fleet' && ships.length > 1 ? `Every ship ${text}`
+  : wings(s) > 1 ? `One ship in ${ships.length === wings(s) ? 'every wing' : `${ships.length} wings`} ${text}` : ships.map(ship => `${shipLabel(s, ship)} ${text}`).join(' · ');
 
 function apply(s: State, e: Exclude<EventEffect, { kind: 'event' | 'combat' | 'store' }>): string | null {
   switch (e.kind) {
@@ -105,17 +108,18 @@ function apply(s: State, e: Exclude<EventEffect, { kind: 'event' | 'combat' | 's
       return onShips(s, ships, e.who, `${systemDef(e.system).name.toLowerCase()} upgraded`); }
     case 'item': { const found = item(s, e.item, e.tier, e.id); s.pending.push(found);
       return `${(found.kind === 'weapon' ? weaponDef : augmentDef)(found.defId).name} added to the spoils`; }
-    case 'crew': {
-      const c = [...s.captains].sort((a, b) => living(s, a.id).length - living(s, b.id).length)[0], ship = shipOf(s, c);
-      if (living(s, c.id).length >= LIMITS.crew || berths(s, ship) < 1) return 'No free berth for a new recruit';
-      const species = e.species ?? pick(s, SPECIES).id, role = e.role ?? pick(s, ROLES).id;
-      recruit(s, c.id, ship, species, role);
-      return `A ${speciesDef(species).name} ${role} joins ${c.name}`; }
-    case 'crewLoss': {
-      const pool = s.captains.filter(c => living(s, c.id).length > 1).flatMap(c => living(s, c.id));
-      if (!pool.length) return null;
-      const lost = pick(s, pool); s.crew = s.crew.filter(k => k !== lost);
-      return `${lost.name} of ${captainById(s, lost.ownerId)!.name}'s crew was lost`; }
+    case 'crew': { // one recruit per wing, to its captain with the fewest crew
+      const lines = Array.from({ length: wings(s) }, (_, k) => {
+        const c = [...wing(s, k)].sort((a, b) => living(s, a.id).length - living(s, b.id).length)[0], ship = shipOf(s, c);
+        if (living(s, c.id).length >= LIMITS.crew || berths(s, ship) < 1) return null;
+        const species = e.species ?? pick(s, SPECIES).id, role = e.role ?? pick(s, ROLES).id;
+        recruit(s, c.id, ship, species, role);
+        return `A ${speciesDef(species).name} ${role} joins ${c.name}`; }).filter(line => line !== null);
+      return !lines.length ? 'No free berth for a new recruit' : lines.length > 1 ? `${lines.length} recruits join the fleet, one to a wing` : lines[0]; }
+    case 'crewLoss': { // one per wing
+      const lost = Array.from({ length: wings(s) }, (_, k) => wing(s, k).filter(c => living(s, c.id).length > 1).flatMap(c => living(s, c.id))).filter(pool => pool.length).map(pool => pick(s, pool));
+      s.crew = s.crew.filter(k => !lost.includes(k));
+      return !lost.length ? null : lost.length > 1 ? `${lost.length} crew were lost, one from each wing` : `${lost[0].name} of ${captainById(s, lost[0].ownerId)!.name}'s crew was lost`; }
     case 'armada': s.map.armadaCol += e.amount; return `The Armada ${e.amount > 0 ? 'gains' : 'falls back'} ${plural(e.amount, 'beacon')}`;
     case 'reveal': s.revealed = true; return 'Sector map revealed';
     case 'reserves': s.reserves = Math.max(0, s.reserves + e.amount); return `${signed(e.amount)} fleet reserve ${Math.abs(e.amount) === 1 ? 'hull' : 'hulls'}`;

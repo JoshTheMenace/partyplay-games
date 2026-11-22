@@ -8,7 +8,7 @@ Requires Blender 5.2 (Cycles; uses Metal on Apple GPUs, otherwise the CPU, where
 
 ```sh
 sh packages/games/starship-scramble/art/render-all.sh            # everything, about 2 minutes on an M-series GPU
-sh packages/games/starship-scramble/art/render-all.sh ships      # or any of: ships backdrops icons
+sh packages/games/starship-scramble/art/render-all.sh ships      # or any of: ships backdrops icons sites
 BLENDER=/Applications/Blender.app/Contents/MacOS/Blender sh …/render-all.sh
 ```
 
@@ -23,6 +23,7 @@ The `ships` stage first re-exports `hulls.json` from `src/defs/hulls.ts`, then r
 | `contact.py` | `contact-<hullId>.png` (tinted sprite with room rectangles, the paint mask, a half-scale TV preview) and `gallery.png`. |
 | `backdrops.py` | `backdrops/{rustbelt,veil,glasswater,meridian,cinder,sanctum,marches,armada-reach,hangar,map}.jpg`, 1920×1080, JPEG quality 80. |
 | `icons.py` | `icons/{laser,missile,beam,ion,flak,support,augment,scrap,crew,repair,ammo}.png`, 128×128. |
+| `sites.py` | `sites/{outpost,drydock,derelict,beacon}.png`, 640×640: what the fleet finds at a beacon, shown on the event and store screens. Same studio rig and 3/4 view as the icons, no outline. |
 | `hulls.json` | Export of `HULLS` (generated; do not edit). |
 
 ## Ship sprite contract

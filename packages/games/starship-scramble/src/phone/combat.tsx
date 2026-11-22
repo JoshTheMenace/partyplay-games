@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Activity, Atom, Bomb, ChevronsRight, EyeOff, Flame, Gauge, HeartPulse, Home, Orbit, Pause, Play, Rocket, Shield, Telescope, Undo2, Wind, X, Zap, type LucideIcon } from 'lucide-react';
-import { overheat, type ClientProps, type Crew, type RoomState, type ShipView, type WeaponKind, type WeaponState } from '../contracts';
+import { Activity, Atom, Bomb, ChevronsRight, EyeOff, Flame, Gauge, HeartPulse, Home, LifeBuoy, Orbit, Pause, Play, Rocket, Shield, Telescope, Undo2, Wind, X, Zap, type LucideIcon } from 'lucide-react';
+import { WING_COLORS, overheat, wingLetter, wingName, type ClientProps, type Crew, type RoomState, type ShipView, type WeaponKind, type WeaponState } from '../contracts';
 import { useCombatAudio } from '../audio/sfx';
 import { ROLES, speciesDef, systemDef, weaponDef } from '../defs/catalog';
 import { hullDef } from '../defs/hulls';
@@ -32,6 +32,8 @@ export function useCombat(props: ClientProps, actions: Actions) {
   const teleRoom = ship?.rooms.find(r => r.system === 'teleporter' && r.tier > 0) ?? null, pad = teleRoom && hullDef(ship!.hullId).rooms.find(r => r.id === teleRoom.id), seats = teleRoom && pad ? Math.min(Math.min(teleRoom.tier, 3) + 1, pad.w * pad.h) : 0;
   const away = [...new Set(mine.filter(c => c.shipId !== ship?.id).map(c => c.shipId))].flatMap(id => view.ships.filter(s => s.id === id));
   const ready = ship?.status === 'active' ? ship.weapons.filter(w => w.target && weaponStatus(ship, w) === 'ready') : [];
+  /** In a fleet of several wings: this wing's own fight is won while the battle goes on, so its guns cover the other wings by themselves. */
+  const covering = !!view.fleet && !!combat && !combat.outcome && combat.t > combat.introUntilMs && ship?.status === 'active' && !view.ships.some(s => s.faction === 'enemy' && s.status === 'active');
   const cancel = () => setMode(CREW);
   const openShip = (id: string | null) => { setAwayId(id); setPicked([]); cancel(); };
   const pickWeapon = (uid: string) => setMode(m => m.kind === 'weapon' && m.uid === uid ? CREW : { kind: 'weapon', uid, shipId: ship?.weapons.find(w => w.uid === uid)?.target?.shipId ?? null });
@@ -63,7 +65,7 @@ export function useCombat(props: ClientProps, actions: Actions) {
   const pause = () => combat && actions.act({ type: 'pause', paused: !combat.paused });
   const stations = () => actions.act({ type: 'stations' });
   const cloak = () => actions.act({ type: 'cloak' });
-  return { view, combat, me, ship, mode, setMode, cancel, mine, crewShip, selected, weapon, support, candidates, aim, teleRoom, seats, away, ready,
+  return { view, combat, me, ship, mode, setMode, cancel, mine, crewShip, selected, weapon, support, candidates, aim, teleRoom, seats, away, ready, covering,
     openShip, pickWeapon, aimAt, fleet, toggleCrew, room, teleport, roomLabel, fire, pause, stations, cloak, actions, now: props.serverNowMs };
 }
 export type CombatState = ReturnType<typeof useCombat>;
@@ -72,6 +74,7 @@ const Stat = ({ icon: Icon, label, children }: { icon: LucideIcon; label: string
 export function StatusStrip({ c }: { c: CombatState }) {
   const { ship, combat } = c; if (!ship || !combat) return null;
   return <div className="sp-status">
+    {c.view.fleet && c.me && <span className="sp-wingbadge" style={{ '--c': WING_COLORS[c.me.wing % WING_COLORS.length] } as React.CSSProperties} title={`${wingName(c.me.wing)} wing`} aria-label={`${wingName(c.me.wing)} wing`}>{wingLetter(c.me.wing)}</span>}
     <span className="sp-hull"><b>HULL</b><Meter value={ship.hull} max={ship.maxHull} label={`Hull ${ship.hull} of ${ship.maxHull}`}/><span className="kp-numeral">{ship.hull}</span></span>
     <span className="sp-stat"><Shield size={14} aria-hidden="true"/><Pips on={ship.shields + ship.tempShield} total={ship.maxShields + ship.tempShield} label={`Shields ${ship.shields + ship.tempShield} of ${ship.maxShields + ship.tempShield}`}/></span>
     <Stat icon={Wind} label={`Evasion ${ship.evasion}%`}>{ship.evasion}%</Stat>
@@ -128,7 +131,8 @@ const stateLabel: Partial<Record<Crew['state'], string>> = { walking: 'moving', 
 export function CrewRoster({ c }: { c: CombatState }) {
   const { mine, crewShip, ship, selected, view, actions } = c;
   const groups = [...new Set([crewShip?.id, ...mine.map(m => m.shipId)])].flatMap(id => view.ships.filter(s => s.id === id));
-  return <div className="sp-roster" role="group" aria-label="Your crew">{groups.map(s => { const crew = mine.filter(m => m.shipId === s.id), home = s.id === ship?.id;
+  return <div className="sp-roster" role="group" aria-label="Your crew">
+    {groups.map(s => { const crew = mine.filter(m => m.shipId === s.id), home = s.id === ship?.id;
     if (s.id !== crewShip?.id) return <div key={s.id} className="sp-away"><button type="button" className="sp-away-open" onClick={() => c.openShip(home ? null : s.id)}>
       {home ? <Home size={15} aria-hidden="true"/> : <Orbit size={15} aria-hidden="true"/>}<span>{home ? 'Back aboard' : 'Away team'} · {s.name} ({crew.length})</span></button>
       {!home && <button type="button" className="sp-away-recall" aria-label={`Recall crew from ${s.name}`} disabled={actions.busy(`recall-${s.id}`)} onClick={() => actions.act({ type: 'recall', shipId: s.id }, `recall-${s.id}`)}>{actions.busy(`recall-${s.id}`) ? <Spin/> : <Undo2 size={16} aria-hidden="true"/>}</button>}</div>;
@@ -139,7 +143,11 @@ export function CrewRoster({ c }: { c: CombatState }) {
         <span className="sp-crew-text"><b>{m.name}</b><small>{ROLES.find(r => r.id === m.role)?.name} · {room?.system ? systemDef(room.system).short : 'Bay'}{m.beam ? ` · boarding ${view.ships.find(x => x.id === m.beam!.shipId)?.name ?? ''}` : ['fighting', 'extinguishing', 'repairing'].includes(m.state) ? ` · ${stateLabel[m.state]}` : ''}</small></span>
         <Meter value={m.hp} max={m.maxHp} tone="hp" segments={1} label={`${m.name} health`}/></button>; })}
       {!crew.length && <p className="sp-group-label">No crew aboard</p>}</div>; })}
-    {!mine.length && <p className="sp-group-label">All hands lost. Your captain returns with fresh recruits after the battle.</p>}</div>;
+    {!mine.length && <p className="sp-group-label">All hands lost. Your captain returns with fresh recruits after the battle.</p>}
+    {/* Set once and forgotten, so it sits under the crew it commands. */}
+    {ship && <button type="button" className="sp-assist" aria-pressed={ship.assist} disabled={actions.busy('assist')} onClick={() => actions.act({ type: 'assist', on: !ship.assist })}
+      aria-label={`Damage control ${ship.assist ? 'on: crew answer fires, breaches, damage and boarders by themselves' : 'off: crew wait for your orders'}`}>
+      {actions.busy('assist') ? <Spin/> : <LifeBuoy size={15} aria-hidden="true"/>}<span>Damage control</span><b>{ship.assist ? 'Auto' : 'Manual'}</b></button>}</div>;
 }
 /** Ship choices while aiming a weapon or the teleporter. */
 export function TargetList({ c, pick = true }: { c: CombatState; pick?: boolean }) {
@@ -156,7 +164,7 @@ export function TargetList({ c, pick = true }: { c: CombatState; pick?: boolean 
       {!candidates.length && <p className="sp-group-label">No ships in range.</p>}</div>}
     {weapon && <div className="sp-targets-foot">
       <button type="button" className="sp-chip-btn" aria-pressed={weapon.auto} disabled={actions.busy('autofire')} onClick={() => actions.act({ type: 'autofire', weapon: weapon.uid, auto: !weapon.auto })}>{actions.busy('autofire') ? <Spin/> : null}Auto fire {weapon.auto ? 'on' : 'off'}</button>
-      {weapon.target && <button type="button" className="sp-chip-btn" disabled={actions.busy('untarget')} onClick={() => { void actions.act({ type: 'untarget', weapon: weapon.uid }); c.cancel(); }}>Clear target</button>}</div>}
+</div>}
   </div>;
 }
 
@@ -170,7 +178,7 @@ export function CombatController(props: ClientProps & { actions: Actions }) {
   const caption = mode.kind === 'weapon' ? aim && `Tap a room on ${aim.name} to aim ${weaponDef(weapon!.defId).name}`
     : mode.kind === 'teleport' ? aim && `Tap a room on ${aim.name} to beam ${selected.length} across`
     : mode.kind === 'fleet' ? 'Pick a ship to look at'
-    : selected.length ? `${selected.length} selected · tap a room to send them` : crewShip !== ship ? mine.some(m => m.shipId === crewShip?.id) ? `Away team aboard ${crewShip?.name} · tap your crew, then a room` : `Viewing ${crewShip?.name}` : !lost && 'Tap a room with crew, then a room to send them';
+    : selected.length ? `${selected.length} selected · tap a room to send them` : c.covering && crewShip === ship ? 'Your wing is clear · your guns are covering the rest of the fleet' : crewShip !== ship ? mine.some(m => m.shipId === crewShip?.id) ? `Away team aboard ${crewShip?.name} · tap your crew, then a room` : `Viewing ${crewShip?.name}` : !lost && 'Tap a room with crew, then a room to send them';
   const paused = combat.paused && !combat.outcome, by = pauser(view);
   const stage = mode.kind !== 'crew' && mode.kind !== 'fleet' ? aim ? <ShipStage view={view} ship={aim} serverNowMs={props.serverNowMs} onRoom={id => c.room(aim.id, id)} roomLabel={c.roomLabel(aim)} highlight={aim.rooms.map(r => r.id)} selectedRoom={weapon?.target?.shipId === aim.id ? weapon.target.roomId : null}/>
     : <div className="sp-stage sp-stage-empty"><p>No ships in range</p></div>

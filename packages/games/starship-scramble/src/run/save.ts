@@ -1,7 +1,9 @@
 /** World saves: exportSave strips wall-clock and transient bits; loadSave validates every field and reseats the new roster. */
 import type { RoundContext } from '../../../../party-contract/src/index';
 import { assertSerializable } from '../../../../party-contract/src/serializable';
-import { RUN_SECTORS, SAVE_VERSION, type Settings } from '../contracts';
+import { MAX_ROOM_PLAYERS } from '../../../../party-contract/src/index';
+import { RUN_SECTORS, SAVE_VERSION, wingCount, wingOf, type Settings, type Ship } from '../contracts';
+import { CREW, SHIP_KEYS, SHIP_PARTS, SHOT, list, rec as rows } from '../wire';
 import { ENEMY_IDS, SECTOR_IDS } from '../content/types';
 import { sectorDef } from '../content/sectors';
 import { EVENTS } from '../content/events';
@@ -31,19 +33,22 @@ const rec = (c: Check, max: number): Check => (v, p) => { const o = record(v, p)
 const system = ids(SYSTEMS), weapon = ids(WEAPONS), augment = ids(AUGMENTS), faction = oneOf(['ally', 'enemy']), hazard = oneOf(['none', 'asteroids', 'solar', 'ion-storm', 'nebula']);
 const levels = obj(Object.fromEntries(SYSTEMS.map(d => [d.id, opt(num)])));
 const room = obj({ id, system: nul(system), tier: int, damage: num, ionMs: num, fire: num, breach: bool, oxygen: num, repair: num });
-const ship = obj({ id, faction, captainId: nul(id), enemyId: nul(oneOf(ENEMY_IDS)), hullId: ids(HULLS), name: str(32), paint: is(v => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v)), slot: int,
+// Sizes follow the room: MAX_ROOM_PLAYERS captains in wings, each wing facing up to four enemies.
+const SEATS = MAX_ROOM_PLAYERS, HULLS_MAX = SEATS * 2 + 4, CREW_MAX = HULLS_MAX * LIMITS.crew;
+const wing = opt(is(v => Number.isInteger(v) && (v as number) >= -1 && (v as number) < SEATS));
+const ship = obj({ id, faction, captainId: nul(id), enemyId: nul(oneOf(ENEMY_IDS)), hullId: ids(HULLS), name: str(32), paint: is(v => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v)), slot: int, wing, assist: opt(bool), scale: opt(is(v => Number.isInteger(v) && (v as number) >= 1 && (v as number) <= SEATS)),
   hull: num, maxHull: num, shields: num, shieldCharge: num, tempShield: num, tempShieldMs: num, rooms: arr(room, 16), ammo: num, augments: arr(augment, LIMITS.augments),
   weapons: arr(obj({ uid: id, defId: weapon, charge: num, target: nul(obj({ shipId: id, roomId: id })), auto: bool, powered: bool }), 8),
   status: oneOf(['active', 'destroyed', 'fled']), cloakMs: num, cloakCooldownMs: num, teleportCooldownMs: num, defenseCooldownMs: num, fleeAtMs: nul(num),
   phase: int, phases: arr(obj({ maxHull: num, weapons: arr(weapon, 8), systems: levels, line: str(200) }), 4),
   ai: nul(oneOf(['balanced', 'weapons', 'shields', 'boarder', 'hunter'])), fleeBelow: num, autopilot: bool, lastHitBy: nul(id) });
 const crew = obj({ id, name: str(24), species: ids(SPECIES), role: ids(ROLES), faction, ownerId: nul(id), shipId: id, roomId: id, x: num, y: num, hp: num, maxHp: num,
-  state: oneOf(['idle', 'walking', 'manning', 'repairing', 'fighting', 'extinguishing', 'healing', 'dead']), station: nul(id), path: arr(id, 32), beam: opt(obj({ shipId: id, roomId: id })) });
-const combat = obj({ id, t: num, paused: bool, pausedBy: nul(str(32)), hazard, objective: oneOf(['destroy', 'survive', 'boss']), surviveUntilMs: nul(num), ftl: num, jumpVotes: arr(id, 4),
-  projectiles: arr(obj({ id, kind: oneOf(['laser', 'missile', 'beam', 'ion', 'flak', 'support']), weaponId: weapon, fromShipId: id, toShipId: id, roomId: id, mount: int, launchMs: num, arriveMs: num }), 256),
-  events: arr(obj({ id, type: str(16), atMs: num, shipId: id, roomId: opt(id), amount: opt(num), weaponId: opt(weapon), fromShipId: opt(id), crewId: opt(id) }), 512),
+  state: oneOf(['idle', 'walking', 'manning', 'repairing', 'fighting', 'extinguishing', 'healing', 'dead']), station: nul(id), path: arr(id, 32), beam: opt(obj({ shipId: id, roomId: id })), back: opt(id) });
+const combat = obj({ id, t: num, paused: bool, pausedBy: nul(str(32)), hazard, objective: oneOf(['destroy', 'survive', 'boss']), surviveUntilMs: nul(num), ftl: num, jumpVotes: arr(id, SEATS),
+  projectiles: arr(obj({ id, kind: oneOf(['laser', 'missile', 'beam', 'ion', 'flak', 'support']), weaponId: weapon, fromShipId: id, toShipId: id, roomId: id, mount: int, launchMs: num, arriveMs: num }), 4096),
+  events: arr(obj({ id, type: str(16), atMs: num, shipId: id, roomId: opt(id), amount: opt(num), weaponId: opt(weapon), fromShipId: opt(id), crewId: opt(id) }), 8192),
   introUntilMs: num, enemyCharge: num, outcome: nul(oneOf(['victory', 'escaped', 'defeat'])), nextId: int, rng: int });
-const item = (v: unknown, p: string) => { obj({ id, kind: oneOf(['weapon', 'augment']), defId: id, ownerId: nul(id) })(v, p); const it = v as { kind: string; defId: string }; (it.kind === 'weapon' ? weapon : augment)(it.defId, `${p}.defId`); };
+const item = (v: unknown, p: string) => { obj({ id, kind: oneOf(['weapon', 'augment']), defId: id, ownerId: nul(id), wing })(v, p); const it = v as { kind: string; defId: string }; (it.kind === 'weapon' ? weapon : augment)(it.defId, `${p}.defId`); };
 const node = obj({ id, col: int, row: int, x: num, y: num, kind: oneOf(['start', 'unknown', 'hostile', 'distress', 'store', 'nebula', 'elite', 'drydock', 'derelict', 'wormhole', 'exit', 'boss']), links: arr(id, 6), visited: bool, hazard,
   dest: opt(obj({ id: oneOf(SECTOR_IDS), name: str(64), blurb: str(200) })) });
 const event = ids(EVENTS), enemies = (v: unknown, p: string) => { if (v === 'sector') return; if (!Array.isArray(v) || !v.length) bad(p); arr(oneOf(ENEMY_IDS), 6)(v, p); };
@@ -53,14 +58,15 @@ const next: Check = (v, p) => { const kind = record(v, p).kind;
 const count = is(v => Number.isSafeInteger(v) && (v as number) >= 0);
 const state = obj({
   settings: obj({ difficulty: oneOf(['cadet', 'captain']), length: oneOf(Object.keys(RUN_SECTORS)) }), phase: oneOf(['hangar', 'map', 'event', 'combat', 'loot', 'store', 'over']),
-  turn: count, rng: int, nextId: count, ships: arr(ship, 12), crew: arr(crew, 96), combat: nul(combat), fight: nul(obj({ bonus, ambush: bool, endAt: nul(num), counted: arr(id, 512) })),
-  captains: arr(obj({ id, playerId: nul(str(128)), name: str(64), color: str(32), connected: bool, shipId: nul(id), hullId: nul(ids(PLAYER_HULLS)), scrap: count, ready: bool, vote: nul(id),
-    cargo: arr(item, LIMITS.cargo), stats: obj({ damage: num, kills: num, repairs: num, scrapEarned: num, saves: num }) }), 4),
+  turn: count, rng: int, nextId: count, ships: arr(ship, HULLS_MAX), crew: arr(crew, CREW_MAX), combat: nul(combat),
+  fight: nul(obj({ bonus, ambush: bool, endAt: nul(num), counted: arr(id, 8192), resumeAt: opt(nul(num)), paused: opt(arr(id, SEATS)) })),
+  captains: arr(obj({ id, playerId: nul(str(128)), name: str(64), color: str(32), connected: bool, wing, shipId: nul(id), hullId: nul(ids(PLAYER_HULLS)), scrap: count, ready: bool, vote: nul(id),
+    cargo: arr(item, LIMITS.cargo), stats: obj({ damage: num, kills: num, repairs: num, scrapEarned: num, saves: num }) }), SEATS),
   sectors: arr(oneOf(SECTOR_IDS), SECTOR_IDS.length), sectorIndex: count, revealed: bool,
   map: obj({ sectorId: oneOf(SECTOR_IDS), name: str(64), theme: str(64), nodes: arr(node, 72), currentId: id, armadaCol: int, columns: int }),
   event: nul(obj({ defId: event, outcome: nul(obj({ choiceId: id, text: str(1000), lines: arr(str(200), 32) })), next: nul(next) })),
-  loot: nul(obj({ scrapEach: count, items: arr(item, 16), claims: rec(id, 16) })),
-  offers: nul(arr(obj({ id, kind: oneOf(['weapon', 'augment', 'system', 'crew']), defId: id, price: count, soldTo: nul(id), crew: opt(obj({ name: str(24), species: ids(SPECIES), role: ids(ROLES) })) }), 16)), pending: arr(item, 16),
+  loot: nul(obj({ scrapEach: count, items: arr(item, 512), claims: rec(id, 512) })),
+  offers: nul(arr(obj({ id, kind: oneOf(['weapon', 'augment', 'system', 'crew']), defId: id, price: count, soldTo: nul(id), wing, crew: opt(obj({ name: str(24), species: ids(SPECIES), role: ids(ROLES) })) }), 512)), pending: arr(item, 16),
   deadline: nul(num), reserves: count, scrapCarry: count, flags: arr(str(64), 64), seen: arr(str(64), 256), message: str(200),
   result: nul(oneOf(['victory', 'defeat', 'suspended'])), fleetStats: obj({ jumps: count, kills: count, scrap: count, lostShips: count }),
 });
@@ -69,7 +75,8 @@ const state = obj({
 function consistent(s: State) {
   const unique = (list: string[], what: string) => { if (new Set(list).size !== list.length) bad(what); };
   unique(s.ships.map(x => x.id), 'ships'); unique(s.crew.map(x => x.id), 'crew'); unique(s.captains.map(x => x.id), 'captains');
-  if (!s.captains.length) bad('captains');
+  if (!s.captains.length || s.captains.some((c, i) => c.wing !== wingOf(i, s.captains.length))) bad('captains');
+  if (s.ships.some(x => x.captainId ? x.wing !== s.captains.find(c => c.id === x.captainId)?.wing : x.wing >= wingCount(s.captains.length))) bad('wings');
   for (const c of s.captains) { const own = shipById(s, c.shipId); if (c.shipId && own?.captainId !== c.id) bad(`captain ${c.id}`); if (s.phase !== 'hangar' && (!own || !c.hullId)) bad(`captain ${c.id}`); }
   for (const x of s.ships) { const rooms = hullDef(x.hullId).rooms; if (x.rooms.length !== rooms.length || x.rooms.some((r, i) => r.id !== rooms[i].id) || (x.faction === 'enemy') !== !!x.enemyId || x.phase < 0 || x.phase >= Math.max(1, x.phases.length)) bad(`ship ${x.id}`); }
   // Generated ids are prefix + counter; a counter at or below an existing id would mint duplicates.
@@ -85,24 +92,37 @@ function consistent(s: State) {
   if (needs[s.phase] === false || s.phase !== 'combat' && s.combat) bad('phase');
 }
 
+/** The bulky lists as positional rows. */
+const SHIPS = list(rows<Ship>(SHIP_KEYS, SHIP_PARTS)), CREWS = list(CREW), SHOTS = list(SHOT);
 export function exportSave(s: State) {
   const state = structuredClone(s);
   state.deadline = null;
   for (const c of state.captains) { c.ready = false; c.vote = null; }
   if (state.combat) { state.combat.events = []; state.combat.jumpVotes = []; }
-  if (state.fight) { state.fight.endAt = null; state.fight.counted = []; }
-  return { v: SAVE_VERSION, state };
+  if (state.fight) { state.fight.endAt = null; state.fight.counted = []; state.fight.resumeAt = null; }
+  return { v: SAVE_VERSION, state: { ...state, ships: SHIPS.en(state.ships), crew: CREWS.en(state.crew), combat: state.combat && { ...state.combat, projectiles: SHOTS.en(state.combat.projectiles) } } };
+}
+/** A save in its version 1 shape (keyed objects): version 2 rows unpacked; anything that is not rows is left for the shape check to reject. */
+export function expandSave(raw: unknown): { v: unknown; state: unknown } {
+  const save = record(raw, 'save');
+  if (save.v !== SAVE_VERSION) return { v: save.v, state: save.state };
+  const packed = record(save.state, 'state'), open = (c: { de(wire: unknown): unknown }, v: unknown) => Array.isArray(v) && v.every(Array.isArray) ? c.de(v) : v, combat = packed.combat;
+  return { v: 1, state: { ...packed, ships: open(SHIPS, packed.ships), crew: open(CREWS, packed.crew), combat: combat && typeof combat === 'object' ? { ...combat, projectiles: open(SHOTS, (combat as Record<string, unknown>).projectiles) } : combat } };
 }
 
 export function loadSave(ctx: RoundContext, raw: unknown): { state: State; settings: Settings } {
   assertSerializable(raw);
-  const save = record(raw, 'save');
-  if (save.v !== SAVE_VERSION) throw new Error('This save is from a different version of Starship Scramble.');
+  const save = expandSave(raw);
+  if (save.v !== 1) throw new Error('This save is from a different version of Starship Scramble.');
   state(save.state, 'state');
   const s = structuredClone(save.state) as State;
   // Saves from before branching routes listed every planned sector up front and had unnamed exits.
   const next = s.sectors[s.sectorIndex + 1];
   if (next && s.map.nodes.some(n => n.kind === 'exit' && !n.dest)) { const d = sectorDef(next); s.sectors = s.sectors.slice(0, s.sectorIndex + 1); for (const n of s.map.nodes) if (n.kind === 'exit') n.dest = { id: d.id, name: d.name, blurb: d.blurb }; }
+  // Saves from before wings: one to four captains in a single wing, no damage control, nothing fleet-scale.
+  s.captains.forEach((c, i) => { c.wing ??= wingOf(i, s.captains.length); });
+  for (const x of s.ships) { x.wing ??= s.captains.find(c => c.id === x.captainId)?.wing ?? 0; x.assist ??= false; x.scale ??= 1; }
+  for (const o of s.offers ?? []) o.wing ??= 0;
   consistent(s);
   s.captains.forEach((c, i) => {
     const player = ctx.players[i];

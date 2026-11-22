@@ -36,6 +36,7 @@ export type EventDef = {
   /** Sector ids this event may appear in, or 'any'. */ sectors: string[] | 'any';
   /** Node kinds that may draw this event. Follow-ups use []. */ kinds: NodeKind[];
   weight: number; unique?: boolean; requiresFlag?: string;
+  /** Fewest captains this event is drawn for (fleet-life events need a fleet); default 1. */ fleet?: number;
   /** At least one choice; a single-choice event is a no-decision beat. */ choices: ChoiceDef[];
 };
 export type EnemyDef = {

@@ -8,6 +8,7 @@ import { derive } from './core';
 
 export type ShipSpec = {
   id: string; faction: Faction; captainId: string | null; enemyId: string | null; hullId: string; name: string; paint: string; slot: number;
+  /** Engagement (default 0), damage control (default off) and fleet scale (default 1); see Ship. */ wing?: number; assist?: boolean; scale?: number;
   /** Defaults from the hull. */ maxHull?: number; hull?: number; systems?: Partial<Record<SystemId, number>>;
   weapons: string[]; ammo: number; augments: string[]; ai: EnemyAi | null; fleeBelow: number; phases: BossPhase[];
 };

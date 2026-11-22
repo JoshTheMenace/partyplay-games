@@ -40,7 +40,7 @@ export function itemInfo(kind: Offer['kind'], defId: string, crew?: Offer['crew'
 export function previewShip(hull: HullDef, paint: string, name: string): { ship: ShipView; crew: Crew[] } {
   const rooms = hull.rooms.map(r => ({ id: r.id, system: r.system, tier: r.system ? hull.startSystems[r.system] ?? 0 : 0, damage: 0, ionMs: 0, fire: 0, breach: false, oxygen: 100, repair: 0 }));
   const levels = Object.fromEntries(rooms.filter(r => r.system && r.tier).map(r => [r.system, r.tier]));
-  const ship: ShipView = { id: `preview-${hull.id}`, faction: 'ally', captainId: null, enemyId: null, hullId: hull.id, name, paint, slot: 0, hull: hull.maxHull, maxHull: hull.maxHull,
+  const ship: ShipView = { id: `preview-${hull.id}`, faction: 'ally', captainId: null, enemyId: null, hullId: hull.id, name, paint, wing: 0, slot: 0, assist: false, scale: 1, hull: hull.maxHull, maxHull: hull.maxHull,
     shields: levels.shields ?? 0, shieldCharge: 0, tempShield: 0, tempShieldMs: 0, rooms, weapons: hull.startWeapons.map((defId, i) => ({ uid: `w${i}`, defId, charge: 0, target: null, auto: true, powered: i < (levels.weapons ?? 0) })),
     ammo: hull.startAmmo, augments: [], status: 'active', cloakMs: 0, cloakCooldownMs: 0, teleportCooldownMs: 0, defenseCooldownMs: 0, fleeAtMs: null, phase: 0, phases: [], ai: null, fleeBelow: 0, autopilot: false, lastHitBy: null,
     evasion: 0, maxShields: levels.shields ?? 0, levels };

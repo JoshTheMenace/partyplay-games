@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import type { CaptainView, Offer, PublicView } from '../contracts';
+import { Countdown } from '../../../../party-ui/src/index';
 import { CaptainChip, ItemIcon, Readiness, Scrap, backdrop, itemInfo, tint } from './common';
+import { FleetGoods } from './wings';
 
 /** One catalog card, shared by the loot table and the store shelf. */
 export function ItemCard({ kind, defId, crew, owner, children }: { kind: Offer['kind']; defId: string; crew?: Offer['crew']; owner?: CaptainView | null; children?: ReactNode }) {
@@ -13,7 +15,7 @@ export function ItemCard({ kind, defId, crew, owner, children }: { kind: Offer['
   </article>;
 }
 
-export function LootScreen({ view }: { view: PublicView }) {
+export function LootScreen({ view, serverNowMs }: { view: PublicView; serverNowMs(): number }) {
   const loot = view.loot; if (!loot) return null;
   const owner = (itemId: string, fallback: string | null) => view.captains.find(c => c.id === (loot.claims[itemId] ?? fallback)) ?? null;
   return <section className="ss-screen ss-loot ss-bg" style={backdrop(view.map.sectorId)}>
@@ -21,11 +23,12 @@ export function LootScreen({ view }: { view: PublicView }) {
       <div><p className="kp-eyebrow">Victory · salvage recovered</p><h1 className="kp-title">Spoils of battle</h1></div>
       <div className="ss-loot-scrap"><Scrap n={loot.scrapEach} sign/><span>scrap to every captain</span></div>
     </header>
-    {loot.items.length ? <div className={`ss-cards ss-cards-${Math.min(4, Math.ceil(loot.items.length / 2))}`}>{loot.items.map(item => { const who = owner(item.id, item.ownerId);
+    {view.fleet ? <FleetGoods view={view}/> : loot.items.length ? <div className={`ss-cards ss-cards-${Math.min(4, Math.ceil(loot.items.length / 2))}`}>{loot.items.map(item => { const who = owner(item.id, item.ownerId);
       return <ItemCard key={item.id} kind={item.kind} defId={item.defId} owner={who}>
         <footer className="ss-card-foot">{who ? <CaptainChip captain={who}><em>claimed</em></CaptainChip> : <span className="ss-claim">Up for grabs</span>}</footer>
       </ItemCard>; })}</div>
       : <p className="ss-empty">Nothing worth hauling aboard this time. The scrap will have to do.</p>}
-    <Readiness captains={view.captains} prompt="Unclaimed salvage is left behind · ready up to leave"/>
+    <Readiness captains={view.captains} prompt={view.fleet ? "Each wing splits its own salvage on the phones · ready up to leave" : 'Unclaimed salvage is left behind · ready up to leave'}
+      closing={view.voteDeadline ? <>Leaving in <Countdown deadline={view.voteDeadline} serverNowMs={serverNowMs}/></> : undefined}/>
   </section>;
 }
