@@ -33,7 +33,7 @@ export function cleanWriteIn(raw: unknown): string {
 }
 
 // ---------- settings ----------
-/** Times each player conducts. auto is the official length: twice with 3–4 players, otherwise once. */
+/** Times each player conducts. auto is the official length: twice with 3–4 players, otherwise once. A crowd plays roundCount cases instead. */
 export type Laps = 'auto' | 1 | 2;
 export type Settings = {
   laps: Laps;
@@ -67,9 +67,16 @@ export function parseSettings(raw: unknown): Settings {
 }
 
 // ---------- seats, teams and slots (pure; the server is authoritative) ----------
+/**
+ * Big rooms. Up to COSY players everyone is counsel. A bigger room is a crowd: each case has COUNSEL advocates a side and
+ * everyone else is the Gallery, who stand on a track, vote in one twist of their own and heckle.
+ */
+export const COSY = 10, COUNSEL = 3;
+export const isCrowd = (players: number) => players > COSY;
 export const lapsFor = (players: number, laps: Laps) => laps === 'auto' ? players <= 4 ? 2 : 1 : laps;
-export const roundCount = (players: number, laps: Laps) => players * lapsFor(players, laps);
-/** Round r (1-based) is conducted by seat (r - 1) % n. The seats after the Conductor, in seat order: first ceil(k/2) North, rest South. */
+/** Cases in a game. A crowd plays a set night: 6 (laps 1), 12 (laps 2) or, with auto, 8 or enough for every seat to reach the bench once. */
+export const roundCount = (players: number, laps: Laps) => !isCrowd(players) ? players * lapsFor(players, laps) : laps === 1 ? 6 : laps === 2 ? 12 : Math.max(8, Math.ceil(players / (1 + 2 * COUNSEL)));
+/** Up to COSY players: round r (1-based) is conducted by seat (r - 1) % n. The seats after the Conductor, in seat order: first ceil(k/2) North, rest South. */
 export function seatTeams(seats: readonly PlayerId[], round: number): { conductor: PlayerId; north: PlayerId[]; south: PlayerId[] } {
   const n = seats.length, c = (round - 1) % n, rest = Array.from({ length: n - 1 }, (_, i) => seats[(c + 1 + i) % n]), half = Math.ceil(rest.length / 2);
   return { conductor: seats[c], north: rest.slice(0, half), south: rest.slice(half) };
@@ -89,22 +96,34 @@ export type Phase = typeof PHASES[number];
 export const isPick = (phase: Phase): phase is CardKind => phase === 'innocent' || phase === 'guilty' || phase === 'modifier';
 /** The game-owned turn id: one per phase of one round. */
 export const turnIdFor = (round: number, phase: Phase) => `${round}.${phase}`;
+/** The id for actions that stay legal across phases of one round: lean, stand and shout. */
+export const courtIdFor = (round: number) => `${round}.court`;
+/** The Conductor may lean the lever, and the Gallery may stand, once the first pick opens. */
+export const leverOpen = (phase: Phase) => phase !== 'deal' && phase !== 'crash' && phase !== 'complete';
+export const standOpen = (phase: Phase) => leverOpen(phase) && phase !== 'lever';
+/** Heckles the room can throw during the pleas and the decision. */
+export const SHOUTS = ['hear', 'objection', 'boo', 'mercy'] as const;
+export type Shout = typeof SHOUTS[number];
 export const TIMING = {
   /** deal: intro beat before the two random Bystanders (plus welcomeMs in round 1). */
   dealMs: 3500, welcomeMs: 3000,
   /** First beat of each reveal phase (narrator line, face-down cards). */
   introMs: 2500,
-  /** An all-locked pick phase ends settleMs after the last lock, never sooner than minPickMs after it began. */
-  settleMs: 1500, minPickMs: 3000,
+  /** An all-locked pick phase ends settleMs after the last lock, never sooner than minPickMs after it began (juryMs when the Gallery has a ballot). */
+  settleMs: 1500, minPickMs: 3000, juryMs: 12000,
+  /** One seat may heckle this often. */
+  shoutMs: 1200,
   /** The hurry cue fires this long before a pick deadline. */
   hurryMs: 10000,
   /** The Conductor may end a floor early once it has run this long. */
   floorMinMs: 5000,
   /** A disconnected Conductor's remaining floor/lever time shrinks to this. */
   awayMs: 8000,
-  /** The trolley run; the last round holds longer before results. */
-  crashMs: 8000, lastCrashMs: 11000,
+  /** The verdict and the trolley run; the last round holds longer before results. */
+  crashMs: 9500, lastCrashMs: 12500,
 } as const;
+/** Crash choreography on the TV and its sounds, in ms from the start of the crash: the verdict stamp, the trolley's run, the spared ribbon, the death tally. */
+export const CRASH = { stampAt: 150, runAt: 1700, runMs: 2700, sparedAt: 4700, tallyAt: 5400 } as const;
 /** One reveal beat. Long enough for the Clerk to read the card when readAloud is on. */
 export const revealMs = (text: string, readAloud: boolean) => readAloud ? Math.min(6500, Math.max(2600, 1400 + 60 * text.length)) : 2200;
 
@@ -112,7 +131,8 @@ export const revealMs = (text: string, readAloud: boolean) => readAloud ? Math.m
 export const SFX_IDS = ['tap', 'deal', 'flip', 'lock', 'all-locked', 'reveal', 'stamp', 'tick', 'hurry', 'timeup', 'gavel', 'lever', 'bell', 'rumble', 'crash', 'gasp', 'aww', 'cheer', 'drumroll', 'whoosh'] as const;
 export type SfxId = typeof SFX_IDS[number];
 /** The Clerk's static lines (no names, no card text). narration.ts may add variants `<id>.2`, `<id>.3`; the player picks one. */
-export const LINE_IDS = ['welcome', 'round', 'final-round', 'heading.north', 'heading.south', 'pick.innocent', 'pick.guilty', 'pick.modifier', 'reveal.innocent', 'reveal.guilty', 'reveal.modifier', 'hurry', 'timeup', 'floor.north', 'floor.south', 'lever', 'pull', 'nothing', 'dither', 'struck', 'end', 'tie'] as const;
+export const LINE_IDS = ['welcome', 'round', 'final-round', 'heading.north', 'heading.south', 'pick.innocent', 'pick.guilty', 'pick.modifier', 'reveal.innocent', 'reveal.guilty', 'reveal.modifier', 'hurry', 'timeup', 'floor.north', 'floor.south', 'lever', 'pull', 'nothing', 'dither', 'struck', 'end', 'tie',
+  'gallery.stand', 'gallery.vote', 'gallery.aim', 'gallery.glue'] as const;
 export type LineId = typeof LINE_IDS[number];
 /**
  * Host-display audio events. seq rises for the whole game; play cues newer than the last handled and drop any older than
@@ -124,22 +144,27 @@ export const CUE_LIMIT = 16;
 // ---------- public view ----------
 /** Slot 0: the random Bystander; 1: the team's own Innocent; 2: the other team's Guilty. */
 export type Target = { side: Side; slot: 0 | 1 | 2 };
-/** A card on the tracks. from: the team that played it, or 'deck'. by: who locked it (omitted for deck cards and auto-picks). */
-export type Placed = { card: Card; from: Side | 'deck'; by?: PlayerId; auto?: true };
+/** A card on the tracks. from: the team that played it, 'deck', or 'gallery' for the twist the Gallery voted in. by: who locked it (omitted for deck cards, the Gallery's twist and auto-picks). */
+export type Placed = { card: Card; from: Side | 'deck' | 'gallery'; by?: PlayerId; auto?: true };
 /** mods are twists in reveal order; each mod's from is its author team. */
 export type TrackCard = Placed & { mods: Placed[] };
-/** slots are null until revealed. Hidden picks never appear here. */
+/** team: this case's counsel (everyone on the side, up to COSY players). slots are null until revealed. Hidden picks never appear here. */
 export type Track = { side: Side; team: PlayerId[]; slots: [TrackCard | null, TrackCard | null, TrackCard | null] };
 export type PublicPlayer = { id: PlayerId; name: string; color: string; connected: boolean; deaths: number; spared: number; conducted: number };
-export type RoundRecord = { round: number; conductor: PlayerId; defaultSide: Side; pulled: boolean; timedOut: boolean; struck: Side; victims: PlayerId[] };
+/** victims are seats (indexes into players): counsel on the struck track and, in a crowd, the Gallery standing there. */
+export type RoundRecord = { round: number; conductor: PlayerId; defaultSide: Side; pulled: boolean; timedOut: boolean; struck: Side; victims: number[] };
+/** Top-level PublicView fields the room sends only when rev changes (manifest.snapshotCache). Everything else is sent with every snapshot and stays small. */
+export const CACHED = ['players', 'tracks', 'history', 'cues', 'settings', 'underdogs', 'winners'] as const;
 export type PublicView = {
+  /** Rises whenever a CACHED field changes. */
+  rev: number;
   phase: Phase; round: number; rounds: number; turnId: string;
   /** Server-clock ms. deadline is when the current phase or step ends. */
   startedAt: number; deadline: number;
   /** Reveal phases: index of the beat on screen (0 = intro) of steps. plead: floor index 0–1 of 2. Otherwise 0 of 1. */
   step: number; steps: number;
   conductor: PlayerId; defaultSide: Side;
-  /** Live lever. The trolley heads to pulled ? opposite(defaultSide) : defaultSide. Resets each round. */
+  /** Live lever (the Conductor may lean it from the first pick on). The trolley heads to pulled ? opposite(defaultSide) : defaultSide. Resets each round. */
   lever: { pulled: boolean; decided: boolean; timedOut: boolean };
   tracks: Record<Side, Track>;
   /** Locked slots per team in the current pick phase (totals stay visible through its reveal); zeros before the first pick. */
@@ -150,6 +175,14 @@ export type PublicView = {
   floor: Side | null;
   /** crash/complete: the track the trolley ran down. */
   struck: Side | null;
+  /** More than COSY players: three counsel a side and a Gallery. */
+  crowd: boolean;
+  /** Crowd only, one character per seat in players order: '-' on the bench this case, '?' not standing yet, 'n' or 's' standing on that track. Otherwise ''. */
+  gallery: string;
+  /** Crowd, guilty and modifier: Gallery members who have voted this phase. */
+  ballots: number;
+  /** The latest heckles as [seq, seat, index into SHOUTS]; seq rises for the whole game. */
+  shouts: [number, number, number][];
   /** Underdog players this round (catchUp); their team has one extra twist. */
   underdogs: PlayerId[];
   players: PublicPlayer[];
@@ -166,23 +199,36 @@ export type Pick = { cardId: string; text?: string; target?: Target; by: PlayerI
 /** One pick a team must make this phase. Modifier phases have one slot per twist. */
 export type SlotView = { index: number; kind: CardKind; locked: Pick | null; proposals: Proposal[] };
 /**
- * The team's shared hands, visible to every teammate and nobody else. A hand empties when its phase ends (unplayed cards
- * are discarded). The Conductor gets role 'conductor', side null, empty hands and no slots.
+ * A Gallery member's ballot. guilty: the same three twists on every Gallery phone, this phone's vote and the votes per option.
+ * card: the twist the Gallery chose, from the end of guilty until it is revealed. modifier: where this phone wants it, and the
+ * votes per track card (North's three, then South's). shoved: the Clerk placed this seat when the lever opened.
  */
-export type PrivateView = { role: 'conductor' | 'team'; side: Side | null; turnId: string; hands: Record<CardKind, Card[]>; slots: SlotView[] };
+export type JuryView = { options: Card[]; vote: string | null; tally: number[]; card: Card | null; aim: Target | null; aims: number[]; shoved: boolean };
+/**
+ * The team's shared hands, visible to every teammate and nobody else. A hand empties when its phase ends (unplayed cards
+ * are discarded). The Conductor gets role 'conductor', side null, empty hands and no slots. A Gallery member gets role
+ * 'gallery', the track they stand on as side (null until they choose), no hands and a jury ballot.
+ */
+export type PrivateView = { role: 'conductor' | 'team' | 'gallery'; side: Side | null; turnId: string; hands: Record<CardKind, Card[]>; slots: SlotView[]; jury?: JuryView };
 
 // ---------- actions ----------
 /**
- * Every action carries the current PublicView.turnId; stale ids are rejected. lean also accepts the round's plead id
- * during lever. propose/lock: team members in a pick phase. slot indexes PrivateView.slots. text only for blank cards
- * (required to lock); target only in the modifier phase (required to lock). propose with cardId null withdraws.
- * lock is first-wins and final. lean/next/decide: Conductor only. next ends floor `step` early (after floorMinMs).
+ * Every action carries the current PublicView.turnId; stale ids are rejected. lean, stand and shout also accept
+ * courtIdFor(round), so a tap survives a phase change. propose/lock: team members in a pick phase. slot indexes
+ * PrivateView.slots. text only for blank cards (required to lock); target only in the modifier phase (required to lock).
+ * propose with cardId null withdraws. lock is first-wins and final. lean/next/decide: Conductor only. next ends floor
+ * `step` early (after floorMinMs). stand/vote/aim: the Gallery (stand while standOpen, vote in guilty, aim in modifier);
+ * each replaces that seat's earlier choice. shout: anyone but the Conductor, in plead and lever, once per shoutMs.
  */
 export type Action =
   | { kind: 'propose'; turnId: string; slot: number; cardId: string | null; text?: string; target?: Target }
   | { kind: 'lock'; turnId: string; slot: number; cardId: string; text?: string; target?: Target }
   | { kind: 'lean'; turnId: string; pulled: boolean }
   | { kind: 'next'; turnId: string; step: number }
-  | { kind: 'decide'; turnId: string; pull: boolean };
+  | { kind: 'decide'; turnId: string; pull: boolean }
+  | { kind: 'stand'; turnId: string; side: Side }
+  | { kind: 'vote'; turnId: string; cardId: string }
+  | { kind: 'aim'; turnId: string; target: Target }
+  | { kind: 'shout'; turnId: string; shout: Shout };
 /** Trolley Court has no held input. */
 export type Input = null;

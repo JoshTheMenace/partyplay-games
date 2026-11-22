@@ -1,6 +1,8 @@
 /**
- * The Clerk's static lines, voiced by tools/narrate.ts. One entry per LineId in types.ts; `<id>.2` / `<id>.3` are variants
- * (the mixer picks one). No player names, no card text; at most 1,500 characters in total.
+ * The Clerk's static lines. One entry per LineId in types.ts; `<id>.2` / `<id>.3` are variants. No player names, no card
+ * text; at most 1,750 characters in total. The TV prints every line as the Clerk's caption; the mixer speaks the ones
+ * tools/narrate.ts has recorded (vo-manifest.ts) and stays silent for the rest, so a line must read well with no voice.
+ * The gallery.* lines are not recorded yet.
  */
 export const LINES: Record<string, string> = {
   welcome: 'All rise! Trolley Court is now in session. One lever. No appeals.',
@@ -37,4 +39,10 @@ export const LINES: Record<string, string> = {
   'struck.2': 'Let the record show several flattened parties.',
   end: 'Court is adjourned! Fewest deaths wins. Congratulations, I suppose.',
   tie: 'A tie! The court declines to choose between you. Court is adjourned.',
+  'gallery.stand': 'Gallery, pick a track to stand on. Choose as if your life depends on it.',
+  'gallery.vote': 'Gallery, the court allows you one twist. Vote for it.',
+  'gallery.aim': 'Gallery, your twist needs a target. Aim it.',
+  'gallery.glue': 'Feet are glued. Nobody hops now.',
 };
+/** The variant a cue uses, chosen by its seq, so the caption on the TV and the recording the mixer plays are the same line. */
+export function lineVariant(id: string, seq: number) { const all = [id, `${id}.2`, `${id}.3`].filter(k => Object.hasOwn(LINES, k)); return all[seq % all.length] ?? id; }

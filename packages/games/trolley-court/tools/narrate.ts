@@ -1,6 +1,6 @@
 /**
  * Voices the Clerk with ElevenLabs and regenerates src/vo-manifest.ts (recorded id → spoken ms). Sources: LINES from
- * src/narration.ts (every LineId, variants `<id>.2|.3`, ≤ 1,500 chars) and, unless --no-cards, every stock card in
+ * src/narration.ts (every LineId, variants `<id>.2|.3`, ≤ 1,750 chars) and, unless --no-cards, every stock card in
  * deck.server.ts as `card.<id>`. An id is regenerated only when its text, voice, model or settings change (hashes in
  * public/games/trolley-court/vo/index.json). Spend is recorded as tool `trolley-court-narrate`.
  * Usage (platform root): node --import tsx packages/games/trolley-court/tools/narrate.ts [--dry-run] [--cap <credits>] [--only <prefix>] [--no-cards]
@@ -17,7 +17,7 @@ import { client } from './elevenlabs';
 
 const root = join(import.meta.dirname, '..'), out = join(root, '../../../public/games/trolley-court/vo'), indexFile = join(out, 'index.json');
 /** "Daniel": a premade British broadcaster voice, a crisp court Clerk. */
-const VOICE = 'onwK4e9ZLuTAKqWW03F9', MODEL = 'eleven_turbo_v2_5', BUDGET = 1500;
+const VOICE = 'onwK4e9ZLuTAKqWW03F9', MODEL = 'eleven_turbo_v2_5', BUDGET = 1750;
 const SETTINGS = { line: { stability: .4, similarity_boost: .8, style: .4, speed: 1.02, use_speaker_boost: true }, card: { stability: .5, similarity_boost: .8, style: .25, speed: 1.06, use_speaker_boost: true } };
 type Index = Record<string, { hash: string; ms: number }>;
 

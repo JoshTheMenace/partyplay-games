@@ -1,8 +1,8 @@
 /* Trolley Court phone: team counsel share a hand (propose, then first lock wins); the Conductor works the lever. */
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArcadeButton, Countdown, HoldButton, StatusNotice, TextInput } from '../../../party-ui/src/index';
-import { KINDS, TIMING, WRITE_IN_MAX, cleanWriteIn, isPick, opposite, type Action, type Card, type CardKind, type PrivateView, type PublicView, type Side, type Target } from './types';
-import { CardFace, Cap, Chip, KIND, Skull, TEAM, TrackList, cardText, heading, player, plural, slotName, useNow, vars } from './cards';
+import { KINDS, SHOUTS, SIDES, TIMING, WRITE_IN_MAX, cleanWriteIn, courtIdFor, isPick, leverOpen, opposite, standOpen, type Action, type Card, type CardKind, type PrivateView, type PublicView, type Shout, type Side, type Target } from './types';
+import { CardFace, Cap, Chip, KIND, SHOUT, Skull, TEAM, TrackList, cardText, heading, heads, player, plural, slotName, useNow, vars } from './cards';
 import { Lever, type Props } from './display';
 import { cue } from './audio';
 
@@ -122,9 +122,86 @@ function Indicator({ v, side }: { v: PublicView; side?: Side | null }) {
   return <p className="tc-indicator" data-side={h}><Lever pulled={v.lever.pulled}/><span><small>Trolley heading</small><b className="kp-display">{TEAM[h]}</b>{side && <em>{h === side ? 'That’s your track!' : 'Not your track… yet'}</em>}</span></p>;
 }
 
-function Tracks({ v, side }: { v: PublicView; side?: Side | null }) {
+/** Heckles for the pleas and the decision. They pop up on the TV; the server allows one per shoutMs. */
+function ShoutBar({ props }: { props: Props }) {
+  const { publicView: v } = props, [rest, setRest] = useState(false);
+  useEffect(() => { if (!rest) return; const t = setTimeout(() => setRest(false), TIMING.shoutMs + 100); return () => clearTimeout(t); }, [rest]);
+  if (v.phase !== 'plead' && v.phase !== 'lever') return null;
+  const shout = (kind: Shout) => { cue('tap'); setRest(true); void props.sendAction({ kind: 'shout', turnId: courtIdFor(v.round), shout: kind }).catch(() => undefined); };
+  return <div className="tc-shoutbar" role="group" aria-label="Heckle on the TV">{SHOUTS.map(k => <button key={k} data-kind={k} disabled={rest || props.connected === false} onClick={() => shout(k)}>{SHOUT[k]}</button>)}</div>;
+}
+
+/** The Gallery's whole game: which track to stand on. Live until the lever opens. */
+function StandBar({ props, own }: { props: Props; own: PrivateView }) {
+  const { publicView: v } = props, { error, send } = useSend(props), open = standOpen(v.phase), h = heading(v), off = props.connected === false;
+  const [want, setWant] = useState<Side | null>(null);
+  useEffect(() => setWant(null), [own.side, v.round]);
+  const at = want ?? own.side;
+  const go = async (side: Side) => { if (side === at) return; cue('tap'); setWant(side); if (!(await send({ kind: 'stand', turnId: courtIdFor(v.round), side }))) setWant(null); };
+  return <div className="tc-stand" role="group" aria-label="Pick a track to stand on">
+    <p>{!open ? 'Feet are glued. No more hopping.' : at ? 'Hop any time until the lever opens.' : 'Tap a track to stand on it.'}</p>
+    {SIDES.map(s => <button key={s} className="tc-stand-btn" data-side={s} aria-pressed={at === s} disabled={!open || off} onClick={() => void go(s)}>
+      <small>{at === s ? 'You’re standing on' : open ? at ? 'Hop to' : 'Stand on' : 'Not on'}</small><b className="kp-display">{TEAM[s]}</b>
+      <span>{plural(heads(v, s), 'head')}</span>{h === s && <em>Trolley heading here</em>}
+    </button>)}
+    {error && <StatusNotice tone="error">{error}</StatusNotice>}
+  </div>;
+}
+
+/** The Gallery's twist: vote for one of three (guilty), then for the card it lands on (modifier). The latest tap counts. */
+function Ballot({ props, own }: { props: Props; own: PrivateView }) {
+  const { publicView: v } = props, j = own.jury!, { error, send } = useSend(props), late = useNow(props.serverNowMs) >= v.deadline, off = props.connected === false;
+  const [want, setWant] = useState<string | null>(null), key = (t: Target) => `${t.side[0]}${t.slot}`;
+  useEffect(() => setWant(null), [j.vote, j.aim && key(j.aim), v.turnId]);
+  const send1 = async (id: string, action: Action) => { cue('tap'); setWant(id); if (!(await send(action))) setWant(null); };
+  if (v.phase === 'guilty') {
+    const mine = want ?? j.vote;
+    return <section className="tc-ballot" aria-label="Vote for the Gallery’s twist">
+      <h2 className="kp-display">The Gallery’s twist</h2><p className="tc-goal">Vote for one. The winner gets pinned to a card of the Gallery’s choosing.</p>
+      <ul className="tc-hand">{j.options.map((c, k) => <li key={c.id}><button className="tc-hand-card" aria-pressed={mine === c.id} disabled={late || off} onClick={() => void send1(c.id, { kind: 'vote', turnId: v.turnId, cardId: c.id })}>
+        <CardFace card={c}><em className="tc-votes">{plural(j.tally[k] ?? 0, 'vote')}</em></CardFace></button></li>)}</ul>
+      <p className="tc-waiting" role="status">{late ? 'Voting is closed.' : mine ? 'Vote counted. Tap another to change it.' : 'Tap a twist to vote.'}</p>
+      {error && <StatusNotice tone="error">{error}</StatusNotice>}
+    </section>;
+  }
+  const mine = want ?? (j.aim ? key(j.aim) : null), text = (t: Target) => { const c = v.tracks[t.side].slots[t.slot]; return c ? cardText(c.card) : 'Not revealed yet'; };
+  return <section className="tc-ballot" aria-label="Aim the Gallery’s twist">
+    <h2 className="kp-display">Aim your twist</h2>
+    {j.card && <CardFace card={j.card} label="The Gallery’s twist"/>}
+    <div className="tc-targets" role="group" aria-label="Stick this twist on">
+      <p>Stick it on…</p>
+      {SIDES.map((s, row) => <div key={s} className="tc-target-row" data-side={s}><h4>{TEAM[s]}</h4>
+        {([0, 1, 2] as const).map(i => { const t = { side: s, slot: i }, n = j.aims[row * 3 + i] ?? 0; return <button key={i} className="tc-target" data-side={s} aria-pressed={mine === key(t)} disabled={late || off} onClick={() => void send1(key(t), { kind: 'aim', turnId: v.turnId, target: t })}>
+          <small>{slotName(s, i)}{n ? ` · ${plural(n, 'vote')}` : ''}</small><span>{text(t)}</span>
+        </button>; })}
+      </div>)}
+    </div>
+    <p className="tc-waiting" role="status">{late ? 'Aiming is closed.' : mine ? 'Aim counted. Tap another card to change it.' : 'Tap the card it should stick to.'}</p>
+    {error && <StatusNotice tone="error">{error}</StatusNotice>}
+  </section>;
+}
+
+function Gallery({ props, own }: { props: Props; own: PrivateView }) {
+  const { publicView: v } = props, j = own.jury!, side = own.side, n = [...v.gallery].filter(c => c !== '-').length;
+  if (v.phase === 'crash' || v.phase === 'complete') return <><Result v={v} side={side} me={props.playerId!} gallery/><Tracks v={v} side={side}/></>;
+  const intro = v.phase === 'deal' ? ['You’re in the Gallery', `Six counsel build this case and argue it. You and ${n - 1} others pick a track to stand on, vote in a twist and heckle.`]
+    : v.phase === 'innocent' ? ['Pick a track', 'Stand where you think the trolley won’t go. If it takes your track, you die with it.']
+    : v.phase === 'plead' ? [`${TEAM[v.floor ?? v.defaultSide]} has the floor`, 'Listen, heckle, and hop tracks while you still can.']
+    : v.phase === 'lever' ? ['Shout now!', j.shoved ? `You never chose, so the Clerk shoved you onto ${side ? TEAM[side] : 'a track'}.` : 'The Conductor is deciding. Feet are glued.']
+    : ['Watch the TV', 'Cards are being revealed.'];
+  return <section className="tc-gallery">
+    {v.phase === 'guilty' || v.phase === 'modifier' ? <Ballot props={props} own={own}/> : <><h2 className="kp-display">{intro[0]}</h2><p>{intro[1]}</p></>}
+    {j.card && v.phase !== 'modifier' && <p className="tc-held">The Gallery’s twist: <b>+ {j.card.text}</b></p>}
+    {v.phase !== 'deal' && <StandBar props={props} own={own}/>}
+    <ShoutBar props={props}/>
+    {(v.phase === 'plead' || v.phase === 'lever') && <Indicator v={v} side={side}/>}
+    <Tracks v={v} side={side}/>
+  </section>;
+}
+
+function Tracks({ v, side, counsel }: { v: PublicView; side?: Side | null; counsel?: boolean }) {
   const order = side === 'south' ? ['south', 'north'] as const : ['north', 'south'] as const;
-  return <div className="tc-tracklists">{order.map(s => <TrackList key={s} v={v} side={s} mine={s === side}/>)}</div>;
+  return <div className="tc-tracklists">{order.map(s => <TrackList key={s} v={v} side={s} mine={s === side} counsel={counsel}/>)}</div>;
 }
 
 function Hands({ own, open }: { own: PrivateView; open?: CardKind }) {
@@ -146,15 +223,16 @@ function Conductor({ props }: { props: Props }) {
   useEffect(() => setLean(null), [v.lever.pulled, v.turnId]);
   const pulled = lean ?? v.lever.pulled, h = pulled ? opposite(v.defaultSide) : v.defaultSide, off = props.connected === false;
   const floorStart = v.step === 0 ? v.startedAt : Math.max(v.startedAt, v.deadline - v.settings.floorSeconds * 1000), nextAt = floorStart + TIMING.floorMinMs;
-  const toggle = async () => { const next = !pulled; setLean(next); cue('lever'); if (!(await send({ kind: 'lean', turnId: v.turnId, pulled: next }))) setLean(null); };
+  const toggle = async () => { const next = !pulled; setLean(next); cue('lever'); if (!(await send({ kind: 'lean', turnId: courtIdFor(v.round), pulled: next }))) setLean(null); };
   const lever = <button className="tc-switch" role="switch" aria-checked={pulled} aria-label={`Trolley heading: ${TEAM[h].toUpperCase()}`} data-side={h} disabled={off || v.lever.decided} onClick={() => void toggle()}>
     <Lever pulled={pulled}/><span><small>Trolley heading</small><b className="kp-display">{TEAM[h]}</b><em>{pulled ? 'Pulled. Tap to put it back.' : 'Untouched. Tap to pull.'}</em></span>
   </button>;
   const building = !['plead', 'lever', 'crash', 'complete'].includes(v.phase);
   return <section className="tc-conductor">
     {building && <><h2 className="kp-display">You’re the Conductor</h2>
-      <p>Watch both tracks fill up. Then each team pleads, and you decide. The trolley heads <b className={`tc-team-${v.defaultSide}`}>{TEAM[v.defaultSide]}</b> unless you pull the lever.</p>
-      {isPick(v.phase) && <ul className="tc-progress-mini">{(['north', 'south'] as const).map(s => { const p = v.progress[s]; return <li key={s} data-side={s}><b>{TEAM[s]}</b> {p.total && p.locked >= p.total ? '✓ locked' : `${p.locked}/${p.total} locked…`}</li>; })}</ul>}</>}
+      <p>Watch both tracks fill up. Then each team pleads, and you decide. The trolley heads <b className={`tc-team-${v.defaultSide}`}>{TEAM[v.defaultSide]}</b> unless you pull the lever. Lean it whenever you like: the room is watching.</p>
+      {isPick(v.phase) && <ul className="tc-progress-mini">{(['north', 'south'] as const).map(s => { const p = v.progress[s]; return <li key={s} data-side={s}><b>{TEAM[s]}</b> {p.total && p.locked >= p.total ? '✓ locked' : `${p.locked}/${p.total} locked…`}</li>; })}</ul>}
+      {leverOpen(v.phase) && lever}</>}
     {v.phase === 'plead' && <>
       <h2 className="kp-display">{TEAM[v.floor ?? v.defaultSide]} has the floor</h2>
       <p>Listen, lean the lever as they sway you, and move things along when you’ve heard enough.</p>
@@ -170,15 +248,16 @@ function Conductor({ props }: { props: Props }) {
       {lever}
     </>)}
     {error && <StatusNotice tone="error">{error}</StatusNotice>}
+    {v.crowd && <p className="tc-toll">{SIDES.map(s => <span key={s} data-side={s}><b className="kp-numeral">{heads(v, s)}</b> on {TEAM[s]}</span>)}</p>}
     <Tracks v={v}/>
   </section>;
 }
 
-function Result({ v, side, me }: { v: PublicView; side?: Side | null; me?: string }) {
+function Result({ v, side, me, gallery }: { v: PublicView; side?: Side | null; me?: string; gallery?: boolean }) {
   const p = player(v, me), hit = !!side && v.struck === side;
   if (!v.struck) return null;
   return <section className="tc-result" data-hit={hit} data-side={side ?? undefined}>
-    {side ? <><h2 className="kp-display">{hit ? 'Struck!' : 'Spared!'}</h2><p>{hit ? '+1 death for your whole team.' : `${TEAM[opposite(side)]} took the hit.`}</p></>
+    {side ? <><h2 className="kp-display">{hit ? 'Struck!' : 'Spared!'}</h2><p>{hit ? gallery ? `You stood on ${TEAM[side]}. +1 death.` : '+1 death for your whole team.' : `${TEAM[opposite(side)]} took the hit.`}</p></>
       : <><h2 className="kp-display">{TEAM[v.struck]} is struck</h2><p>{v.lever.timedOut ? 'You dithered. The lever stayed put.' : v.lever.pulled ? 'You pulled the lever.' : 'You did nothing.'} Conductors never score.</p></>}
     {p && <p className="tc-total"><Skull/> {plural(p.deaths, 'death')} so far</p>}
   </section>;
@@ -188,36 +267,39 @@ function Team({ props, own }: { props: Props; own: PrivateView }) {
   const { publicView: v } = props, side = own.side!, kind = isPick(v.phase) ? v.phase : null;
   const next: CardKind | undefined = v.phase === 'deal' ? 'innocent' : v.phase === 'innocentReveal' ? 'guilty' : v.phase === 'guiltyReveal' ? 'modifier' : undefined;
   if (kind && own.slots.length) return <PickPanel key={v.turnId} props={props} own={own} kind={kind}/>;
-  if (v.phase === 'crash' || v.phase === 'complete') return <><Result v={v} side={side} me={props.playerId!}/><Tracks v={v} side={side}/></>;
+  if (v.phase === 'crash' || v.phase === 'complete') return <><Result v={v} side={side} me={props.playerId!}/><Tracks v={v} side={side} counsel/></>;
   if (v.phase === 'plead' || v.phase === 'lever') {
     const mine = v.floor === side;
     return <section className="tc-plead" data-mine={v.phase === 'plead' && mine}>
       <h2 className="kp-display">{v.phase === 'lever' ? 'Shout now!' : mine ? 'Your floor: argue out loud!' : `${TEAM[v.floor ?? opposite(side)]} has the floor`}</h2>
       <p>{v.phase === 'lever' ? 'The Conductor is deciding. Make your case!' : mine ? 'Convince Your Honour to send the trolley the other way.' : 'Listen, then get ready to answer.'}</p>
+      <ShoutBar props={props}/>
       <Indicator v={v} side={side}/>
-      <Tracks v={v} side={side}/>
+      <Tracks v={v} side={side} counsel/>
     </section>;
   }
-  return <section className="tc-watch"><h2 className="kp-display">Watch the TV</h2><p>{kind ? 'Time’s up. The Clerk picked for your team.' : 'Cards are being revealed. Plan quietly with your team.'}</p><Tracks v={v} side={side}/><Hands own={own} open={next}/></section>;
+  return <section className="tc-watch"><h2 className="kp-display">Watch the TV</h2><p>{kind ? 'Time’s up. The Clerk picked for your team.' : 'Cards are being revealed. Plan quietly with your team.'}</p><Tracks v={v} side={side} counsel/><Hands own={own} open={next}/></section>;
 }
 
 export function ControllerView(props: Props) {
   const { publicView: v, privateView: own, playerId } = props, me = player(v, playerId ?? undefined);
-  const side = own?.side ?? null, mates = side ? v.tracks[side].team.filter(id => id !== playerId).map(id => (player(v, id)?.name ?? '').split(' ')[0]) : [];
+  const side = own?.side ?? null, mates = side && own?.role === 'team' ? v.tracks[side].team.filter(id => id !== playerId).map(id => (player(v, id)?.name ?? '').split(' ')[0]) : [];
   const withWho = mates.length > 2 ? `${mates.slice(0, 2).join(', ')} +${mates.length - 2}` : mates.join(', ');
   const timer = (isPick(v.phase) || v.phase === 'plead' || v.phase === 'lever');
   return <main className="tc tc-phone" data-side={side ?? undefined} data-role={own?.role}>
     <header className="tc-phone-head">
       {own?.role === 'conductor' ? <span className="tc-role" data-role="conductor"><Cap/>Conductor</span>
+        : own?.role === 'gallery' ? <span className="tc-role" data-side={side ?? undefined}><b>GALLERY</b>{side ? ` · on ${TEAM[side]}` : ' · not standing yet'}</span>
         : side ? <span className="tc-role" data-side={side}><b>{TEAM[side].toUpperCase()}</b>{mates.length ? ` · with ${withWho}` : ' · solo counsel'}</span>
         : <span className="tc-role">Watching</span>}
-      <span className="tc-phase">Round {v.round}/{v.rounds} · {PHASE_LINE[v.phase]}</span>
+      <span className="tc-phase">Case {v.round}/{v.rounds} · {PHASE_LINE[v.phase]}</span>
       {timer && <span className="tc-phone-clock" data-low={v.deadline - props.serverNowMs() < 10500}><Countdown deadline={v.deadline} serverNowMs={props.serverNowMs}/></span>}
     </header>
     {props.connected === false && <StatusNotice>Reconnecting. Your seat and your team’s picks are safe.</StatusNotice>}
     {!me ? <section className="tc-watch"><h2 className="kp-display">You’re watching</h2><p>This case started without you. You’ll get a seat when the host starts the next game.</p><Tracks v={v}/></section>
       : !own ? <section className="tc-watch"><h2 className="kp-display">Taking your seat…</h2><p>Your role appears here in a moment.</p></section>
       : own.role === 'conductor' ? (v.phase === 'crash' || v.phase === 'complete' ? <><Result v={v} me={playerId!}/><Tracks v={v}/></> : <Conductor props={props}/>)
+      : own.role === 'gallery' ? <Gallery props={props} own={own}/>
       : <Team props={props} own={own}/>}
     {me && <p className="tc-me"><Chip p={me}/> <span><Skull/> {plural(me.deaths, 'death')}</span></p>}
   </main>;

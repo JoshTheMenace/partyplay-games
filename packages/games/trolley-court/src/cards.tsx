@@ -1,18 +1,38 @@
 /* Trolley Court shared visuals: card faces and backs, figure silhouettes, name chips, the Conductor and small helpers. */
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { opposite, type Card, type CardKind, type Figure, type Placed, type PublicPlayer, type PublicView, type Side } from './types';
+import { LINES, lineVariant } from './narration';
+import { CRASH, SIDES, opposite, type Card, type CardKind, type Figure, type Placed, type PublicPlayer, type PublicView, type Shout, type Side } from './types';
+import { VO } from './vo-manifest';
 
 export const art = { base: '/games/trolley-court/' };
 export const TEAM: Record<Side, string> = { north: 'North', south: 'South' };
 export const KIND: Record<CardKind, string> = { innocent: 'Innocent', guilty: 'Guilty', modifier: 'Twist' };
 export const vars = (o: Record<string, string | number>) => o as CSSProperties;
-export const slotName = (side: Side, slot: number) => slot === 0 ? 'Bystander' : slot === 1 ? 'Their pick' : `Planted by ${TEAM[opposite(side)]}`;
+export const SHOUT: Record<Shout, string> = { hear: 'Hear, hear!', objection: 'Objection!', boo: 'Boo!', mercy: 'Mercy!' };
+export const slotName = (side: Side, slot: number) => slot === 0 ? 'Bystander' : slot === 1 ? `${TEAM[side]}’s pick` : `Planted by ${TEAM[opposite(side)]}`;
 export const heading = (v: PublicView): Side => v.struck ?? (v.lever.pulled ? opposite(v.defaultSide) : v.defaultSide);
 export const player = (v: PublicView, id?: string) => v.players.find(p => p.id === id);
 export const cardText = (c: Card) => c.text || 'Blank card: write your own';
 export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 /** Who put a card on the tracks, for author tags. */
-export const credit = (v: PublicView, p: Placed) => p.from === 'deck' ? 'from the deck' : p.auto ? 'auto-picked' : `by ${player(v, p.by)?.name ?? TEAM[p.from]}`;
+export const credit = (v: PublicView, p: Placed) => p.from === 'deck' ? 'from the deck' : p.auto ? 'auto-picked' : p.from === 'gallery' ? 'voted in by the Gallery' : `by ${player(v, p.by)?.name ?? TEAM[p.from]}`;
+export const fromName = (from: Placed['from']) => from === 'gallery' ? 'Gallery' : from === 'deck' ? '' : TEAM[from];
+/** Crowd: the seats standing on a track, and every head the trolley would hit there (counsel plus those standing). */
+export const standers = (v: PublicView, side: Side) => [...v.gallery].flatMap((c, seat) => c === side[0] ? [seat] : []);
+export const heads = (v: PublicView, side: Side) => v.tracks[side].team.length + standers(v, side).length;
+export const sideOfSeat = (v: PublicView, seat: number): Side | null => SIDES.find(s => v.gallery[seat] === s[0] || v.tracks[s].team.includes(v.players[seat]?.id)) ?? null;
+/** Sounds and lines the crash holds back so they land on the picture (ms after the cue). */
+export const CUE_DELAY: Record<string, number> = { gavel: CRASH.stampAt, bell: CRASH.runAt - 300, rumble: CRASH.runAt, crash: CRASH.runAt + 900, gasp: CRASH.sparedAt - 600, aww: CRASH.sparedAt - 600, struck: CRASH.tallyAt - 300 };
+/** The Clerk's caption: lines show one after another, each for as long as its recording (or a reading of it) lasts. */
+export function clerkLine(v: PublicView, now: number) {
+  let free = 0, shown: string | null = null;
+  for (const c of v.cues) if (c.kind === 'line') {
+    const id = lineVariant(c.id, c.seq), text = LINES[id] ?? '', due = c.at + (CUE_DELAY[c.id] ?? 0), start = Math.max(due, free), end = start + (VO[id] ?? 1200 + 55 * text.length) + 700;
+    if (start - due > 8000) continue; // The mixer drops a line that has waited this long; so does its caption.
+    free = end - 400; if (now >= start && now < end) shown = text;
+  }
+  return shown;
+}
 export const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export function useNow(serverNowMs: () => number, ms = 250) {
@@ -42,6 +62,8 @@ export const Skull = () => <svg className="tc-skull" viewBox="0 0 24 24" aria-hi
 /** A conductor's cap with a judge's wig curl peeking out. */
 export const Cap = () => <svg className="tc-cap" viewBox="0 0 32 24" aria-hidden="true"><path d="M4 14C4 6 10 3 16 3s12 3 12 11z" fill="#1d2a6b" stroke="var(--kp-ink)" strokeWidth="2"/><path d="M2 14h28l-3 5H5z" fill="var(--kp-ink)"/><circle cx="16" cy="9" r="3" fill="var(--kp-sun)"/><circle cx="5" cy="20" r="3.4" fill="var(--kp-cream)" stroke="var(--kp-ink)"/><circle cx="27" cy="20" r="3.4" fill="var(--kp-cream)" stroke="var(--kp-ink)"/></svg>;
 
+/** One Gallery member: a seat-coloured dot with their initial. */
+export const Dot = ({ p, className = '', style }: { p?: PublicPlayer; className?: string; style?: CSSProperties }) => <i className={`tc-dot ${className}`} style={{ ...vars({ '--seat': p?.color ?? '#888' }), ...style }} title={p?.name}>{[...(p?.name ?? '?')][0]?.toUpperCase()}</i>;
 export function Chip({ p, children, me }: { p?: PublicPlayer; children?: ReactNode; me?: boolean }) {
   return <span className="tc-chip" style={vars({ '--seat': p?.color ?? '#888' })} data-off={p ? !p.connected : undefined}><i aria-hidden="true"/><b>{me ? 'You' : p?.name ?? 'Player'}</b>{children}</span>;
 }
@@ -50,6 +72,7 @@ export function Chip({ p, children, me }: { p?: PublicPlayer; children?: ReactNo
 export function CardFace({ card, label, className = '', children }: { card: Card; label?: string; className?: string; children?: ReactNode }) {
   return <span className={`tc-card ${className}`} data-kind={card.kind} data-blank={card.blank ? true : undefined}>
     <span className="tc-card-head">{card.kind === 'modifier' ? TWIST : <FigureIcon figure={card.figure}/>}<span>{label ?? KIND[card.kind]}</span>{card.blank && <em>Write-in</em>}</span>
+    <span className="tc-card-art" aria-hidden="true">{card.kind === 'modifier' ? TWIST : <FigureIcon figure={card.figure}/>}</span>
     <span className="tc-card-text">{cardText(card)}</span>
     {children}
   </span>;
@@ -57,10 +80,10 @@ export function CardFace({ card, label, className = '', children }: { card: Card
 export const CardBack = ({ stamp, children }: { stamp?: string; children?: ReactNode }) => <div className="tc-back" aria-label={stamp ? `Face-down card, ${stamp.toLowerCase()}` : 'Face-down card'}>{stamp && <b className="tc-stamp">{stamp}</b>}{children}</div>;
 
 /** Read-only track summary for phones: every revealed card with its twists, in full. */
-export function TrackList({ v, side, mine }: { v: PublicView; side: Side; mine?: boolean }) {
+export function TrackList({ v, side, mine, counsel }: { v: PublicView; side: Side; mine?: boolean; counsel?: boolean }) {
   const t = v.tracks[side], hot = heading(v) === side;
   return <section className="tc-tracklist" data-side={side} data-mine={mine} aria-label={`${TEAM[side]} track`}>
-    <h3><span>{TEAM[side]}{mine ? ' · your track' : ''}</span>{hot && <em>{v.phase === 'crash' || v.phase === 'complete' ? 'Struck' : 'Trolley heading here'}</em>}</h3>
-    <ol>{t.slots.map((c, i) => <li key={i} data-kind={c?.card.kind ?? (i === 2 ? 'guilty' : 'innocent')}><small>{mine && i === 1 ? 'Your pick' : slotName(side, i)}</small>{c ? <><p>{cardText(c.card)}</p>{c.mods.map(m => <p key={m.card.id} className="tc-mod" data-from={m.from}><b>{m.from === 'deck' ? '' : TEAM[m.from]}</b> + {cardText(m.card)}</p>)}</> : <p className="tc-empty">Not revealed yet</p>}</li>)}</ol>
+    <h3><span>{TEAM[side]}{mine ? ' · your track' : ''}{v.crowd && <small> · {plural(heads(v, side), 'head')}</small>}</span>{hot && <em>{v.phase === 'crash' || v.phase === 'complete' ? 'Struck' : 'Trolley heading here'}</em>}</h3>
+    <ol>{t.slots.map((c, i) => <li key={i} data-kind={c?.card.kind ?? (i === 2 ? 'guilty' : 'innocent')}><small>{mine && counsel && i === 1 ? 'Your pick' : slotName(side, i)}</small>{c ? <><p>{cardText(c.card)}</p>{c.mods.map(m => <p key={m.card.id} className="tc-mod" data-from={m.from}><b>{fromName(m.from)}</b> + {cardText(m.card)}</p>)}</> : <p className="tc-empty">Not revealed yet</p>}</li>)}</ol>
   </section>;
 }

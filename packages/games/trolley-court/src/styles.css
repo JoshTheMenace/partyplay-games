@@ -7,11 +7,14 @@
 
 /* Cards: em-based, so the context's font-size sets the size. */
 .tc-card{position:relative;display:flex;flex-direction:column;border-radius:.42em;background:linear-gradient(170deg,#fffdf6,#f1e3c3);color:var(--kp-ink);border:.1em solid var(--kp-ink);box-shadow:0 .16em 0 var(--kp-ink),0 .45em .9em #0006;text-align:left;font-weight:800}
-.tc-card-head{display:flex;align-items:center;gap:.45em;padding:.28em .55em;background:var(--k);border-bottom:.1em solid var(--kp-ink);border-radius:.32em .32em 0 0;font-family:var(--font-display);font-weight:400;font-size:.62em;letter-spacing:.06em;text-transform:uppercase;line-height:1.1}
+.tc-card-head{position:relative;z-index:1;display:flex;align-items:center;gap:.45em;padding:.28em .55em;background:var(--k);border-bottom:.1em solid var(--kp-ink);border-radius:.32em .32em 0 0;font-family:var(--font-display);font-weight:400;font-size:.62em;letter-spacing:.06em;text-transform:uppercase;line-height:1.1}
 .tc-card-head>span{flex:1;min-width:0}
 .tc-card-head em{font-style:normal;background:var(--kp-ink);color:var(--kp-sun);padding:.1em .5em;border-radius:.4em}
 .tc-figure{width:1.9em;height:1.9em;flex:none;fill:currentColor;stroke-linejoin:round}
-.tc-card-text{display:block;padding:.3em .55em .45em;line-height:1.16;overflow-wrap:break-word}
+/* The figure again, large and faint in the corner of the card. */
+.tc-card-art{position:absolute;inset:0;overflow:hidden;border-radius:.32em;pointer-events:none}
+.tc-card-art .tc-figure{position:absolute;right:-.2em;bottom:-.5em;width:3.6em;height:3.6em;color:color-mix(in srgb,var(--k) 62%,#8a6a3a);opacity:.3;transform:rotate(-8deg)}
+.tc-card-text{position:relative;display:block;padding:.3em .55em .45em;line-height:1.16;overflow-wrap:break-word}
 .tc-card[data-blank] .tc-card-text{font-style:italic;font-weight:700}
 .tc-back{position:relative;display:grid;place-items:center;border-radius:.42em;border:.1em solid var(--kp-ink);background:url('/games/trolley-court/art/card-back.svg') center/auto 100% no-repeat,repeating-linear-gradient(125deg,#1d2a6b 0 14px,#24337f 14px 21px);box-shadow:0 .16em 0 var(--kp-ink),0 .45em .9em #0006}
 .tc-back>small{position:absolute;left:.6em;top:.4em;z-index:1;padding:.1em .45em;border-radius:.3em;background:#0b1030d9;font-size:.55em;text-transform:uppercase;letter-spacing:.1em;color:var(--kp-cream);opacity:.85}
@@ -22,16 +25,26 @@
 .tc-chip[data-off=true]{opacity:.55}
 .tc-skull{width:1em;height:1em;fill:var(--kp-cream);vertical-align:-.12em;flex:none}
 .tc-cap{width:1.8em;height:1.35em;flex:none;vertical-align:-.3em}
+.tc-dot{display:grid;place-items:center;width:30px;height:30px;flex:none;border-radius:50%;background:var(--seat);color:var(--kp-ink);border:3px solid var(--kp-ink);font:900 15px/1 var(--font-body);font-style:normal}
 
 /* ---------- TV stage (1920×1080, scaled) ---------- */
 .tc-frame{position:relative;width:100%;overflow:hidden;border-radius:1rem}
 .tc-stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;overflow:hidden;background:#141a48;color:var(--kp-cream);font-size:28px}
+.tc-shaker{position:absolute;inset:0}
 .tc-sky{position:absolute;inset:0;background:center/cover no-repeat}
+.tc-sky>i{position:absolute;width:7px;height:7px;border-radius:50%;background:var(--kp-cream);box-shadow:0 0 10px 2px #fff6e580;animation:tc-twinkle 3.2s ease-in-out infinite}
+.tc-sky>b{position:absolute;left:-340px;top:330px;width:300px;height:54px;border-radius:99px;background:#fff6e512;box-shadow:70px -22px 0 -6px #fff6e512,150px 6px 0 -12px #fff6e50d;animation:tc-drift 95s linear infinite}
+.tc-sky>b+b{top:760px;width:220px;animation-duration:140s;animation-delay:-60s}
 .tc-top{position:absolute;left:24px;right:24px;top:12px;height:88px;display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:22px;z-index:4}
-.tc-top>p{margin:0}
+.tc-top p{margin:0}
 .tc-round{display:flex;align-items:baseline;gap:10px;padding:8px 22px;border-radius:999px;background:var(--tc-panel);border:3px solid #fff6e533;font-size:22px;text-transform:uppercase;letter-spacing:.08em}
 .tc-round b{font-size:48px;color:var(--kp-sun);letter-spacing:0}
-.tc-banner{font-size:44px;text-align:center;text-wrap:balance;line-height:1.1;text-shadow:0 3px var(--kp-ink),0 0 20px var(--kp-ink)}
+.tc-banner{display:grid;justify-items:center;align-content:center;gap:2px;min-width:0;text-align:center}
+.tc-banner>.kp-display{font-size:44px;text-wrap:balance;line-height:1.08;text-shadow:0 3px var(--kp-ink),0 0 20px var(--kp-ink)}
+/* The Clerk's caption: every narrated line in print, under the banner. */
+.tc-clerk{display:flex;align-items:center;gap:10px;max-width:100%;padding:1px 18px 1px 4px;border-radius:99px;background:#05071acc;border:2px solid #78d95999;font-size:25px;font-weight:800;font-style:italic;line-height:1.1;animation:tc-rise .35s both}
+.tc-clerk-face{width:32px;height:32px;flex:none;animation:tc-talk .32s ease-in-out infinite}
+.tc-banner:has(.tc-clerk)>.kp-display{font-size:36px}
 .tc-top-judge{display:flex;align-items:center;gap:12px;padding:8px 22px 8px 14px;border-radius:999px;background:var(--tc-panel);border:3px solid var(--kp-sun);font-size:30px;max-width:420px}
 .tc-top-judge .tc-cap{width:58px;height:44px}
 .tc-top-judge span,.tc-nameplate span{display:grid;line-height:1.05}
@@ -50,13 +63,23 @@
 .tc-branch{transition:opacity .4s}
 .tc-branch:not(.is-hot){opacity:.6}
 .tc-branch.is-hot .tc-rails{stroke:var(--kp-sun);filter:drop-shadow(0 0 10px #ffd24aaa)}
+.tc-stage[data-phase=lever] .tc-branch.is-hot .tc-rails{animation:tc-hot .9s ease-in-out infinite}
 .tc-default rect{fill:var(--kp-ink);stroke:var(--kp-cream);stroke-width:3}
 .tc-default text{fill:var(--kp-sun);font:26px var(--font-display);text-anchor:middle;letter-spacing:2px}
+/* The junction signal: the lit lamp is the track the trolley will take. */
+.tc-signal rect{fill:#262a4a;stroke:var(--kp-ink);stroke-width:5}
+.tc-signal circle{fill:#0b1030;stroke:var(--kp-ink);stroke-width:4;transition:fill .3s}
+.tc-signal[data-side=north] .tc-lamp-n{fill:var(--tc-north);filter:drop-shadow(0 0 9px var(--tc-north))}
+.tc-signal[data-side=south] .tc-lamp-s{fill:var(--tc-south);filter:drop-shadow(0 0 9px var(--tc-south))}
 
 .tc-trolley{position:absolute;left:0;top:0;width:230px;height:150px;offset-distance:0%;offset-rotate:auto;z-index:3;pointer-events:none}
-.tc-trolley img{display:block;width:100%;height:100%;transform:translateY(-58px);filter:drop-shadow(0 8px 0 #05071a88)}
+.tc-trolley img{position:relative;display:block;width:100%;height:100%;transform:translateY(-58px);filter:drop-shadow(0 8px 0 #05071a88);animation:tc-idle 1.1s ease-in-out infinite}
+.tc-trolley[data-mood=rev] img{animation:tc-rev .22s linear infinite}
+.tc-beam{position:absolute;left:212px;top:-34px;width:250px;height:86px;background:linear-gradient(90deg,#ffe9a366,#ffe9a300);clip-path:polygon(0 38%,100% 0,100% 100%,0 62%);animation:tc-flicker 2.4s ease-in-out infinite}
+.tc-streaks{position:absolute;right:210px;top:-60px;width:190px;height:120px;opacity:0;background:repeating-linear-gradient(180deg,#fff6e500 0 16px,#fff6e5aa 16px 21px);mask-image:linear-gradient(90deg,transparent,#000)}
 .tc-trolley[data-run=true]{animation:tc-run var(--run-ms) linear calc(var(--run-at) + var(--t0)) both}
-.tc-trolley[data-run=true] img{animation:tc-rattle .16s linear infinite}
+.tc-trolley[data-run=true] img{animation:tc-windup .4s ease-in calc(var(--run-at) - 400ms + var(--t0)) both,tc-rattle .16s linear calc(var(--run-at) + var(--t0)) infinite}
+.tc-trolley[data-run=true] .tc-streaks{animation:tc-show .2s calc(var(--run-at) + 150ms + var(--t0)) both}
 .tc-heading{position:absolute;left:30px;top:526px;width:300px;display:flex;align-items:center;gap:12px;padding:6px 18px;border-radius:999px;background:var(--kp-ink);border:4px solid var(--team);color:var(--team);z-index:2;transition:border-color .3s,color .3s}
 .tc-heading span{font-size:18px;text-transform:uppercase;letter-spacing:.12em;color:var(--kp-cream)}
 .tc-heading b{font-size:40px;flex:1}
@@ -64,6 +87,9 @@
 .tc-heading[data-side=north] svg{transform:rotate(-40deg)}.tc-heading[data-side=south] svg{transform:rotate(40deg)}
 .tc-bench{position:absolute;left:20px;top:596px;width:430px;height:352px}
 .tc-judge{position:absolute;left:0;top:10px;width:220px;height:300px}
+.tc-eyes,.tc-brow{transition:transform .35s}
+.tc-judge[data-look=north] .tc-eyes{transform:translate(3px,-3px)}.tc-judge[data-look=south] .tc-eyes{transform:translate(3px,3px)}
+.tc-judge[data-shock=true] .tc-brow{transform:translateY(-9px)}
 .tc-lever{position:absolute;left:230px;top:20px;width:160px;height:300px;overflow:visible}
 .tc-lever-arm{transform-origin:80px 250px;transform:rotate(-30deg);transition:transform .5s cubic-bezier(.3,1.7,.5,1)}
 .tc-lever[data-pulled=true] .tc-lever-arm{transform:rotate(30deg)}
@@ -76,22 +102,24 @@
 .tc-board>*{grid-column:1/-1;margin:0}
 .tc-board>.tc-kicker,.tc-board>h1{grid-column:1}
 .tc-kicker{font-size:18px;text-transform:uppercase;letter-spacing:.14em;color:var(--kp-sky)}
-.tc-board h1{font-size:44px;line-height:.98;margin:4px 0 8px;color:var(--kp-sun);text-wrap:balance;animation:tc-pop .5s cubic-bezier(.3,1.6,.5,1) both}
+.tc-board h1{font-size:44px;line-height:.98;margin:4px 0 6px;color:var(--kp-sun);text-wrap:balance;animation:tc-pop .5s cubic-bezier(.3,1.6,.5,1) both}
 .tc-board[data-floor] h1{color:var(--team)}
 .tc-board[data-floor=north]{--team:var(--tc-north)}.tc-board[data-floor=south]{--team:var(--tc-south)}
 .tc-sub{font-size:21px;line-height:1.2;font-weight:700}
-.tc-progress{list-style:none;padding:0;display:grid;gap:6px;font-size:22px}
+.tc-progress{list-style:none;padding:0;display:grid;gap:4px;font-size:22px}
 .tc-progress li{display:flex;justify-content:space-between;gap:10px;padding:2px 12px;border-radius:10px;background:#fff6e512;border-left:8px solid var(--team)}
 .tc-progress b{color:var(--team)}
+.tc-progress .tc-jury{--team:var(--kp-sun)}
+.tc-stage[data-crowd=true] .tc-progress{gap:4px;font-size:20px}.tc-stage[data-crowd=true] .tc-board h1{margin-bottom:5px}
 .tc-progress li[data-done=true] span{color:var(--kp-lime)}
 .tc-progress .tc-all{justify-content:center;border:0;background:var(--kp-lime);color:var(--kp-ink);font-family:var(--font-display);animation:tc-pop .4s both}
 .tc-big-clock{grid-column:2;grid-row:1/3;align-self:center;width:112px;height:112px;border-radius:50%;display:grid;place-items:center;border:6px solid var(--kp-cream);font-size:62px;background:var(--kp-ink)}
 .tc-big-clock[data-low=true]{border-color:var(--kp-coral);color:var(--kp-coral);animation:tc-pulse 1s infinite}
 
-.tc-row{position:absolute;left:470px;right:24px;height:412px;display:grid;grid-template-columns:250px repeat(3,376px);gap:16px;align-items:start;z-index:1;transition:opacity .4s,filter .4s}
+.tc-row{position:absolute;left:470px;right:24px;height:412px;display:grid;grid-template-columns:250px repeat(3,376px);gap:16px;align-items:start;z-index:1;transition:filter .4s}
 .tc-row[data-side=north]{top:112px}.tc-row[data-side=south]{top:536px}
-.tc-row[data-dim=true]{opacity:.55;filter:saturate(.45)}
-.tc-plate{position:relative;align-self:stretch;display:flex;flex-direction:column;gap:8px;padding:14px 14px 12px;border-radius:22px;background:var(--tc-panel);border:4px solid var(--team);box-shadow:0 8px 0 var(--kp-ink);font-size:21px;transition:box-shadow .4s}
+.tc-row[data-dim=true]{filter:brightness(.5) saturate(.5)}
+.tc-plate{position:relative;display:flex;flex-direction:column;gap:8px;padding:14px 14px 12px;border-radius:22px;background:var(--tc-panel);border:4px solid var(--team);box-shadow:0 8px 0 var(--kp-ink);font-size:21px;transition:box-shadow .4s}
 .tc-row[data-lit=true] .tc-plate{box-shadow:0 8px 0 var(--kp-ink),0 0 0 6px color-mix(in srgb,var(--team) 45%,transparent),0 0 60px var(--team)}
 .tc-plate h2{margin:0;font-size:58px;color:var(--team);line-height:.9;text-shadow:0 4px var(--kp-ink)}
 .tc-tag[data-hit=true]{background:var(--kp-coral)}
@@ -103,40 +131,82 @@
 .tc-plate .tc-chip{display:block}.tc-plate .tc-chip>i{display:inline-block;margin-right:.4em;vertical-align:-.04em}
 .tc-pips{display:inline-grid;grid-auto-flow:column;align-items:center;gap:2px;margin-left:.5em;font-size:.9em;color:var(--kp-cream);opacity:.85}
 .tc-underdog{display:inline-block;margin-left:.4em;vertical-align:.1em;line-height:1.2;font-style:normal;font-size:13px;text-transform:uppercase;letter-spacing:.08em;background:var(--kp-grape);color:var(--kp-ink);border-radius:6px;padding:1px 6px}
-.tc-twist-count{margin-top:auto;font-size:21px;font-weight:900;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+/* Crowd: the number that makes it a trolley problem. */
+.tc-heads{display:flex;align-items:center;gap:10px;margin:4px 0 0;padding:6px 10px;border-radius:14px;background:color-mix(in srgb,var(--team) 22%,#05071a);line-height:1.05;font-weight:900;font-size:19px}
+.tc-heads b{font-size:58px;color:var(--team);min-width:1.1em;text-align:center}
+.tc-heads span{display:grid}.tc-heads small{font-size:14px;font-weight:700;opacity:.8}
+.tc-row[data-struck=true] .tc-heads[data-hit=true]{animation:tc-toll .5s calc(var(--tally-at) + var(--t0)) both}
+.tc-twist-count{font-size:21px;font-weight:900;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
 .tc-mini-backs{display:flex;flex-wrap:wrap;gap:5px}
 .tc-mini-backs i{width:34px;height:46px;border-radius:5px;border:2px solid var(--kp-ink);background:#1d2a6b url('/games/trolley-court/art/card-back.svg') center/cover;animation:tc-pop .35s both}
-.tc-floor-flag{position:absolute;left:-6px;bottom:-14px;width:262px;padding:8px 6px;text-align:center;font-size:24px;line-height:1;border-radius:12px;background:var(--team);color:var(--kp-ink);border:3px solid var(--kp-ink);transform:rotate(-3deg);box-shadow:0 5px 0 var(--kp-ink);animation:tc-pop .5s both;z-index:3}
+.tc-floor-flag{position:absolute;right:-12px;top:-18px;padding:6px 12px;font-size:21px;line-height:1;border-radius:10px;background:var(--team);color:var(--kp-ink);border:3px solid var(--kp-ink);transform:rotate(4deg);box-shadow:0 5px 0 var(--kp-ink);animation:tc-pop .5s both;z-index:1}
 
 .tc-slot{position:relative;display:flex;flex-direction:column;gap:10px;min-width:0}
 .tc-slot>.tc-card,.tc-slot>.tc-back,.tc-empty-slot{min-height:170px}
-.tc-slot>.tc-card{transform-origin:50% 0;transition:transform .35s,box-shadow .35s}
-.tc-slot:nth-child(2)>.tc-card,.tc-slot:nth-child(2) .tc-mod{transform-origin:0 0}.tc-slot:nth-child(4)>.tc-card,.tc-slot:nth-child(4) .tc-mod{transform-origin:100% 0}
-.tc-slot[data-spot=true]>.tc-card{transform:scale(1.15);z-index:2;box-shadow:0 0 0 6px var(--kp-sun),0 0 70px 14px #ffd24a99}
+.tc-stage[data-crowd=true] .tc-slot>:is(.tc-card,.tc-back,.tc-empty-slot){min-height:150px}
+.tc-slot>.tc-card{transform-origin:50% 0;transition:box-shadow .35s;animation:tc-land .45s cubic-bezier(.3,1.4,.5,1) both}
+.tc-slot>.tc-back{animation:tc-deal .5s cubic-bezier(.2,1.2,.4,1) both}
+.tc-slot:nth-child(3)>.tc-back{animation-delay:.08s}.tc-slot:nth-child(4)>.tc-back{animation-delay:.16s}
+.tc-slot[data-spot=true]>.tc-card{z-index:2;box-shadow:0 0 0 6px var(--kp-sun),0 0 70px 14px #ffd24a99}
 .tc-slot[data-target=true]>.tc-card{box-shadow:0 0 0 5px var(--kp-sun),0 .45em .9em #0006}
-.tc-flip{animation:tc-flip .7s cubic-bezier(.2,1.3,.4,1) both}
-.tc-credit{position:absolute;left:50%;bottom:-.75em;transform:translateX(-50%);font-size:.6em;font-weight:900;background:var(--kp-ink);color:var(--kp-sun);padding:.15em .8em;border-radius:99px;border:2px solid var(--kp-sun);white-space:nowrap}
+.tc-flip{animation:tc-flip .7s cubic-bezier(.2,1.3,.4,1) both!important}
 .tc-empty-slot{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:8px;border:4px dashed #fff6e559;border-radius:14px;background:#05071a59;text-align:center;padding:12px;font-size:22px}
 .tc-empty-slot small{font-size:16px;text-transform:uppercase;letter-spacing:.12em;opacity:.8}
-.tc-slot .tc-back .tc-stamp{font-size:44px}
+.tc-slot .tc-back .tc-stamp{font-size:44px;animation:tc-slam .3s cubic-bezier(.3,1.6,.5,1) both}
 .tc-mods{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:22px}
-.tc-mods[data-many=true]{font-size:20px}
-.tc-stage .tc-mod{position:relative;padding:5px 10px 5px 34px;border-radius:10px;background:#0b1030f2;border:3px solid var(--team);line-height:1.18;font-weight:800;transform-origin:50% 0;transition:transform .35s;animation:tc-drop .5s cubic-bezier(.3,1.5,.5,1) both}
-.tc-stage .tc-mod::before{position:absolute;left:5px;top:5px;width:20px;height:20px;border-radius:5px;background:var(--team);color:var(--kp-ink);font:14px/20px var(--font-display);text-align:center}
-.tc-stage .tc-mod[data-from=north]::before{content:'N'}.tc-stage .tc-mod[data-from=south]::before{content:'S'}
-.tc-stage .tc-mod[data-spot=true]{transform:scale(1.12);z-index:2;box-shadow:0 0 0 4px var(--kp-sun),0 0 40px #ffd24a99}
-.tc-mod small{display:block;font-size:.75em;color:var(--kp-sun)}
+.tc-mods[data-many=true],.tc-mods[data-n="3"],.tc-stage[data-crowd=true] .tc-mods{font-size:20px}
+/* Twists: paper tags pinned under their card, in the colour of whoever played them. */
+.tc-stage .tc-mod{position:relative;padding:5px 10px 5px 34px;border-radius:4px 10px 10px 4px;background:#0b1030f2;border:3px solid var(--team);border-left-width:8px;line-height:1.18;font-weight:800;transform-origin:50% 0;animation:tc-drop .5s cubic-bezier(.3,1.5,.5,1) both}
+.tc-stage .tc-mod:nth-child(odd){transform:rotate(-.6deg)}.tc-stage .tc-mod:nth-child(even){transform:rotate(.5deg)}
+.tc-stage .tc-mod::before{position:absolute;left:4px;top:5px;width:22px;height:22px;border-radius:50%;background:var(--team);color:var(--kp-ink);font:15px/22px var(--font-display);text-align:center}
+.tc-stage .tc-mod[data-from=north]::before{content:'N'}.tc-stage .tc-mod[data-from=south]::before{content:'S'}.tc-stage .tc-mod[data-from=gallery]::before{content:'G'}
+.tc [data-from=gallery]{--team:var(--kp-sun)}
+.tc-stage .tc-mod[data-spot=true]{z-index:2;box-shadow:0 0 0 4px var(--kp-sun),0 0 40px #ffd24a99}
 .tc-more{align-self:flex-start;padding:3px 12px;border-radius:99px;background:var(--kp-sun);color:var(--kp-ink);font-weight:900}
+.tc-stage[data-crowd=true] .tc-mods:is([data-many=true],[data-n="3"]){font-size:18px;gap:5px}.tc-stage[data-crowd=true] .tc-more{font-size:16px;padding:1px 10px}
 
-/* The crash: hits are timed on --hit (per slot), offset by --t0 (time already elapsed). */
+/* Crowd: the Gallery stands along the bottom edge of the track it chose. */
+.tc-band{position:absolute;left:266px;right:0;bottom:0;height:42px;border-radius:10px;background:linear-gradient(#05071a00,#05071a99);border-bottom:5px solid color-mix(in srgb,var(--team) 70%,transparent)}
+.tc-band>.tc-dot{width:34px;height:34px;font-size:17px}
+.tc-band>.tc-dot{position:absolute;bottom:4px;transition:left .35s;animation:tc-hop .45s cubic-bezier(.3,1.7,.5,1) both}
+.tc-band>span{position:absolute;inset:0;display:grid;place-items:center;font-size:17px;font-weight:700;opacity:.6}
+.tc-row[data-lit=true] .tc-band>.tc-dot{animation:tc-hop .45s cubic-bezier(.3,1.7,.5,1) both,tc-fidget 1.3s ease-in-out .5s infinite}
+.tc-row[data-struck=true] .tc-band>.tc-dot{animation:tc-flatten .35s ease-out calc(var(--hit) + var(--t0)) both}
+.tc-row[data-spared=true] .tc-band>.tc-dot{animation:tc-cheer .5s ease-in-out calc(var(--spared-at) + var(--t0)) 4}
+
+/* A reveal: the card (and the twist landing on it) big and centre stage for the beat, flying out of and back into its slot. */
+.tc-showcase{position:absolute;left:906px;top:292px;width:820px;z-index:6;display:grid;gap:14px;font-size:54px;pointer-events:none;transform-origin:50% 40%;animation:tc-show-in .45s cubic-bezier(.2,1.25,.4,1) var(--t0) both,tc-show-out .38s ease-in calc(var(--beat) - 380ms + var(--t0)) forwards}
+.tc-showcase::before{content:'';position:absolute;inset:-260px -420px;z-index:-1;background:radial-gradient(closest-side,#05071ab8 45%,#05071a00)}
+.tc-showcase .tc-card{box-shadow:0 0 0 8px var(--kp-sun),0 0 0 14px var(--kp-ink),0 30px 80px #000c}
+.tc-showcase p{margin:0}
+.tc-show-where{display:flex;justify-content:space-between;align-items:baseline;gap:20px;padding:0 6px;font-size:30px;font-weight:900;text-shadow:0 3px var(--kp-ink)}
+.tc-show-where b{font:44px var(--font-display);color:var(--team);text-transform:uppercase;letter-spacing:.04em}
+.tc-show-where span{color:var(--kp-sun)}
+.tc-show-mod{display:grid;gap:4px;margin:0 30px!important;padding:14px 22px;border-radius:8px 18px 18px 8px;background:#0b1030;border:6px solid var(--team);border-left-width:16px;font-size:44px;line-height:1.12;box-shadow:0 18px 50px #000b;animation:tc-drop .5s cubic-bezier(.3,1.5,.5,1) calc(.4s + var(--t0)) both}
+.tc-show-mod small{font-size:24px;color:var(--team);font-weight:900}
+
+/* The ruling, stamped across the stage before the trolley moves. */
+.tc-verdict-card{position:absolute;inset:0;z-index:7;display:grid;place-content:center;justify-items:center;gap:8px;text-align:center;pointer-events:none;background:radial-gradient(ellipse at center,#05071af2 0 34%,#05071a00 70%);animation:tc-verdict 1500ms linear calc(var(--stamp-at) + var(--t0)) both}
+.tc-verdict-card small{font-size:34px;font-weight:900;text-transform:uppercase;letter-spacing:.12em;color:var(--kp-cream)}
+.tc-verdict-card b{font-size:150px;line-height:.95;color:var(--kp-sun);-webkit-text-stroke:8px var(--kp-ink);paint-order:stroke fill;text-shadow:0 12px 0 var(--kp-ink);transform:rotate(-4deg);text-transform:uppercase}
+.tc-verdict-card[data-how=pulled] b{color:var(--kp-coral)}
+.tc-verdict-card span{font-size:40px;font-weight:900;max-width:1300px}
+.tc-verdict-card em{font:normal 52px var(--font-display);color:var(--team);text-transform:uppercase}
+.tc-gavel{width:150px;height:150px;transform-origin:80% 90%;animation:tc-gavel .45s cubic-bezier(.5,0,.9,.4) calc(var(--stamp-at) - 120ms + var(--t0)) both}
+.tc-stage[data-phase=crash] .tc-shaker{animation:tc-shake .32s linear calc(var(--stamp-at) + 140ms + var(--t0)),tc-shake .24s linear calc(var(--hit0) + var(--t0)),tc-shake .24s linear calc(var(--hit1) + var(--t0)),tc-shake .24s linear calc(var(--hit2) + var(--t0))}
+
+/* The crash: hits are timed on --hit (per slot or Gallery member), offset by --t0 (time already elapsed). */
 .tc-struck-stamp,.tc-bonk{display:none}
 .tc-row[data-struck=true] .tc-slot{animation:tc-squash .7s ease-out calc(var(--hit) + var(--t0)) both}
-.tc-row[data-struck=true] .tc-struck-stamp{display:block;position:absolute;left:-4%;right:-4%;top:38%;padding:4px 0;text-align:center;background:var(--kp-ink);color:var(--kp-coral);font:52px/1 var(--font-display);text-transform:uppercase;letter-spacing:.08em;transform:rotate(-7deg);box-shadow:0 6px 0 #0006;animation:tc-stamp .4s cubic-bezier(.3,1.6,.5,1) calc(var(--hit) + var(--t0)) both}
+.tc-row[data-struck=true] .tc-slot>.tc-card{animation:tc-tread 1ms calc(var(--hit) + var(--t0)) both}
+.tc-row[data-struck=true] .tc-struck-stamp{display:block;position:absolute;z-index:2;left:-4%;right:-4%;top:38%;padding:4px 0;text-align:center;background:var(--kp-ink);color:var(--kp-coral);font:52px/1 var(--font-display);text-transform:uppercase;letter-spacing:.08em;transform:rotate(-7deg);box-shadow:0 6px 0 #0006;animation:tc-stamp .4s cubic-bezier(.3,1.6,.5,1) calc(var(--hit) + var(--t0)) both}
 .tc-row[data-struck=true] .tc-bonk{display:block;position:absolute;right:-24px;top:-44px;font:58px/1 var(--font-display);font-style:normal;color:var(--kp-sun);-webkit-text-stroke:3px var(--kp-ink);paint-order:stroke fill;z-index:4;animation:tc-bonk 1.1s calc(var(--hit) + var(--t0)) both}
 .tc-ribbon{position:absolute;left:600px;top:120px;padding:10px 60px;font-size:72px;background:var(--kp-lime);color:var(--kp-ink);border:5px solid var(--kp-ink);border-radius:14px;transform:rotate(-5deg);box-shadow:0 10px 0 var(--kp-ink);z-index:3;pointer-events:none;animation:tc-ribbon 2.6s calc(var(--spared-at) + var(--t0)) both}
-.tc-stage[data-phase=complete] .tc-ribbon{display:none}
-.tc-stage[data-phase=complete] .tc-row .tc-slot,.tc-stage[data-phase=complete] .tc-struck-stamp{animation:none}
-.tc-stage[data-phase=complete] .tc-bonk{display:none}
+.tc-confetti{position:absolute;left:266px;right:0;top:-30px;height:0;z-index:3;pointer-events:none}
+.tc-confetti i{position:absolute;left:calc(var(--k) * 6.4% + 2%);width:16px;height:26px;border-radius:4px;background:var(--kp-sun);opacity:0;animation:tc-confetti 1.7s cubic-bezier(.3,.6,.6,1) calc(var(--spared-at) + var(--k) * 45ms + var(--t0))}
+.tc-confetti i:nth-child(3n){background:var(--kp-lime)}.tc-confetti i:nth-child(3n+1){background:var(--kp-sky);width:20px;height:14px}.tc-confetti i:nth-child(4n){background:var(--kp-coral)}
+.tc-stage[data-phase=complete] :is(.tc-ribbon,.tc-confetti,.tc-bonk){display:none}
+.tc-stage[data-phase=complete] .tc-row :is(.tc-slot,.tc-struck-stamp){animation:none}
 
 .tc-tally{position:absolute;left:24px;right:24px;top:962px;height:104px;display:flex;justify-content:center;gap:10px;list-style:none;margin:0;padding:0;z-index:2}
 .tc-tally li{position:relative;flex:1 1 0;max-width:280px;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:4px;padding:6px 12px;border-radius:16px;background:var(--tc-panel);border:3px solid #fff6e526;border-bottom:7px solid var(--team,#fff6e540)}
@@ -157,17 +227,61 @@
 .tc-fall{position:absolute;left:14px;top:50px;font-size:34px;animation:tc-fall .8s cubic-bezier(.5,0,.8,.6) calc(var(--tally-at) + var(--t0)) both}
 .tc-fall .tc-skull{fill:var(--kp-coral)}
 
+/* Crowd: the waiting Gallery and the standings instead of sixty-four tally chips. */
+.tc-strip{position:absolute;left:24px;right:24px;top:962px;height:104px;display:flex;gap:12px;z-index:2}
+.tc-strip>p{margin:0;min-width:0;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:2px 14px;padding:8px 18px;border-radius:16px;background:var(--tc-panel);border:3px solid #fff6e526;font-size:24px;font-weight:900}
+.tc-strip small{grid-column:1/-1;font-size:15px;text-transform:uppercase;letter-spacing:.12em;color:var(--kp-sun)}
+.tc-wait{flex:0 0 auto}.tc-wait b{white-space:nowrap}
+.tc-wait-dots{display:flex;align-items:center;height:38px;padding-left:calc(-1 * var(--lap))}
+.tc-wait-dots>.tc-dot{margin-left:var(--lap);animation:tc-hop .45s cubic-bezier(.3,1.7,.5,1) both}
+.tc-rank{flex:1 1 0}.tc-rank>b{display:flex;align-items:center;gap:6px;font:44px var(--font-display);color:var(--kp-lime)}
+.tc-rank[data-kind=worst]{flex:0 1 auto}.tc-rank[data-kind=worst]>b{color:var(--kp-coral)}
+.tc-rank>span{display:flex;flex-wrap:wrap;align-items:center;gap:2px 18px;max-height:62px;overflow:hidden;line-height:1.2}
+.tc-rank .tc-chip>b{white-space:nowrap}
+.tc-rank em{font-style:normal;color:var(--muted-foreground)}
+
+.tc-shouts{position:absolute;inset:0;z-index:5;pointer-events:none}
+.tc-shout{position:absolute;margin:0;display:grid;justify-items:center;padding:6px 18px 4px;border-radius:18px 18px 18px 4px;background:var(--kp-cream);color:var(--kp-ink);border:4px solid var(--kp-ink);box-shadow:0 6px 0 var(--kp-ink);line-height:1;white-space:nowrap;animation:tc-shout 2.5s cubic-bezier(.2,.8,.4,1) both}
+.tc-shout b{font-size:38px}.tc-shout small{font-size:16px;font-weight:900;opacity:.75}
+.tc-stage[data-crowd=true] .tc-shout b{font-size:30px}
+.tc-shout[data-kind=objection]{background:var(--kp-coral)}.tc-shout[data-kind=hear]{background:var(--kp-lime)}.tc-shout[data-kind=mercy]{background:var(--kp-sky)}
+
 @keyframes tc-run{to{offset-distance:100%}}
 @keyframes tc-rattle{0%,100%{transform:translateY(-58px) rotate(0)}50%{transform:translateY(-61px) rotate(-1.2deg)}}
+@keyframes tc-idle{50%{transform:translateY(-60px)}}
+@keyframes tc-rev{0%,100%{transform:translate(0,-58px)}25%{transform:translate(-2px,-59px) rotate(-.6deg)}75%{transform:translate(2px,-57px) rotate(.6deg)}}
+@keyframes tc-windup{0%{transform:translate(0,-58px)}70%{transform:translate(-22px,-58px) scaleX(.93)}100%{transform:translate(0,-58px)}}
+@keyframes tc-flicker{50%{opacity:.55}}
+@keyframes tc-twinkle{50%{opacity:.25;transform:scale(.6)}}
+@keyframes tc-drift{to{transform:translateX(2400px)}}
+@keyframes tc-hot{50%{filter:drop-shadow(0 0 22px #ffd24a)}}
+@keyframes tc-talk{50%{transform:translateY(-3px) rotate(-4deg)}}
+@keyframes tc-rise{from{opacity:0;transform:translateY(10px)}}
 @keyframes tc-pulse{50%{transform:scale(1.08)}}
 @keyframes tc-glow{50%{text-shadow:0 0 18px var(--team)}}
 @keyframes tc-pop{from{opacity:0;transform:scale(.6) rotate(-6deg)}}
+@keyframes tc-slam{from{opacity:0;transform:rotate(-8deg) scale(2.4)}}
 @keyframes tc-drop{from{opacity:0;transform:translateY(-30px) scale(1.3)}}
-@keyframes tc-flip{from{transform:perspective(900px) rotateY(95deg) scale(1.15)}to{transform:scale(1.15)}}
+@keyframes tc-deal{from{opacity:0;transform:translate(-520px,60px) rotate(-24deg) scale(.5)}}
+@keyframes tc-land{from{transform:translateY(-14px) scale(1.04)}}
+@keyframes tc-flip{from{transform:perspective(900px) rotateY(95deg)}}
+@keyframes tc-hop{from{opacity:0;transform:translateY(-46px) scale(.6)}}
+@keyframes tc-fidget{50%{transform:translateY(-5px)}}
+@keyframes tc-flatten{to{transform:translateY(9px) scale(1.25,.3);filter:grayscale(.7) brightness(.7)}}
+@keyframes tc-cheer{50%{transform:translateY(-16px)}}
+@keyframes tc-toll{0%{transform:none}40%{transform:scale(1.18) rotate(-3deg);background:var(--kp-coral)}100%{transform:none;background:color-mix(in srgb,var(--kp-coral) 45%,#05071a)}}
+@keyframes tc-show-in{from{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.4)}}
+@keyframes tc-show-out{to{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.4)}}
+@keyframes tc-verdict{0%{opacity:0;transform:scale(2.6)}9%{opacity:1;transform:scale(.95)}13%{transform:scale(1)}85%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.12)}}
+@keyframes tc-gavel{from{transform:rotate(70deg)}}
+@keyframes tc-shake{0%,100%{transform:none}20%{transform:translate(-10px,6px) rotate(-.3deg)}40%{transform:translate(9px,-7px) rotate(.25deg)}60%{transform:translate(-6px,-4px)}80%{transform:translate(5px,4px)}}
 @keyframes tc-squash{0%{transform:none}25%{transform:translateY(-36px) rotate(-9deg) scale(1.05)}55%{transform:translateY(14px) rotate(5deg) scaleY(.82)}100%{transform:rotate(-2deg) scaleY(.94)}}
+@keyframes tc-tread{to{background:repeating-linear-gradient(90deg,#05071a00 0 9px,#05071a26 9px 14px) 0 62%/100% 20px no-repeat,repeating-linear-gradient(90deg,#05071a00 0 9px,#05071a26 9px 14px) 0 22%/100% 20px no-repeat,linear-gradient(170deg,#efe6d2,#d9c9a6)}}
 @keyframes tc-stamp{from{opacity:0;transform:rotate(-7deg) scale(2.2)}}
 @keyframes tc-bonk{0%{opacity:0;transform:scale(.2) rotate(-25deg)}18%{opacity:1;transform:scale(1.3) rotate(12deg)}70%{opacity:1;transform:scale(1) rotate(10deg)}100%{opacity:0;transform:scale(1.1) rotate(10deg)}}
 @keyframes tc-ribbon{0%{opacity:0;transform:rotate(-5deg) scale(.5)}12%{opacity:1;transform:rotate(-5deg) scale(1.05)}80%{opacity:1;transform:rotate(-5deg)}100%{opacity:0;transform:rotate(-5deg) translateY(-40px)}}
+@keyframes tc-confetti{0%{opacity:1;transform:translateY(0) rotate(0)}100%{opacity:0;transform:translateY(420px) rotate(540deg)}}
+@keyframes tc-shout{0%{opacity:0;transform:translateY(30px) scale(.4) rotate(-8deg)}10%{opacity:1;transform:translateY(0) scale(1.1) rotate(3deg)}18%{transform:scale(1) rotate(-2deg)}80%{opacity:1;transform:translateY(-70px) rotate(-2deg)}100%{opacity:0;transform:translateY(-110px) rotate(-2deg)}}
 @keyframes tc-hide{to{opacity:0}}
 @keyframes tc-show{from{opacity:0;transform:scale(2)}}
 @keyframes tc-fall{0%{opacity:0;transform:translateY(-260px) rotate(-180deg)}20%{opacity:1}85%{opacity:1;transform:translateY(0) rotate(0)}100%{opacity:0;transform:translateY(0)}}
@@ -262,7 +376,35 @@
 .tc-result[data-hit=true] h2{color:var(--kp-coral)}
 .tc-total{font-size:18px;font-weight:900}
 .tc-verdict{text-align:center}
+/* The Gallery: stand on a track, vote in a twist, heckle. */
+.tc-gallery,.tc-ballot{display:grid;gap:12px}
+.tc-stand{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tc-stand>p,.tc-stand>.kp-notice{grid-column:1/-1;font-weight:800}
+.tc-stand-btn{position:relative;display:grid;gap:2px;justify-items:start;min-height:112px;padding:10px 12px;border-radius:18px;border:4px solid color-mix(in srgb,var(--team) 55%,transparent);background:#0b1030;color:var(--kp-cream);text-align:left;box-shadow:0 6px 0 var(--kp-ink);transition:transform .15s,background .2s}
+.tc-stand-btn small{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted-foreground)}
+.tc-stand-btn b{font-size:clamp(1.7rem,9vw,2.4rem);line-height:1;color:var(--team)}
+.tc-stand-btn span{font-weight:800;font-size:15px}
+.tc-stand-btn em{font-style:normal;font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:.06em;background:var(--kp-sun);color:var(--kp-ink);padding:2px 8px;border-radius:6px}
+.tc-stand-btn[aria-pressed=true]{border-color:var(--team);background:color-mix(in srgb,var(--team) 26%,#0b1030);box-shadow:0 6px 0 var(--kp-ink),0 0 0 3px var(--kp-sun);animation:tc-pop .35s cubic-bezier(.3,1.6,.5,1)}
+.tc-stand-btn[aria-pressed=true] small{color:var(--kp-cream)}
+.tc-stand-btn:active:not(:disabled){transform:translateY(3px)}
+.tc-stand-btn:disabled{opacity:.75}.tc-stand-btn:disabled[aria-pressed=false]{opacity:.4}
+.tc-votes{align-self:flex-start;margin:0 .55em .45em;font-style:normal;font-size:13px;font-weight:900;background:var(--kp-ink);color:var(--kp-sun);padding:2px 8px;border-radius:8px}
+.tc-ballot>.tc-card{font-size:17px}
+.tc-held{padding:8px 12px;border-radius:12px;border-left:6px solid var(--kp-sun);background:#ffd24a1a;font-size:15px}
+.tc-shoutbar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.tc-shoutbar button{min-height:48px;padding:4px 2px;border-radius:14px 14px 14px 4px;border:3px solid var(--kp-ink);background:var(--kp-cream);color:var(--kp-ink);font:15px/1.05 var(--font-display);box-shadow:0 4px 0 var(--kp-ink)}
+.tc-shoutbar [data-kind=objection]{background:var(--kp-coral)}.tc-shoutbar [data-kind=hear]{background:var(--kp-lime)}.tc-shoutbar [data-kind=mercy]{background:var(--kp-sky)}
+.tc-shoutbar button:active:not(:disabled){transform:translateY(3px);box-shadow:0 1px 0 var(--kp-ink)}
+.tc-shoutbar button:disabled{opacity:.45}
+.tc-toll{display:flex;gap:10px;font-weight:800}
+.tc-toll span{flex:1;padding:6px 12px;border-radius:12px;background:#0b1030;border-left:6px solid var(--team)}
+.tc-toll b{font-size:26px;color:var(--team)}
+.tc-tracklist h3 small{font:800 13px var(--font-body);color:var(--muted-foreground)}
+@media (max-width:359px){.tc-shoutbar{grid-template-columns:1fr 1fr}}
 @media (orientation:landscape) and (max-height:500px){
+  .tc-gallery>p:not(.tc-held),.tc-stand>p{display:none}
+  .tc-stand-btn{min-height:76px}
   .tc-phone-head{position:static}
   .tc-hand{grid-template-columns:repeat(2,minmax(0,1fr))}
   .tc-hand>.tc-detail{grid-column:1/-1}
@@ -280,7 +422,7 @@
 .tc-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:.8rem}
 .tc-options label{display:grid;gap:.3rem;font-weight:800}
 .tc-toggles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:.6rem 1.2rem}
-.tc-toggles p{margin:.1rem 0 0;font-size:.85rem;color:var(--muted-foreground)}
+.tc-toggles p,.tc-settings-note{margin:.1rem 0 0;font-size:.85rem;color:var(--muted-foreground)}
 .tc-howto ul{display:grid;gap:.5rem;padding-left:1.2rem;line-height:1.4}
 .tc-howto-cards{display:flex;flex-wrap:wrap;gap:.8rem;font-size:15px}
 .tc-howto-cards .tc-card{flex:1 1 180px;max-width:240px}
@@ -289,6 +431,9 @@
 .tc-verdict-head h2{margin:.2em 0;color:var(--kp-sun);font-size:2em}
 .tc-verdict-head p{margin:0;color:var(--muted-foreground)}
 .tc-podium{display:flex;flex-wrap:wrap;justify-content:center;gap:.6rem}
+.tc-awards{list-style:none;margin:.5em 0 0;padding:0;display:flex;flex-wrap:wrap;justify-content:center;gap:.4em .6em;font-size:.85em}
+.tc-awards li{display:flex;align-items:center;gap:.5em;padding:.25em .8em;border-radius:99px;background:#fff6e512;border:1px solid #fff6e526}
+.tc-awards b{display:flex;align-items:center;gap:.3em;color:var(--kp-sun);font-size:.8em;text-transform:uppercase;letter-spacing:.08em}
 .tc-winner{display:grid;justify-items:center;gap:.2em;padding:.4em .9em;border-radius:1em;background:#ffd24a1f;border:2px solid var(--kp-sun);font-size:1.2em;animation:tc-pop .5s both}
 .tc-winner small{font-size:.7em}
 .tc-podium[data-many=true] .tc-winner{font-size:1em;padding:.25em .7em}
@@ -302,6 +447,16 @@
 .tc-history strong{color:var(--team)}
 .tc-history small{grid-column:2/-1;color:var(--muted-foreground)}
 .tc-standings :is(td,th):nth-child(n+3){width:1%;white-space:nowrap;text-align:center}
+/* More than ten players: the standings as a wall of one-line rows. */
+.tc-wall{list-style:none;margin:0;padding:0;columns:var(--cols) 13em;column-gap:1.2em;font-size:.9em}
+.tc-wall li{display:grid;grid-template-columns:2.6em minmax(0,1fr) auto;align-items:center;gap:.4em;padding:.22em .5em;break-inside:avoid;border-bottom:1px solid #fff6e51f}
+.tc-wall li>b{display:flex;align-items:center;gap:.25em}
+.tc-wall li[data-win=true]{background:#ffd24a1f}
+.tc-wall li[data-me=true]{outline:2px solid var(--kp-sun);outline-offset:-2px;border-radius:.4em}
+.tc-wall .tc-chip>b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-you{color:var(--kp-sun)}
+.tc-results[data-crowd=true] .tc-results-grid{grid-template-columns:minmax(0,1fr)}
+@media (min-width:900px){.tc-results[data-crowd=true] .tc-results-grid{grid-template-columns:minmax(0,2.4fr) minmax(0,1fr)}}
 .tc-results[data-display=true]{font-size:clamp(.8rem,min(1.4vw,(100vh - 300px) / (12 + 2.4 * var(--rows))),1.6rem)}
 .tc-results[data-display=true] .tc-standings td,.tc-results[data-display=true] .tc-standings th{padding:.3em .5em}
 @media (max-width:480px){.tc-standings :is(td,th){padding:.5rem .3rem}.tc-standings th span{display:none}}

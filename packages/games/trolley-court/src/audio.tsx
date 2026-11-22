@@ -6,16 +6,17 @@
  */
 import { useEffect } from 'react';
 import type { GameAudioProps } from '../../../party-ui/src/index';
+import { CUE_DELAY } from './cards';
 import { manifest } from './manifest';
-import { LINES } from './narration';
+import { lineVariant } from './narration';
 import { SFX_IDS, type Card, type LineId, type PublicView, type SfxId } from './types';
 import { VO } from './vo-manifest';
 
 const BASE = manifest.assetBase, LEVEL = { bed: .35, sfx: .75, vo: 1, phone: .45 }, DUCK = { bed: 10 ** (-10 / 20), sfx: 10 ** (-4 / 20) };
 /** Cues older than this are history; queued narration older than MAX_WAIT_MS is dropped instead of talking over the next beat. */
 const STALE_MS = 4000, MAX_WAIT_MS = 8000;
-/** Crash choreography: ms after the cue, matched to display.tsx (trolley rolls at 1.3 s, first hit ≈ 2.35 s, ribbon 4.6 s). */
-const DELAY: Partial<Record<SfxId | LineId, number>> = { bell: 100, rumble: 1000, crash: 2250, gasp: 3500, aww: 3500, struck: 4400 };
+/** Heckles by index into SHOUTS: hear, objection, boo, mercy. The lever and heckles are heard from the view, not from server cues. */
+const HECKLE: SfxId[] = ['cheer', 'gasp', 'aww', 'gasp'];
 /** Minimum ms between two plays of one effect. */
 const COOLDOWN: Partial<Record<SfxId, number>> = { tick: 150, cheer: 1500, gasp: 700, aww: 1200, drumroll: 1500, rumble: 1500, crash: 1000 };
 const SFX_SET = new Set<string>(SFX_IDS);
@@ -44,7 +45,7 @@ class Mixer {
   private sfx: Buffers; private vo: Buffers;
   private last = new Map<string, number>(); private voices = 0; private timers = new Set<number>();
   private queue: Spoken[] = []; private speaking: (() => void) | null = null; private unduckTimer = 0;
-  private lastSeq = 0; private seeded = false; private round: string | null = null; private phase: string | null = null;
+  private lastSeq = 0; private seeded = false; private round: string | null = null; private phase: string | null = null; private pulled = false; private shout = 0;
   private muted = isMuted(); private disposed = false; private voice: SpeechSynthesisVoice | null | undefined;
 
   /** host: the watching display (preloads, narrates, unlocks on any interaction); otherwise a phone's quiet tap player. */
@@ -91,10 +92,10 @@ class Mixer {
       src.start();
     });
   }
-  /** A Clerk line: a random recorded variant, else the browser voice reading its text. */
-  sayLine(id: LineId) {
-    const recorded = [id, `${id}.2`, `${id}.3`].filter(v => Object.hasOwn(VO, v)), vo = recorded[Math.floor(Math.random() * recorded.length)];
-    this.say(vo ? { vo, queued: performance.now() } : { text: LINES[id], queued: performance.now() });
+  /** A Clerk line: the variant its cue seq selects (the TV captions the same one). An unrecorded line stays a caption. */
+  sayLine(id: LineId, seq = Math.floor(Math.random() * 6)) {
+    const vo = lineVariant(id, seq);
+    if (Object.hasOwn(VO, vo)) this.say({ vo, queued: performance.now() });
   }
   /** A card: its recording when one exists (never for write-ins), else speech synthesis of its text. */
   sayCard(card: Card) {
@@ -108,16 +109,19 @@ class Mixer {
     if (!view) { this.seeded = true; return; }
     const cues = [...view.cues].sort((a, b) => a.seq - b.seq), max = cues.at(-1)?.seq ?? 0, prev = this.phase;
     this.phase = view.phase;
+    const moved = view.lever.pulled !== this.pulled, heckles = view.shouts.filter(x => x[0] > this.shout);
+    this.pulled = view.lever.pulled; this.shout = view.shouts.at(-1)?.[0] ?? 0;
     if (!this.seeded) { this.seeded = true; this.round = roundId; this.lastSeq = max; return; }
     if (roundId !== this.round || max < this.lastSeq) { this.round = roundId; this.lastSeq = 0; }
+    else if (connected) { if (moved && view.phase !== 'deal' && view.phase !== 'crash') this.play('lever'); for (const x of heckles.slice(-2)) this.play(HECKLE[x[2]], .4); }
     if (view.phase === 'complete' && prev && prev !== 'complete' && connected) this.later(900, () => this.play('cheer'));
     for (const cue of cues) {
       if (cue.seq <= this.lastSeq) continue;
       this.lastSeq = cue.seq;
-      const wait = (DELAY[cue.id as SfxId] ?? 0) - (now - cue.at);
+      const wait = (CUE_DELAY[cue.id] ?? 0) - (now - cue.at);
       if (!connected || wait < -STALE_MS || !this.audible()) continue;
       if (cue.kind === 'sfx') this.later(wait, () => this.play(cue.id));
-      else if (cue.kind === 'line') this.later(wait, () => this.sayLine(cue.id));
+      else if (cue.kind === 'line') this.later(wait, () => this.sayLine(cue.id, cue.seq));
       else if (view.settings.readAloud) { const card = findCard(view, cue.id); if (card) this.sayCard(card); }
     }
   }

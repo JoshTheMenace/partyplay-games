@@ -1,64 +1,95 @@
-# Trolley Court acceptance · 2026-10-04
+# Trolley Court acceptance · 2026-11-22
 
-This is browser QA of the real game (launcher, room server, shared lobby/results shell, TV page and phone pages) on isolated builds. Defects found were fixed in `packages/games/trolley-court/` and re-verified on a fresh build. Nothing was staged, committed, pushed or deployed. No other game, the live server on 4390 or `output/builds/partyplay-public*` was touched.
+Browser QA of the deep pass (big rooms up to 64, the reveal showcase and verdict sequence, captions, heckles, new cards) on isolated builds: the real launcher, room server, shared lobby and results shell, a TV page and phone pages. Nothing was staged, committed, pushed or deployed. No other game's folder was touched. The earlier acceptance (2026-10-04, builds `tc-qa-a`…`tc-qa-e` and `trolley-final`) is summarised at the end; its builds no longer exist.
 
-## Current build: `tc-qa-e`
+## Final build: `tc-pass-3`
 
-- `output/builds/tc-qa-e`, client index SHA-256 `84dcf962d94f9dc14d2d3e21916604bce7b28b13e813a14bd7b0e86ae5198b48`. It includes every fix below.
-- Served by an owned `npm run serve:isolated -- tc-qa-e 4388` and stopped afterwards. Earlier runs used ports 4384–4387 (builds `tc-qa-a`…`tc-qa-d`); all are stopped and the ports are free.
-- Static checks on the final source: `npx tsc --noEmit -p <tsconfig including only packages/games/trolley-court>` passes (the full `npx tsc --noEmit` still runs out of memory on this 3.9 GB machine, as in the integration report). `npx oxlint packages/games/trolley-court` exits 0. `node --import tsx --test packages/games/trolley-court/tests/*.test.ts tests/catalog.test.ts tests/registry-contract.test.ts` passes 55/55.
-- Not mine and left alone: an orphaned `trolley-qa-2` server on port 4382 (started 03:09 by an earlier session, parent is systemd), and other agents' Hijinks fullscreen drivers. Browser runs took `/tmp/hijinks-heavy.lock` so they did not overlap other heavy jobs.
-
-## Review fixes recheck: `trolley-final`
-
-- `output/builds/trolley-final`, served by an owned `serve:isolated -- trolley-final 4377` and stopped afterwards. Driven by `output/playwright/trolley-court/fixcheck.ts` (headless, under `/tmp/hijinks-heavy.lock`); evidence and `result.json` in `output/playwright/trolley-court/tc-fix-write/` and `tc-fix-audio/`.
-- **TV audio across results and replay** (`tc-fix-audio`, 3 socket bots, `laps: 1`): `client.dispose()` no longer destroys the display mixer. With a probe on the TV page, one AudioContext lived from round 1 through results and the replay, with 0 `close()` calls. Buffer starts went 8 (round 1) → 164 (results) → 171 (15 s into the replay), so the replay still plays cues. This is a count, not listening.
-- **Write-in drafts reach teammates** (`tc-fix-write`, 5 seats: Ana and Sam on North): Ana typed "A pigeon with a law degree", and Sam's blank card showed it with Ana's pip (`02-sam-sees-ana-draft.png`). Tapping the card filled Sam's text box with the same text and enabled Lock, and Sam's lock placed Ana's text (`03`, `04`).
-- **Write-in limit counts code points:** pasting `a` plus 69 emoji kept 60 code points, the counter read 60/60, and Lock stayed enabled (`01-ana-emoji-clamp.png`).
-- **Stale twist:** Ana proposed twist X in Twist 2, then Sam locked X in Twist 1. On Twist 2, X is disabled ("In Twist 1"), Lock is disabled, and the status line reads "That card is in Twist 1. Pick another." (`05-ana-stale-twist.png`).
-- Bidi/zero-width write-in stripping is covered by a unit test (`cleanWriteIn drops invisible format characters…`), not a browser run.
+- `output/builds/tc-pass-3`, built 2026-11-22T09:19:52Z, client index SHA-256 `16744aec3be07e6a0e141da248255d705b45339a47581ae7dc42431c82478a0c`. Served by an owned `HOST=127.0.0.1 npm run serve:isolated -- tc-pass-3 4424`; the server was stopped and the build deleted when the runs finished. Every scenario below ran on this build.
+- Earlier builds of this pass, all deleted: `tc-pass-base` (the untouched source, for the "before" screenshots, port 4420), `tc-pass-1` (port 4422) and `tc-pass-2` (port 4423). A first 4-player and 32-player night ran on `tc-pass-1`, and 3, 6, 10, 32 and 64 on `tc-pass-2`; the defects they showed are listed below and were fixed before `tc-pass-3`.
+- Static checks on the final source: `node --import tsx --test packages/games/trolley-court/tests/*.test.ts` passes 46/46 (deck 4, rules 24, crowd 18). `npm run typecheck` exits 0. `npm run lint` exits 0 with no finding in this game's files. `npm run test:platform` passes 119 of 120 with 1 skipped (the packaged-app test, which needs `PARTY_LOCAL_HOST_APP`); it includes the registry contract at 3 and at 64 players.
 
 ## How it was driven
 
-`node --import tsx packages/games/trolley-court/tools/qa-driver.ts --port <port> --players N [...]` (headless Chromium from `~/.cache/ms-playwright`, Playwright resolved like the Hijinks driver).
-
-- The TV (1920×1080) adds the game, plays on this screen, applies settings through the real Settings modal and starts the room. Phones (390×844, touch) join through the join form with typed names and tap **Ready to play**. Bots join over WebSockets and play with `src/bot.ts`.
-- Phones play with real taps: pick a card (the write-in first, typed in full), aim twists on the target map, **Lock it in**; as Conductor tap the lever switch, **Next speaker / To the lever**, and press-and-hold a verdict for 1.35 s.
-- Every new phase/step is shot on the TV, with a 1280×720 sweep per phase kind; every phone is shot per phase, with 320×568, 667×375 and 844×390 sweeps per phase kind and role. The crash is also shot at 3.2 s and 5.9 s. Each shot runs layout checks (horizontal overflow, targets under 44 px, clipped or too-wide TV text) and a **privacy check**: the page text must not contain any card from another team's private hand (for the TV and the Conductor: any hand) that is not already revealed on the tracks. `log.json` in each folder holds phases, accepted/rejected actions, layout findings and console/page errors.
+- `tools/qa-driver.ts` (headless Chromium through `playwright-core`): the TV (1920×1080) adds the game, plays on this screen, applies settings through the real Settings → Game rules modal and starts the room. Phones (390×844, touch) join through the join form with typed names and tap **Ready to play**; the rest of the roster are socket bots that play with `src/bot.ts` and heckle. Phones play with real taps: propose, write in, aim and lock as counsel; lean (from the first reveal), **Next speaker**, and press-and-hold a verdict as Conductor; in the Gallery take a track, vote, aim, heckle and hop once per case.
+- Every new phase and step is shot on the TV (plus a 1280×720 sweep per phase kind) and on each phone (plus 320×568, 667×375 and 844×390 sweeps per phase kind and role). Each shot runs layout checks and a privacy check: the page text must not contain a hand card of another team (any hand, on the TV, a Conductor's or a Gallery phone), nor the Gallery's ballot anywhere but a Gallery phone, unless the card is already on the tracks. `log.json` in each folder also holds case lengths taken from the TV's own snapshots, bytes received per seat (average and the busiest 5 s), and for each real phone the longest stretch with no enabled control on screen.
+- `tools/sandbox.ts` renders any phase at any roster from fixtures the real rules and bots produce, with no room. It was used to judge the densest legal content (`10max`, `64max`: 16-character names, every card padded to its 70 or 60 character limit, Accomplices + Underdog with every twist piled on one card), each moment of the crash, reduced motion, settings and how-to. Its shots are in `output/trolley-pass/after/`.
 
 ## Scenarios on the final build
 
-| Run (evidence) | Roster and settings | Result | Accepted actions |
+| Run (`output/trolley-pass/…`) | Roster and settings | Result | Accepted actions |
 | --- | --- | --- | --- |
-| `tc-qa-e-3p` | 3 real phones (Mika, Jonah, Ana), `laps: 1` (3 rounds), write-ins on, read-aloud on | Full game to the shared results (Jonah walks free, 0 deaths); **Play again** from results, all three phones re-readied through the UI, and the replay reached round 1's Innocent pick with deaths 0/0/0 and empty history. Every phone was a team member twice and Conductor once; write-ins were typed and locked by both teams (`*-write-in.png`). 0 console or page errors, 0 privacy findings in 418 shots. | 66 (propose 36, lock 18, lean 3, next 6, decide 3), 0 rejected |
-| `tc-qa-e-10p` | 10 seats with 16-character names: 2 real phones + 8 bots; Accomplices + Underdog on; `--pile` aims every twist at North's Bystander; timers 20/30/20/10, read-aloud off | Full 10-round game to results (5 joint winners at 4 deaths). The maximum twist load, 11 twists on one card (Accomplices 5+4 plus two Underdog extras), occurred in rounds 5, 6 and 8 (logged; the driver shoots rounds 1–3 and the last) and round 2 had 10 on one card (`174-r2-modifierReveal-10-tv.png`); the 11-twist reveal was shot with the same layout in `tc-qa-d-10p/160-r2-modifierReveal-11-tv.png`. Two 5-member plates with Underdog badges and death pips fit; TV results at 1280×720 keep **Play again** on screen. 0 privacy findings in 476 shots. | 651 accepted; 50 rejected, all "<name> already locked this." races between teammates (first-lock-wins working as designed) |
-| `tc-qa-e-idle` | 4 seats: 3 phones + 1 bot, default timers, `--idle --rounds 2` | Round 1: nobody acts, so every timer ran out: Innocent/Guilty 30 s and Twist 45 s auto-picks ("auto-picked" credit on the TV), both 30 s floors, and the 20 s lever window ("Your Honour dithered. The lever stayed put." / "Left as it was"). Round 2: a team phone went offline for 16 s during the Innocent pick; the other team locked alone and the phase ended early once the server dropped the dead socket (~11 s). The Conductor's phone went offline for 24 s during floor 1: floor 1 was cut from 30 s to 21.7 s, floor 2 lasted 8 s (`awayMs`), the reconnected Conductor got a full lever window, and the timeout kept the lever where it was. Seats and picks survived both reconnects. | 5 (by design: idle) |
+| `final-3p` | 3 real phones, `laps: 1` (3 cases), defaults | Full game to results (Mika walks free, 0 deaths), **Play again**, all three re-readied through the UI, and the replay reached case 1's Innocent pick with deaths 0/0/0 and empty history. Each phone was counsel twice and Conductor once. 0 errors, 0 privacy findings in 422 shots. | 82 (propose 37, lock 18, shout 12, lean 6, next 6, decide 3), 0 rejected |
+| `final-6p` | 6 seats: 3 phones + 3 bots, defaults (6 cases) | Full game to results (four joint winners on 2 deaths), **Play again**, phones re-readied through the UI and bots over their sockets, replay at case 1 of 6 with all deaths 0. 0 errors, 0 privacy findings in 501 shots. | 225; 10 rejected (9 "already locked this" races between teammates, 1 heckle throttle) |
+| `final-10p` | 10 seats with 16-character names: 2 phones + 8 bots; Accomplices + Underdog; `--pile` aims every twist at North's Bystander; timers 30/45/30/15, read-aloud off | Full 10-case game to results (two joint winners on 3 deaths), **Play again**, replay at case 1 of 10. Nine to eleven twists landed on one card in most cases. 0 errors, 0 privacy findings in 522 shots. | 751; 45 rejected (42 lock races, 3 heckle throttle) |
+| `final-32p` | 32 seats: 2 phones + 30 bots, defaults (8 cases) | Full night to results (two joint winners on 1 death; deaths spread 1–6). Both phones were mostly Gallery and each sat on the bench. 0 errors, 0 lost taps, 0 layout or privacy findings in 381 shots. | 1,080 (stand 268, vote 200, aim 200, shout 245, propose 91, lock 48, next 16, decide 8, lean 4); 13 rejected, all races with a phase change or a teammate |
+| `final-64p` | 64 seats with 16-character names: 2 phones + 62 bots, defaults (10 cases) | Full night to results (three joint winners on 1 death; deaths spread 1–9; ten different Conductors). The lobby wall listed 64 ready seats. 0 errors, 0 lost taps, 0 privacy findings in 409 shots. | 2,669 (stand 720, vote 570, aim 570, shout 611, propose 105, lock 60, next 20, decide 10, lean 3); 80 rejected (55 heckle throttle or late heckles, 13 stands after the glue or the bell, 12 lock races) |
+| `final-32p-short`, `final-64p-short` | 32 and 64 seats, `laps: 1` (the Short night, 6 cases) | Both full nights to results in 10.7 and 10.8 min (nine joint winners at 32, one at 64). 0 errors, 0 privacy findings. These runs split the traffic into play and the results screen. | not tallied |
 
-Viewports seen and inspected: TV 1920×1080 and 1280×720; phones 390×844, 320×568, 667×375 and 844×390, for the team and Conductor roles in deal, every pick phase (including chosen/aimed/write-in/locked states), every reveal, plead, lever (including the hold-in-progress state), crash and results.
+Remaining layout-check entries on the final build are one kind only: a twist chip measured mid-way through its 0.5 s drop-in (`wide tc-mods … 432>376`), on reveal beats and each time a crowded card cycles its chips.
 
-Earlier evidence (before fixes, kept for history): `tc-qa-a-3p` (first full 3-player game + replay, build `tc-qa-a`), `tc-qa-b-10p` (first full 10-player game), `tc-qa-c-idle`, and the re-verification runs `tc-qa-d-3p` / `tc-qa-d-10p`. `smoke/` predates this pass.
+## Pacing, idle time and traffic
 
-## Defects found and fixed
+Case length is what the driver measured with bots and scripted phones, which decide in seconds. People take longer: a pick is about 20–30 s rather than 5–15, a floor 30–50 s rather than 7–10. The last column is every timer running out at the default settings (deal 12.5 s, picks 50 + 50 + 75 s, reveals about 40 s, floors 2 × 50 s, lever 30 s, crash 9.5 s).
 
-1. **Settings select clipped.** "Official (twice with 3–4 players)" was cut off in the Length select. Now "Official (twice at 3–4)".
-2. **North DEFAULT tag hidden** under the Clerk's board whenever the trolley defaulted North (board grows with the progress list and big clock). Moved down to clear it (`display.tsx`).
-3. **Pick dock text over cards.** The dock's status line ("Tap a card to suggest it…") was printed on top of the card text scrolling beneath it at 320×568 and 390×844. The dock is now opaque behind its text, with a short fade above.
-4. **Conductor header wrapped** ("CONDUCTOR · YOUR HONOUR" over two lines at 390 px). Now "Conductor" with the cap icon.
-5. **Conductor controls below the fold in landscape.** At 667×375 and 844×390 the lever filled the screen and **Next speaker** needed a scroll. The explanatory line is hidden and the lever is shorter in short landscape; the lever and Next are both on screen.
-6. **TV plates overflowed at 10 players.** Seat dots wrapped onto their own line, and with Underdog badges and death pips the South roster ran under the tally strip. Chips now flow inline (dot stays with the name, pips and badge follow), and 4–5-member plates use a compact size.
-7. **Write-in preview.** The blank card kept saying "Blank card: write your own" while typing; it now shows the draft text.
-8. **Small TV text at 720p.** Plate names, twist counts, card-back minis, twist chips and tally names were enlarged; card-back slot labels ("Planted by South") got a backing pill so they no longer run into the card-back art.
-9. **Edge spotlights** on the first and last slot scaled over the team plate and stage edge; they now grow inward.
-10. **Results.** Phone standings broke names letter by letter ("An a", "Jon ah") and overflowed at 320 px: number columns are now content-width with icon headers on narrow screens. TV results scale with the screen and row count, victims are hidden on short TVs with more than 6 rounds, and more than three joint winners use a compact podium, so 10-player results fit at 1280×720.
-11. Minor: banner line height, phone lever spacing, twist target buttons keep clear of the sticky header and dock.
+| Players | Cases | Measured case (bots) | Measured night (bots) | Expected with people | Every timer runs out |
+| --- | --- | --- | --- | --- | --- |
+| 3 (`laps: 1`) | 3 (6 official) | 109–133 s | 6 min for 3 | about 20 min for 6 | 37 min |
+| 6 | 6 | 86–99 s | 10 min | about 22 min | 37 min |
+| 10 | 10 | 90–99 s (short timers) | 16 min | 35–40 min | 61 min |
+| 32 | 8 | 98–106 s | 14 min | 28–32 min | 49 min |
+| 64 | 10 | 96–103 s | 17 min | 35–40 min | 61 min |
 
-Driver fixes (`tools/qa-driver.ts`, QA only): the settings select locator, a 60 s action timeout instead of hanging forever, a TypeScript definite-assignment error, the privacy check, a 24 s Conductor outage (the server needs 10–15 s to notice a dead socket) and the round-1 proposal by the first team phone.
+A case does not grow with the roster: the bench is always seven people and the Gallery acts in parallel.
+
+**Nothing to do.** The longest stretch a real phone had no enabled control was 21.5–23 s at every size: the crash (9.5 s) and the next deal (12.5 s). The one exception was 27.6 s for counsel at 10 players with Accomplices on, during an eleven-twist reveal. A Gallery phone had a live control 73–74% of the time at 32 and 64 (the stand bar is live from the first pick to the lever); counsel in small rooms 39–59% (they watch reveals and wait for the other team). The Conductor now has the lever from the first pick on.
+
+**Traffic**, bytes received per seat (driver, real sockets). The mean is over the whole game; the busiest 5 s is split into play and the results screen for the big rooms.
+
+| Players | Mean per seat | Busiest 5 s in play | Results screen | Whole room (mean) |
+| --- | --- | --- | --- | --- |
+| 3 | 10.6 KiB/s | 18 KiB/s | not split | 32 KiB/s |
+| 6 | 12.0 KiB/s | 21 KiB/s | not split | 72 KiB/s |
+| 10 (Accomplices) | 17.3 KiB/s | 51 KiB/s | not split | 173 KiB/s |
+| 32 | 12.6–12.8 KiB/s | 20–24 KiB/s | 44–45 KiB/s | 404–409 KiB/s |
+| 64 | 14.7 KiB/s | 20–22 KiB/s | 74–76 KiB/s | 942–943 KiB/s |
+
+Before this pass the whole public view travelled in every snapshot: computed from the untouched source, 46 KiB/s a phone at 4 players and 66 at 10. With the snapshot cache a 64-player full public view is 11.4 KB and is sent about 23 times a case; the per-snapshot part is 0.56 KB plus the private view (0.2–0.45 KB Gallery, up to 1.2 KB counsel). Sixty-two bots heckling far more than people will did not push a phone past 22 KiB/s in play. The busiest traffic of a big night is the results screen, where the platform attaches the outcome rows (9 KB at 64 seats) to every snapshot at 10 Hz; that is shell behaviour, not this game's view. The largest single message is the 64-player results snapshot, about 25 KB, or 28 KB if every seat were a joint winner: inside the 32 KiB cap (unit test).
+
+## Viewports inspected
+
+TV 1920×1080 and 1280×720; phones 390×844, 320×568, 667×375 and 844×390. Looked at, not only measured: lobby (3 and 64 seats), deal, every pick (empty, half locked, all locked), every reveal with the showcase, plead with heckles, lever, the crash at 0.4 s, 3 s, 5.3 s and 7 s, results (3, 6, 10, 32, 64 seats, TV and phone), replay; phone screens for counsel, Conductor (including the early lean) and Gallery (stand, vote, aim, plead, hop, heckle, glued, crash); reduced motion on the crash; the fullest legal track at 10 and at 64.
+
+## Before and after
+
+- `output/trolley-pass/before/`: 18 shots of the untouched game (build `tc-pass-base`): a 4-player game on TV and phone including 320×568, and the 10-player fullest track (`10p-fullest-track-plead-tv.png`, `10p-plead-tv-1280x720.png`).
+- `output/trolley-pass/after/`: 30 sandbox shots of the final source at the same moments plus the big-room ones, including `tv-10max-fullest-track(-720).png`, `tv-64max-plead(-720).png`, `phone-64max-gallery-*-320.png` and `results-64max-*`.
+- `output/trolley-pass/final-*/`: `log.json` for every final-build run and a dozen of its screenshots (the lobby, a reveal, plead, lever, crash, results at 1280×720, a phone at 390 and at 320×568, the replay). The run folders were trimmed to these afterwards; the shot counts above are what each run took and checked. `p2-10p/log.json` is kept for the false privacy entries described below.
+
+## Defects found and fixed during the pass
+
+Found on `tc-pass-1` and `tc-pass-2` and absent on `tc-pass-3`:
+
+1. **Gallery strip overflow.** Waiting Gallery dots were absolutely positioned and slid into the standings box as people stood. They now flow in a row.
+2. **Floor flag pushed the plate off the row** at 64 players with long names. It is now a tag on the plate's corner.
+3. **Twists over the Gallery band / past the row.** A long card with three twists reached 6–8 px past its row. Three or more twists on one card now step down a size (and one more in a crowd).
+4. **Board overflow.** The Clerk's board was 4 px too tall with three progress rows.
+5. **Heckle storms hid the cards** in a 64-seat room. A crowd shows the newest six bubbles, smaller, low on the track.
+6. **Gallery phone in short landscape** put the stand bar in half the width. Now full width with the intro text hidden.
+7. **Caption lag.** With instant bot picks the caption trailed two phases behind; a line that has waited 8 s is dropped, as the mixer already does with its audio.
+8. **Gallery dots reshuffled on every hop.** Newcomers now join the end of the line.
+9. **Dimmed track showed the rails through the cards** (present before this pass). The quiet track is darkened, not made transparent.
+
+Driver fixes (`tools/qa-driver.ts`, QA only): Playwright found at `$PLAYWRIGHT_CORE` or `~/.local/opt/pw`; the Settings → Game rules step; snapshots decoded through the cache; 127.0.0.1; bots ready again for a replay (the first 6-player replay attempt failed on this, not on the game); phase times from snapshots instead of the screenshot loop; optional taps give up after 3 s and are counted as `lostTaps`; and a race in the privacy check that briefly reported a phone's own hand as foreign when the game started between the screenshot and the text read (`p2-10p`, 10 false entries, all cards of that phone's own team).
 
 ## Remaining limits and notes
 
-- **Not physical devices.** Phones were emulated in headless Chromium; touch, keyboard-over-input, notches, real network loss and long sessions on real iOS/Android are untested. Offline was emulated with `context.setOffline`.
-- **Audio not heard.** The `trolley-final` recheck counted AudioContext/buffer-start activity only. Headless runs cannot judge narration, card read-aloud (recorded or speech synthesis), SFX mix or ducking on real TV speakers.
-- In both idle runs (`tc-qa-c-idle`, `tc-qa-e-idle`) the TV and the always-online phone logged one "WebSocket connection … failed" per offline episode and reconnected without losing their seat or phase. It did not reproduce in a two-context test and never happened in runs without offline toggles; it looks like a harness/shared-session artefact, not Trolley Court code.
-- Remaining layout-check entries are transient: the spotlit twist chip measured mid-scale (`421>376`) and the falling-skull tally animation during the crash. Both were checked visually.
-- Driver step timeouts (1–3 per 10-player run) are a phone trying to tap a card just as the slot was locked or the timer ended; the server and UI were consistent afterwards.
-- The full `npx tsc --noEmit` and full `npm test` were not re-run here (memory); the integration report covers them.
+- **Not physical devices.** Phones were emulated in headless Chromium; touch, keyboard over the write-in box, notches, real Wi-Fi with 32 or 64 phones and long sessions on real iOS and Android are untested. Bots stand in for all but two or three seats.
+- **Audio not heard.** No run listened to the mix. Changed and unheard: the lever sound now triggered from the view, heckles reusing `cheer`, `gasp` and `aww` quietly, `gavel` on the verdict stamp, and the crash sounds re-timed to the longer sequence. The 139 new cards and the four `gallery.*` lines have no recordings: the cards are read by browser speech synthesis like write-ins, the lines are captions only.
+- **Timeouts and disconnects in the browser** were not re-run in this pass (the 2026-10-04 `--idle` scenario). The rules for them are unchanged up to ten players and unit-tested for a crowd (a 32-player night with no input, a disconnected Gallery seat).
+- **Absolute worst-case twist stack.** With every text padded to its legal maximum (a four-line card under two three-line twists and a "+7 more" chip) the stack reaches 12 px into the gap between the rows (`after/tv-10max-last-twist-reveal.png`). Real cards did not do this in the ten-case pile run.
+- **Pacing with people** is an estimate; only bot-speed nights were measured.
+- The newly pressed stand button plays a 0.35 s pop that starts from transparent, so a screenshot taken on that frame shows one button (`final-64p/141-…-hopped.png`).
+
+## Earlier acceptance (2026-10-04)
+
+Builds `tc-qa-a`…`tc-qa-e` and `trolley-final` covered the ten-seat game: full games at 3 and 10 players with replay, an idle run with every timer expiring, a team phone and the Conductor's phone going offline, write-in drafts, the emoji clamp and stale-twist handling, and TV audio surviving results and replay (counted, not heard). Eleven layout defects were fixed then. That evidence was under `output/playwright/trolley-court/`.

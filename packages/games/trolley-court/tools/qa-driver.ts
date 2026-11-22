@@ -1,6 +1,6 @@
 /**
  * Trolley Court live QA driver (Node only, never imported by the client). One TV page, real phone pages that join and play
- * through the UI, and socket bots for the rest of the roster.
+ * through the UI, and socket bots for the rest of the roster (3–64 seats).
  *
  *   node --import tsx packages/games/trolley-court/tools/qa-driver.ts --port 4381 --players 3 [--phones 3] [--long-names]
  *     [--settings '{"laps":1}'] [--pile] [--idle] [--replay] [--rounds N] [--shots output/playwright/trolley-court/<run>]
@@ -8,7 +8,11 @@
  * - TV (headless, 1920×1080) adds the game to the library, plays on this screen, applies --settings and starts the room.
  * - Phones (390×844, touch) join through the join form, tap Ready to play and then play every turn with real taps: pick a
  *   card (the write-in first, typed in full), aim twists, Lock it in; as Conductor lean the lever, Next speaker, and
- *   press-and-hold a verdict. Bots join over WebSockets and play with src/bot.ts after a short human beat.
+ *   press-and-hold a verdict; in the Gallery (11+ players) stand on a track, vote and aim the Gallery's twist, heckle and
+ *   hop once during the pleas. Bots join over WebSockets and play with src/bot.ts after a short human beat, and heckle.
+ * - log.json also records, per seat, the bytes received (average and busiest 5 s), the length of every case, and for each
+ *   real phone the longest stretch with no enabled control on screen. lostTaps counts phone taps that gave up because
+ *   the control had just gone away (a teammate locked first, the phase moved on); they are races, not errors.
  * - --pile aims every twist at North's Bystander (stress test). --idle: nobody acts in round 1 (every timer runs out, one
  *   phone only proposes); in round 2 one team phone goes offline for the Innocent pick and the Conductor's phone goes
  *   offline for the floors (24 s: the server notices a dead socket after 10–15 s). --rounds N stops after N rounds. --replay taps Play again on results and starts round 1 again.
@@ -19,47 +23,59 @@ import { createRequire } from 'node:module';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { WebSocket } from 'ws';
+import { SnapshotDecoder } from '../../../party-contract/src/snapshot-cache';
 import { botAction } from '../src/bot';
-import type { Action, PrivateView, PublicView } from '../src/types';
+import { manifest } from '../src/manifest';
+import { courtIdFor, type Action, type PrivateView, type PublicView } from '../src/types';
 
 const { values: args } = parseArgs({ options: {
   port: { type: 'string' }, players: { type: 'string', default: '3' }, phones: { type: 'string' }, 'long-names': { type: 'boolean', default: false },
   settings: { type: 'string', default: '{}' }, pile: { type: 'boolean', default: false }, idle: { type: 'boolean', default: false },
   replay: { type: 'boolean', default: false }, rounds: { type: 'string' }, shots: { type: 'string' }, 'max-minutes': { type: 'string', default: '30' },
 } });
-const count = Number(args.players), phoneCount = Math.min(count, Number(args.phones ?? Math.min(count, 3))), base = `http://localhost:${args.port}`, t0 = Date.now();
-if (!args.port || !(count >= 3 && count <= 10)) throw new Error('Usage: qa-driver.ts --port <port> --players <3-10> [...]');
+const count = Number(args.players), phoneCount = Math.min(count, Number(args.phones ?? Math.min(count, 3))), base = `http://127.0.0.1:${args.port}`, t0 = Date.now();
+if (!args.port || !(count >= 3 && count <= manifest.players.max)) throw new Error('Usage: qa-driver.ts --port <port> --players <3-64> [...]');
 const shots = args.shots ?? `output/playwright/trolley-court/qa-${new Date().toISOString().replace(/[:.]/g, '-')}`, stopAfter = Number(args.rounds ?? Infinity);
 mkdirSync(shots, { recursive: true });
-const { chromium } = createRequire(`${process.env.HOME}/.npm/_npx/e41f203b7505f1fb/node_modules/`)('playwright');
+const { chromium } = createRequire(`${process.env.PLAYWRIGHT_CORE ?? `${process.env.HOME}/.local/opt/pw/node_modules`}/`)('playwright-core');
 type Page = any; // Playwright is loaded untyped from outside the project.
 type Snap = { roundId: string; serverTime: number; publicView: PublicView; privateView: PrivateView | null };
 type Ack = { accepted: boolean; reason?: string };
-type Seat = { label: string; page: Page | null; id: string; snap: Snap | null; at: number; room: string; busy: boolean; key: string; since: number; shot: string; mem: Record<string, unknown>; lock: Promise<unknown>; send?(a: Action): Promise<Ack> };
+type Seat = { label: string; page: Page | null; id: string; snap: Snap | null; at: number; room: string; busy: boolean; key: string; since: number; shot: string; mem: Record<string, unknown>; lock: Promise<unknown>; send?(a: Action): Promise<Ack>;
+  decoder: SnapshotDecoder; resync?(roundId: string): void; bytes: number; frames: number; buckets: Map<number, number>; resultsAt: number; idle: { longest: number; from: string; to: string; total: number; watched: number } };
 
 const sleep = (ms: number) => new Promise(done => setTimeout(done, ms));
 const log = (...parts: unknown[]) => console.log(`[${((Date.now() - t0) / 1000).toFixed(1)}s]`, ...parts);
-const report = { base, players: count, phones: phoneCount, settings: JSON.parse(args.settings!), code: '', phases: [] as string[], actions: {} as Record<string, { accepted: Record<string, number>; rejected: Record<string, number> }>, errors: [] as string[], shots: [] as string[], layout: [] as unknown[], notes: [] as string[] };
+const report = { base, players: count, phones: phoneCount, settings: JSON.parse(args.settings!), code: '', phases: [] as string[], times: [] as [string, number][], cases: [] as { round: number; seconds: number }[], lostTaps: 0, traffic: {} as Record<string, unknown>, idle: {} as Record<string, unknown>, actions: {} as Record<string, { accepted: Record<string, number>; rejected: Record<string, number> }>, errors: [] as string[], shots: [] as string[], layout: [] as unknown[], notes: [] as string[] };
 const SHORT = ['Mika', 'Jonah', 'Ana', 'Sam', 'Lee', 'Rui', 'Ola', 'Kit', 'Bo', 'Zed'];
 const LONG = ['Bartholomew Fizz', 'Gertrude Q. Hoot', 'Wilhelmina Wobb', 'Maximilian Moss', 'Ottoline Pepper', 'Barnaby Quibble', 'Clementine Zest', 'Percival Plonkk', 'Henrietta Huffy', 'Montgomery Mops'];
 const WRITE_INS = ['A tap-dancing accountant who audits the moon every Tuesday', 'Gran, who knits scarves for lampposts', 'A pigeon with a law degree and no regrets at all whatsoever'];
-const names = args['long-names'] ? LONG : SHORT;
+const names = Array.from({ length: count }, (_, i) => i < 10 ? (args['long-names'] ? LONG : SHORT)[i] : args['long-names'] ? `${LONG[i % 10].slice(0, 14)}${String(i).padStart(2, '0')}` : `${SHORT[i % 10]} ${String.fromCharCode(64 + Math.floor(i / 10))}${i % 7}`);
 const pick = <T>(list: T[]) => list[Math.floor(Math.random() * list.length)];
 const bump = (o: Record<string, number>, k: string) => { o[k] = (o[k] ?? 0) + 1; };
 const record = (label: string, kind: string, ack: Ack) => { const s = report.actions[label] ??= { accepted: {}, rejected: {} }; if (ack.accepted) bump(s.accepted, kind); else { bump(s.rejected, `${kind}: ${ack.reason}`); log(`${label} rejected ${kind}: ${ack.reason}`); } };
-const seat = (label: string, page: Page | null): Seat => ({ label, page, id: '', snap: null, at: 0, room: '', busy: false, key: '', since: 0, shot: '', mem: {}, lock: Promise.resolve() });
+const seat = (label: string, page: Page | null): Seat => ({ label, page, id: '', snap: null, at: 0, room: '', busy: false, key: '', since: 0, shot: '', mem: {}, lock: Promise.resolve(), decoder: new SnapshotDecoder(), bytes: 0, frames: 0, buckets: new Map(), resultsAt: 0, idle: { longest: 0, from: '', to: '', total: 0, watched: 0 } });
 const now = (s: Seat) => s.snap ? s.snap.serverTime + Date.now() - s.at : Date.now();
 /** Runs work alone on a page: a viewport sweep never resizes a page under a tap. */
 const hold = <T>(s: Seat, work: () => Promise<T>): Promise<T> => { const run = s.lock.then(work); s.lock = run.catch(() => undefined); return run; };
 function onMessage(s: Seat, raw: string) {
-  const m = JSON.parse(raw);
+  const m = JSON.parse(raw), bucket = Math.floor((Date.now() - t0) / 5000);
+  s.bytes += raw.length; s.frames++; s.buckets.set(bucket, (s.buckets.get(bucket) ?? 0) + raw.length);
   if (m.type === 'room.welcome') { s.id = m.playerId ?? ''; s.room = m.room.phase; }
   else if (m.type === 'room.state') s.room = m.room.phase;
-  else if (m.type === 'game.snapshot' || m.type === 'round.results') { s.snap = m; s.at = Date.now(); }
+  else if (m.type === 'game.snapshot' || m.type === 'round.results') {
+    if (m.type === 'round.results' && !s.resultsAt) s.resultsAt = Date.now();
+    // The room sends the heavy public fields only when they change (manifest.snapshotCache); decode as a phone does.
+    const full = s.decoder.decode(m, manifest.snapshotCache);
+    if (full) { s.snap = full as Snap; s.at = Date.now(); } else s.resync?.(m.roundId);
+    // Phase times come from the TV's own snapshots, so a slow screenshot never shifts them.
+    const v = s === tv && m.type === 'game.snapshot' ? s.snap?.publicView : null, beat = v ? `r${v.round}-${v.phase}-${v.step}` : '';
+    if (beat && beat !== lastBeat) { lastBeat = beat; report.times.push([beat, +((Date.now() - t0) / 1000).toFixed(1)]); }
+  }
   return m;
 }
 
-let browser: Page = null, tv = seat('tv', null), failure: Error | null = null;
+let browser: Page = null, tv = seat('tv', null), failure: Error | null = null, lastBeat = '';
 const sockets: WebSocket[] = [], seats: Seat[] = [];
 async function newPage(viewport: { width: number; height: number }, label: string, mobile: boolean) {
   const page = await (await browser.newContext({ viewport, isMobile: mobile, hasTouch: mobile, deviceScaleFactor: 1 })).newPage();
@@ -77,14 +93,16 @@ function tap(s: Seat) {
   });
 }
 async function joinBot(i: number, name: string, code: string) {
-  const s = seat(`bot${i}`, null), ws = new WebSocket(`ws://localhost:${args.port}/ws`), acks = new Map<string, (a: Ack) => void>();
+  const s = seat(`bot${i}`, null), ws = new WebSocket(`ws://127.0.0.1:${args.port}/ws`), acks = new Map<string, (a: Ack) => void>();
   sockets.push(ws);
   const wire = (type: string, payload: object = {}) => ws.send(JSON.stringify({ v: '1.0', type, ...payload }));
-  let seq = 0, round = '', readied = '';
+  let seq = 0, round = '', readied = false;
+  s.resync = roundId => wire('snapshot.sync', { roundId });
   ws.on('message', data => {
     const m = onMessage(s, String(data));
-    if ((m.type === 'room.welcome' || m.type === 'room.state') && m.room.phase === 'lobby' && readied !== m.room.lobbyId && !m.room.players.find((p: Page) => p.id === s.id)?.ready) { readied = m.room.lobbyId; wire('room.ready', { ready: true, lobbyId: m.room.lobbyId }); }
-    if (m.type === 'round.prepare') { wire('round.ready', { roundId: m.roundId }); round = m.roundId; seq = 0; }
+    // Ready once per lobby, so a replay readies again and a refusal never becomes a retry loop.
+    if (m.type === 'room.welcome' || m.type === 'room.state') { if (m.room.phase !== 'lobby') readied = false; else if (!readied && !m.room.players.find((p: Page) => p.id === s.id)?.ready) { readied = true; wire('room.ready', { ready: true, lobbyId: m.room.lobbyId }); } }
+    if (m.type === 'round.prepare') { wire('round.ready', { roundId: m.roundId }); round = m.roundId; seq = 0; s.decoder.reset(); }
     if (m.type === 'action.ack') { acks.get(m.actionId)?.(m); acks.delete(m.actionId); }
     if (m.type === 'error') report.errors.push(`${s.label}: ${m.reason}`);
   });
@@ -103,18 +121,22 @@ async function botStep(s: Seat) {
   if (s.mem.beat !== beat) { s.mem.beat = beat; s.mem.wait = Date.now() + 1200 + Math.random() * 3500; }
   if (Date.now() < (s.mem.wait as number)) return;
   let a = botAction(v, mine, s.id, Math.random, now(s));
-  if (!a) return;
+  // Bots heckle now and then during the pleas and the decision.
+  if (!a && mine.role !== 'conductor' && (v.phase === 'plead' || v.phase === 'lever') && Math.random() < .12) a = { kind: 'shout', turnId: courtIdFor(v.round), shout: pick(['hear', 'objection', 'boo', 'mercy'] as const) };
+  if (!a) { s.mem.wait = Date.now() + 700; return; }
   if (args.pile && 'target' in a && a.target) a = { ...a, target: { side: 'north', slot: 0 } };
   const ack = await s.send!(a); record(s.label, a.kind, ack);
   s.mem.wait = Date.now() + (ack.accepted ? 400 + Math.random() * 900 : 1500);
 }
 const enabled = async (loc: Page) => await loc.count() > 0 && await loc.first().isEnabled().catch(() => false);
+/** Optional taps (heckles, hops, ballots) give up quickly if the control has just gone away. */
+const quick = { timeout: 3000 };
 /** One real UI step per call on a phone page. */
 async function phoneStep(s: Seat) {
   const v = s.snap?.publicView, mine = s.snap?.privateView, p = s.page;
   if (!v || !mine || s.room !== 'playing') return;
   const beat = `${v.turnId}:${v.step}`, t = now(s);
-  if (s.mem.beat !== beat) { const { offline, offAt, dropped, proposed, leaned } = s.mem; s.mem = { beat, wait: Date.now() + 1500 + Math.random() * 1500, offline, offAt, dropped, proposed, leaned: leaned === v.round ? leaned : 0 }; }
+  if (s.mem.beat !== beat) { const { offline, offAt, dropped, proposed, leaned, voted, hopped, heckled, early } = s.mem; s.mem = { beat, wait: Date.now() + 1500 + Math.random() * 1500, offline, offAt, dropped, proposed, voted, hopped, heckled, early, leaned: leaned === v.round ? leaned : 0 }; }
   if (Date.now() < (s.mem.wait as number) || t >= v.deadline - 600) return;
   const later = (ms: number) => { s.mem.wait = Date.now() + ms; };
   if (args.idle && v.round === 1) {
@@ -142,7 +164,20 @@ async function phoneStep(s: Seat) {
     if (await enabled(lock)) { await lock.click(); await sleep(700); await extra(s, 'locked'); return later(1200); }
     return later(500);
   }
+  if (mine.role === 'gallery') {
+    // The Gallery: take a track, vote for a twist, aim it, heckle, and hop once while the teams plead.
+    const ballot = p.locator(v.phase === 'guilty' ? '.tc-ballot .tc-hand-card:not([disabled])' : '.tc-ballot .tc-target:not([disabled])');
+    if ((v.phase === 'guilty' || v.phase === 'modifier') && s.mem.voted !== v.turnId && await ballot.count()) { s.mem.voted = v.turnId; await ballot.nth(Math.floor(Math.random() * await ballot.count())).click(quick).catch(() => undefined); await extra(s, 'voted'); return later(900); }
+    const stand = p.locator('.tc-stand-btn:not([disabled])');
+    if (!mine.side && !args.idle && await stand.count()) { await stand.nth(Math.floor(Math.random() * 2)).click(quick).catch(() => undefined); await extra(s, 'stood'); return later(900); }
+    if (v.phase === 'plead' && s.mem.hopped !== v.round && t > v.startedAt + 2500) { s.mem.hopped = v.round; const other = p.locator('.tc-stand-btn[aria-pressed="false"]:not([disabled])'); if (await other.count()) { await other.first().click(quick).catch(() => undefined); await extra(s, 'hopped'); } return later(1200); }
+    const shout = p.locator('.tc-shoutbar button:not([disabled])');
+    if ((v.phase === 'plead' || v.phase === 'lever') && await shout.count() && Math.random() < .5) { await shout.nth(Math.floor(Math.random() * 4)).click(quick).catch(() => undefined); await extra(s, 'heckled'); return later(2500); }
+    return later(700);
+  }
+  if (mine.role === 'team' && v.phase === 'plead' && s.mem.heckled !== v.turnId + v.step) { s.mem.heckled = v.turnId + v.step; const shout = p.locator('.tc-shoutbar button:not([disabled])'); if (await shout.count()) { await shout.nth(1).click(quick).catch(() => undefined); await extra(s, 'heckled'); } return later(1500); }
   if (mine.role !== 'conductor') return;
+  if (v.phase === 'innocentReveal' && s.mem.early !== v.round) { s.mem.early = v.round; await p.locator('.tc-switch').click(quick).catch(() => undefined); await extra(s, 'early-lean'); return later(1500); }
   if (v.phase === 'plead') {
     if (v.step === 0 && s.mem.leaned !== v.round) { s.mem.leaned = v.round; await p.locator('.tc-switch').click(); await extra(s, 'leaned'); return later(2500 + Math.random() * 3000); }
     const next = p.getByRole('button', { name: /^(Next speaker|To the lever)/ });
@@ -191,22 +226,25 @@ const CHECKS = () => {
   if (root.scrollWidth > root.clientWidth + 1) out.push(`page overflows horizontally ${root.scrollWidth}>${root.clientWidth}`);
   for (const b of document.querySelectorAll('.tc button, .tc [role=switch]')) { const r = b.getBoundingClientRect(); if (r.width && r.height && (r.height < 44 || r.width < 44) && !b.closest('.tc-stage')) out.push(`small target "${(b.getAttribute('aria-label') ?? b.textContent ?? '').trim().slice(0, 30)}" ${Math.round(r.width)}×${Math.round(r.height)}`); }
   const stage = document.querySelector('.tc-stage');
-  if (stage) for (const el of stage.querySelectorAll('.tc-card-text, .tc-mods, .tc-plate, .tc-board, .tc-tally, .tc-tally li, .tc-top-judge, .tc-banner')) {
+  if (stage) for (const el of stage.querySelectorAll('.tc-slot .tc-card-text, .tc-mods, .tc-plate, .tc-board, .tc-tally, .tc-strip>p, .tc-top-judge, .tc-banner>p')) {
     const e = el as HTMLElement;
     if (e.scrollHeight > e.clientHeight + 2 && getComputedStyle(e).overflowY !== 'auto') out.push(`clipped ${e.className} "${(e.textContent ?? '').slice(0, 30)}" ${e.scrollHeight}>${e.clientHeight}`);
-    if (e.scrollWidth > e.clientWidth + 2) out.push(`wide ${e.className} "${(e.textContent ?? '').slice(0, 30)}" ${e.scrollWidth}>${e.clientWidth}`);
+    if (e.scrollWidth > e.clientWidth + 2 && !e.querySelector('.tc-floor-flag')) out.push(`wide ${e.className} "${(e.textContent ?? '').slice(0, 30)}" ${e.scrollWidth}>${e.clientWidth}`);
   }
-  if (stage) for (const row of stage.querySelectorAll('.tc-row')) for (const slot of row.querySelectorAll('.tc-slot')) { const a = slot.getBoundingClientRect(), b = row.getBoundingClientRect(); if (a.bottom > b.bottom + 4) out.push(`slot spills below its row by ${Math.round(a.bottom - b.bottom)}px (${(row as HTMLElement).dataset.side})`); }
+  if (stage && (stage as HTMLElement).dataset.phase !== 'crash') for (const row of stage.querySelectorAll('.tc-row')) for (const slot of row.querySelectorAll('.tc-slot')) { const a = slot.getBoundingClientRect(), b = row.querySelector('.tc-band')?.getBoundingClientRect() ?? row.getBoundingClientRect(), edge = row.querySelector('.tc-band') ? b.top : b.bottom; if (a.bottom > edge + 4) out.push(`slot spills below its row by ${Math.round(a.bottom - edge)}px (${(row as HTMLElement).dataset.side})`); }
   return out;
 };
 async function snap(s: Seat, name: string, fullPage = false) {
   const file = `${shots}/${name}.png`;
   await s.page.screenshot({ path: file, fullPage });
   const issues = await s.page.evaluate(CHECKS).catch(() => []);
-  // Privacy: no other team's hand card (any hand, on the TV or a Conductor's phone) may appear in this page's text.
-  const side = s === tv ? null : s.snap?.privateView?.side ?? null, text: string = await s.page.evaluate(() => document.body.innerText).catch(() => '');
+  // Privacy: no other team's hand card (any hand, on the TV, a Conductor's or a Gallery phone) may appear in this page's text, and the Gallery's ballot only on Gallery phones.
+  // Read the page first: a snapshot that lands during the read must not make a seat's own hand look foreign.
+  const text: string = await s.page.evaluate(() => document.body.innerText).catch(() => ''), own = s === tv ? null : s.snap?.privateView ?? null, side = own?.role === 'team' ? own.side : null;
   const tracks = Object.values((s.snap ?? tv.snap)?.publicView.tracks ?? {}).flatMap(t => t.slots.flatMap(c => c ? [c.card.text, ...c.mods.map(m => m.card.text)] : []));
-  for (const x of seats) if (x.snap?.privateView?.side && x.snap.privateView.side !== side) for (const c of Object.values(x.snap.privateView.hands).flat()) if (c.text.length > 8 && !tracks.includes(c.text) && text.includes(c.text)) issues.push(`PRIVACY: ${x.label}'s hand card "${c.text.slice(0, 30)}" is visible`);
+  if (s === tv || own) for (const x of seats) if (x.snap?.privateView?.role === 'team' && x.snap.privateView.side !== side) for (const c of Object.values(x.snap.privateView.hands).flat()) if (c.text.length > 8 && !tracks.includes(c.text) && text.includes(c.text)) issues.push(`PRIVACY: ${x.label}'s hand card "${c.text.slice(0, 30)}" is visible`);
+  const jury = seats.find(x => x.snap?.privateView?.jury)?.snap?.privateView?.jury;
+  if (jury && own?.role !== 'gallery') for (const c of [...jury.options, ...(jury.card ? [jury.card] : [])]) if (!tracks.includes(c.text) && text.includes(c.text)) issues.push(`PRIVACY: the Gallery's ballot card "${c.text.slice(0, 30)}" is visible`);
   report.shots.push(file); if (issues.length) report.layout.push({ file, issues });
 }
 let n = 0;
@@ -234,12 +272,23 @@ async function film(s: Seat) {
     await sleep(120);
   }
 }
+/** Samples a real phone four times a second: how long does it go with no enabled control on screen? */
+async function idleWatch(s: Seat) {
+  let since = 0, from = '';
+  while (filming) {
+    const live = s.room !== 'playing' ? 1 : await s.page.evaluate(() => document.querySelectorAll('.tc button:not([disabled]), .tc [role=switch]:not([disabled]), .tc input:not([disabled])').length).catch(() => 1);
+    const key = `${keyOf(s)}`, at = Date.now();
+    if (s.room === 'playing') { s.idle.watched += 250; if (!live) s.idle.total += 250; }
+    if (live) since = 0; else { if (!since) { since = at; from = key; } if (at - since > s.idle.longest) Object.assign(s.idle, { longest: at - since, from, to: key }); }
+    await sleep(250);
+  }
+}
 async function until(test: () => boolean, ms: number, what: string) {
   for (const end = Date.now() + ms; !test();) { if (Date.now() > end) throw new Error(`Timed out waiting for ${what}.`); if (failure) throw failure; await sleep(150); }
 }
 
 const loop = setInterval(() => {
-  for (const s of seats) if (!s.busy) { s.busy = true; void hold(s, () => s.page ? phoneStep(s) : botStep(s)).catch(e => { report.errors.push(`${s.label} step: ${String(e.message).split('\n')[0]}`); s.mem.wait = Date.now() + 1500; }).finally(() => { s.busy = false; }); }
+  for (const s of seats) if (!s.busy) { s.busy = true; void hold(s, () => s.page ? phoneStep(s) : botStep(s)).catch(e => { if (/Timeout/.test(e.message)) report.lostTaps++; else report.errors.push(`${s.label} step: ${String(e.message).split('\n')[0]}`); s.mem.wait = Date.now() + 1500; }).finally(() => { s.busy = false; }); }
 }, 150);
 try {
   browser = await chromium.launch({ headless: true, args: ['--disable-gpu'] });
@@ -251,6 +300,7 @@ try {
   log(`room ${code} on ${base}`);
   if (Object.keys(report.settings).length) {
     await tv.page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await tv.page.getByRole('button', { name: 'Game rules', exact: true }).click();
     const LABEL: Record<string, string> = { laps: 'Length', pickSeconds: 'Innocent & Guilty timer', modifierSeconds: 'Twist timer', floorSeconds: 'Each team’s floor', leverSeconds: 'Lever decision', accomplices: 'Accomplices', catchUp: 'Underdog', blanks: 'Write-ins', family: 'Milder deck', readAloud: 'Read cards aloud' };
     for (const [k, value] of Object.entries(report.settings)) {
       if (typeof value === 'boolean') { const sw = tv.page.getByRole('switch', { name: LABEL[k], exact: true }); if ((await sw.getAttribute('aria-checked')) !== String(value)) await sw.click(); }
@@ -265,6 +315,7 @@ try {
     await s.page.getByRole('textbox', { name: 'Your name' }).fill(names[i]);
     await s.page.getByRole('button', { name: 'Join the room', exact: true }).click();
     await s.page.getByRole('button', { name: 'Ready to play', exact: true }).click({ timeout: 20000 });
+    s.page.setDefaultTimeout(8000); // Joined: from here a tap on a control that has just gone away gives up quickly.
     seats.push(s);
   }
   for (let i = phoneCount; i < count; i++) seats.push(await joinBot(i + 1, names[i], code));
@@ -272,7 +323,7 @@ try {
   await sleep(1500);
   await snap(tv, '000-lobby-tv'); await snap(seats[0], '000-lobby-phone1');
   await tv.page.getByRole('button', { name: 'Start game', exact: true }).click({ timeout: 20000 });
-  const cameras = [tv, ...seats.filter(s => s.page)].map(film);
+  const cameras = [...[tv, ...seats.filter(s => s.page)].map(film), ...seats.filter(s => s.page).map(idleWatch)];
   const deadline = Date.now() + Number(args['max-minutes']) * 60000;
   await until(() => tv.room === 'results' || (tv.snap?.publicView.round ?? 0) > stopAfter, deadline - Date.now(), 'results');
   if (tv.room === 'results') {
@@ -298,6 +349,18 @@ try {
   if (tv?.page) await snap(tv, 'zzz-error-tv').catch(() => undefined);
 } finally {
   clearInterval(loop); filming = false;
+  // Case lengths from the TV's phase log, traffic per seat (average and the busiest 5 s), and each phone's longest stretch with nothing to tap.
+  const deals = report.times.filter(([k]) => /^r\d+-deal-0$/.test(k));
+  report.cases = deals.slice(0, -1).map(([k, at], i) => ({ round: Number(k.slice(1).split('-')[0]), seconds: +(deals[i + 1][1] - at).toFixed(1) }));
+  const playing = report.times.find(([k]) => k.startsWith('r1-'))?.[1] ?? 0, span = Math.max(1, (Date.now() - t0) / 1000 - playing);
+  // The results screen is counted apart: there the platform attaches the outcome rows to every snapshot.
+  const done = report.times.length && tv.room === 'results' ? Math.floor((tv.resultsAt - t0) / 5000) : Infinity;
+  const rate = (s: Seat) => { const from = Math.ceil(playing / 5), all = [...s.buckets].filter(([b]) => b >= from), buckets = all.map(([, n]) => n), play = all.filter(([b]) => b < done).map(([, n]) => n), after = all.filter(([b]) => b > done).map(([, n]) => n);
+    return { kbPerSecond: +(buckets.reduce((a, b) => a + b, 0) / 1024 / span).toFixed(1), peakKbPerSecond: +(Math.max(0, ...buckets) / 5 / 1024).toFixed(1), peakInPlayKbPerSecond: +(Math.max(0, ...play) / 5 / 1024).toFixed(1), resultsKbPerSecond: +(Math.max(0, ...after) / 5 / 1024).toFixed(1), frames: s.frames }; };
+  for (const s of [tv, ...seats.filter(x => x.page), ...seats.filter(x => !x.page).slice(0, 2)]) report.traffic[s.label] = rate(s);
+  const all = seats.map(s => rate(s).kbPerSecond); report.traffic.everySeat = { meanKbPerSecond: +(all.reduce((a, b) => a + b, 0) / Math.max(1, all.length)).toFixed(1), maxKbPerSecond: Math.max(0, ...all), roomKbPerSecond: +all.reduce((a, b) => a + b, 0).toFixed(0) };
+  for (const s of seats.filter(x => x.page)) report.idle[s.label] = { longestSeconds: +(s.idle.longest / 1000).toFixed(1), from: s.idle.from, to: s.idle.to, idleShare: +(s.idle.total / Math.max(1, s.idle.watched)).toFixed(2) };
+  log(`cases ${JSON.stringify(report.cases)}`); log(`traffic ${JSON.stringify(report.traffic)}`); log(`idle ${JSON.stringify(report.idle)}`);
   writeFileSync(`${shots}/log.json`, JSON.stringify({ ...report, failure: failure?.message ?? null, minutes: +((Date.now() - t0) / 60000).toFixed(1) }, null, 1));
   log(`actions ${JSON.stringify(report.actions)}`);
   log(`${report.shots.length} shots, ${report.layout.length} with layout issues, ${report.errors.length} errors → ${shots}`);

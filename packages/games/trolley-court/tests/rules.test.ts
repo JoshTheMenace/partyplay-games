@@ -1,78 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { assertSerializable } from '../../../party-contract/src/serializable';
-import { rules, type State } from '../src/server';
-import { botAction } from '../src/bot';
-import { GUILTY, INNOCENT, MODIFIERS } from '../src/deck.server';
+import { rules } from '../src/server';
 import {
-  KINDS, SIDES, TIMING, cleanWriteIn, defaults, lapsFor, modifierSlots, opposite, revealMs, roundCount, seatTeams,
-  type Action, type Card, type Phase, type Settings, type Side,
+  KINDS, SIDES, TIMING, cleanWriteIn, courtIdFor, defaults, lapsFor, modifierSlots, opposite, revealMs, roundCount, seatTeams,
+  type Settings,
 } from '../src/types';
-
-const ctx = (n = 4, seed = 1) => ({ roomId: 'room', roundId: 'round', nowMs: 1000, seed, players: Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `Player ${i}`, color: '#ff5748' })) });
-const game = (n = 4, settings: Partial<Settings> = {}, seed = 1) => rules.create(ctx(n, seed), { ...defaults, ...settings });
-const view = (s: State) => rules.publicView(s, { nowMs: s.now, phase: 'playing' });
-const me = (s: State, id: string) => rules.playerView(s, id, { nowMs: s.now, phase: 'playing' });
-const tick = (s: State, at = s.deadline) => rules.tick(s, new Map(), 0, at);
-const to = (s: State, phase: Phase, round = s.round) => { for (let i = 0; i < 2000 && !(s.phase === phase && s.round === round); i++) tick(s); assert.equal(`${s.round}.${s.phase}`, `${round}.${phase}`); };
-type Loose = { [K in Action['kind']]: Omit<Extract<Action, { kind: K }>, 'turnId'> & { turnId?: string } }[Action['kind']];
-const act = (s: State, id: string, a: Loose, at = s.now + 1) => rules.applyAction(s, id, { turnId: view(s).turnId, ...a } as Action, at);
-const rejects = (s: State, fn: () => void, message: RegExp = /./) => { const before = structuredClone(s); assert.throws(fn, message); assert.deepEqual(s, before); };
-const stock = (s: State, side: Side, kind: Card['kind']) => s.hands[side][kind].filter(c => !c.blank);
-const cues = (s: State, kind: string) => s.cues.filter(c => c.kind === kind).map(c => c.id);
-const BANKS = { innocent: INNOCENT, guilty: GUILTY, modifier: MODIFIERS };
-const rng = (seed: number) => () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
-
-/** Projection checks: serializable, no undefined fields, nothing unrevealed in public, no foreign hands in private views. */
-function check(s: State) {
-  const pub = view(s), json = JSON.stringify(pub);
-  assertSerializable(pub); assert.deepEqual(JSON.parse(json), pub); assertSerializable(rules.outcome(s));
-  const shown = SIDES.flatMap(side => s.tracks[side].slots.flatMap(x => x ? [x.card, ...x.mods.map(m => m.card)] : []));
-  const ids = new Set(shown.map(c => c.id)), texts = new Set(shown.map(c => c.text));
-  const secret = [...SIDES.flatMap(side => KINDS.flatMap(k => s.hands[side][k])), ...s.queue.map(q => q.placed.card)].filter(c => !ids.has(c.id));
-  const drafts = SIDES.flatMap(side => s.slots[side].flatMap(x => [x.locked?.text, ...x.proposals.map(p => p.text)]));
-  for (const c of secret) assert.ok(!json.includes(`"${c.id}"`), `public view leaks ${c.id}`);
-  for (const t of [...secret.map(c => c.text), ...drafts]) if (t && !texts.has(t)) assert.ok(!json.includes(JSON.stringify(t)), `public view leaks "${t}"`);
-  for (const kind of KINDS) assert.equal(s.deck[kind].length + s.discard[kind].length + s.dealt.filter(c => c.kind === kind).length, BANKS[kind].filter(c => !s.settings.family || !c.spicy).length);
-  for (const p of s.players) {
-    const mine = me(s, p.id), pj = JSON.stringify(mine);
-    assertSerializable(mine); assert.deepEqual(JSON.parse(pj), mine);
-    if (mine.role === 'conductor') { assert.equal(p.id, s.conductor); assert.deepEqual(mine, { role: 'conductor', side: null, turnId: pub.turnId, hands: { innocent: [], guilty: [], modifier: [] }, slots: [] }); continue; }
-    assert.ok(s.teams[mine.side!].includes(p.id));
-    for (const c of KINDS.flatMap(k => s.hands[opposite(mine.side!)][k])) assert.ok(!pj.includes(`"${c.id}"`), `${p.id} sees ${c.id}`);
-  }
-}
-
-/** Drives a game with bots (or none) on a 250 ms fake clock until complete, checking projections at every step. */
-function play(n: number, settings: Partial<Settings> = {}, seed = 1, bots = true) {
-  const s = game(n, settings, seed), random = rng(seed), rejected: string[] = [];
-  let accepted = 0, key = '';
-  for (let i = 0; i < 200000 && s.phase !== 'complete'; i++) {
-    if (bots) for (const p of s.players) {
-      const a = botAction(view(s), me(s, p.id), p.id, random, s.now);
-      if (a) try { rules.applyAction(s, p.id, a, s.now); accepted++; } catch (e) { rejected.push((e as Error).message); }
-    }
-    if (`${s.round}.${s.phase}.${s.step}` !== key) {
-      key = `${s.round}.${s.phase}.${s.step}`; check(s);
-      assert.equal(new Set(s.dealt.map(c => c.id)).size, s.dealt.length, 'a card repeated within a round');
-    }
-    tick(s, Math.min(s.deadline, s.now + 250));
-  }
-  check(s);
-  return { s, accepted, rejected };
-}
-function finished(s: State, n: number, laps: Settings['laps'] = 'auto') {
-  const out = rules.outcome(s), fewest = Math.min(...s.players.map(p => p.deaths));
-  assert.equal(s.phase, 'complete'); assert.equal(s.history.length, roundCount(n, laps)); assert.equal(out.complete, true);
-  assert.deepEqual(out.winners, s.players.filter(p => p.deaths === fewest).map(p => p.id));
-  for (const p of s.players) {
-    assert.equal(p.conducted, lapsFor(n, laps)); assert.equal(p.deaths + p.spared + p.conducted, s.history.length);
-    assert.equal(p.deaths, s.history.filter(h => h.victims.includes(p.id)).length);
-  }
-  for (const h of s.history) assert.equal(h.struck, h.pulled ? opposite(h.defaultSide) : h.defaultSide);
-  assert.deepEqual(s.cues.map(c => c.seq), s.cues.map((_, i) => s.seq - s.cues.length + 1 + i));
-  assert.equal(s.cues.at(-1)!.id, out.winners.length > 1 ? 'tie' : 'end');
-}
+import { BANKS, act, check, ctx, cues, finished, game, me, play, rejects, stock, tick, to, view } from './harness';
 
 test('settings: defaults, merging and strict rejection', () => {
   assert.deepEqual(rules.validateSettings({}), defaults);
@@ -121,7 +54,7 @@ test('seats, teams, round counts and slot counts for 3–10 players', () => {
 });
 
 test('create validates the roster and is deterministic per seed', () => {
-  for (const c of [ctx(2), ctx(11), { ...ctx(3), players: [ctx(3).players[0], ctx(3).players[0], ctx(3).players[1]] }, { ...ctx(3), nowMs: NaN }]) assert.throws(() => rules.create(c, defaults));
+  for (const c of [ctx(2), ctx(65), { ...ctx(3), players: [ctx(3).players[0], ctx(3).players[0], ctx(3).players[1]] }, { ...ctx(3), nowMs: NaN }]) assert.throws(() => rules.create(c, defaults));
   assert.deepEqual(game(5, {}, 9), game(5, {}, 9));
   assert.notDeepEqual(game(5, {}, 9).deck, game(5, {}, 10).deck);
   const s = game(4);
@@ -153,7 +86,7 @@ test('full phase order, timing and turn ids with no input', () => {
     '1.plead#0/2', '1.plead#1/2', '1.lever#0/1', '1.crash#0/1', '2.deal#0/3']);
   assert.equal(s.deadline - s.startedAt, TIMING.dealMs); assert.equal(s.conductor, 'p1');
   const h = s.history[0];
-  assert.deepEqual(h, { round: 1, conductor: 'p0', defaultSide: h.defaultSide, pulled: false, timedOut: true, struck: h.defaultSide, victims: h.defaultSide === 'north' ? ['p1', 'p2'] : ['p3'] });
+  assert.deepEqual(h, { round: 1, conductor: 'p0', defaultSide: h.defaultSide, pulled: false, timedOut: true, struck: h.defaultSide, victims: h.defaultSide === 'north' ? [1, 2] : [3] });
 });
 
 test('reveal beats: one card per step, spotlight, read-aloud timing and cues', () => {
@@ -252,7 +185,10 @@ test('stale, duplicate, late and out-of-phase actions leave state unchanged', ()
   rejects(s, () => act(s, 'p1', { kind: 'lock', slot: 0, cardId: card.id, turnId: '2.innocent' }), /Too late/);
   act(s, 'p1', { kind: 'lock', slot: 0, cardId: card.id });
   rejects(s, () => act(s, 'p1', { kind: 'lock', slot: 0, cardId: card.id }), /already locked/);
-  rejects(s, () => act(s, 'p0', { kind: 'lean', pulled: true }), /locked right now/);
+  rejects(s, () => act(s, 'p1', { kind: 'stand', side: 'north' }), /Only the Gallery/);
+  rejects(s, () => act(s, 'p1', { kind: 'vote', cardId: 'm001' }), /Only the Gallery/);
+  rejects(s, () => act(s, 'p0', { kind: 'aim', target: { side: 'north', slot: 0 } }), /Only the Gallery/);
+  rejects(s, () => act(s, 'p1', { kind: 'shout', shout: 'boo' }), /Wait for the pleas/);
   to(s, 'innocentReveal');
   rejects(s, () => act(s, 'p2', { kind: 'lock', slot: 0, cardId: stock(s, 'north', 'guilty')[0].id, turnId: old }), /Too late/);
   to(s, 'plead');
@@ -269,6 +205,7 @@ test('stale, duplicate, late and out-of-phase actions leave state unchanged', ()
   assert.equal(s.phase, 'crash'); assert.deepEqual(s.lever, { pulled: true, decided: true, timedOut: false });
   rejects(s, () => act(s, 'p0', { kind: 'decide', pull: false, turnId: '1.lever' }), /Too late/);
   rejects(s, () => act(s, 'p0', { kind: 'lean', pulled: false, turnId: '1.plead' }), /Too late/);
+  rejects(s, () => act(s, 'p0', { kind: 'lean', pulled: false, turnId: courtIdFor(1) }), /locked right now/);
   s.round = s.rounds; to(s, 'complete', s.rounds);
   rejects(s, () => act(s, 'p0', { kind: 'decide', pull: false }), /adjourned/);
 });
@@ -347,16 +284,24 @@ test('Conductor away shortens floors and the lever; timeouts keep the lever wher
   assert.deepEqual(cues(s, 'line').slice(-2), ['dither', 'struck']);
 
   const l = game(4); to(l, 'plead');
-  act(l, 'p0', { kind: 'lean', pulled: true }); assert.equal(view(l).lever.pulled, true); assert.equal(l.cues.at(-1)!.id, 'lever');
-  const seq = l.seq; act(l, 'p0', { kind: 'lean', pulled: true }); assert.equal(l.seq, seq);
+  // A lean is live on the TV but plays no server cue and leaves the cached fields alone.
+  const seq = l.seq, rev = l.rev; act(l, 'p0', { kind: 'lean', pulled: true }); assert.equal(view(l).lever.pulled, true); assert.deepEqual([l.seq, l.rev], [seq, rev]);
   to(l, 'lever');
   assert.equal(l.deadline - l.startedAt, defaults.leverSeconds * 1000);
-  act(l, 'p0', { kind: 'lean', pulled: false, turnId: '1.plead' }); act(l, 'p0', { kind: 'lean', pulled: true });
+  rejects(l, () => act(l, 'p0', { kind: 'lean', pulled: false, turnId: '1.plead' }), /Too late/);
+  act(l, 'p0', { kind: 'lean', pulled: false, turnId: courtIdFor(1) }); act(l, 'p0', { kind: 'lean', pulled: true });
   for (let t = l.startedAt; t < l.deadline; t += 500) tick(l, t);
   assert.equal(cues(l, 'sfx').filter(id => id === 'tick').length, 5);
   tick(l);
   assert.equal(l.struck, opposite(l.defaultSide)); assert.deepEqual(l.lever, { pulled: true, decided: false, timedOut: true });
-  assert.deepEqual(l.history[0], { round: 1, conductor: 'p0', defaultSide: l.defaultSide, pulled: true, timedOut: true, struck: opposite(l.defaultSide), victims: l.teams[opposite(l.defaultSide)] });
+  assert.deepEqual(l.history[0], { round: 1, conductor: 'p0', defaultSide: l.defaultSide, pulled: true, timedOut: true, struck: opposite(l.defaultSide), victims: l.teams[opposite(l.defaultSide)].map(id => Number(id.slice(1))) });
+
+  // The Conductor may lean from the first pick on (round-wide id or the phase's own), never during the deal.
+  const e = game(4);
+  rejects(e, () => act(e, 'p0', { kind: 'lean', pulled: true, turnId: courtIdFor(1) }), /locked right now/);
+  to(e, 'innocent'); act(e, 'p0', { kind: 'lean', pulled: true }); to(e, 'guiltyReveal'); act(e, 'p0', { kind: 'lean', pulled: false, turnId: courtIdFor(1) });
+  rejects(e, () => act(e, 'p1', { kind: 'lean', pulled: true }), /Only the Conductor/); rejects(e, () => act(e, 'p0', { kind: 'lean', pulled: true, turnId: courtIdFor(2) }), /Too late/);
+  act(e, 'p0', { kind: 'lean', pulled: true }); to(e, 'crash'); assert.equal(e.struck, opposite(e.defaultSide));
 });
 
 test('scoring: struck team dies, others spared, Conductor conducts; ties share the win', () => {

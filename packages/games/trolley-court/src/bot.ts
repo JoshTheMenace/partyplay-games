@@ -1,5 +1,5 @@
 /** Test and QA bot (never imported by client code). now defaults to the wall clock; harnesses pass their fake server time. */
-import { SIDES, TIMING, WRITE_IN_MAX, isPick, type Action, type PlayerId, type PrivateView, type PublicView } from './types';
+import { SIDES, TIMING, WRITE_IN_MAX, courtIdFor, isPick, opposite, standOpen, type Action, type PlayerId, type PrivateView, type PublicView } from './types';
 
 const WRITE_IN = 'A suspiciously calm robot'.slice(0, WRITE_IN_MAX);
 export function botAction(view: PublicView, mine: PrivateView, playerId: PlayerId, random: () => number, now = Date.now()): Action | null {
@@ -11,6 +11,13 @@ export function botAction(view: PublicView, mine: PrivateView, playerId: PlayerI
     if (own && !used.has(own.cardId)) return { kind: 'lock', turnId, slot: slot.index, cardId: own.cardId, ...(own.text === undefined ? {} : { text: own.text }), ...(own.target ? { target: own.target } : {}) };
     const card = any(mine.hands[slot.kind].filter(c => !used.has(c.id))); if (!card) return null;
     return { kind: 'propose', turnId, slot: slot.index, cardId: card.id, ...(card.blank ? { text: WRITE_IN } : {}), ...(slot.kind === 'modifier' ? { target: { side: any(SIDES), slot: any([0, 1, 2] as const) } } : {}) };
+  }
+  // The Gallery: vote, aim, take a track, and now and then hop while the teams plead.
+  if (mine.role === 'gallery' && mine.jury) {
+    if (view.phase === 'guilty' && !mine.jury.vote) return { kind: 'vote', turnId, cardId: any(mine.jury.options).id };
+    if (view.phase === 'modifier' && !mine.jury.aim) return { kind: 'aim', turnId, target: { side: any(SIDES), slot: any([0, 1, 2] as const) } };
+    if (standOpen(view.phase) && (!mine.side || (view.phase === 'plead' && random() < 0.03))) return { kind: 'stand', turnId: courtIdFor(view.round), side: mine.side ? opposite(mine.side) : any(SIDES) };
+    return null;
   }
   if (view.conductor !== playerId) return null;
   if (view.phase === 'plead') return random() < 0.05 ? { kind: 'lean', turnId, pulled: !view.lever.pulled } : now >= view.startedAt + TIMING.floorMinMs ? { kind: 'next', turnId, step: view.step } : null;
