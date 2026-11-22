@@ -16,7 +16,7 @@ export class PartySession {
   private timer: ReturnType<typeof setInterval>;
   private inputTimer: ReturnType<typeof setInterval>;
   private held = new HeldInputChannel((kind, payload) => { if (this.canInput()) this.send(kind === 'state' ? 'input.state' : 'input.release', { roundId: this.state.room!.roundId, seq: this.seq++, ...(kind === 'state' ? { payload } : {}) }); });
-  private offset = 0; private bestRtt = Infinity; private seq = 0; private attempt = 0; private stopped = false; private lastMessageAt = Date.now(); private lastPingAt = 0;
+  private offset = 0; private bestRtt = Infinity; private seq = 0; private attempt = 0; private stopped = false; private lastMessageAt = Date.now(); private lastTimerAt = Date.now(); private lastPingAt = 0;
   private credentials: { code: string; token: string } | null = null;
   private initial: Record<string, unknown> | null = null;
   private storageKey = 'party.collection.session.v1';
@@ -26,6 +26,10 @@ export class PartySession {
     this.inputTimer = setInterval(() => { if (this.canInput()) this.held.flush(performance.now()); else this.held.release(false); }, 16);
     this.timer = setInterval(() => {
       const now = Date.now();
+      // A late timer means this thread was blocked (a 3D scene compiling shaders), so the server's messages are queued behind it,
+      // not missing. Closing here would reload a scene that had just finished loading; count the silence from now instead.
+      if (now - this.lastTimerAt > 2000) this.lastMessageAt = now;
+      this.lastTimerAt = now;
       if (this.socket?.readyState === WebSocket.OPEN && now - this.lastMessageAt > 15000) this.socket.close(4000, 'Connection silent');
       if (now - this.lastPingAt > 5000) { this.lastPingAt = now; this.send('clock.ping', { clientTime: now }); }
       for (const [id, action] of this.pending) {
