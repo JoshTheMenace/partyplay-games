@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createRace, NEUTRAL_INPUT, stepRace } from '../src/sim/race';
 import { PHYSICS } from '../src/sim/physics';
-import { toRaceView, kartFromView } from '../src/sim/view';
+import { toRaceView, kartFromView, toOwnView } from '../src/sim/view';
 import { decodeRaceView, encodeRaceView } from '../src/net/wire';
 import { rules } from '../src/server';
 import { InputComposer, keyBinding } from '../src/ui/input';
@@ -46,7 +46,8 @@ test('only the Roadster flies, and a missing fly counter is never a press', () =
 
 test('flight state survives the wire so prediction replays it, and the controls send presses', () => {
   const r = race('roadster'); drive(r, {}, 5.5); drive(r, { fly: 1 }, .3);
-  const k = kartFromView(decodeRaceView(encodeRaceView(toRaceView(r))).racers[0]);
+  assert.equal(decodeRaceView(encodeRaceView(toRaceView(r))).racers[0].prevFly, 0, 'press counters only reach their own seat');
+  const k = kartFromView(decodeRaceView(encodeRaceView(toRaceView(r)), toOwnView(r, r.racers[0].id)).racers[0]);
   assert.ok(k.flyT > 0 && k.tank === PHYSICS.flyTank - PHYSICS.flyBurst && k.prevFly === 1);
   const sent: Input[] = [], c = new InputComposer(i => sent.push(i));
   c.hold('fly', 'k:f', true); c.hold('fly', 'k:f', false); c.hold('fly', 'k:f', true);

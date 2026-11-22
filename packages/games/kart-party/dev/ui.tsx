@@ -25,9 +25,9 @@ import { ItemIcon, ITEM_NAMES } from '../src/ui/icons';
 const q = new URLSearchParams(location.search), num = (k: string, d: number) => Number(q.get(k) ?? d);
 const NAMES = ['Maximilian Storm', 'Alexandria Quinn', 'Bartholomew Lee', 'Jo', 'Christopher Rays', 'Anastasia Belle', 'Sam', 'Wolfgang Amadeus', 'Gwendolyn Parker', 'WWWWWWWWWWWWWWWW'];
 const COLORS = ['#ff5748', '#28c6e7', '#78d955', '#b58aff', '#ffd24a', '#ff8fc8', '#3fe0c5', '#ff9a1f', '#9fe8ff', '#e3e9f7'];
-const humans = Math.max(1, Math.min(10, num('views', num('n', 1))));
-const players = Array.from({ length: humans }, (_, i) => ({ id: `p${i}`, name: NAMES[i], color: COLORS[i], lobbyChoice: { character: (i * 3) % 8, kart: (['zoomer', 'bolt', 'tank'] as const)[i % 3] } }));
-const settings: Settings = rules.validateSettings({ track: q.get('track') ?? 'palm-bay', laps: 3, gridSize: 10, views: q.get('mode') === 'personal' ? 'personal' : 'tv' });
+const humans = Math.max(1, Math.min(64, num('views', num('n', 1))));
+const players = Array.from({ length: humans }, (_, i) => ({ id: `p${i}`, name: i < 10 ? NAMES[i] : `${NAMES[i % 10].slice(0, 13)} ${i}`, color: COLORS[i % 10], lobbyChoice: { character: (i * 3) % 8, kart: (['zoomer', 'bolt', 'tank'] as const)[i % 3] } }));
+const settings: Settings = rules.validateSettings({ track: q.get('track') ?? 'palm-bay', laps: 3, gridSize: Math.max(10, num('grid', humans)), views: q.get('mode') === 'personal' ? 'personal' : 'tv' });
 
 function makeRace(seconds: number): Race {
   const race = rules.create({ roomId: 'ui', roundId: 'ui', players, seed: num('seed', 3), nowMs: 0 }, settings);
@@ -93,7 +93,7 @@ function Ctl() {
 
 function LobbyMock() {
   const n = num('n', 6), me = q.get('me') !== '0';
-  const roster: RosterPlayer[] = Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: i === 0 ? 'Alexandria Quinn' : NAMES[i % NAMES.length], color: COLORS[i % 8], connected: i !== 4, ready: i % 2 === 1,
+  const roster: RosterPlayer[] = Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: i === 0 ? 'Alexandria Quinn' : i < 10 ? NAMES[i] : `${NAMES[i % 10].slice(0, 13)} ${i}`, color: COLORS[i % 8], connected: i !== 4, ready: i % 2 === 1,
     lobbyChoice: i === 0 && !q.has('pick') ? undefined : i % 3 === 2 ? undefined : { character: (i * 5) % 8, kart: (['zoomer', 'bolt', 'tank'] as const)[i % 3] } }));
   const [players, setPlayers] = useState(roster);
   return <main className="kp-shell"><Lobby roomId="r" lobbyId="l" players={players} playerId={me ? 'p0' : null} isHost={!me} settings={settings} connected

@@ -110,9 +110,10 @@ export type Race = {
   chaos: { mode: ChaosMode; kind: ChaosKind | null; last: ChaosKind | null; t: number; next: number };
 };
 
-/** Snapshot sent to every screen at 20 Hz. Racer physics fields are rounded but complete, so
- * prediction can reconstruct KartState. Stats are only included once results begin. */
-export type RacerView = Omit<Racer, 'stats' | 'ai' | 'lapTimes'> & { lapTimes: number[]; stats?: RacerStats };
+/** Snapshot sent to every screen at 30 Hz. Racer physics fields are rounded but complete, so prediction can
+ * reconstruct KartState. Ranking progress and checkpoints stay on the server; stats and lap times arrive with the results.
+ * The fields in OWN_KEYS (net/wire.ts) only reach the seat that drives the kart: for every other racer they are neutral. */
+export type RacerView = Omit<Racer, 'stats' | 'ai' | 'lapTimes' | 'progress' | 'checkpoint'> & { lapTimes: number[]; stats?: RacerStats };
 export type RaceView = Omit<Race, 'racers' | 'rng'> & { racers: RacerView[] };
 
 /* ---------------- Track authoring ---------------- */

@@ -1,6 +1,6 @@
 /* North-up course map drawn from the same track samples the simulation uses. World → map: (−x, −z),
  * so driving "forward" is up the screen and a left turn on the course is a left turn on the map. */
-import { useId, useMemo, type ReactNode } from 'react';
+import { memo, useId, useMemo, type ReactNode } from 'react';
 import { getTrack } from '../tracks/index';
 import type { Track } from '../sim/track';
 import type { RaceView, TrackId } from '../sim/types';
@@ -51,12 +51,17 @@ export function TrackShape({ id, className = 'kp2-track-shape' }: { id: TrackId;
   return <svg className={className} viewBox={trackOutline(id).viewBox} aria-hidden="true" focusable="false"><Course o={trackOutline(id)}/></svg>;
 }
 
-export function Minimap({ race, highlight = [], className = '' }: { race: RaceView; highlight?: readonly string[]; className?: string }) {
-  const o = useMemo(() => trackOutline(race.track), [race.track]), r = o.size / 42;
+type MapProps = { race: RaceView; highlight?: readonly string[]; className?: string };
+/** A crowded map repaints ten times a second, not thirty: 64 dots are some 200 SVG nodes for a phone to diff on every snapshot. */
+export const Minimap = memo(Dots, (a, b) => a.className === b.className && String(a.highlight) === String(b.highlight) && a.race.track === b.race.track && a.race.racers.length === b.race.racers.length
+  && (b.race.racers.length > 16 ? Math.floor(a.race.time * 10) === Math.floor(b.race.time * 10) && a.race.phase === b.race.phase : a.race === b.race));
+function Dots({ race, highlight = [], className = '' }: MapProps) {
+  // A crowd of dots would bury the course: they shrink as the field grows (the highlighted ones keep their size).
+  const o = useMemo(() => trackOutline(race.track), [race.track]), r = o.size / 42, crowd = race.racers.length > 32 ? .62 : race.racers.length > 16 ? .78 : 1;
   const order = [...race.racers].sort((a, b) => Number(highlight.includes(a.id)) - Number(highlight.includes(b.id)) || Number(!a.bot) - Number(!b.bot) || b.rank - a.rank);
   return <svg className={`kp2-minimap ${className}`} viewBox={o.viewBox} role="img" aria-label="Course map">
     <Course o={o}>{order.map(p => {
-      const big = highlight.includes(p.id), rad = big ? r * 1.45 : p.bot ? r * .9 : r * 1.15;
+      const big = highlight.includes(p.id), rad = big ? r * 1.45 : (p.bot ? r * .9 : r * 1.15) * crowd;
       return <g key={p.id} transform={`translate(${(-p.x).toFixed(1)} ${(-p.z).toFixed(1)})`} opacity={p.respawnT > 0 ? .45 : 1}>
         {big && <circle r={rad * 1.7} className="kp2-map-halo" fill={p.color}/>}
         <circle r={rad} fill={p.color} className="kp2-map-dot" strokeWidth={rad * .38}/>

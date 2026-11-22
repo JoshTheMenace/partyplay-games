@@ -1,6 +1,6 @@
 import type { GameRules } from '../../../party-contract/src/index';
-import { createRace, honk, NEUTRAL_INPUT, racerOutcome, stepRace } from './sim/race';
-import { toRaceView } from './sim/view';
+import { createRace, honk, MAX_RACERS, NEUTRAL_INPUT, racerOutcome, stepRace } from './sim/race';
+import { toOwnView, toRaceView, type OwnView } from './sim/view';
 import { encodeRaceView, type RaceWire } from './net/wire';
 import { isKartBody, isSpeedClass, CHARACTERS } from './sim/stats';
 import { isTrackId } from './tracks/index';
@@ -10,14 +10,14 @@ export type { Action, Settings } from './sim/types';
 
 const DEFAULTS: Settings = { track: 'palm-bay', laps: 3, speedClass: 100, difficulty: 'normal', gridSize: 8, items: 'normal', views: 'auto', chaos: 'on' };
 const counter = (n: unknown) => Number.isInteger(n) ? ((n as number) % 256 + 256) % 256 : 0;
-export const rules: GameRules<Race, Input, Action, Settings, RaceWire, null> = {
+export const rules: GameRules<Race, Input, Action, Settings, RaceWire, OwnView | null> = {
   validateSettings(raw) {
     const s = { ...DEFAULTS, ...(raw && typeof raw === 'object' ? raw as Partial<Settings> : {}) };
     if (!isTrackId(s.track)) throw Error('Choose a course.');
     if (!Number.isInteger(s.laps) || s.laps < 1 || s.laps > 5) throw Error('Choose 1–5 laps.');
     if (!isSpeedClass(s.speedClass)) throw Error('Choose 50, 100, 150 or 200cc.');
     if (!['easy', 'normal', 'hard'].includes(s.difficulty)) throw Error('Choose a CPU difficulty.');
-    if (!Number.isInteger(s.gridSize) || s.gridSize < 1 || s.gridSize > 10) throw Error('Choose a grid of 1–10 racers.');
+    if (!Number.isInteger(s.gridSize) || s.gridSize < 1 || s.gridSize > MAX_RACERS) throw Error(`Choose a grid of 1–${MAX_RACERS} racers.`);
     if (!['normal', 'frantic', 'off'].includes(s.items)) throw Error('Choose an item mode.');
     if (!['auto', 'tv', 'personal'].includes(s.views)) throw Error('Choose Auto, TV or personal views.');
     if (!['off', 'on', 'wild'].includes(s.chaos!)) throw Error('Choose a chaos level.');
@@ -41,7 +41,7 @@ export const rules: GameRules<Race, Input, Action, Settings, RaceWire, null> = {
   applyAction(state, playerId, action) { if (action.type === 'honk') honk(state, playerId); },
   tick(state, inputs, dt) { stepRace(state, inputs, dt); },
   onPresenceChange(state, playerId, connected) { const racer = state.racers.find(r => r.id === playerId); if (racer) racer.connected = connected; },
-  publicView: state => encodeRaceView(toRaceView(state)), playerView: () => null,
+  publicView: state => encodeRaceView(toRaceView(state)), playerView: (state, playerId) => toOwnView(state, playerId),
   outcome: state => racerOutcome(state),
   dispose() {},
 };

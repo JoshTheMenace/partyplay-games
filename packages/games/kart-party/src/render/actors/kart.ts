@@ -88,10 +88,45 @@ function shadowProxy(model: THREE.Object3D, key: string) {
   mesh.onBeforeShadow = () => geo!.setDrawRange(0, Infinity); mesh.onAfterShadow = () => geo!.setDrawRange(0, 0);
   return mesh;
 }
+/** Far stand-in for crowded grids: the rest-pose kart + driver as ONE coarse mesh. Vertices are snapped to a 14 cm grid and
+ * merged, which leaves roughly a tenth of the triangles and one draw instead of ten; from 30 m away it reads the same.
+ * It shares the racer's rig material (paint, star shimmer, fade). Geometry is cached per kart/character. */
+const farGeometry = new Map<string, THREE.BufferGeometry>(), CELL = .14;
+function farStandIn(model: THREE.Object3D, key: string, material: THREE.Material) {
+  let geo = farGeometry.get(key);
+  if (!geo) {
+    const cells = new Map<string, number>(), pos: number[] = [], col: number[] = [], pbr: number[] = [], count: number[] = [], idx: number[] = [], inv = new THREE.Matrix4();
+    model.updateMatrixWorld(true); inv.copy(model.matrixWorld).invert();
+    model.traverse(o => {
+      if (!(o instanceof THREE.Mesh) || !o.geometry.getAttribute('aPbr')) return;
+      const P = o.geometry.getAttribute('position'), C = o.geometry.getAttribute('color'), B = o.geometry.getAttribute('aPbr'), I = o.geometry.index, map: number[] = [];
+      m1.multiplyMatrices(inv, o.matrixWorld);
+      for (let i = 0; i < P.count; i++) {
+        v1.fromBufferAttribute(P, i).applyMatrix4(m1);
+        // Paint and trim never share a vertex, so a painted panel keeps its edge against the black of a tyre.
+        const cell = `${Math.round(v1.x / CELL)},${Math.round(v1.y / CELL)},${Math.round(v1.z / CELL)},${B.getW(i)}`;
+        let n = cells.get(cell);
+        if (n === undefined) { cells.set(cell, n = count.length); pos.push(0, 0, 0); col.push(C.getX(i), C.getY(i), C.getZ(i)); pbr.push(B.getX(i), B.getY(i), B.getZ(i), B.getW(i)); count.push(0); }
+        pos[n * 3] += v1.x; pos[n * 3 + 1] += v1.y; pos[n * 3 + 2] += v1.z; count[n]++; map.push(n);
+      }
+      for (let i = 0, n = I ? I.count : P.count; i < n; i += 3) {
+        const a = map[I ? I.getX(i) : i], b = map[I ? I.getX(i + 1) : i + 1], c = map[I ? I.getX(i + 2) : i + 2];
+        if (a !== b && b !== c && a !== c) idx.push(a, b, c);
+      }
+    });
+    for (let n = 0; n < count.length; n++) { pos[n * 3] /= count[n]; pos[n * 3 + 1] /= count[n]; pos[n * 3 + 2] /= count[n]; }
+    geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.setAttribute('aPbr', new THREE.Float32BufferAttribute(pbr, 4));
+    geo.setIndex(idx); geo.computeVertexNormals(); geo.computeBoundingSphere();
+    farGeometry.set(key, geo);
+  }
+  const mesh = new THREE.Mesh(geo, material); mesh.name = 'far_stand_in'; mesh.visible = false;
+  return mesh;
+}
 const isDescendant = (o: THREE.Object3D, ancestor: THREE.Object3D) => { for (let p = o.parent; p; p = p.parent) if (p === ancestor) return true; return false; };
 
-/** Per-frame context shared by every kart. */
-export type KartFrame = { dt: number; time: number; track: Track; reducedMotion: boolean };
+/** Per-frame context shared by every kart. `revving`: the countdown is running (engines blip on the grid). */
+export type KartFrame = { dt: number; time: number; track: Track; reducedMotion: boolean; revving?: boolean };
 
 export class KartActor {
   readonly root = new THREE.Group();          // simulation position + ground-aligned heading
@@ -99,6 +134,9 @@ export class KartActor {
   readonly parts: ReturnType<typeof buildKartModel>;
   readonly materials: RigMaterial[] = [];
   private readonly owned: THREE.Material[] = [];
+  private readonly far: THREE.Mesh;
+  /** Did any viewport draw the full rig since the last update (null: none asked)? A kart that was a far stand-in everywhere skips its wheel, body and driver animation. */
+  private rig: boolean | null = null;
   /** World-space outputs for effects (updated each frame). */
   readonly contact = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
   readonly exhaust = [new THREE.Vector3(), new THREE.Vector3()];
@@ -122,7 +160,7 @@ export class KartActor {
   starT = 0; shieldT = 0; inkT = 0; shockT = 0; drift: -1 | 0 | 1 = 0; driftTier = 0; speed = 0; releaseT = 0;
 
   constructor(assets: KartAssets, readonly id: string, kart: KartBodyId, character: number, shadows: boolean) {
-    this.parts = buildKartModel(assets, kart, character);
+    this.parts = buildKartModel(assets, kart, character); this.beat = [...id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 628, 7) / 100;
     const paint = new THREE.Color(CHARACTERS[clamp(character, 0, CHARACTERS.length - 1)]?.color ?? '#ffffff');
     // One tinted rig material per racer (compacted meshes); other materials are cloned only if painted.
     const rig = rigMaterial(paint), cloned = new Map<THREE.Material, THREE.Material>([[rig, rig]]);
@@ -143,9 +181,10 @@ export class KartActor {
       o.castShadow = false; o.receiveShadow = false;
     });
     // One merged silhouette casts the shadow instead of ~10 animated parts (a tenth of the shadow draws).
+    this.far = farStandIn(this.parts.model, `${kart}:${character}`, rig);
     if (shadows) this.parts.model.add(shadowProxy(this.parts.model, `${kart}:${character}`));
-    this.pivot.position.y = COM; this.parts.model.position.y = -COM;
-    this.pivot.add(this.parts.model); this.root.add(this.pivot);
+    this.pivot.position.y = COM; this.parts.model.position.y = this.far.position.y = -COM;
+    this.pivot.add(this.parts.model, this.far); this.root.add(this.pivot);
     this.root.name = `racer:${id}`;
   }
 
@@ -227,16 +266,22 @@ export class KartActor {
     this.lean = lerp(this.lean, lat * .2 + k.drift * .12, approach(8, dt));
     this.roll = lerp(this.roll, -lat * .06 - k.drift * .05, approach(10, dt));
     this.pitch = lerp(this.pitch, clamp(-this.accel / 45, -.06, .05) - (k.boostT > 0 ? .03 : 0), approach(8, dt));
+    // A boost kicking in sits the kart back on its rear wheels for a moment (a rocket start most of all).
+    this.squat = Math.max(this.squat * Math.exp(-4 * dt), this.boostStarted && k.grounded && !f.reducedMotion ? Math.min(.14, .05 + this.boostStarted * .25) : 0);
     this.shrink = lerp(this.shrink, k.shockT > 0 ? .72 : 1, approach(k.shockT > 0 ? 14 : 5, dt));
     const sx = this.shrink / Math.sqrt(this.sy), sy = this.shrink * this.sy;
     this.pivot.scale.set(sx, sy, sx);
     this.pivot.position.y = COM * sy;
     this.parts.model.position.y = -COM;
     this.pivot.quaternion.setFromEuler(e1.set(this.tumble + (this.trickKind === 1 ? trick : 0), this.yawOff + this.spinOff + (this.trickKind === 2 ? trick : 0), this.trickKind === 0 ? trick * (this.trickSide) : 0, 'YXZ'));
+    const rigged = this.rig !== false; this.rig = null;
+    if (rigged) {
     // Suspension: body rolls/pitches over the wheels, with a little speed buzz.
-    const buzz = k.grounded ? Math.sin(f.time * 47 + this.id.length) * .004 * clamp(speed / 20, 0, 1) : 0;
-    P.body.quaternion.setFromEuler(e1.set(this.pitch, 0, this.roll)).multiply(P.bodyRest);
-    P.body.position.set(P.bodyPos.x, P.bodyPos.y + buzz + (this.sy - 1) * -.05, P.bodyPos.z);
+    // On the grid the engine blips: the body shudders in bursts, each kart on its own beat.
+    const rev = f.revving && !f.reducedMotion ? Math.max(0, Math.sin(f.time * 3.1 + this.beat)) ** 6 : 0;
+    const buzz = k.grounded ? Math.sin(f.time * 47 + this.beat) * (.004 * clamp(speed / 20, 0, 1) + .012 * rev) : 0;
+    P.body.quaternion.setFromEuler(e1.set(this.pitch - this.squat - rev * .012, 0, this.roll + buzz * 1.5 * rev)).multiply(P.bodyRest);
+    P.body.position.set(P.bodyPos.x, P.bodyPos.y + buzz + (this.sy - 1) * -.05 + this.squat * .8, P.bodyPos.z);
 
     // ---- Wheels and steering.
     const counter = k.drift ? k.drift * (.34 - .22 * Math.max(0, k.steer * k.drift)) : 0;
@@ -263,6 +308,7 @@ export class KartActor {
     const armSteer = wheelZ * .2, wave = Math.sin(f.time * 9) * .22 * this.cheer;
     turnParent(P.armL, lerp(-armSteer + flail, -2.05 + wave, this.cheer), 0, -.8 * this.cheer - flail * .5, 'ZYX');
     turnParent(P.armR, lerp(armSteer - flail, -2.05 - wave, this.cheer), 0, .8 * this.cheer + flail * .5, 'ZYX');
+    }
 
     // ---- Star shimmer (rainbow emissive), invulnerability blink.
     if (k.starT > 0 || this.starWas) {
@@ -288,7 +334,9 @@ export class KartActor {
     if (this.releaseT > 0) this.releaseT = Math.max(0, this.releaseT - dt);
     this.prevHeading = k.heading; this.prevGrounded = k.grounded; this.prevVy = k.vy; this.prevBoost = k.boostT; this.prevSpeed = speed; this.first = false;
   }
-  private starWas = false; private trickSide = 1; private loopT = 0;
+  private starWas = false; private trickSide = 1; private loopT = 0; private squat = 0;
+  /** A phase of its own per kart, so a grid of karts does not shake in step. */
+  private readonly beat: number;
   private groundBasis(k: RacerPose['kart'], f: KartFrame, speed: number, dt: number) {
     const qy = queryTrack(f.track, k.x, k.z, k.hint, k.y);
     const ground = qy.ground ?? k.y - 20;
@@ -308,6 +356,8 @@ export class KartActor {
   trick() { this.trickT = .5; this.trickKind = (this.trickKind + 1) % 3; this.trickSide = Math.random() < .5 ? 1 : -1; }
   /** Dithered fade for the next viewport (1 = solid); only the per-racer rig material supports it. */
   fade(f: number) { const u = this.materials[0].material.userData.fade; if (u) u.value = f; }
+  /** Full rig, or the coarse far stand-in (no wheel spin, no shadow), for the next viewport. */
+  detail(full: boolean) { this.parts.model.visible = full; this.far.visible = !full; this.rig = !!this.rig || full; }
   /** Nudge the squash spring (bumps, pickups). */
   kick(amount: number) { this.syV += amount; }
   dispose() { for (const m of this.owned) m.dispose(); this.root.removeFromParent(); }

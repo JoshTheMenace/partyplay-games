@@ -30,7 +30,8 @@ function makeRace(humans = 1, extra: Partial<Settings> = {}): Race {
   const players = Array.from({ length: humans }, (_, i) => ({ id: `p${i}`, name: NAMES[i], color: '#ff5748', lobbyChoice: { character: i % 8, kart: 'bolt' } }));
   return rules.create({ roomId: 'r', roundId: 'u', players, seed: 5, nowMs: 0 }, settings(extra));
 }
-const view = (race: Race) => decodeRaceView(rules.publicView(race, { nowMs: 0, phase: 'playing' }));
+/** What a screen decodes; `own` adds that seat's private view (its own drift charge and input counters). */
+const view = (race: Race, own?: string) => decodeRaceView(rules.publicView(race, { nowMs: 0, phase: 'playing' }), own ? rules.playerView(race, own, { nowMs: 0, phase: 'playing' }) : null);
 const count = (html: string, needle: string) => html.split(needle).length - 1;
 const noop = () => {};
 const ctlProps = (race: RaceView, playerId: string, isHost = false) => ({ roomId: 'r', roundId: 'u', playerId, viewRole: 'controller' as const, isHost, publicView: race, privateView: null, connected: true,
@@ -96,7 +97,7 @@ test('steering, keys and gamepad mapping', () => {
 test('phone controller (TV mode): steer zone, drift/item/brake, no text captions, and a status strip', () => {
   const race = makeRace(2), me = race.racers.find(r => r.id === 'p1')!;
   me.item = 'triple-nitro'; me.itemCount = 3; me.drift = 1; me.driftTier = 2; me.driftCharge = 3;
-  const html = renderToStaticMarkup(<Controller {...ctlProps(view(race), 'p1')}/>);
+  const html = renderToStaticMarkup(<Controller {...ctlProps(view(race, 'p1'), 'p1')}/>);
   assert.match(html, /kp2-ctl-full/);
   assert.match(html, /Steering area/);
   assert.doesNotMatch(html, /role="switch"|Controls on this device|>Controls</);
@@ -107,7 +108,7 @@ test('phone controller (TV mode): steer zone, drift/item/brake, no text captions
   assert.match(html, /kp2-status/); assert.match(html, /Alexandria Quinn/); assert.match(html, /\/10/);
   assert.match(html, /Ready/);                                              // countdown on the phone
   me.driftCharge = 2.3;                                                     // halfway from orange (1.6) to purple (3)
-  const ring = Number(/stroke-dasharray="([\d.]+) /.exec(renderToStaticMarkup(<Controller {...ctlProps(view(race), 'p1')}/>))?.[1]);
+  const ring = Number(/stroke-dasharray="([\d.]+) /.exec(renderToStaticMarkup(<Controller {...ctlProps(view(race, 'p1'), 'p1')}/>))?.[1]);
   assert.ok(Math.abs(ring - 50) < 2, `drift ring ${ring}% follows PHYSICS.driftTiers`);
 });
 
@@ -119,12 +120,12 @@ test('formatTime rounds once: never ":60.00"', () => {
 test('controller item states: roulette, holdable trailing, empty slot', () => {
   const race = makeRace(2), me = race.racers.find(r => r.id === 'p1')!;
   me.rollT = 1; me.item = 'bomb';
-  assert.match(renderToStaticMarkup(<Controller {...ctlProps(view(race), 'p1')}/>), /Rolling an item/);
+  assert.match(renderToStaticMarkup(<Controller {...ctlProps(view(race, 'p1'), 'p1')}/>), /Rolling an item/);
   me.rollT = 0; me.item = 'peel'; me.trailing = true;
-  const trailing = renderToStaticMarkup(<Controller {...ctlProps(view(race), 'p1')}/>);
+  const trailing = renderToStaticMarkup(<Controller {...ctlProps(view(race, 'p1'), 'p1')}/>);
   assert.match(trailing, /is-trailing/); assert.match(trailing, /hold to trail behind/);
   me.item = null; me.trailing = false;
-  assert.match(renderToStaticMarkup(<Controller {...ctlProps(view(race), 'p1')}/>), /kp2-item is-empty/);
+  assert.match(renderToStaticMarkup(<Controller {...ctlProps(view(race, 'p1'), 'p1')}/>), /kp2-item is-empty/);
 });
 
 test('controller: personal mode overlays controls without the status strip; a desktop host gets keyboard only', () => {

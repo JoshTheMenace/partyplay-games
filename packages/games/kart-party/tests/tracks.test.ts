@@ -130,6 +130,20 @@ for (const t of tracks) {
     }
   });
 
+  test(`${id}: grids of 16, 32 and 64 line up on the road without touching, close to the line`, () => {
+    for (const racers of [11, 16, 32, 64]) {
+      const slots = Array.from({ length: racers }, (_, slot) => gridSlot(t, slot, racers));
+      slots.forEach((g, slot) => {
+        const q = queryTrack(t, g.x, g.z, -1, g.y);
+        assert.ok(q.beyond === 0 && Math.abs(q.lateral) <= q.halfWidth - 1.2 && q.ground !== null, `${racers}: slot ${slot} is off the road (lateral ${q.lateral.toFixed(1)} of ±${q.halfWidth.toFixed(1)})`);
+        for (let o = 0; o < slot; o++) assert.ok(Math.hypot(g.x - slots[o].x, g.z - slots[o].z) > 2.7, `${racers}: slots ${o} and ${slot} overlap`);
+      });
+      const back = Math.max(...slots.map(g => forwardDistance(t, g.d, 0)));
+      assert.ok(back <= (racers > 32 ? 75 : 45), `${racers}: the last row starts ${back.toFixed(0)} m back`);
+      assert.ok(forwardDistance(t, slots[0].d, 0) <= 8.01, 'pole sits on the line');
+    }
+  });
+
   test(`${id}: item rows, boxes and boost pads sit on the course`, () => {
     assert.ok(t.def.itemRows.length >= 3 && t.def.itemRows.length <= 4, 'item rows');
     assert.ok(t.pads.length >= 2 && t.pads.length <= 4, 'boost pads');

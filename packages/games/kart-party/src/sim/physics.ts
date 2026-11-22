@@ -11,16 +11,22 @@ import { forwardDistance, gravityScale, loopPose, moverPosition, pointAt, queryT
 import { kartStats, TOP_SPEED } from './stats';
 import type { HitKind, Input, KartBodyId, KartState, Phase, RaceEventType, SpeedClass, Surface } from './types';
 
-/** `fly`: the kart has thrusters (the Roadster). */
-export type KartParams = { topSpeed: number; accel: number; handling: number; weight: number; traction: number; fly?: boolean };
-/** Resolved per-racer tuning. `skill` scales CPU top speed (1 for humans). */
-export function kartParams(character: number, kart: KartBodyId, speedClass: SpeedClass, skill = 1): KartParams {
+/** `fly`: the kart has thrusters (the Roadster). `torque`: extra engine push from a standstill, fading to none at 45% of top speed
+ * (the Roadster's electric motors: +40% off the line, after a hit, out of a hairpin). `mercy`: seconds of invulnerability after recovering from a hit, when longer than usual. */
+export type KartParams = { topSpeed: number; accel: number; handling: number; weight: number; traction: number; fly?: boolean; torque?: number; mercy?: number };
+/** Resolved per-racer tuning. `skill` scales CPU top speed (1 for humans). `field` is the size of the grid: in a crowd far more
+ * shells, bombs and peels are in play, so past twelve racers a kart that was just hit is left alone for longer (0.8 s grows to
+ * 1.7 s at 32 racers and 3 s at 64), which keeps how often anyone gets hit close to a small race. */
+export function kartParams(character: number, kart: KartBodyId, speedClass: SpeedClass, skill = 1, field = 1): KartParams {
   const s = kartStats(character, kart);
-  return { topSpeed: TOP_SPEED[speedClass] * s.speed * skill, accel: s.accel, handling: s.handling, weight: s.weight, traction: s.traction, ...(kart === 'roadster' ? { fly: true } : {}) };
+  return { topSpeed: TOP_SPEED[speedClass] * s.speed * skill, accel: s.accel, handling: s.handling, weight: s.weight, traction: s.traction, ...(kart === 'roadster' ? { fly: true, torque: .4 } : {}),
+    ...(field > 12 ? { mercy: Math.min(3, P.recoverInvuln + (field - 12) * .045) } : {}) };
 }
 export type Drafter = { x: number; z: number; heading: number; speed: number };
 /** `gravity` scales gravity race-wide (Chaos mode's Moon Gravity); track zones still apply, the lower one wins. */
-export type StepEnv = { time: number; phase: Phase; drafters: readonly Drafter[]; gravity?: number };
+export type StepEnv = { time: number; phase: Phase; drafters: readonly Drafter[]; gravity?: number;
+  /** Index of this kart in `drafters` when the list is the whole field (the race passes one shared list). */
+  self?: number };
 export type KartEvent = { type: RaceEventType; value?: number };
 
 /** Tuning shared with tests, CPUs and presentation. */
@@ -109,7 +115,7 @@ export function stepKart(k: KartState, input: Input, p: KartParams, track: Track
     k.spinT -= s;
   }
   if (k.tumbleT > 0) k.tumbleT = Math.max(0, k.tumbleT - dt);
-  if (hurt && k.spinT <= 0 && k.tumbleT <= 0) k.invulnT = Math.max(k.invulnT, P.recoverInvuln);
+  if (hurt && k.spinT <= 0 && k.tumbleT <= 0) k.invulnT = Math.max(k.invulnT, p.mercy ?? P.recoverInvuln);
   if (k.loop > 0) {
     const loop = riddenLoop(track, k.d);
     if (loop) { rideLoop(k, input, p, track, loop, dt, hurt); return done(); }
@@ -153,7 +159,7 @@ export function stepKart(k: KartState, input: Input, p: KartParams, track: Track
     else if (input.brake) fwd = fwd > 1 ? Math.max(0, fwd - P.brake * dt) : Math.max(-P.reverseSpeed, fwd - 12 * dt);
     else if (fwd < 0) fwd = Math.min(0, fwd + P.brake * dt);
     else if (fwd < top) {
-      fwd = Math.min(top, fwd + engine(p, boosting, star) * Math.pow(1 - fwd / top, .6) * dt);
+      fwd = Math.min(top, fwd + engine(p, boosting, star, fwd) * Math.pow(1 - fwd / top, .6) * dt);
     } else {
       const excess = fwd - top;
       fwd = Math.max(top, fwd - (P.bleed + (rough && !boosting && !star ? 2.5 : .5) * excess) * dt);
@@ -247,7 +253,7 @@ export function stepKart(k: KartState, input: Input, p: KartParams, track: Track
     k.driftCharge = Math.min(4, k.driftCharge + dt * (.2 + 1.6 * bite));
   }
   k.driftTier = k.drift !== 0 ? driftTierOf(k.driftCharge) : 0;
-  if (drafting(k, env.drafters, p)) {
+  if (drafting(k, env.drafters, p, env.self)) {
     k.slipCharge += dt;
     // After a slipstream boost the charge starts below zero: the next one needs a longer tow.
     if (k.slipCharge >= P.slipCharge) { k.slipCharge = -P.slipCooldown; k.slipT = P.slipTime; startBoost(k, P.slipTime, P.slipPower); emit('slipstream'); }
@@ -256,7 +262,8 @@ export function stepKart(k: KartState, input: Input, p: KartParams, track: Track
   return done();
 }
 
-const engine = (p: KartParams, boosting: boolean, star: boolean) => P.accel * Math.sqrt(p.topSpeed / TOP_SPEED[100]) * p.accel * (boosting ? 3 : 1) * (star ? 1.5 : 1);
+const engine = (p: KartParams, boosting: boolean, star: boolean, v: number) => P.accel * Math.sqrt(p.topSpeed / TOP_SPEED[100]) * p.accel * (boosting ? 3 : 1) * (star ? 1.5 : 1)
+  * (p.torque ? 1 + p.torque * clamp(1 - v / (p.topSpeed * .45), 0, 1) : 1);
 const decaySlip = (k: KartState, dt: number) => { k.slipCharge = k.slipCharge > 0 ? Math.max(0, k.slipCharge - dt * 2) : Math.min(0, k.slipCharge + dt); };
 
 /* ---------------- Loop-the-loop (DESIGN §9.1) ---------------- */
@@ -308,7 +315,7 @@ function rideLoop(k: KartState, input: Input, p: KartParams, track: Track, loop:
   let v = v0, lat = (or - c * ot) / (1 - c * c);
   if (hurt) v *= Math.exp(-(k.tumbleT > 0 ? 1.36 : 1.05) * dt);
   else if (input.brake) v -= P.brake * dt;
-  else if (v < top) v = Math.min(top, v + engine(p, boosting, star) * Math.pow(1 - v / top, .6) * dt);
+  else if (v < top) v = Math.min(top, v + engine(p, boosting, star, v) * Math.pow(1 - v / top, .6) * dt);
   else v = Math.max(top, v - (P.bleed + .5 * (v - top)) * dt);
   v = Math.max(Math.min(p.topSpeed * P.loopMin, v0 + P.loopLift * dt), v - P.loopGravity * at.ty * dt);
   lat = moveToward(lat, clamp(lat, -lane, lane), P.loopPull * dt);                                          // came in wide: eased in
@@ -371,10 +378,11 @@ function bounce(k: KartState, nx: number, nz: number, tfx: number, tfz: number) 
   if (impact > 6) emit('wall', Math.round(impact));
 }
 
-function drafting(k: KartState, drafters: readonly Drafter[], p: KartParams) {
+function drafting(k: KartState, drafters: readonly Drafter[], p: KartParams, self = -1) {
   if (!k.grounded || k.boostT > 0 || Math.hypot(k.vx, k.vz) < p.topSpeed * .8) return false;
-  for (const o of drafters) {
-    if (o.speed < p.topSpeed * .8 || Math.abs(angleDelta(k.heading, o.heading)) > .44) continue;
+  for (let i = 0; i < drafters.length; i++) {
+    const o = drafters[i];
+    if (i === self || o.speed < p.topSpeed * .8 || Math.abs(angleDelta(k.heading, o.heading)) > .44) continue;
     const dx = k.x - o.x, dz = k.z - o.z, ofx = Math.sin(o.heading), ofz = Math.cos(o.heading), behind = -(dx * ofx + dz * ofz);
     if (behind > 1.5 && behind < 16 && Math.abs(dz * ofx - dx * ofz) < 2.5) return true;
   }

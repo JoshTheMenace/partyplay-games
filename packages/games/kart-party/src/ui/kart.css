@@ -179,6 +179,17 @@
 .kp2-tower em { font-style: normal; margin-left: auto; padding-left: .3em; display: grid; }
 .kp2-tower-flag svg { width: 1.1em; height: 1.1em; color: var(--kp-cream); }
 .kp2-tower-final { font: 400 .8em var(--font-display); color: var(--kp-ink); background: var(--kp-sun); border-radius: .3em; padding: 0 .3em; }
+.kp2-tower.is-big { font-size: clamp(10px, 2.05cqh, 24px); gap: .35cqh; }
+.kp2-tower li.is-window { margin-top: 1.5cqh; }
+.kp2-spare .kp2-tower.is-big { font-size: clamp(8px, min(3.4cqh, 3.1cqw), 22px); gap: .5cqh; }
+.kp2-cast { position: absolute; right: max(1.6cqw, var(--safe-right)); top: 3cqh; display: grid; justify-items: end; gap: 1.2cqh; font-size: clamp(12px, 2.6cqh, 30px); }
+.kp2-cast-status { display: flex; align-items: baseline; gap: .12em; padding: .12em .7em; border-radius: .6em; background: #05071ad9; font-size: 1.5em; }
+.kp2-cast-status small { margin-right: .5em; font: 900 .42em var(--font-body); letter-spacing: .16em; text-transform: uppercase; color: var(--muted-foreground); }
+.kp2-cast-status span { font-size: .6em; color: #cdd3f2; }
+.kp2-cast-status i { margin-left: .8em; font-style: normal; font-size: .62em; color: var(--kp-sun); }
+.kp2-cast-feed { list-style: none; margin: 0; padding: 0; display: grid; justify-items: end; gap: .5cqh; font: 900 .8em var(--font-body); }
+.kp2-cast-feed li { padding: .2em .8em; border-radius: .6em; background: #05071ad9; border-right: .32em solid var(--c); white-space: nowrap; animation: kp2-cast-in .25s ease-out; }
+@keyframes kp2-cast-in { from { opacity: 0; transform: translateX(1.5em); } }
 .kp2-minimap { position: absolute; overflow: visible; filter: drop-shadow(0 .5cqh .7cqh #000a); }
 .kp2-map-edge { fill: none; stroke: #05071a; stroke-linejoin: round; stroke-opacity: .88; }
 .kp2-map-road { fill: none; stroke: #fff6e5; stroke-linejoin: round; }
@@ -270,6 +281,14 @@
 .kp2-board-state { margin-top: 4px; padding: .15em .7em; border-radius: 99px; font-size: .7rem; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; background: #05071a99; color: var(--muted-foreground); }
 .kp2-board li.is-ready { border-color: var(--kp-lime); }
 .kp2-board li.is-ready .kp2-board-state { background: var(--kp-lime); color: var(--kp-ink); }
+/* More than ten racers: one compact row each, so 64 fit a TV without pages of scrolling. Ready = lime edge and a tick. */
+.kp2-board.is-dense { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 6px; }
+.kp2-board.is-dense li { grid-template-columns: auto minmax(0, 1fr); justify-items: start; align-content: center; text-align: left; gap: 0 8px; padding: 5px 8px 5px 5px; border-radius: 12px; }
+.kp2-board.is-dense li .kp2-portrait { --s: 34px; margin: 0; grid-row: span 2; }
+.kp2-board.is-dense b { font-size: .86rem; line-height: 1.15; }
+.kp2-board.is-dense small { font-size: .7rem; }
+.kp2-board.is-dense .kp2-board-state { display: none; }
+.kp2-board.is-dense li.is-ready b::after { content: '\00a0✓'; color: var(--kp-lime); }
 .kp2-course-summary { display: flex; align-items: center; gap: 14px; padding: 10px 16px 10px 10px; border-radius: 18px; background: var(--theme-bg); border: 2px solid #fff6e51a; }
 .kp2-course-summary .kp2-track-shape { width: 86px; height: 86px; flex: none; }
 .kp2-course-summary > div { display: grid; line-height: 1.15; }
@@ -334,6 +353,15 @@
 .kp2-step-1 .kp2-step-block { height: clamp(80px, 14vw, 128px); background: linear-gradient(#ffe27a, var(--kp-sun) 40%, #e3a200); }
 .kp2-step-2 .kp2-step-block { height: clamp(58px, 10vw, 94px); background: linear-gradient(#ffffff, #d7deee 40%, #9ea8c2); }
 .kp2-step-3 .kp2-step-block { height: clamp(42px, 7vw, 70px); background: linear-gradient(#ffc9a1, #ffa46b 40%, #cf6c32); }
+/* The podium builds itself: blocks rise third, second, first, then each racer pops onto theirs; the standings follow. */
+.kp2-step-block { transform-origin: bottom; animation: kp2-rise .5s cubic-bezier(.2, 1.3, .4, 1) backwards; }
+.kp2-step > :not(.kp2-step-block) { animation: kp2-pop-plain .35s cubic-bezier(.2, 1.6, .4, 1) backwards; }
+.kp2-step-3 .kp2-step-block { animation-delay: .15s; } .kp2-step-3 > :not(.kp2-step-block) { animation-delay: .55s; }
+.kp2-step-2 .kp2-step-block { animation-delay: .45s; } .kp2-step-2 > :not(.kp2-step-block) { animation-delay: .85s; }
+.kp2-step-1 .kp2-step-block { animation-delay: .75s; } .kp2-step-1 > :not(.kp2-step-block) { animation-delay: 1.2s; }
+.kp2-results-body { animation: kp2-settle .45s 1.1s ease-out backwards; }
+@keyframes kp2-rise { from { transform: scaleY(0); } }
+@keyframes kp2-settle { from { opacity: 0; transform: translateY(14px); } }
 .kp2-results-body { display: grid; gap: 16px; align-items: start; }
 @media (min-width: 900px) { .kp2-results-body { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); } }
 .kp2-table { width: 100%; border-collapse: separate; border-spacing: 0 4px; font-variant-numeric: tabular-nums; }
@@ -351,6 +379,23 @@
 .kp2-table-racer em { font-style: normal; font-size: .62rem; font-weight: 900; letter-spacing: .1em; color: var(--muted-foreground); vertical-align: .15em; }
 .kp2-table-racer small { color: var(--muted-foreground); font-size: .76rem; }
 .kp2-table .is-fastest { color: var(--kp-grape); font-weight: 900; }
+/* Crowded results: the standings split into columns on a wide screen (one list on a phone) and the awards run underneath. */
+.kp2-tables { display: grid; gap: 0 14px; align-items: start; }
+.kp2-results-body.is-dense { grid-template-columns: minmax(0, 1fr); }
+.kp2-results-body.is-dense .kp2-table td { padding: 2px 8px; }
+.kp2-results-body.is-dense .kp2-table td:first-child { font-size: 1.05rem; }
+.kp2-results-body.is-dense .kp2-table-racer .kp2-portrait { --s: 26px; }
+.kp2-results-body.is-dense .kp2-table-racer small { display: none; }
+.kp2-results-body.is-dense .kp2-awards { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.kp2-podium.is-dense .kp2-step .kp2-portrait { --s: clamp(44px, 7vw, 68px); }
+.kp2-podium.is-dense .kp2-step-1 .kp2-portrait { --s: clamp(54px, 9vw, 84px); }
+.kp2-podium.is-dense .kp2-step-1 .kp2-step-block { height: clamp(48px, 7vw, 66px); }
+.kp2-podium.is-dense .kp2-step-2 .kp2-step-block { height: clamp(38px, 5.5vw, 50px); }
+.kp2-podium.is-dense .kp2-step-3 .kp2-step-block { height: clamp(30px, 4.5vw, 38px); }
+@media (min-width: 900px) { .kp2-tables { grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); } }
+/* Four columns need a 1080p-wide screen; on a 720p TV the same four blocks sit two by two so names stay on one or two lines. */
+@media (min-width: 900px) and (max-width: 1599px) { .kp2-tables.is-four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 899px) { .kp2-tables .kp2-table + .kp2-table thead { display: none; } }
 .kp2-awards { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .kp2-awards li { display: flex; align-items: center; gap: 12px; padding: 10px 14px 10px 10px; border-radius: 18px; background: linear-gradient(110deg, color-mix(in srgb, var(--c) 28%, #141a44), #141a44 70%); border: 2px solid #fff6e514; }
 .kp2-awards li.is-me { border-color: var(--kp-cream); }
@@ -427,7 +472,7 @@
 .kp2-t1 { color: #3fb4ff; font-weight: 900; } .kp2-t2 { color: #ff9a1f; font-weight: 900; } .kp2-t3 { color: #c46bff; font-weight: 900; }
 
 @media (prefers-reduced-motion: reduce) {
-  .kp2-roulette-strip, .kp2-drift.tier-3, .kp2-hud-alert, .kp2-hud-banner, .kp2-count-num, .kp2-ctl-count, .kp2-hud-finish, .kp2-hud-top, .kp2-status, .kp2-chaos-wash, .kp2-chaos-banner, .kp2-status-chaos b { animation: none !important; }
+  .kp2-roulette-strip, .kp2-drift.tier-3, .kp2-hud-alert, .kp2-hud-banner, .kp2-count-num, .kp2-ctl-count, .kp2-hud-finish, .kp2-hud-top, .kp2-status, .kp2-chaos-wash, .kp2-chaos-banner, .kp2-status-chaos b, .kp2-cast-feed li, .kp2-step-block, .kp2-step > *, .kp2-results-body { animation: none !important; }
   .kp2-hud-banner { transform: translate(-50%, -50%) skewX(-8deg); }
   .kp2-roulette::after { content: '?'; position: absolute; inset: 0; display: grid; place-items: center; font: 400 2em var(--font-display); color: var(--kp-cream); background: #141a44cc; }
 }

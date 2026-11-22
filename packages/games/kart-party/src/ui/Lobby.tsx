@@ -13,6 +13,10 @@ const pickOf = (p?: RosterPlayer): LobbyChoice | null => {
   const c = p?.lobbyChoice as Partial<LobbyChoice> | undefined;
   return c && Number.isInteger(c.character) && c.character! >= 0 && c.character! < CHARACTERS.length && isKartBody(c.kart) ? { character: c.character!, kart: c.kart } : null;
 };
+/** "Ana, Bo and 3 more": a crowded room can't name everyone who shares a pick. */
+const nameList = (people: RosterPlayer[]) => people.length > 3 ? `${people.slice(0, 2).map(p => p.name).join(', ')} and ${people.length - 2} more` : people.map(p => p.name).join(', ');
+/** Past this many people the lobby switches to its compact layouts. */
+const CROWD = 10;
 const STATS: { key: keyof KartStats; label: string }[] = [
   { key: 'speed', label: 'Speed' }, { key: 'accel', label: 'Accel' }, { key: 'handling', label: 'Handling' }, { key: 'traction', label: 'Grip' }, { key: 'weight', label: 'Weight' },
 ];
@@ -58,7 +62,7 @@ export function Lobby({ players, playerId, settings, connected, error, onChoice,
   if (!me) return <section className="kp2-lobby kp2-lobby-board" aria-label="Racers">
     <CourseSummary settings={settings}/>
     <h2 className="kp2-lobby-heading">Racers <small>{players.filter(p => p.ready).length}/{players.length} ready</small></h2>
-    {players.length ? <ul className="kp2-board">{players.map(p => { const c = pickOf(p); return <li key={p.id} className={p.ready ? 'is-ready' : ''} style={{ '--c': p.color } as CSSProperties}>
+    {players.length ? <ul className={`kp2-board ${players.length > CROWD ? 'is-dense' : ''}`}>{players.map(p => { const c = pickOf(p); return <li key={p.id} className={p.ready ? 'is-ready' : ''} style={{ '--c': p.color } as CSSProperties}>
       {c ? <Portrait index={c.character}/> : <span className="kp2-portrait kp2-portrait-unknown" aria-hidden="true"><span className="kp2-preview-fallback">?</span></span>}
       <b>{p.name}</b><small>{c ? `${character(c.character).name} · ${kartName(c.kart)}` : p.ready ? 'Surprise racer' : 'Choosing…'}</small>
       <span className="kp2-board-state">{!p.connected ? 'Away' : p.ready ? 'Ready!' : 'Picking'}</span>
@@ -70,7 +74,7 @@ export function Lobby({ players, playerId, settings, connected, error, onChoice,
       {char === null ? <span className="kp2-portrait kp2-portrait-unknown" aria-hidden="true"><span className="kp2-preview-fallback">?</span></span> : <Portrait index={char}/>}
       <div><small>{me.ready ? 'Ready! Waiting for the host' : 'Pick your racer'}</small><b>{c ? c.name : 'Who’s driving?'}</b>
         <span>{c ? <span className="kp2-cap">{c.species} · {c.weight} · {kartName(kart)}</span> : 'Tap a racer below, or ready up for a surprise.'}</span>
-        {char !== null && takenBy(char).length > 0 && <em className="kp2-lobby-clash">Also picked by {takenBy(char).map(p => p.name).join(', ')}</em>}</div>
+        {char !== null && takenBy(char).length > 0 && <em className="kp2-lobby-clash">Also picked by {nameList(takenBy(char))}</em>}</div>
       <StatBars stats={stats} compact/>
     </header>
     {error && <p className="kp2-lobby-error" role="alert">{error}</p>}
@@ -79,7 +83,7 @@ export function Lobby({ players, playerId, settings, connected, error, onChoice,
         <div className="kp2-char-grid">{CHARACTERS.map((ch, i) => { const by = takenBy(i); return <button key={ch.name} type="button" className={`kp2-char ${char === i ? 'is-picked' : ''}`} aria-pressed={char === i}
           style={{ '--c': ch.color } as CSSProperties} disabled={!connected} onClick={() => pick(i, kart)}>
           <Portrait index={i}/><b>{ch.name}</b><small>{ch.weight}</small>
-          {by.length > 0 && <span className="kp2-char-by" style={{ '--p': by[0].color } as CSSProperties} title={`Also picked by ${by.map(p => p.name).join(', ')}`}>{by[0].name}{by.length > 1 && ` +${by.length - 1}`}</span>}
+          {by.length > 0 && <span className="kp2-char-by" style={{ '--p': by[0].color } as CSSProperties} title={`Also picked by ${nameList(by)}`}>{players.length > CROWD ? `×${by.length}` : <>{by[0].name}{by.length > 1 && ` +${by.length - 1}`}</>}</span>}
         </button>; })}</div>
       </fieldset>
       <fieldset className="kp2-pick-group"><legend>Kart</legend>
@@ -88,7 +92,7 @@ export function Lobby({ players, playerId, settings, connected, error, onChoice,
         </button>)}</div>
       </fieldset>
     </div>
-    {others.length > 0 && <details className="kp2-lobby-roster" open><summary>Racers · {players.filter(p => p.ready).length}/{players.length} ready</summary>
+    {others.length > 0 && <details className="kp2-lobby-roster" open={players.length <= CROWD}><summary>Racers · {players.filter(p => p.ready).length}/{players.length} ready</summary>
       <ul>{players.map(p => <PlayerChip key={p.id} player={p} me={p.id === playerId}/>)}</ul></details>}
     <div className="kp2-ready-bar">
       <button type="button" className={`kp2-ready ${me.ready ? 'is-ready' : ''}`} disabled={!connected} onClick={() => { if (!me.ready) pick(char ?? surprise(), kart); onReady(!me.ready); }}>

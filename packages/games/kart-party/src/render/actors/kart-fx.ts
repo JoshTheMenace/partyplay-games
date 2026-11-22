@@ -70,6 +70,8 @@ export const cloneProp = (assets: KartAssets, name: string) =>
   ((assets.props && compactTemplate(assets.props, name, () => assets.clone(name))) || compactTemplate(FALLBACK_LIBRARY, name, () => fallbackTemplate(name)))?.clone(true) ?? null;
 const TRAIL_PROP: Partial<Record<ItemId, string>> = { peel: 'peel', bouncer: 'bouncer_shell', seeker: 'seeker_shell' };
 
+/** The Roadster's boost colour: icy white-blue vapour. */
+const JET = new THREE.Color(0x9fe8ff).multiplyScalar(1.5);
 export type FxEnv = { fx: Fx; dt: number; time: number; theme: ThemeId; reducedMotion: boolean };
 
 export class KartExtras {
@@ -80,7 +82,8 @@ export class KartExtras {
   private ink: THREE.Mesh | null = null; private inkScale = 0;
   readonly flameColor = new THREE.Color().copy(COLORS.flame); private flameHold = 0;
   private readonly group: THREE.Group;
-  constructor(private readonly kart: KartActor, private readonly assets: KartAssets, world: THREE.Group) { this.group = world; }
+  /** `electric` (the Roadster): no exhaust, so no flames, puffs or stall smoke; its boosts are icy cold-gas jets from the tail nozzles. */
+  constructor(private readonly kart: KartActor, private readonly assets: KartAssets, world: THREE.Group, private readonly electric = false) { this.group = world; if (electric) this.flameColor.copy(JET); }
 
   /** Tint the next boost flame (mini-turbo tier, pad, star...). */
   tint(color: THREE.Color, hold = .6) { this.flameColor.copy(color); this.flameHold = hold; }
@@ -95,7 +98,7 @@ export class KartExtras {
       for (const p of K.parts.exhausts) { const m = new THREE.Mesh(flameGeometry(), this.flameMat); m.position.copy(p); m.renderOrder = 13; m.frustumCulled = false; K.parts.body.add(m); this.flames.push(m); }
     }
     if (this.flameMat) {
-      if (this.flameHold > 0) this.flameHold -= dt; else this.flameColor.lerp(k.starT > 0 ? rainbow(env.time * 1.5, .55, 2) : COLORS.flame, approach(3, dt));
+      if (this.flameHold > 0) this.flameHold -= dt; else this.flameColor.lerp(k.starT > 0 ? rainbow(env.time * 1.5, .55, 2) : this.electric ? JET : COLORS.flame, approach(3, dt));
       this.flameMat.uniforms.uColor.value.copy(this.flameColor); this.flameMat.uniforms.uTime.value = env.time;
       this.flameMat.uniforms.uAlpha.value = clamp(this.flameLevel * 1.2, 0, 1);
       for (const m of this.flames) { m.visible = this.flameLevel > .02; const f = this.flameLevel * (.85 + Math.random() * .3); m.scale.set(f * 1.1, f * 1.1, f * (1.1 + Math.random() * .5)); }
@@ -103,7 +106,7 @@ export class KartExtras {
     if (boosting && this.flameLevel > .3) for (const e of K.exhaust) {
       fx.emit(FX.flare, e.x, e.y, e.z, k.vx, k.vy, k.vz, this.flameColor, .35 * this.flameLevel);
       for (let i = fx.n(38 * this.flameLevel, dt); i > 0; i--) fx.emit(FX.ember, e.x, e.y, e.z, k.vx * .7 - K.forward.x * rnd(3, 7) + rnd(-1, 1), k.vy * .7 - K.forward.y * rnd(3, 7) + rnd(0, 1.5), k.vz * .7 - K.forward.z * rnd(3, 7) + rnd(-1, 1), this.flameColor, 1);
-    } else if (speed < 6 && !K.respawning && k.stallT <= 0) for (const e of K.exhaust) for (let i = fx.n(5, dt); i > 0; i--) fx.emit(FX.puff, e.x, e.y, e.z, -K.forward.x * 1.2, .8, -K.forward.z * 1.2, COLORS.smoke);
+    } else if (speed < 6 && !K.respawning && k.stallT <= 0 && !this.electric) for (const e of K.exhaust) for (let i = fx.n(5, dt); i > 0; i--) fx.emit(FX.puff, e.x, e.y, e.z, -K.forward.x * 1.2, .8, -K.forward.z * 1.2, COLORS.smoke);
     // Roadster thrusters: cold gas, so white vapour and no flame, blasting back from the rear nozzles and down from the floor jets.
     if (k.flyT > 0 && !K.respawning) {
       for (const e of K.exhaust) {
@@ -112,7 +115,10 @@ export class KartExtras {
       }
       for (let i = fx.n(70, dt); i > 0; i--) fx.emit(FX.smoke, K.center.x + rnd(-.9, .9), K.center.y - .2, K.center.z + rnd(-1.2, 1.2), k.vx * .5 + rnd(-2, 2), -rnd(8, 14), k.vz * .5 + rnd(-2, 2), COLORS.white, 1.6);
     }
-    if (k.stallT > 0) for (const e of K.exhaust) for (let i = fx.n(22, dt); i > 0; i--) fx.emit(FX.smoke, e.x, e.y, e.z, -K.forward.x * 2 + rnd(-.5, .5), rnd(1, 2), -K.forward.z * 2 + rnd(-.5, .5), COLORS.darkSmoke, 1.2);
+    if (k.stallT > 0) for (const e of K.exhaust) for (let i = fx.n(22, dt); i > 0; i--) {
+      if (this.electric) fx.emit(FX.spark, e.x, e.y, e.z, -K.forward.x * rnd(1, 4) + rnd(-2, 2), rnd(1, 4), -K.forward.z * rnd(1, 4) + rnd(-2, 2), COLORS.zap, .8, 1, K.groundY);   // a tripped breaker, not a flooded engine
+      else fx.emit(FX.smoke, e.x, e.y, e.z, -K.forward.x * 2 + rnd(-.5, .5), rnd(1, 2), -K.forward.z * 2 + rnd(-.5, .5), COLORS.darkSmoke, 1.2);
+    }
 
     const grounded = k.grounded && !K.respawning && K.airHeight < .3;
     // ---- Drift: at each rear wheel a flickering flame tongue + a shower of streak sparks in the tier

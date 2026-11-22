@@ -9,10 +9,13 @@ import { createActors } from './actors';
 import { loadKartAssets } from './assets';
 import { CameraRig, type ShotViewport } from './camera';
 import { viewportPixels } from './layout';
+import { createPost } from './post';
 import type { FrameInput, KartRenderer, QualityTier } from './types';
 import { buildWorld } from './world/world';
 
-export type RendererOptions = { track: TrackId; signal: AbortSignal; quality: QualityTier; onError(error: unknown): void };
+export type RendererOptions = { track: TrackId; signal: AbortSignal; quality: QualityTier; onError(error: unknown): void;
+  /** Racers on the grid (start boxes painted); ten when not given. */
+  grid?: number };
 export type RendererStats = { calls: number; triangles: number; viewports: number; pixelRatio: number; geometries: number; textures: number; tier: QualityTier };
 /** The platform-facing KartRenderer plus dev diagnostics. */
 export type KartRendererExt = KartRenderer & { stats(): RendererStats };
@@ -40,13 +43,13 @@ export async function createKartRenderer(canvas: HTMLCanvasElement, options: Ren
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.setScissorTest(true); renderer.info.autoReset = true;
 
-  let world: ReturnType<typeof buildWorld> | null = null, actors: ReturnType<typeof createActors> | null = null, envRT: THREE.WebGLRenderTarget | null = null;
+  let world: ReturnType<typeof buildWorld> | null = null, actors: ReturnType<typeof createActors> | null = null, envRT: THREE.WebGLRenderTarget | null = null, post: ReturnType<typeof createPost> = null;
   const scene = new THREE.Scene();
   const dispose = () => {
     if (disposed) return; disposed = true;
     signal.removeEventListener('abort', dispose);
     try { actors?.dispose(); } catch (e) { console.error(e); }
-    world?.dispose(); envRT?.dispose();
+    world?.dispose(); envRT?.dispose(); post?.dispose();
     canvas.removeEventListener('webglcontextlost', onLost);
     renderer.dispose(); renderer.forceContextLoss();
   };
@@ -55,7 +58,7 @@ export async function createKartRenderer(canvas: HTMLCanvasElement, options: Ren
     const assets = await loadKartAssets(signal);
     if (signal.aborted || disposed) throw abort();
     let tier: QualityTier = options.quality;
-    world = buildWorld(track, assets, tier, Math.min(8, renderer.capabilities.getMaxAnisotropy()));
+    world = buildWorld(track, assets, tier, Math.min(8, renderer.capabilities.getMaxAnisotropy()), options.grid);
     renderer.toneMappingExposure = world.theme.exposure;
     scene.add(world.group); scene.fog = world.fog;
     world.prepare(renderer);
@@ -74,11 +77,13 @@ export async function createKartRenderer(canvas: HTMLCanvasElement, options: Ren
     const warm = cameraFor(0), s0 = track.samples[track.samples.length - 20];
     warm.position.set(s0.x, s0.y + 3, s0.z); warm.lookAt(track.samples[4].x, track.samples[4].y, track.samples[4].z); warm.updateMatrixWorld();
     await renderer.compileAsync(scene, warm);
+    // A display that starts at full quality also gets bloom: compile the render-target shader variants now, not on the first frame.
+    if (options.quality === 0 && (post = createPost(renderer, world.theme.bloom))) { renderer.setRenderTarget(post.target); await renderer.compileAsync(scene, warm); renderer.setRenderTarget(null); }
     if (signal.aborted || disposed) throw abort();
 
     const dev = (globalThis as { __kart?: Record<string, unknown> }).__kart;
-    if (dev) { dev.scene = scene; dev.renderer = renderer; dev.THREE = THREE; dev.track = track; dev.cameras = cameras; }
-    const w = world, a = actors, px = { x: 0, y: 0, w: 0, h: 0 }, focus = new THREE.Vector3(), dir = new THREE.Vector3();
+    if (dev) { dev.scene = scene; dev.renderer = renderer; dev.THREE = THREE; dev.track = track; dev.cameras = cameras; dev.fx = post; }
+    const w = world, a = actors, fx = post, px = { x: 0, y: 0, w: 0, h: 0 }, focus = new THREE.Vector3(), dir = new THREE.Vector3();
     const lightRight = new THREE.Vector3(), lightUp = new THREE.Vector3();
     lightRight.crossVectors(new THREE.Vector3(0, 1, 0), w.sunDir).normalize(); lightUp.crossVectors(w.sunDir, lightRight).normalize();
     let width = 0, height = 0, ratio = 0, extent = 0; const stats: RendererStats = { calls: 0, triangles: 0, viewports: 0, pixelRatio: 1, geometries: 0, textures: 0, tier };
@@ -109,14 +114,15 @@ export async function createKartRenderer(canvas: HTMLCanvasElement, options: Ren
         try {
           const cw = canvas.clientWidth, ch = canvas.clientHeight;
           if (cw <= 0 || ch <= 0 || frame.viewports.length === 0) return;
-          applyTier(frame.quality);
+          applyTier((dev?.tier as QualityTier | undefined) ?? frame.quality);
           const dpr = Math.min(window.devicePixelRatio || 1, tier === 0 ? 2 : tier === 1 ? 1.5 : 1);
           if (cw !== width || ch !== height || dpr !== ratio) { width = cw; height = ch; ratio = dpr; renderer.setPixelRatio(dpr); renderer.setSize(cw, ch, false); }
           const W = Math.round(cw * dpr), H = Math.round(ch * dpr), gutter = frame.viewports.length > 1 ? Math.max(2, Math.round(3 * dpr)) : 0;
           w.update(frame.race, frame.time, frame.newEvents, frame.moverTime);
           a.update(frame);
           renderer.setViewport(0, 0, cw, ch); renderer.setScissor(0, 0, cw, ch);
-          renderer.setClearColor(DIVIDER, 1); renderer.clear();
+          const glow = fx && tier === 0 && dev?.post !== false ? fx : null;
+          if (glow) glow.begin(W, H, DIVIDER); else { renderer.setClearColor(DIVIDER, 1); renderer.clear(); }
           let calls = 0, tris = 0;
           for (let i = 0; i < frame.viewports.length; i++) {
             const vp = frame.viewports[i];
@@ -129,11 +135,13 @@ export async function createKartRenderer(canvas: HTMLCanvasElement, options: Ren
             if (w.sun.castShadow) fitShadow(camera, vp.kind === 'overview');
             a.beforeViewport(vp.racerId, camera);
             // setViewport/setScissor take CSS pixels; divide the device-pixel rect back out.
-            renderer.setViewport(px.x / dpr, px.y / dpr, px.w / dpr, px.h / dpr); renderer.setScissor(px.x / dpr, px.y / dpr, px.w / dpr, px.h / dpr);
+            if (glow) glow.viewport(px.x, px.y, px.w, px.h);
+            else { renderer.setViewport(px.x / dpr, px.y / dpr, px.w / dpr, px.h / dpr); renderer.setScissor(px.x / dpr, px.y / dpr, px.w / dpr, px.h / dpr); }
             scene.matrixWorldAutoUpdate = i === 0;   // one world-matrix pass per frame, not per viewport
             renderer.render(scene, camera);
             calls = Math.max(calls, renderer.info.render.calls); tris = Math.max(tris, renderer.info.render.triangles);
           }
+          glow?.end(frame.dt);
           stats.calls = calls; stats.triangles = tris; stats.viewports = frame.viewports.length; stats.pixelRatio = dpr; stats.geometries = renderer.info.memory.geometries; stats.textures = renderer.info.memory.textures; stats.tier = tier;
           readyFlag = true;
         } catch (error) { fail(error); }

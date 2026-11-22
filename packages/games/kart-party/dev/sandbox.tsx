@@ -49,8 +49,8 @@ function advance(ms: number) {
 let simClock = performance.now();
 setInterval(() => { const now = performance.now(), steps = paused ? 0 : Math.floor((now - simClock) * 60 / 1000); advance(steps * 1000 / 60); simClock = paused ? now : simClock + steps * 1000 / 60; }, 4);
 setInterval(() => {
-  const wire = JSON.stringify(rules.publicView(race, { nowMs: simulated, phase: 'playing' })), at = serverNowMs();
-  downlink(() => { const view = decodeRaceView(JSON.parse(wire) as RaceWire); listeners.forEach(l => l(view, at)); });
+  const ctx = { nowMs: simulated, phase: 'playing' as const }, wire = JSON.stringify(rules.publicView(race, ctx)), own = JSON.stringify(playerId && rules.playerView(race, playerId, ctx)), at = serverNowMs();
+  downlink(() => { const view = decodeRaceView(JSON.parse(wire) as RaceWire, JSON.parse(own)); listeners.forEach(l => l(view, at)); });
 }, 50);
 const keys = new Set<string>();
 const key = (e: KeyboardEvent) => {
@@ -63,7 +63,7 @@ const key = (e: KeyboardEvent) => {
   send();
 };
 addEventListener('keydown', key); addEventListener('keyup', key);
-(window as unknown as { __kart: unknown }).__kart = { race, settings, truth, view: () => decodeRaceView(rules.publicView(race, { nowMs: simulated, phase: 'playing' })), setInput: (v: Partial<Input>) => { Object.assign(input, v); send(); }, step: (s: number) => advance(s * 1000), pause: (p: boolean) => { paused = p; }, ready: false };
+(window as unknown as { __kart: unknown }).__kart = { race, settings, truth, view: () => decodeRaceView(rules.publicView(race, { nowMs: simulated, phase: 'playing' }), playerId ? rules.playerView(race, playerId, { nowMs: simulated, phase: 'playing' }) : null), setInput: (v: Partial<Input>) => { Object.assign(input, v); send(); }, step: (s: number) => advance(s * 1000), pause: (p: boolean) => { paused = p; }, ready: false };
 
 function App() {
   const [view, setView] = useState<{ v: RaceView; t: number } | null>(null), signal = useMemo(() => new AbortController().signal, []);

@@ -29,11 +29,13 @@ export function partyAwards(racers: readonly RacerView[], limit = 4) {
   return out;
 }
 const bestLap = (r: RacerView) => r.lapTimes.length ? Math.min(...r.lapTimes) : null;
+/** Standings columns on a wide screen: a 64-racer table is four short columns, not one that scrolls for pages. */
+const columns = (rows: number) => rows > 48 ? 4 : rows > 20 ? 3 : rows > 12 ? 2 : 1;
 
 export function Results({ publicView, playerId }: ResultsViewProps<RaceView>) {
   const race = publicView, rows = [...race.racers].sort((a, b) => a.rank - b.rank), podium = rows.slice(0, 3);
   const me = rows.find(r => r.id === playerId), fastest = Math.min(...rows.map(r => bestLap(r) ?? Infinity));
-  const awards = partyAwards(rows), def = TRACK_DEFS[race.track], mine = awards.find(a => a.racer.id === playerId);
+  const awards = partyAwards(rows), def = TRACK_DEFS[race.track], mine = awards.find(a => a.racer.id === playerId), cols = columns(rows.length), per = Math.ceil(rows.length / cols);
   return <section className="kp2-results" aria-label="Race results">
     <header className="kp2-results-head">
       <small>{def?.name ?? 'Race'} · {race.laps} {race.laps === 1 ? 'lap' : 'laps'} · {race.speedClass}cc</small>
@@ -44,22 +46,22 @@ export function Results({ publicView, playerId }: ResultsViewProps<RaceView>) {
         {mine && <span className="kp2-results-me-award"><small>{mine.award.title}</small><b>{mine.award.blurb(mine.value)}</b></span>}
       </p>}
     </header>
-    <ol className="kp2-podium" aria-label="Podium">
+    <ol className={`kp2-podium ${cols > 1 ? 'is-dense' : ''}`} aria-label="Podium">
       {[podium[1], podium[0], podium[2]].map((r, i) => r && <li key={r.id} className={`kp2-step kp2-step-${r.rank} ${r.id === playerId ? 'is-me' : ''}`} style={{ '--c': r.color, order: i } as CSSProperties}>
         <Portrait index={r.character}/><b>{r.name}</b><small>{rideLabel(r)}</small>
         <span className="kp2-step-block kp-numeral"><span>{r.rank}<sup>{ordinalSuffix(r.rank)}</sup></span></span>
       </li>)}
     </ol>
-    <div className="kp2-results-body">
-      <table className="kp2-table">
+    <div className={`kp2-results-body ${cols > 1 ? 'is-dense' : ''}`}>
+      <div className={`kp2-tables ${cols === 4 ? 'is-four' : ''}`} style={{ '--cols': cols } as CSSProperties}>{Array.from({ length: cols }, (_, c) => <table key={c} className="kp2-table">
         <thead><tr><th scope="col">#</th><th scope="col">Racer</th><th scope="col">Time</th><th scope="col">Best lap</th></tr></thead>
-        <tbody>{rows.map(r => { const lap = bestLap(r); return <tr key={r.id} className={`${r.id === playerId ? 'is-me' : ''} ${r.bot ? 'is-cpu' : ''}`} style={{ '--c': r.color } as CSSProperties}>
+        <tbody>{rows.slice(c * per, (c + 1) * per).map(r => { const lap = bestLap(r); return <tr key={r.id} className={`${r.id === playerId ? 'is-me' : ''} ${r.bot ? 'is-cpu' : ''}`} style={{ '--c': r.color } as CSSProperties}>
           <td className="kp-numeral">{r.rank}</td>
           <td><span className="kp2-table-racer"><Portrait index={r.character}/><span><b>{r.name}{r.bot && <em> CPU</em>}</b><small>{rideLabel(r)}</small></span></span></td>
           <td className="kp-numeral">{r.finishTime === null ? 'DNF' : formatTime(r.finishTime)}</td>
           <td className={`kp-numeral ${lap !== null && lap === fastest ? 'is-fastest' : ''}`}>{lap === null ? '—' : formatTime(lap)}</td>
         </tr>; })}</tbody>
-      </table>
+      </table>)}</div>
       {awards.length > 0 && <ul className="kp2-awards" aria-label="Party awards">{awards.map(({ award, racer, value }) => <li key={award.title} className={racer.id === playerId ? 'is-me' : ''} style={{ '--c': racer.color } as CSSProperties}>
         <Portrait index={racer.character}/><span><small>{award.title}</small><b>{racer.name}</b><em>{award.blurb(value)}</em></span>
       </li>)}</ul>}

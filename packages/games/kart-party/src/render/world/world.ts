@@ -32,7 +32,8 @@ export type World = {
   dispose(): void;
 };
 
-export function buildWorld(track: Track, assets: KartAssets, quality: QualityTier, anisotropy: number): World {
+/** `grid`: how many start boxes to paint (the size of the field). */
+export function buildWorld(track: Track, assets: KartAssets, quality: QualityTier, anisotropy: number, grid = 10): World {
   const theme = THEMES[track.def.theme], seed = hashString(track.def.id), kit = new TextureKit(anisotropy);
   const group = new THREE.Group(); group.name = 'world';
   const hf = buildHeightfield(track, theme.terrain, seed, quality === 2 ? 6 : 4);   // space: only the camera's floor
@@ -60,7 +61,7 @@ export function buildWorld(track: Track, assets: KartAssets, quality: QualityTie
   const river = hf.canyons.length && !space ? waterMaterial(theme, kit) : null;
   if (river && !theme.water) { river.color.set(0x2f9e9c); river.opacity = 0.93; }
   if (river) group.add(riverMesh(hf, river));
-  const trackMeshes = buildTrackMeshes(track, theme, hf, kit, water);
+  const trackMeshes = buildTrackMeshes(track, theme, hf, kit, water, grid);
   group.add(trackMeshes.group);
   const clone = (name: string) => assets.clone(name);
   const gantry = buildGantry(track, theme, kit, clone); group.add(gantry.group);

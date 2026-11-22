@@ -12,8 +12,8 @@ import type { Input, KartBodyId, LobbyChoice, Race, RaceEvent, Racer, RacerStats
 
 export const COUNTDOWN_SECONDS = 3.5;      // time starts at -3.5: "Ready", then 3, 2, 1 on whole seconds, GO at 0
 export const FINISH_CELEBRATION = 3.5;     // seconds of scene time after the last human finishes
-export const MAX_EVENTS = 40;
-export const MAX_RACERS = 10;
+export const MAX_EVENTS = 40;             // recent events kept (4 per racer on grids past ten: a full field makes ~100 a second)
+export const MAX_RACERS = 64;             // the room's seat ceiling (party-contract MAX_ROOM_PLAYERS)
 const HOP_AIR = .5;                        // longer than any drift hop: only real jumps count as airtime
 export const NEUTRAL_INPUT: Input = { steer: 0, drift: false, brake: false, item: false, hop: 0, fire: 0, seq: 0 };
 
@@ -38,7 +38,7 @@ export function createRace(settings: Settings, players: readonly RacePlayer[], s
   }
   for (const { p, i } of order) { const c = picks[i]; entrants.push({ id: p.id, name: p.name, color: p.color, bot: false, character: c ? c.character : freeCharacter(), kart: c?.kart ?? 'zoomer' }); }
   const racers: Racer[] = entrants.map((e, slot) => {
-    const g = gridSlot(track, slot);
+    const g = gridSlot(track, slot, entrants.length);
     return { ...createKartState(g.x, g.y, g.z, g.heading, track), ...e, connected: true, lap: 0, checkpoint: 0, progress: -track.length + g.d, rank: slot + 1,
       finishTime: null, lapTimes: [], lapStart: 0, item: null, itemCount: 0, rollT: 0, trailing: false, lastSeq: 0, honkT: 0, stats: emptyStats(),
       ai: e.bot ? { lane: 0, mistakeT: 0, itemDelay: 0, driftHold: 0, targetD: 0 } : null };
@@ -48,15 +48,30 @@ export function createRace(settings: Settings, players: readonly RacePlayer[], s
     firstFinish: null, endAt: null, cooldowns: { thunder: 0, comet: 0 }, chaos: createChaos(settings.chaos) };
 }
 
+/** A first-corner pile-up on a crowded grid makes hundreds of bumps and position swaps a second. Screens voice and draw at most
+ * one per racer in this many seconds (audio/cues.ts REPEAT), so the repeats are not recorded: an overtake when that racer just had
+ * one, a bump when both karts just had one. Grids of up to twelve keep every event. */
+const QUIET: Partial<Record<RaceEvent['type'], number>> = { bump: .25, overtake: .5 };
+function repeated(race: Race, event: Omit<RaceEvent, 'id' | 't'>, quiet: number) {
+  let a = false, b = event.type !== 'bump';
+  for (let i = race.events.length - 1; i >= 0 && race.events[i].t > race.time - quiet && !(a && b); i--) {
+    const e = race.events[i]; if (e.type !== event.type) continue;
+    a ||= e.racer === event.racer || e.other === event.racer; b ||= e.racer === event.other || e.other === event.other;
+  }
+  return a && b;
+}
 export function pushEvent(race: Race, event: Omit<RaceEvent, 'id' | 't'>) {
+  const quiet = race.racers.length > 12 ? QUIET[event.type] : undefined;
+  if (quiet && repeated(race, event, quiet)) return;
   race.events.push({ id: ++race.serial, t: Math.round(race.time * 1000) / 1000, ...event });
-  if (race.events.length > MAX_EVENTS) race.events.splice(0, race.events.length - MAX_EVENTS);
+  const keep = Math.max(MAX_EVENTS, race.racers.length * 4);
+  if (race.events.length > keep) race.events.splice(0, race.events.length - keep);
 }
 /** Deterministic random number from the race's PRNG state. */
 export const raceRandom = (race: Race) => nextRandom(race);
 
 export function paramsFor(race: Race, racer: Racer): KartParams {
-  return chaosParams(kartParams(racer.character, racer.kart, race.speedClass, racer.bot ? CPU_SKILL[race.difficulty] * botSkill(race, racer) : 1), race.chaos.kind);
+  return chaosParams(kartParams(racer.character, racer.kart, race.speedClass, racer.bot ? CPU_SKILL[race.difficulty] * botSkill(race, racer) : 1, race.racers.length), race.chaos.kind);
 }
 
 export function honk(race: Race, id: string) {
@@ -83,7 +98,7 @@ export function stepRace(race: Race, inputs: ReadonlyMap<string, Input>, dt: num
     if (!racer.bot) racer.lastSeq = input.seq;
     if (race.phase === 'racing' && racer.finishTime === null) handleItemInput(race, racer, input, track);
     const beforeD = racer.d, wasRespawning = racer.respawnT > 0;
-    for (const e of stepKart(racer, input, params[i], track, dt, { time: race.time, phase: race.phase, drafters: drafters.filter((_, j) => j !== i), gravity: chaosGravity(race.chaos.kind) })) {
+    for (const e of stepKart(racer, input, params[i], track, dt, { time: race.time, phase: race.phase, drafters, self: i, gravity: chaosGravity(race.chaos.kind) })) {
       pushEvent(race, { type: e.type, racer: racer.id, ...(e.value !== undefined ? { value: e.value } : {}) });
       if (e.type === 'fall') beginRespawn(racer);
       if (e.type === 'mini-turbo') { racer.stats.miniTurbos++; if (e.value === 3) racer.stats.purpleTurbos++; }

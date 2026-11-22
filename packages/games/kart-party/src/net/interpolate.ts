@@ -17,10 +17,10 @@ import type { Entity, KartState, RaceView, RacerView } from '../sim/types';
 /** Continuous KartState fields; everything else (flags, tiers, counters) comes from the newer state. */
 export const KART_LERP_FIELDS = ['x', 'y', 'z', 'vx', 'vy', 'vz', 'steer', 'air', 'lateral', 'driftCharge', 'hopT', 'boostT', 'boostPower', 'slipT', 'slipCharge',
   'trickT', 'spinT', 'tumbleT', 'starT', 'shieldT', 'inkT', 'shockT', 'respawnT', 'invulnT', 'stallT'] as const satisfies readonly (keyof KartState)[];
-const RACER_EXTRA = ['progress', 'rollT', 'honkT'] as const satisfies readonly (keyof RacerView)[];
+const RACER_EXTRA = ['rollT', 'honkT'] as const satisfies readonly (keyof RacerView)[];
 const ENTITY_LERP = ['x', 'y', 'z', 'vx', 'vy', 'vz', 't', 'fuse'] as const satisfies readonly (keyof Entity)[];
 /** Fields that may be negative; every other lerped field is a timer/charge and is clamped at 0 when extrapolating. */
-const SIGNED = new Set<string>(['x', 'y', 'z', 'vx', 'vy', 'vz', 'steer', 'lateral', 'progress']);
+const SIGNED = new Set<string>(['x', 'y', 'z', 'vx', 'vy', 'vz', 'steer', 'lateral']);
 
 function blendFields<T extends object>(out: T, a: T, b: T, t: number, fields: readonly string[]) {
   const o = out as Record<string, number>, x = a as Record<string, number>, y = b as Record<string, number>;

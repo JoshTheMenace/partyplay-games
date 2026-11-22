@@ -50,7 +50,7 @@ export function padMaterial() {
 
 export type TrackMeshes = { group: THREE.Group; pads: THREE.ShaderMaterial; water: THREE.Material | null };
 
-export function buildTrackMeshes(track: Track, theme: ThemeStyle, hf: Heightfield, kit: TextureKit, water: THREE.Material | null): TrackMeshes {
+export function buildTrackMeshes(track: Track, theme: ThemeStyle, hf: Heightfield, kit: TextureKit, water: THREE.Material | null, grid = 10): TrackMeshes {
   const group = new THREE.Group(); group.name = 'track';
   const L = track.length, S = track.samples;
   // Gaps and loop footprints (the loop's ribbon replaces the road there) carry no road, lines or pillars.
@@ -171,8 +171,8 @@ export function buildTrackMeshes(track: Track, theme: ThemeStyle, hf: Heightfiel
   const start = rowsAlong(track, L - 1.25, 1.25, 0.5), SS = start.map(d => sampleAt(track, d));
   geo(mats.checker).grid(start.length, 2, (i, c, o) => { const s = SS[i], lat = c ? s.halfWidth : -s.halfWidth; put(o, s, lat, 0.018, lat / 1.6, (i / (start.length - 1)) * 2.5 / 1.6); });
   const paint = geo(mats.paint);
-  for (let slot = 0; slot < 10; slot++) {
-    const g = gridSlot(track, slot);
+  for (let slot = 0; slot < grid; slot++) {
+    const g = gridSlot(track, slot, grid);
     const box = (a0: number, a1: number, l0: number, l1: number) => {
       const s0 = sampleAt(track, g.d + a0), s1 = sampleAt(track, g.d + a1);
       paint.grid(2, 2, (row, c, o) => { const ss = row ? s1 : s0; put(o, ss, g.lateral + (c ? l1 : l0), 0.014, 0, 0); });

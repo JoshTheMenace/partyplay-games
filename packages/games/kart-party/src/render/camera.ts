@@ -197,13 +197,17 @@ export class CameraRig {
 }
 
 /** Chooses who a watching TV follows: the leader, held at least `hold` seconds per shot; cuts early
- * when the followed racer disconnects, and a few seconds after they finish (so the finish swing plays). */
+ * when the followed racer disconnects, and a few seconds after they finish (so the finish swing plays).
+ * A crowded grid (more than CROWD still racing) is a broadcast: until the final lap the shots rotate between the leader,
+ * the closest fight for position in the front half, and a spotlight that works its way through the whole field, so
+ * thirty people watching one TV all get their turn on it. */
+const CROWD = 8;
 export class Director {
   followId: string | null = null;
   shot: Shot = 'chase';
-  private since = -Infinity; private finishSeen: number | null = null; private shots = 0;
+  private since = -Infinity; private finishSeen: number | null = null; private shots = 0; private spot = 0;
   constructor(readonly hold = 6, readonly celebrate = 3.5) {}
-  reset() { this.followId = null; this.since = -Infinity; this.finishSeen = null; this.shots = 0; this.shot = 'chase'; }
+  reset() { this.followId = null; this.since = -Infinity; this.finishSeen = null; this.shots = 0; this.spot = 0; this.shot = 'chase'; }
   update(race: RaceView | null, now: number): string | null {
     if (!race || race.racers.length === 0) return this.followId = null;
     let leader: RacerView | null = null, anyLeader = race.racers[0], current: RacerView | null = null, racing = 0;
@@ -217,10 +221,20 @@ export class Director {
     // A disconnect cuts only when there is someone else to show (else every frame would re-cut to them).
     let cut = !current || (!current.connected && leader.id !== current.id);
     if (!cut && this.finishSeen !== null && racing > 0 && now - this.finishSeen >= this.celebrate) cut = true;
-    if (!cut && now - this.since >= this.hold && leader.id !== this.followId && (!current || current.finishTime === null)) cut = true;
-    if (cut) { this.followId = leader.id; this.since = now; this.finishSeen = leader.finishTime !== null ? now : null; this.shots++; this.shot = this.pickShot(race); }
+    const crowd = racing > CROWD && race.phase === 'racing' && leader.lap !== race.laps;
+    if (!cut && now - this.since >= this.hold && (leader.id !== this.followId || crowd) && (!current || current.finishTime === null)) cut = true;
+    if (cut) { const next = crowd ? this.story(race, leader) : leader; this.followId = next.id; this.since = now; this.finishSeen = next.finishTime !== null ? now : null; this.shots++; this.shot = this.pickShot(race); }
     else if (now - this.since >= this.hold * 1.6 && this.finishSeen === null) { this.since = now; this.shots++; this.shot = this.pickShot(race); }
     return this.followId;
+  }
+  private story(race: RaceView, leader: RacerView): RacerView {
+    const live = race.racers.filter(r => r.finishTime === null && r.connected !== false).sort((a, b) => a.rank - b.rank), kind = this.shots % 3;
+    if (kind === 1) {   // the chaser in the tightest gap of the front half
+      let best = live[1], gap = Infinity;
+      for (let i = 1; i < Math.ceil(live.length / 2); i++) { const g = Math.hypot(live[i].x - live[i - 1].x, live[i].z - live[i - 1].z); if (g < gap) { gap = g; best = live[i]; } }
+      return best;
+    }
+    return kind === 2 ? live[Math.floor(++this.spot * .618034 % 1 * live.length)] : leader;   // golden-ratio steps visit every rank
   }
   private pickShot(race: RaceView): Shot {
     if (race.phase === 'countdown') return 'chase';

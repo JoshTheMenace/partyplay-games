@@ -91,7 +91,7 @@ export class KartPredictor {
     this.sent = keep < 0 ? [] : this.sent.slice(keep);
     this.fallback = view.time + clamp((serverNowMs - snapshotTime) / 1000, 0, .5) + ASSUMED_UPLINK - nowMs / 1000;
     const drafters = view.racers.filter(r => r.id !== this.racerId).map(r => ({ x: r.x, z: r.z, x0: r.x, z0: r.z, vx: r.vx, vz: r.vz, heading: r.heading, speed: Math.hypot(r.vx, r.vz) }));
-    this.auth = { kart: kartFromView(racer), time: view.time, phase: view.phase, racer, params: chaosParams(kartParams(racer.character, racer.kart, view.speedClass, 1), view.chaos?.kind ?? null), gravity: chaosGravity(view.chaos?.kind ?? null), drafters, snapshotTime, at: nowMs };
+    this.auth = { kart: kartFromView(racer), time: view.time, phase: view.phase, racer, params: chaosParams(kartParams(racer.character, racer.kart, view.speedClass, 1, view.racers.length), view.chaos?.kind ?? null), gravity: chaosGravity(view.chaos?.kind ?? null), drafters, snapshotTime, at: nowMs };
     this.dirty = true;
   }
 

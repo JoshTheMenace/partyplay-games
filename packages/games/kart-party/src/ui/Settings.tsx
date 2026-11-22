@@ -6,6 +6,8 @@ import type { Settings } from '../sim/types';
 import { TrackShape } from './Minimap';
 
 export const DEFAULT_SETTINGS: Settings = { track: 'palm-bay', laps: 3, speedClass: 100, difficulty: 'normal', gridSize: 8, items: 'normal', views: 'auto', chaos: 'on' };
+/** Grid sizes on offer (any 1–64 is valid; a room with more people than the grid races them all). */
+const GRIDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 16, 24, 32, 48, 64];
 /** The set-pieces only Rainbow Road has, listed on its finale card. */
 const FINALE = ['Star rings', 'Springs', 'Low gravity', 'Pinball bumpers', 'Loop-the-loop'];
 type Option<V> = { value: V; label: ReactNode; note?: string };
@@ -53,11 +55,11 @@ export function SettingsPanel({ settings: raw, onChange, disabled }: SettingsVie
         { value: 'on', label: 'Chaos', note: 'About every 20 seconds a surprise hits everyone: moon gravity, banana storms, mega karts and more.' },
         { value: 'wild', label: 'Total chaos', note: 'Surprises every 10 seconds or so. Nobody is safe.' },
         { value: 'off', label: 'Off', note: 'Classic racing. No surprises.' }]} {...props}/>
-      <Choice name="gridSize" label="Grid size" wide options={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => ({ value: n, label: n,
-        note: n === 1 ? 'Humans only, no CPUs.' : `CPUs fill the grid up to ${n} racers.` }))} {...props}/>
+      <Choice name="gridSize" label="Grid size" wide options={GRIDS.map(n => ({ value: n, label: n,
+        note: n === 1 ? 'Humans only, no CPUs.' : `CPUs fill the grid up to ${n} racers.${n > 12 ? ' A big pack: boxes refill faster and the start grid goes wide.' : ''}` }))} {...props}/>
       <Choice name="views" label="Where people race" wide options={[
         { value: 'auto', label: 'Auto', note: 'Up to 4 players share the TV in split screen. With 5 or more, each phone shows its own race and the TV follows the action.' },
-        { value: 'tv', label: 'TV split', note: 'Everyone races on the TV (small tiles with 5+ players). Phones are controllers only.' },
+        { value: 'tv', label: 'TV split', note: 'Everyone races on the TV (small tiles with 5+ players). Phones are controllers only. With more than 10 players everyone races on their own phone.' },
         { value: 'personal', label: 'Own phone', note: 'Each phone shows its own 3D race with touch controls. The TV becomes a live broadcast.' }]} {...props}/>
     </div>
   </div>;

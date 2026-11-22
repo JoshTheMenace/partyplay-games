@@ -2,10 +2,10 @@
  * renderer, and one SharedHud over the whole display. Sizes use container-query units, so a HUD scales
  * with its own viewport (full screen, split in two or four, or a phone). */
 import { useRef, type CSSProperties } from 'react';
-import { angleDelta, headingOf } from '../sim/math';
+import { angleDelta, clamp, headingOf } from '../sim/math';
 import { sampleAt } from '../sim/track';
 import { getTrack } from '../tracks/index';
-import type { RaceEvent, RaceView, RacerView } from '../sim/types';
+import type { HitKind, RaceEvent, RaceView, RacerView } from '../sim/types';
 import { CHAOS } from '../sim/chaos';
 import { PHYSICS } from '../sim/physics';
 import type { ViewRect } from '../render/types';
@@ -92,14 +92,49 @@ function CountdownBig({ time }: { time: number }) {
   </div>;
 }
 
-function Tower({ race, highlight }: { race: RaceView; highlight: readonly string[] }) {
-  const rows = [...race.racers].sort((a, b) => a.rank - b.rank);
-  return <ol className="kp2-tower" aria-label="Standings">
-    {rows.map(r => <li key={r.id} className={`${highlight.includes(r.id) ? 'is-me' : ''} ${r.bot ? 'is-cpu' : ''}`} style={{ '--c': r.color } as CSSProperties}>
+/** A crowded grid can't list everyone: the tower keeps the leaders and, below them, a short window that follows `around`
+ * (the one racer this screen is about) or pages through the rest of the field every few seconds, so every name gets its turn. */
+const TOWER_HEAD = 8, TOWER_PAGE = 6;
+function Tower({ race, highlight, around }: { race: RaceView; highlight: readonly string[]; around?: string }) {
+  const all = [...race.racers].sort((a, b) => a.rank - b.rank), big = all.length > TOWER_HEAD + TOWER_PAGE;
+  const me = around ? all.findIndex(r => r.id === around) : -1, pages = Math.ceil((all.length - TOWER_HEAD) / TOWER_PAGE);
+  const from = Math.min(all.length - TOWER_PAGE, me >= TOWER_HEAD ? Math.max(TOWER_HEAD, me - 2) : TOWER_HEAD + Math.floor(Math.max(0, race.time) / 4) % pages * TOWER_PAGE);
+  const rows = big ? [...all.slice(0, TOWER_HEAD), ...all.slice(from, from + TOWER_PAGE)] : all;
+  return <ol className={`kp2-tower ${big ? 'is-big' : ''}`} aria-label="Standings">
+    {rows.map((r, i) => <li key={r.id} className={`${highlight.includes(r.id) ? 'is-me' : ''} ${r.bot ? 'is-cpu' : ''} ${big && i === TOWER_HEAD ? 'is-window' : ''}`} style={{ '--c': r.color } as CSSProperties}>
       <b className={`kp-numeral kp2-rank-${rankTone(r.rank)}`}>{r.rank}</b><Portrait index={r.character}/><span>{r.name}</span>
       {r.finishTime !== null ? <em className="kp2-tower-flag" aria-label="Finished"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1v14" stroke="currentColor" strokeWidth="2"/><path d="M4 2h10v8H4z" fill="#fff6e5"/><path d="M4 2h2.5v2H4zM9 2h2.5v2H9zM6.5 4H9v2H6.5zM11.5 4H14v2h-2.5zM4 6h2.5v2H4zM9 6h2.5v2H9zM6.5 8H9v2H6.5zM11.5 8H14v2h-2.5z" fill="#05071a"/></svg></em> : r.lap === race.laps && race.laps > 1 ? <em className="kp2-tower-final" aria-label="Final lap">F</em> : null}
     </li>)}
   </ol>;
+}
+
+/** Broadcast extras for a watching TV: the leader's lap and the race clock, and a short feed of what just happened. */
+const HIT_VERB: Record<HitKind, string> = { spin: 'spun out', tumble: 'blasted', shock: 'zapped', ink: 'inked' };
+type FeedLine = { id: number; t: number; color: string; text: string };
+function useFeed(race: RaceView) {
+  const mem = useRef<{ seen: number; leader: string; lines: FeedLine[] }>({ seen: -1, leader: '', lines: [] }).current;
+  const name = (id?: string) => race.racers.find(r => r.id === id), leader = race.racers.find(r => r.rank === 1);
+  if (race.serial < mem.seen) { mem.seen = -1; mem.leader = ''; mem.lines = []; }   // a new race
+  const add = (id: number, who: RacerView | undefined, text: string) => { if (who) mem.lines.push({ id, t: race.time, color: who.color, text }); };
+  for (const e of race.events) if (e.id > mem.seen) {
+    mem.seen = e.id;
+    const a = name(e.other), v = name(e.racer);
+    if (e.type === 'hit' && a && v && a !== v && e.value !== 2 && e.value !== 3) add(e.id, a, `${a.name} ${HIT_VERB[(['spin', 'tumble', 'shock', 'ink'] as const)[e.value ?? 0]]} ${v.name}`);
+    else if (e.type === 'thunder') add(e.id, v, `${v?.name} zapped everyone ahead`);
+    else if (e.type === 'comet') add(e.id, v, a ? `${v?.name} sent a comet after ${a.name}` : `${v?.name} launched a comet`);
+    else if (e.type === 'finish' && (e.value ?? 9) <= 3) add(e.id, v, `${v?.name} finishes ${e.value}${ordinalSuffix(e.value ?? 0)}!`);
+  }
+  if (leader && race.phase === 'racing' && race.time > 4 && leader.id !== mem.leader) { if (mem.leader && leader.finishTime === null) add(-race.serial - 1, leader, `${leader.name} takes the lead!`); mem.leader = leader.id; }
+  mem.lines = mem.lines.filter(l => race.time - l.t < 4).slice(-3);
+  return mem.lines;
+}
+function Broadcast({ race }: { race: RaceView }) {
+  const lines = useFeed(race), leader = race.racers.find(r => r.rank === 1);
+  if (race.phase !== 'racing' || !leader) return null;
+  return <div className="kp2-cast">
+    <div className="kp2-cast-status kp-numeral"><small>Lap</small>{clamp(leader.lap, 1, race.laps)}<span>/{race.laps}</span><i>{formatTime(race.time)}</i></div>
+    <ul className="kp2-cast-feed" aria-live="off">{lines.map(l => <li key={l.id} style={{ '--c': l.color } as CSSProperties}>{l.text}</li>)}</ul>
+  </div>;
 }
 
 /** The active chaos event: a colour wash over everything, a big announcement, then a shrinking timer chip. */
@@ -123,7 +158,8 @@ export function SharedHud({ race, followId, mode }: SharedHudProps) {
   return <div className={`kp2-shared kp2-shared-${layout}`}>
     <CountdownBig time={race.time}/>
     <ChaosHud race={race}/>
-    {layout === 'full' && <Tower race={race} highlight={highlight}/>}
+    {layout === 'full' && <Tower race={race} highlight={highlight} around={mode === 'split' ? humans[0]?.id : undefined}/>}
+    {mode === 'spectator' && <Broadcast race={race}/>}
     {spare && <div className="kp2-spare" style={{ left: `${spare.x * 100}%`, top: `${spare.y * 100}%`, width: `${spare.w * 100}%`, height: `${spare.h * 100}%` }}>
       <Tower race={race} highlight={highlight}/><Minimap race={race} highlight={highlight} className="kp2-minimap-spare"/>
     </div>}

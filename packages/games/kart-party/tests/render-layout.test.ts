@@ -73,6 +73,18 @@ test('director follows the leader, holds ≥ 6 s, cuts on disconnect and after a
   assert.equal(d.update(null, 11), null);
 });
 
+test('director on a crowded grid: rotates leader, closest battle and a spotlight that reaches everyone, then the leader on the final lap', () => {
+  const field = (lap = 1) => ({ ...race(Array.from({ length: 32 }, (_, i) => racer(`r${i}`, i + 1, { x: 0, z: -i * 10 + (i === 5 ? 9 : 0), lap }))), laps: 3 }) as RaceView;
+  const d = new Director(6, 3.5), seen = new Set<string>();
+  assert.equal(d.update(field(), 0), 'r0', 'opens on the leader');
+  assert.equal(d.update(field(), 3), 'r0', 'holds the shot');
+  assert.equal(d.update(field(), 6.1), 'r5', 'then the chaser in the tightest gap of the front half');
+  for (let t = 12.2; t < 12.2 + 6.1 * 300; t += 6.1) seen.add(d.update(field(), t)!);
+  assert.equal(seen.size, 32, 'every racer gets a shot');
+  assert.equal(d.update(field(3), 12.2 + 6.1 * 301), 'r0', 'the final lap belongs to the leader');
+  assert.equal(d.update(field(3), 12.2 + 6.1 * 305), 'r0');
+});
+
 test('director holds on a disconnected leader when nobody else is racing (no per-frame cuts)', () => {
   const d = new Director(6, 3.5), done = race([racer('a', 1, { finishTime: 50, connected: false }), racer('b', 2, { finishTime: 55 })]);
   assert.equal(d.update(done, 0), 'a');

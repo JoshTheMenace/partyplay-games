@@ -37,6 +37,12 @@ export const HIT_KINDS: readonly HitKind[] = ['spin', 'tumble', 'shock', 'ink'];
 /** Seconds the roulette spins before the item can be used. */
 export const ROULETTE_SECONDS = 1.4;
 export const BOX_RESPAWN = 2.5, BOX_RADIUS = 2, MAX_PEELS = 12;
+/** A row of four boxes can't arm a pack of forty: past eight racers boxes come back faster (32 racers 0.6 s, 64 racers 0.4 s). */
+export const boxRespawn = (racers: number) => BOX_RESPAWN * clamp(8 / racers, .16, 1);
+/** Thunder and the comet hit the whole field at once, so a big grid waits longer between them (×2 at 32 racers, ×3 at 48+). */
+export const fieldCooldown = (racers: number) => clamp(racers / 16, 1, 3);
+/** Peels allowed on the course at once: twelve, or one per two racers on a big grid (at most 32). */
+export const maxPeels = (racers: number) => clamp(Math.ceil(racers / 2), MAX_PEELS, 32);
 export const THUNDER_COOLDOWN = 20, COMET_COOLDOWN = 25, SHIELD_SECONDS = 12, STAR_SECONDS = 7.5;
 export const blastRadius = (e: Entity) => e.bounces;
 /** Owner of the peels Chaos mode drops from the sky (no racer is credited with their hits). */
@@ -94,7 +100,7 @@ export function collectBoxes(race: Race, track: Track, dt: number): void {
     if (race.boxes[i] > 0) return;
     for (const r of race.racers) {
       if (r.respawnT > 0 || r.finishTime !== null || (r.x - box.x) ** 2 + (r.z - box.z) ** 2 > BOX_RADIUS ** 2 || Math.abs(r.y + .6 - box.y) > 2.2) continue;
-      race.boxes[i] = BOX_RESPAWN;
+      race.boxes[i] = boxRespawn(race.racers.length);
       pushEvent(race, { type: 'pickup', racer: r.id, value: i, x: box.x, z: box.z });
       if (r.item === null && r.rollT <= 0) startRoll(race, r);
       break;
@@ -142,7 +148,8 @@ function useItem(race: Race, r: Racer, track: Track) {
       const back = wasTrailing ? TRAIL_BACK : 3;
       spawn(race, track, 'peel', r.id, r.x - fx * back, r.y + .5, r.z - fz * back, 0, 1.5, 0);
       const peels = race.entities.filter(e => e.kind === 'peel');
-      if (peels.length > MAX_PEELS) { const drop = new Set(peels.slice(0, peels.length - MAX_PEELS)); race.entities = race.entities.filter(e => !drop.has(e)); }
+      const max = maxPeels(race.racers.length);
+      if (peels.length > max) { const drop = new Set(peels.slice(0, peels.length - max)); race.entities = race.entities.filter(e => !drop.has(e)); }
       break;
     }
     case 'bouncer': { const v = Math.max(45, top * 1.9); spawn(race, track, 'bouncer', r.id, r.x + fx * 2.4, r.y, r.z + fz * 2.4, fx * v, 0, fz * v); break; }
@@ -159,12 +166,12 @@ function useItem(race: Race, r: Racer, track: Track) {
     case 'comet': {
       const target = leaderFor(race, r.id), from = r.loop > 0 ? pointAt(track, r.d, r.lateral) : r;   // from a loop: launched off the road below
       spawn(race, track, 'comet', r.id, from.x, from.y + 2, from.z, r.vx, 6, r.vz, target?.id ?? null);
-      race.cooldowns.comet = COMET_COOLDOWN;
+      race.cooldowns.comet = COMET_COOLDOWN * fieldCooldown(race.racers.length);
       pushEvent(race, { type: 'comet', racer: r.id, ...(target ? { other: target.id } : {}) });
       break;
     }
     case 'thunder': case 'ink': {
-      if (item === 'thunder') { race.cooldowns.thunder = THUNDER_COOLDOWN; pushEvent(race, { type: 'thunder', racer: r.id }); }
+      if (item === 'thunder') { race.cooldowns.thunder = THUNDER_COOLDOWN * fieldCooldown(race.racers.length); pushEvent(race, { type: 'thunder', racer: r.id }); }
       const dealt = r.stats.hitsDealt;   // one zap of the whole field counts as one hit landed
       for (const v of race.racers) if (v !== r && v.rank < r.rank && v.finishTime === null) strike(race, v, item === 'thunder' ? 'shock' : 'ink', r.id);
       r.stats.hitsDealt = Math.min(r.stats.hitsDealt, dealt + 1);

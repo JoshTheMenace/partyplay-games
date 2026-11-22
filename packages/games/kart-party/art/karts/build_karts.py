@@ -14,7 +14,9 @@ from mathutils import Vector as V, Matrix, Euler
 GAME = Path(__file__).resolve().parents[2]
 OUT, PREV = GAME / 'public/models', GAME / 'public/models/previews'
 ARGS = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
-QA = Path('/tmp/kartqa')
+import os
+QA = Path(os.environ.get('KART_QA', '/tmp/kartqa'))
+ONLY = next((a.split('=')[1] for a in ARGS if a.startswith('--only=')), None)   # re-render one kart's preview (and its QA views) only
 bpy.ops.wm.read_factory_settings(use_empty=True)
 
 # ---------------------------------------------------------------- materials
@@ -468,7 +470,7 @@ KARTS = {
     'zoomer': dict(front=(.86, .38, .32, .98), rear=(.88, .46, .42, -.92), seat=(0, .50, -.2)),
     'bolt': dict(front=(.89, .37, .30, 1.0), rear=(.9, .42, .36, -.95), seat=(0, .44, -.24)),
     'tank': dict(front=(.84, .50, .48, .95), rear=(.84, .52, .50, -.92), seat=(0, .64, -.14)),
-    'roadster': dict(front=(.86, .34, .3, 1.08), rear=(.88, .38, .38, -.98), seat=(0, .42, -.26)),
+    'roadster': dict(front=(.86, .33, .28, 1.04), rear=(.88, .37, .36, -.96), seat=(0, .44, -.24)),
 }
 
 def kart_zoomer(g, seat):
@@ -555,33 +557,46 @@ def kart_tank(g, seat):
     column(g, seat, (0, .82, .62))
 
 def kart_roadster(g, seat):
-    # After the next-generation Tesla Roadster revealed 2026-10-15: a low wedge with an open cockpit (removable roof off),
-    # thin LED headlights, a full-width tail light, an active rear wing and four horizontal cold-gas thruster nozzles.
-    g.add(body_loft([(-1.56, .26, .62, .72), (-1.34, .2, .72, .84), (-.95, .16, .76, .86), (-.7, .15, .72, .82), (-.55, .14, .52, .78, 4, .9),
-                     (0, .14, .5, .76, 4, .88), (.36, .15, .64, .8), (.7, .16, .64, .86), (1.05, .17, .6, .86), (1.4, .19, .47, .76),
-                     (1.56, .22, .36, .54), (1.64, .25, .3, .26, 3)], 22, 5, .94), PAINT)
-    ell(g, GLASS, (0, .62, .52), (.6, .17, .26), (-24, 0, 0), 14, 6)                          # wraparound windshield
-    g.add(tube(spline([(.58, .6, .4), (.42, .76, .48), (0, .8, .5), (-.42, .76, .48), (-.58, .6, .4)], 2), .022, 6), TRIM)  # screen frame
+    # After the next-generation Tesla Roadster (shown again 2026-10-15), squashed to kart proportions: a closed-wheel body with
+    # tall haunches over all four wheels, a smooth grille-less nose with thin LED blades at its corners, a low raked screen
+    # (roof panel off), twin buttresses running back from the headrest, a short active spoiler, a full-width light bar
+    # across a flat tail and four cold-gas thruster nozzles in the dark panel under it. No logos.
+    FW, RW = KARTS['roadster']['front'], KARTS['roadster']['rear']
+    g.add(body_loft([(-1.58, .3, .66, .9, 4), (-1.52, .24, .7, .95), (-1.44, .21, .73, .97),        # flat, full-width tail
+                     (-1.37, .2, .75, .67), (-.96, .19, .78, .67), (-.58, .17, .72, .67),              # waist between the rear wheels
+                     (-.5, .15, .5, .98), (0, .15, .5, .97), (.58, .15, .52, .98),                    # doors (the tub floor; rails below)
+                     (.66, .16, .66, .64), (1.04, .18, .62, .64), (1.4, .2, .55, .64),                # hood between the front wheels
+                     (1.47, .2, .51, .93), (1.57, .22, .45, .87), (1.64, .27, .38, .62, 3)], 24, 4.5, .93), PAINT)
     for k in (1, -1):
-        for z, cy, R in ((1.08, .34, .42), (-.98, .38, .46)):                                   # flared fenders over the wheels
-            arc = [V((k * .86, cy + R * math.sin(t), z + R * math.cos(t))) for t in (math.radians(a) for a in range(14, 167, 25))]
-            g.add(tube(arc, .2, 6, flat=.3, up=(0, 1, 0)), PAINT)
-        g.add(rbox(.12, .12, .62, .08, 1), PAINT, xf((k * .76, .32, .05)))                           # door sills
-        g.add(rbox(.13, .03, .64, .02, 1), TRIM, xf((k * .75, .17, .05)))                          # black lower trim
-        ell(g, TRIM, (k * .78, .42, -.5), (.05, .09, .2), seg=8, rings=4)                         # side intake ahead of the rear wheel
-        g.add(tube([(k * .62, .5, 1.26), (k * .32, .4, 1.56)], .026, 6), LAMP)                      # thin LED headlights
-        g.add(tube([(k * .34, .74, -1.18), (k * .34, .9, -1.26), (k * .3, 1.0, -1.3)], .03, 6), TRIM)   # swan-neck wing struts
-        g.add(rbox(.02, .12, .2, .018, 1), PAINT, xf((k * .84, .98, -1.32), (-8, 0, 0)))           # wing end plates
-    g.add(rbox(.84, .028, .2, .024, 1), PAINT, xf((0, 1.02, -1.32), (-10, 0, 0)))                  # active rear wing, deployed
-    g.add(rbox(.84, .01, .04, .008, 1), TRIM, xf((0, 1.05, -1.24), (-10, 0, 0)))
-    g.add(rbox(.66, .022, .02, .02, 1), TAIL, xf((0, .63, -1.555)))                                 # full-width tail light
-    g.add(rbox(.6, .08, .12, .05, 1), TRIM, xf((0, .3, -1.5)))                                    # rear diffuser
-    for x in (.48, .18, -.18, -.48):                                                               # four cold-gas thruster nozzles
-        g.add(tube([(x, .43, -1.44), (x, .43, -1.58)], lambda u: .045 + .03 * u, 10, caps=False), CHROME)
-        ell(g, TRIM, (x, .43, -1.56), (.06, .06, .02), seg=10, rings=3)
-    g.add(rbox(.5, .03, .14, .03, 1), TRIM, xf((0, .2, 1.5)))                                    # front splitter
-    seat_back(g, seat, .44)
-    column(g, seat, (0, .6, .5))
+        g.add(body_loft([(-.52, .3, .71, .2), (-.1, .3, .66, .19), (.62, .3, .66, .2)], 10, 4), PAINT, xf((k * .78, 0, 0)))  # door tops
+        for x, r, w, z in (FW, RW):                                                             # haunches: a shell over each wheel
+            R = r + .09; a0 = math.radians(11)
+            arc = [V((k * x, r + R * math.sin(t), z + R * math.cos(t))) for t in (math.radians(a) for a in range(11, 172, 20))]
+            g.add(tube(arc, w / 2 + .075, 6, flat=.3, up=(0, math.sin(a0), math.cos(a0))), PAINT)
+            lip = [V((k * (x + w / 2 + .05), r + (R - .05) * math.sin(t), z + (R - .05) * math.cos(t))) for t in (math.radians(a) for a in range(8, 175, 24))]
+            g.add(tube(lip, .034, 4, caps=False), TRIM)                                          # dark arch lip
+        g.add(body_loft([(-1.42, .72, .77, .07), (-1.1, .74, .88, .13), (-.76, .72, .99, .15), (-.5, .7, 1.05, .15)], 10, 2.6), PAINT, xf((k * .36, 0, 0)))  # buttress
+        g.add(box(.02, .04, .5), TRIM, xf((k * .985, .2, .04)), smooth=False)                    # black sill
+        ell(g, TRIM, (k * .96, .47, -.42), (.035, .1, .13), seg=8, rings=4)                       # side scoop ahead of the rear wheel
+        g.add(tube([(k * .86, .45, 1.49), (k * .64, .43, 1.585), (k * .42, .41, 1.635)], .02, 5), LAMP)   # thin LED blade
+        ell(g, PAINT, (k * .88, .8, .56), (.075, .04, .05), seg=8, rings=4)                       # mirror
+        g.add(tube([(k * .72, .7, .58), (k * .84, .79, .56)], .016, 4, caps=False), TRIM)
+        g.add(box(.02, .035, .02), TRIM, xf((k * .5, .76, -1.5)), smooth=False)                  # spoiler struts
+    ell(g, GLASS, (0, .72, .6), (.62, .19, .23), (-30, 0, 0), 14, 6)                              # low wraparound screen
+    g.add(tube(spline([(.6, .7, .5), (.44, .87, .56), (0, .91, .58), (-.44, .87, .56), (-.6, .7, .5)], 2), .02, 5), TRIM)
+    g.add(rbox(.2, .012, .3, .01, 1), GLASS, xf((0, .82, -.98), (9, 0, 0)))                      # rear glass between the buttresses
+    g.add(rbox(.82, .02, .085, .018, 1), PAINT, xf((0, .805, -1.5), (-12, 0, 0)))                # active spoiler, raised a hand's width
+    g.add(box(.9, .034, .012), TRIM, xf((0, .6, -1.598)), smooth=False)                          # full-width light bar on a black band
+    g.add(box(.87, .014, .008), TAIL, xf((0, .6, -1.612)), smooth=False)
+    g.add(rbox(.66, .1, .02, .018, 1), TRIM, xf((0, .41, -1.582)))                               # dark tail panel
+    for x in (.45, .16, -.16, -.45):                                                              # four cold-gas thruster nozzles
+        g.add(tube([(x, .43, -1.57), (x, .43, -1.63)], lambda u: .04 + .022 * u, 8, caps=False), CHROME)
+        ell(g, TRIM, (x, .43, -1.6), (.045, .045, .015), seg=8, rings=3)
+    for x in (.3, 0, -.3): g.add(box(.012, .05, .08), TRIM, xf((x, .26, -1.56)), smooth=False)   # diffuser strakes
+    g.add(box(.4, .028, .012), TRIM, xf((0, .29, 1.642)), smooth=False)                          # low intake slit
+    g.add(rbox(.8, .012, .07, .01, 1), TRIM, xf((0, .2, 1.58)))                                   # front splitter
+    seat_back(g, seat, .46)
+    column(g, seat, (0, .66, .5))
 
 def kart(kid):
     spec = KARTS[kid]; seat = V(spec['seat'])
@@ -591,14 +606,14 @@ def kart(kid):
     for tag, (x, r, w, z) in (('f', spec['front']), ('r', spec['rear'])):
         for k, side in ((1, 'l'), (-1, 'r')):
             c = V((k * x, r, z)); g = Geo()
-            tyre(g, r, w, knobs=10 if kid == 'tank' else 0, seg=18 if kid in ('tank', 'roadster') else 20, rim=CHROME if kid != 'bolt' else TRIM, rim_frac=.72 if kid in ('bolt', 'roadster') else .6, side=k)
+            tyre(g, r, w, knobs=10 if kid == 'tank' else 0, seg=18 if kid in ('tank', 'roadster') else 20, rim=CHROME if kid != 'bolt' else TRIM, rim_frac=.8 if kid == 'roadster' else .72 if kid == 'bolt' else .6, side=k)
             g.v = [p + c for p in g.v]
             parent = empty(f'kart_{kid}_steer_{tag}{side}', root, c) if tag == 'f' else root
             mesh(f'kart_{kid}_wheel_{tag}{side}', g, parent, c)
     sw = Geo(); steering_wheel(sw); sw.v = [p * CS for p in sw.v]
     mesh(f'kart_{kid}_steering', sw, root, seat + WHEEL * CS, tilt=WHEEL_TILT)
     empty(f'kart_{kid}_seat', root, seat)
-    ex = {'zoomer': (.23, .6, -1.5), 'bolt': (.125, .42, -1.53), 'tank': (.48, 1.38, -1.4), 'roadster': (.48, .43, -1.6)}[kid]
+    ex = {'zoomer': (.23, .6, -1.5), 'bolt': (.125, .42, -1.53), 'tank': (.48, 1.38, -1.4), 'roadster': (.3, .43, -1.64)}[kid]
     for k, side in ((1, 'l'), (-1, 'r')): empty(f'kart_{kid}_exhaust_{side}', root, (k * ex[0], ex[1], ex[2]))
     return root
 
@@ -688,11 +703,12 @@ def shot(path, res=(256, 256), cam_pos=(3.9, 2.7, 5.0), target=(0, .75, 0), lens
 PREV.mkdir(parents=True, exist_ok=True)
 CHAR_CAM, CHAR_TGT, KART_CAM, KART_TGT = (2.5, 2.25, 3.6), (0, 1.18, .12), (3.3, 2.2, 4.1), (.12, .4, .3)
 KART_PREVIEW = {'zoomer': '#e63b3b', 'bolt': '#2f7dff', 'tank': '#ffb020', 'roadster': '#c8102e'}
-for i in range(8):
+for i in range(0 if ONLY is None else 8, 8):
     paint.default_value = (*lin(shade(CHARS[i][3], .95) if CHARS[i][1] != 'penguin' else '#4a8cff'), 1)
     seat_on('kart_zoomer', f'char_{i}'); show('kart_zoomer', f'char_{i}')
     shot(PREV / f'char-{i}.png', cam_pos=CHAR_CAM, target=CHAR_TGT, lens=50)
 for k, c in KART_PREVIEW.items():
+    if ONLY not in (None, k): continue
     paint.default_value = (*lin(c), 1); roots[f'kart_{k}'].location = (0, 0, 0); show(f'kart_{k}')
     shot(PREV / f"kart-{k}.png", cam_pos=KART_CAM, target=KART_TGT, lens=54)
 
@@ -706,8 +722,14 @@ def sheet(files, cols, out, cell=256):
         cellv = canvas[y0:y0 + cell, c * cell:(c + 1) * cell]; cellv[..., :3] = px[..., :3] * a + cellv[..., :3] * (1 - a)
     out_img = bpy.data.images.new('sheet', W, H, alpha=True); out_img.pixels = canvas.ravel().tolist()
     out_img.filepath_raw = str(out); out_img.file_format = 'PNG'; out_img.save()
-QA.mkdir(exist_ok=True)
-sheet([PREV / f'char-{i}.png' for i in range(8)] + [PREV / f'kart-{k}.png' for k in KARTS], 4, QA / 'karts-sheet.png')
+QA.mkdir(parents=True, exist_ok=True)
+if ONLY is None: sheet([PREV / f'char-{i}.png' for i in range(8)] + [PREV / f'kart-{k}.png' for k in KARTS], 4, QA / 'karts-sheet.png')
+elif '--qa' in ARGS:  # one kart with a driver from the angles a race shows it: chase, side, front and above
+    scene.cycles.samples = 24
+    seat_on(f'kart_{ONLY}', 'char_1'); show(f'kart_{ONLY}', 'char_1'); paint.default_value = (*lin(KART_PREVIEW[ONLY]), 1)
+    for name, cam_pos, tgt in (('chase', (0, 2.6, -6.4), (0, .9, 0)), ('rear34', (3.6, 2.2, -4.6), (0, .6, 0)), ('side', (5.6, 1.3, .2), (0, .7, 0)), ('front34', (3.4, 1.9, 4.6), (0, .6, .2)), ('top', (.2, 7, -.6), (0, 0, 0))):
+        shot(QA / f'{ONLY}-{name}.png', (448, 448), cam_pos, tgt, 50)
+    print('QA_DONE'); sys.exit(0)
 
 if '--qa' in ARGS:  # chase-camera readability line-ups (not shipped)
     scene.cycles.samples = 32

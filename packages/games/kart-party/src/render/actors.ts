@@ -16,11 +16,15 @@ import { COLORS, CONFETTI, FX, rainbow, rnd, TIER } from './actors/presets';
 import { Skids } from './actors/skids';
 import type { Actors, ActorsFactory, CameraCue, FrameInput, RacerPose } from './types';
 
+/** A crowded grid draws only this many karts in full; the rest (and nothing within FULL_NEAR metres) use the coarse stand-in. */
+const FULL_KARTS = 10, FULL_NEAR = 14, CROWD = 12;
+/** One-view screens (a phone, the watching TV) name the nearest few human rivals. */
+const SOLO_TAGS = 5;
 /** Particle capacity / effect budget / skid quads per quality tier. */
 const CAPACITY = [5000, 3500, 1800], BUDGET = [1, .65, .35], SKIDS = [2400, 1600, 800];
 const NITRO = new THREE.Color(0x3fb4ff).multiplyScalar(1.4), PAD = new THREE.Color(0xffb020).multiplyScalar(1.4), ROCKET = new THREE.Color(0xff4a10).multiplyScalar(1.5);
 
-type Racer = { kart: KartActor; extras: KartExtras; tag: NameTag; cue: CameraCue; lines: number; confetti: number; trail: number; prevShock: number; kartId: string; camD: number; tagKey: number; tagA: number; lift: Map<string, number> };
+type Racer = { kart: KartActor; extras: KartExtras; tag: NameTag; cue: CameraCue; lines: number; confetti: number; trail: number; prevShock: number; kartId: string; camD: number; tagKey: number; tagA: number; lift: Map<string, number>; human: boolean };
 const nearest = (a: Racer, b: Racer) => a.tagKey - b.tagKey, tagAt = new THREE.Vector3(), fwd = new THREE.Vector3();
 /** View depth of `c` along the camera's forward axis `fwd` (set per viewport). */
 const depth = (c: THREE.Vector3, cam: THREE.Vector3) => (c.x - cam.x) * fwd.x + (c.y - cam.y) * fwd.y + (c.z - cam.z) * fwd.z;
@@ -28,7 +32,7 @@ const depth = (c: THREE.Vector3, cam: THREE.Vector3) => (c.x - cam.x) * fwd.x + 
 export const createActors: ActorsFactory = ({ track, scene, assets, quality }) => {
   const group = new THREE.Group(); group.name = 'kart-actors';
   const fx = new Fx(CAPACITY[quality]), skids = new Skids(SKIDS[quality]), items = new ItemActors(track, assets, fx);
-  const shadows = new BlobShadows(64), lines = new SpeedLines(56);
+  const shadows = new BlobShadows(160), lines = new SpeedLines(56);
   group.add(skids.mesh, shadows.mesh, items.group, fx.group, lines.mesh);
   scene.add(group);
   const racers = new Map<string, Racer>();
@@ -36,7 +40,7 @@ export const createActors: ActorsFactory = ({ track, scene, assets, quality }) =
   const env: FxEnv = { fx, dt: 0, time: 0, theme: track.def.theme, reducedMotion: false };
   const shadowAlpha = quality === 2 ? 1 : .7;
   let viewportCount = 1, reduced = false, time = 0, frameDt = 0;
-  const tagOrder: Racer[] = [], stack = new TagStack();
+  const tagOrder: Racer[] = [], stack = new TagStack(), byDistance: number[] = [];
   const idle: CameraCue = { shake: 0, fovKick: 0 };
   const shake = (id: string | undefined, amount: number) => { const r = id ? racers.get(id) : undefined; if (r) r.cue.shake = Math.min(1, Math.max(r.cue.shake, amount)); };
   const kick = (id: string, deg: number) => { const r = racers.get(id); if (r) r.cue.fovKick = Math.max(r.cue.fovKick, deg); };
@@ -51,7 +55,7 @@ export const createActors: ActorsFactory = ({ track, scene, assets, quality }) =
       const kart = new KartActor(assets, rv.id, rv.kart, rv.character, quality < 2);
       group.add(kart.root);
       const tag = new NameTag(); group.add(tag.sprite);
-      racers.set(rv.id, { kart, extras: new KartExtras(kart, assets, group), tag, cue: { shake: 0, fovKick: 0 }, lines: 0, confetti: 0, trail: 0, prevShock: 0, kartId: `${rv.kart}:${rv.character}`, camD: 0, tagKey: 0, tagA: 0, lift: new Map() });
+      racers.set(rv.id, { kart, extras: new KartExtras(kart, assets, group, rv.kart === 'roadster'), tag, cue: { shake: 0, fovKick: 0 }, lines: 0, confetti: 0, trail: 0, prevShock: 0, kartId: `${rv.kart}:${rv.character}`, camD: 0, tagKey: 0, tagA: 0, lift: new Map(), human: !rv.bot });
     }
     if (racers.size > frame.race.racers.length) for (const id of racers.keys()) if (!frame.race.racers.some(r => r.id === id)) remove(id);
   }
@@ -96,10 +100,11 @@ export const createActors: ActorsFactory = ({ track, scene, assets, quality }) =
       } break;
       case 'boost-pad': if (r && K) { r.extras.tint(PAD, 1); for (let i = fx.burst(16); i > 0; i--) fx.emit(FX.sparkle, K.center.x + rnd(-1, 1), K.center.y + rnd(-.3, .8), K.center.z + rnd(-1, 1), pose ? pose.kart.vx * .3 : 0, rnd(1, 3), pose ? pose.kart.vz * .3 : 0, COLORS.gold, 1.2); } break;
       case 'rocket-start': if (r && K) {
-        r.extras.tint(ROCKET, 1.3); kick(ev.racer, 5);
-        for (const e of K.exhaust) for (let i = fx.burst(24); i > 0; i--) fx.emit(FX.fire, e.x, e.y, e.z, -K.forward.x * rnd(4, 9) + rnd(-2, 2), rnd(0, 2), -K.forward.z * rnd(4, 9) + rnd(-2, 2), COLORS.fire, .45);
+        const electric = pose?.view.kart === 'roadster';   // no exhaust to light: a blast of cold vapour instead of fire
+        r.extras.tint(electric ? NITRO : ROCKET, 1.3); kick(ev.racer, 5);
+        for (const e of K.exhaust) for (let i = fx.burst(24); i > 0; i--) fx.emit(electric ? FX.wind : FX.fire, e.x, e.y, e.z, -K.forward.x * rnd(4, 9) + rnd(-2, 2), rnd(0, 2), -K.forward.z * rnd(4, 9) + rnd(-2, 2), electric ? COLORS.wind : COLORS.fire, electric ? 1.4 : .45);
       } break;
-      case 'stall': if (K) for (const e of K.exhaust) for (let i = fx.burst(16); i > 0; i--) fx.emit(FX.smoke, e.x, e.y, e.z, -K.forward.x * rnd(1, 3), rnd(1, 3), -K.forward.z * rnd(1, 3), COLORS.darkSmoke, 1.6); break;
+      case 'stall': if (K && pose?.view.kart !== 'roadster') for (const e of K.exhaust) for (let i = fx.burst(16); i > 0; i--) fx.emit(FX.smoke, e.x, e.y, e.z, -K.forward.x * rnd(1, 3), rnd(1, 3), -K.forward.z * rnd(1, 3), COLORS.darkSmoke, 1.6); break;
       case 'trick': if (K && at) { K.trick(); for (let i = fx.burst(18); i > 0; i--) fx.emit(FX.sparkle, at.x + rnd(-1.2, 1.2), at.y + rnd(0, 1.5), at.z + rnd(-1.2, 1.2), pose ? pose.kart.vx * .8 : 0, rnd(0, 2), pose ? pose.kart.vz * .8 : 0, rainbow(Math.random(), .65, 2), rnd(1, 1.6)); } break;
       case 'slipstream': if (K && at && pose) for (let i = fx.burst(30); i > 0; i--) { const a = Math.random() * Math.PI * 2; fx.emit(FX.wind, at.x + Math.cos(a) * 1.4, at.y + .3 + Math.sin(a), at.z + Math.sin(a) * 1.4, pose.kart.vx * .2, 0, pose.kart.vz * .2, COLORS.wind, 1.4); } break;
       case 'pickup': if (K) K.kick(1.2); break;
@@ -170,7 +175,7 @@ export const createActors: ActorsFactory = ({ track, scene, assets, quality }) =
     update(frame) {
       const dt = frameDt = frame.dt; time = frame.time; reduced = frame.reducedMotion; viewportCount = frame.viewports.length;
       fx.budget = BUDGET[frame.quality];
-      kartFrame.dt = env.dt = dt; kartFrame.time = env.time = time; kartFrame.reducedMotion = env.reducedMotion = reduced;
+      kartFrame.dt = env.dt = dt; kartFrame.time = env.time = time; kartFrame.reducedMotion = env.reducedMotion = reduced; kartFrame.revving = frame.race.phase === 'countdown';
       sync(frame);
       const top = TOP_SPEED[frame.race.speedClass] ?? 29;
       shadows.begin();
@@ -226,10 +231,17 @@ export const createActors: ActorsFactory = ({ track, scene, assets, quality }) =
       // corner or covers it; alongside our kart they stay solid. With no kart followed: anything within 4 m.
       camera.getWorldDirection(fwd);
       const lo = oc ? depth(oc, cam) - 2.8 : 4;
+      // Crowded grid: full rigs for the nearest few only. One-view screens tag the nearest human rivals.
+      byDistance.length = 0;
+      for (const r of racers.values()) { const c = r.kart.center; byDistance.push(r.camD = Math.hypot(c.x - cam.x, c.y - cam.y, c.z - cam.z)); }
+      const crowd = racers.size > CROWD, detail = crowd ? Math.max(FULL_NEAR, byDistance.sort((a, b) => a - b)[FULL_KARTS - 1]) : Infinity;
+      let tagReach = 55;
+      if (!split) { byDistance.length = 0; for (const [id, r] of racers) if (r.human && id !== racerId) byDistance.push(r.camD); if (byDistance.length > SOLO_TAGS) tagReach = Math.min(tagReach, byDistance.sort((a, b) => a - b)[SOLO_TAGS - 1] + .01); }
       for (const [id, r] of racers) {
-        const c = r.kart.center, d = Math.hypot(c.x - cam.x, c.y - cam.y, c.z - cam.z), f = id === racerId ? 1 : smoothstep(lo, lo + 1.4, depth(c, cam));
-        r.kart.fade(f); r.kart.pivot.visible = !r.kart.hidden && f > .03;
-        r.camD = d; r.tagA = split && id !== racerId && r.kart.root.visible ? (1 - smoothstep(70, 120, d)) * smoothstep(3, 6, d) * f : 0;
+        const c = r.kart.center, d = r.camD, f = id === racerId ? 1 : smoothstep(lo, lo + 1.4, depth(c, cam));
+        r.kart.fade(f); r.kart.pivot.visible = !r.kart.hidden && f > .03; r.kart.detail(id === racerId || d <= detail);
+        const reach = split ? (1 - smoothstep(70, 120, d)) : r.human && d <= tagReach ? 1 - smoothstep(40, 55, d) : 0;
+        r.tagA = id !== racerId && r.kart.root.visible ? reach * smoothstep(3, 6, d) * f : 0;
         if (r.tagA > .02) tagOrder.push(r); else r.tag.place(0, 0, 0, 0);
       }
       // Tags that would cover a nearer one stack above it (up to 3 rows, eased per view) or hide.

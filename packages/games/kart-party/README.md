@@ -1,6 +1,6 @@
 # Kart Party
 
-A ground-up rebuild (2026-09-23) of the PartyPlay kart racer: 1–10 racers, five courses (the last is the Rainbow Road finale), eight Blender-made characters and four karts (including the thruster-equipped Roadster), drift mini-turbos, items and CPU rivals. [DESIGN.md](DESIGN.md) is the design, tuning targets and module map.
+A ground-up rebuild (2026-09-23) of the PartyPlay kart racer: 1–64 racers (32 at once is the size that is tested end to end; 64 is the room's ceiling), five courses (the last is the Rainbow Road finale), eight Blender-made characters and four karts (including the thruster-equipped Roadster), drift mini-turbos, items and CPU rivals. [DESIGN.md](DESIGN.md) is the design, tuning targets and module map.
 
 ## Layout
 
@@ -12,6 +12,7 @@ A ground-up rebuild (2026-09-23) of the PartyPlay kart racer: 1–10 racers, fiv
 - `src/ui/`, `src/audio/`: HUD, controller, lobby, settings, results; synthesized sound and music playback.
 - `art/karts/`, `art/props/`: Blender build scripts for `public/models/karts.glb` and `props.glb`.
 - `dev/`: local sandbox that runs a race straight into the real scene, plus actor and UI harnesses. It is not part of the platform build.
+- `tools/`: `bench.ts` prints simulation and snapshot cost at 10, 32 and 64 racers; `room-bot.ts` is the hook that makes the platform's socket bots pick racers, steer, drift and fire items.
 
 ## Play and validate
 
@@ -25,7 +26,14 @@ npm run build:isolated -- kart-check
 npm run serve:isolated -- kart-check 4340
 ```
 
-Sandbox: `npx vite --config packages/games/kart-party/dev/vite.config.mjs --port 5190`, then open `http://localhost:5190/games/kart-party/?track=palm-bay&players=1&cpus=7`. Rebuild models with `blender --background --python art/karts/build_karts.py` or `art/props/build_props.py`.
+Sandbox: `npx vite --config packages/games/kart-party/dev/vite.config.mjs --port 5190`, then open `http://localhost:5190/games/kart-party/?track=palm-bay&players=1&cpus=7` (`cpus` up to 63, `kart=roadster`, `tier=0|1|2` to pin graphics quality, `metrics=1` for draw calls and triangles). Rebuild models with `blender --background --python art/karts/build_karts.py` (`-- --only=roadster` re-renders one kart's preview) or `art/props/build_props.py`.
+
+A crowd, from the platform root with an isolated server running and a room created from a real host page:
+
+```sh
+node --import tsx scripts/qa/room-bots.ts --port 4421 --code ABCDEF --players 31 --stats 5 --hook packages/games/kart-party/tools/room-bot.ts
+node --import tsx packages/games/kart-party/tools/bench.ts palm-bay 60
+```
 
 ## How to race
 
@@ -33,12 +41,14 @@ Open **Settings** in the PartyPlay header, then toggle **Tilt steering**. Sound 
 
 The kart accelerates by itself. Steer, then hop into a drift: holding it through a corner charges blue, orange and purple mini-turbos. Tap drift on GO for a rocket start, and again off a ramp lip for a trick boost. Item boxes give position-weighted items; hold the item button to drag a peel or shell behind you as a shield. Keyboard: arrows or A/D steer, Space or Shift drift, E item, S brake, H honk, F fly (Roadster).
 
-**The Roadster** is modelled on the next-generation Tesla Roadster revealed on 2026-10-15: the fiercest launch, slightly less grip, and cold-gas thrusters. Tap **FLY** for a one-second burst that lifts the car over shells and karts; the tank holds five bursts (the ~5 s of thrust reported at the reveal) and refills while the wheels are down.
+**The Roadster** is modelled on the next-generation Tesla Roadster: a low closed-wheel body with tall haunches, thin LED blades on a smooth nose, a full-width light bar and four thruster nozzles across the tail. It drives like an electric car: instant torque off the line and out of slow corners, planted and heavy, with no exhaust (its boosts are cold-gas jets). Tap **FLY** for a one-second burst that lifts the car over shells and karts; the tank holds five bursts (the ~5 s of thrust reported at the reveal) and refills while the wheels are down.
 
 **Chaos** (a race setting: Off, Chaos, Total chaos) drops a surprise on the whole field every ~20 s (or ~10 s): Moon Gravity, Banana Storm, Item Frenzy, Mega Karts, Hyper Speed or Underdog Stars, each with a banner, a colour wash and a siren.
 
 Rainbow Road adds its own tricks: fly or drive through a star ring for a boost, hit a spring pad to launch (tap drift in the air for a trick), float through the low-gravity Moon Hop, and dodge the sliding pinball bumpers.
 
-Up to four humans share the TV in split screen. With five or more (or **Personal views**), each racer sees their own phone while the TV follows the race.
+Up to four humans share the TV in split screen. With five or more (or **Own phone**), each racer sees their own phone while the TV follows the race. More than ten always race on their own phones.
+
+**Big rooms.** A room of up to 64 can race together. The start grid widens to five or six lanes, item boxes refill faster so the pack is armed, a kart that was just hit is left alone a little longer, and thunder and comets come less often. Phones name the nearest rivals above their karts. The TV becomes a broadcast: it cuts between the leader, the closest fight and a spotlight that visits everyone, with a standings tower that pages through the field, the leader's lap and a feed of who hit whom. Full-quality displays also get bloom (boost jets, sparks, neon and the rainbow glow); phones skip it. [DESIGN.md §10](DESIGN.md) has the rules and the measured costs.
 
 Music files in `public/music` are supplied by the project owner and are unchanged.

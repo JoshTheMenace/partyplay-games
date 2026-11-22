@@ -13,7 +13,7 @@ import { character, kartName, ordinalSuffix, Portrait, rankTone, TIER_COLORS } f
 import { useTiltSteering } from './TiltSettings';
 import { CHAOS } from '../sim/chaos';
 
-type Props = GameViewProps<Input, Action, RaceView, null>;
+type Props = GameViewProps<Input, Action, RaceView, unknown>;
 const TIERS = [0, ...PHYSICS.driftTiers];
 /** Haptic patterns (ms) for this racer's own events. */
 const BUZZ: Partial<Record<RaceEventType, number | number[]>> = { hit: [60, 40, 90], 'rocket-start': 25, 'boost-pad': 25, wall: 15, ring: [10, 35, 10, 35, 10], spring: [45, 30, 15], bumper: 30, loop: [15, 60, 25, 60, 40] };

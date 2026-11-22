@@ -220,12 +220,21 @@ export function queryTrack(track: Track, x: number, z: number, hint = -1, y?: nu
     beyond, edge: lateral < 0 ? s.edgeL : s.edgeR, edgeLateral };
 }
 
-/** Starting grid: two staggered columns behind the line. Slot 0 is pole. */
-export function gridSlot(track: Track, slot: number) {
-  const row = Math.floor(slot / 2), side = slot % 2 ? 1 : -1, d = wrap(-8 - row * 6 - (slot % 2) * 3, track.length);
-  const s = sampleAt(track, d), lateral = side * Math.min(3.5, s.halfWidth - 2), p = pointAt(track, d, lateral);
+/** Lanes on the starting grid: two for up to ten racers, then as many as the start straight is wide (2.9 m apart), so a
+ * full field of 64 lines up within ~70 m of the line instead of trailing back 200 m. */
+export function gridColumns(track: Track, racers: number) {
+  if (racers <= 10) return 2;
+  return clamp(Math.ceil(racers / 6), 2, Math.max(2, Math.floor((sampleAt(track, -10).halfWidth * 2 - 3.2) / 2.9) + 1));
+}
+/** Starting grid for `racers` karts: staggered columns behind the line. Slot 0 is pole. */
+export function gridSlot(track: Track, slot: number, racers = 10) {
+  const cols = gridColumns(track, racers), row = Math.floor(slot / cols), col = slot % cols, pitch = cols > 2 ? 5 : 6;
+  const d = wrap(-8 - row * pitch - (col % 2) * pitch / 2, track.length), s = sampleAt(track, d);
+  const lateral = (col / (cols - 1) * 2 - 1) * (cols > 2 ? s.halfWidth - 1.6 : Math.min(3.5, s.halfWidth - 2)), p = pointAt(track, d, lateral);
   return { ...p, d, lateral };
 }
+/** The sample index nearest d: a search hint for queryTrack when only the lap distance is known. */
+export const hintAt = (track: Track, d: number) => Math.round(wrap(d, track.length) / track.spacing) % track.samples.length;
 
 /** Gravity multiplier at d (1 outside every zone). */
 export function gravityScale(track: Track, d: number) { for (const g of track.gravity) if (inSpan(track, g, d)) return g.scale; return 1; }

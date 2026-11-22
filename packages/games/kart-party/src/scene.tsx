@@ -17,9 +17,10 @@ import { getTrack } from './tracks/index';
 import { SharedHud, ViewportHud } from './ui/Hud';
 import { resolveViewMode, screenMode } from './views';
 import { createChaos } from './sim/chaos';
+import { MAX_RACERS } from './sim/race';
 import type { KartState, RaceEvent, RaceView, Settings } from './sim/types';
 
-type Props = SceneViewProps<Settings, RaceView, null>;
+type Props = SceneViewProps<Settings, RaceView, unknown>;
 
 /** Stand-in view while the room prepares (no racers yet): the world and item boxes, camera on the grid. */
 function idleRace(settings: Settings, viewMode: 'tv' | 'personal'): RaceView {
@@ -42,7 +43,9 @@ export default function KartScene(props: Props) {
   const viewports = useMemo(() => planViewports(mode, racerKey ? racerKey.split('\n') : [], props.playerId, followId), [mode, racerKey, props.playerId, followId]);
   const viewportsRef = useRef(viewports); viewportsRef.current = viewports;
   const bufferRef = useRef<RaceBuffer | null>(null), predictorRef = useRef<KartPredictor | null>(null);
-  const showMetrics = useMemo(() => typeof location !== 'undefined' && new URLSearchParams(location.search).has('metrics'), []);
+  const query = useMemo(() => new URLSearchParams(typeof location === 'undefined' ? '' : location.search), []), showMetrics = query.has('metrics');
+  /** `?tier=0|1|2` pins the graphics quality (QA screenshots, or a device that should not adapt). */
+  const pinned = /^[012]$/.test(query.get('tier') ?? '') ? Number(query.get('tier')) as QualityTier : null;
   const predicted = !!props.playerId && (mode === 'personal' || (mode === 'split' && racerKey.split('\n').includes(props.playerId)));
 
   useEffect(() => {
@@ -57,7 +60,7 @@ export default function KartScene(props: Props) {
     const sound = (e: Event) => { audio.muted = !!(e as CustomEvent<{ muted: boolean }>).detail?.muted; if (!audio.muted) audio.unlock(); };
     addEventListener('pointerdown', unlock); addEventListener('keydown', unlock); addEventListener('party-sound', sound);
     const coarse = matchMedia('(pointer: coarse)').matches, reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const governor = new QualityGovernor(3, { initialTier: coarse ? 1 : 0 }), metrics = new FrameMetrics();
+    const governor = new QualityGovernor(3, { initialTier: pinned ?? (coarse ? 1 : 0) }), metrics = new FrameMetrics();
     const director = new Director(), idle = idleRace(p.settings, viewMode);
     const poses = new Map<string, RacerPose>(), pool = new Map<string, { view: RaceView['racers'][number]; kart: KartState }>();
     const newEvents: RaceEvent[] = [], spectatorView: ShotViewport = { rect: { x: 0, y: 0, w: 1, h: 1 }, racerId: null, kind: 'chase', shot: 'chase' };
@@ -92,7 +95,7 @@ export default function KartScene(props: Props) {
           spectatorView.racerId = id; spectatorView.shot = director.shot; vps = spectatorViews;
           if (id !== latestFollow.current) { latestFollow.current = id; setFollowId(id); }
         }
-        const tier = governor.frame(interval, now) as QualityTier;
+        const tier = pinned ?? governor.frame(interval, now) as QualityTier;
         metrics.record(interval);
         frame.race = view; frame.viewports = vps; frame.quality = vps.length > 4 ? 2 : tier; frame.time = now / 1000; frame.dt = Math.min(interval / 1000, 0.1);
         frame.moverTime = mine && predictor ? now / 1000 + predictor.lead() : undefined;   // bumpers where they hit our predicted kart
@@ -111,7 +114,7 @@ export default function KartScene(props: Props) {
       } catch (error) { alive = false; cancelAnimationFrame(raf); latest.current.onError(error); }
     };
     if (mode === 'controls') raf = requestAnimationFrame(loop);
-    else void createKartRenderer(canvas.current!, { track, signal: p.signal, quality: governor.tier as QualityTier, onError: e => { if (alive) latest.current.onError(e); } })
+    else void createKartRenderer(canvas.current!, { track, signal: p.signal, quality: governor.tier as QualityTier, grid: Math.min(MAX_RACERS, Math.max(p.settings.gridSize, p.players.length)), onError: e => { if (alive) latest.current.onError(e); } })
       .then(r => { if (!alive) { r.dispose(); return; } renderer = r; raf = requestAnimationFrame(loop); }, e => { if (alive && !(e instanceof DOMException && e.name === 'AbortError')) latest.current.onError(e); });
     return () => {
       alive = false; cancelAnimationFrame(raf); renderer?.dispose(); audio.dispose(); unsubscribe();
