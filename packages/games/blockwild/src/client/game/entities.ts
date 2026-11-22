@@ -181,6 +181,8 @@ export class Entities {
   onEmit: (kind: EntityEmit, x: number, y: number, z: number, dt: number) => void = () => {};
   /** Called on dragon wing beats, roars and landings (at its body centre). */
   onDragon: (cue: DragonCue, x: number, y: number, z: number) => void = () => {};
+  /** The model players wear: the wild's default, or the city's own figure in Caper City. */
+  playerKey: ModelKey = 'player';
   /** The Ender Dragon being drawn, if any (for the boss-fight camera juice). */
   dragon: { x: number; y: number; z: number } | null = null;
 
@@ -345,12 +347,12 @@ export class Entities {
   private updatePlayer(p: PubPlayer, old: PubPlayer, t: number, dt: number, gen: number) {
     let actor = this.players.get(p.id);
     if (!actor) {
-      const rig = this.models.instance('player');
-      actor = { ...newActor(rig, 1.8), ...newExtras('player'), id: p.id, tag: null, tagDistance: 0, name: '', color: '', shirt: 0xffffff, stepDistance: 0 };
+      const rig = this.models.instance(this.playerKey);
+      actor = { ...newActor(rig, 1.8), ...newExtras(this.playerKey), id: p.id, tag: null, tagDistance: 0, name: '', color: '', shirt: 0xffffff, stepDistance: 0 };
       this.players.set(p.id, actor);
       this.group.add(rig.root);
     }
-    this.refreshRig(actor, 'player');
+    this.refreshRig(actor, this.playerKey);
     const armor = p.armor ?? NO_ARMOR, worn = armorKey(armor);
     if (worn !== actor.extraKey) this.outfit(actor, worn, worn ? wearArmor(actor.rig, armor) : null);
     if (actor.name !== p.name || actor.color !== p.color) {
@@ -377,10 +379,12 @@ export class Entities {
     actor.box[0] = actor.x - 0.3; actor.box[1] = actor.y; actor.box[2] = actor.z - 0.3; actor.box[3] = actor.x + 0.3; actor.box[4] = actor.y + h; actor.box[5] = actor.z + 0.3;
     this.place(actor, this.arrival(actor));
     const root = actor.rig.root;
-    root.visible = !(p.flags & PF.OFFLINE) && !(dead && this.time - actor.deadAt > 1.4) && this.loaded(actor.x, actor.z);
+    // A player in a vehicle is drawn as the vehicle (client/city/rides.ts).
+    root.visible = !(p.flags & (PF.OFFLINE | PF.RIDING)) && !(dead && this.time - actor.deadAt > 1.4) && this.loaded(actor.x, actor.z);
     if (root.visible && !sleeping) this.shade(actor.x, actor.y, actor.z, 0.6);
     if (sleeping) { root.rotation.x = -Math.PI / 2; root.position.y += 0.35; }
     if (dead) root.rotation.z = Math.min(1, (this.time - actor.deadAt) / 0.45) * Math.PI / 2;
+    else if (p.flags & PF.DIZZY) root.rotation.z = Math.sin(this.time * 13) * 0.3;
     this.animateHumanoid(actor, sneaking, !!(p.flags & PF.USING), false);
     if (actor.tag) {
       actor.tag.visible = !sneaking && !dead;

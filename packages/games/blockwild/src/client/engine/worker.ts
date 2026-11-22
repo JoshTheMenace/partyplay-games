@@ -12,11 +12,13 @@ import { computeLight, extractCoreLight, extractVolume, fillRegion, newRegion, n
 import { joinLayers, Mesher } from './mesher';
 import { EMIT_CELL, FILTER_CELL } from './tables';
 import type { ColumnUpdate, FromWorker, Layers, ToWorker } from './types';
+import type { Terrain } from '../../shared/protocol';
 
 const SECTIONS = HEIGHT / CHUNK;
 type Column = { sections: Layers[]; light: Uint8Array };
 
 let seed = 0;
+let terrain: Terrain = 'wild';
 let mesher: Mesher | null = null;
 let capacity = 400;
 /** Chunk cells with edits applied (LRU by Map order). */
@@ -40,7 +42,7 @@ function chunkCells(cx: number, cz: number): Uint16Array | null {
   if (chunk) {
     cells.delete(key);
   } else {
-    chunk = pristine.get(key)?.slice() ?? generateChunk(seed, cx, cz);
+    chunk = pristine.get(key)?.slice() ?? generateChunk(seed, cx, cz, terrain);
     for (const [local, value] of edits.get(key) ?? []) chunk[local] = value;
   }
   cells.set(key, chunk);
@@ -52,7 +54,7 @@ function generatedCell(cx: number, cz: number, local: number) {
   const key = chunkKey(cx, cz);
   let chunk = pristine.get(key);
   if (!chunk) {
-    pristine.set(key, chunk = generateChunk(seed, cx, cz));
+    pristine.set(key, chunk = generateChunk(seed, cx, cz, terrain));
     if (pristine.size > 8) pristine.delete(pristine.keys().next().value!);
   }
   return chunk[local]!;
@@ -201,6 +203,7 @@ self.onmessage = (event: MessageEvent<ToWorker>) => {
   switch (message.type) {
     case 'init': {
       seed = message.seed;
+      terrain = message.terrain ?? 'wild';
       capacity = message.capacity;
       const layers = message.layers;
       mesher = new Mesher(key => layers[key] ?? layers.missing ?? 0);

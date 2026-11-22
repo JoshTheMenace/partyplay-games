@@ -6,6 +6,7 @@ import { feed, readRoster, type RosterPlayer } from '../game/feed';
 import { hud } from '../game/hud';
 import { B, I, itemName } from '../../shared/items';
 import { PF, type Action, type Input, type PrivateView, type View } from '../../shared/protocol';
+import { CityDisplay } from './city';
 import { BossBar, Celebration, useCelebration } from './endgame';
 import { dayPhase, meterIcons, PHASE_LABEL, playerStatus, skyAngle, untilChange } from './format';
 import { ItemIcon, MeterSprite } from './icons';
@@ -59,7 +60,10 @@ function PlayerChip({ player, followed }: { player: RosterPlayer; followed: bool
 /** Rosters up to five get a bottom row of cards, up to twelve a slim side column, and a crowd a wall of chips. */
 const density = (players: number) => players <= 5 ? 'row' : players <= 12 ? 'column' : 'crowd';
 
-export function DisplayView({ publicView: view }: GameViewProps<Input, Action, View, PrivateView>) {
+export function DisplayView(props: GameViewProps<Input, Action, View, PrivateView>) {
+  return props.publicView.mode === 'city' ? <CityDisplay {...props}/> : <WildDisplay {...props}/>;
+}
+function WildDisplay({ publicView: view }: GameViewProps<Input, Action, View, PrivateView>) {
   const roster = useStore(feed, s => s.roster), online = roster.filter(player => !(player.flags & PF.OFFLINE)), party = useCelebration(view);
   // The boss bar shows while the camera follows someone in the End.
   const focus = useStore(hud, s => s.focus), subject = roster.find(player => player.id === focus);

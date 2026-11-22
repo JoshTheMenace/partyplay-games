@@ -1,7 +1,8 @@
 /** Room-flow views: world settings, instructions and the results journal. */
 import { useEffect, useState, type CSSProperties } from 'react';
 import { ArcadeButton, ToggleRow, type InstructionsViewProps, type ResultsViewProps, type SettingsViewProps } from '../../../../../party-ui/src/index';
-import { seatsOf, type Difficulty, type Mode, type Settings, type View } from '../../shared/protocol';
+import { seatsOf, type Difficulty, type Minutes, type Mode, type Settings, type View } from '../../shared/protocol';
+import { CityResults } from './city';
 import { nameList } from './endgame';
 import { awards, formatDistance } from './format';
 
@@ -17,6 +18,10 @@ function Segment<T extends string>({ label, value, options, disabled, onChange }
 }
 const MODES: readonly { value: Mode; label: string; note: string }[] = [
   { value: 'survival', label: 'Survival', note: 'Gather, craft, survive the night' }, { value: 'creative', label: 'Creative', note: 'Every block, flight, no danger' },
+  { value: 'city', label: 'Caper City', note: 'Gigs, wheels and mischief in a big city' },
+];
+const ROUNDS: readonly { value: `${Minutes}`; label: string; note: string }[] = [
+  { value: '0', label: 'Free play', note: 'Until the host ends it' }, { value: '10', label: '10 min', note: 'A quick caper' }, { value: '20', label: '20 min', note: 'One city day' }, { value: '30', label: '30 min', note: 'Time to get rich' },
 ];
 const DIFFICULTIES: readonly { value: Difficulty; label: string; note: string }[] = [
   { value: 'peaceful', label: 'Peaceful', note: 'No monsters' }, { value: 'easy', label: 'Easy', note: 'Gentle nights' }, { value: 'normal', label: 'Normal', note: 'The real thing' },
@@ -30,9 +35,10 @@ const SEEDS: readonly { value: 'random' | 'fixed'; label: string; note: string }
 export function SettingsView({ settings, onChange, disabled }: SettingsViewProps<Settings>) {
   const fixed = settings.seed > 0, [draft, setDraft] = useState(fixed ? String(settings.seed) : '');
   useEffect(() => { if (settings.seed > 0) setDraft(String(settings.seed)); }, [settings.seed]);
-  const valid = /^\d{1,6}$/.test(draft) && Number(draft) >= 1;
+  const valid = /^\d{1,6}$/.test(draft) && Number(draft) >= 1, city = settings.mode === 'city';
   return <div className="bw-world-settings">
-    <Segment label="Mode" value={settings.mode} options={MODES} disabled={disabled} onChange={mode => onChange({ ...settings, mode })}/>
+    <Segment label="Mode" value={settings.mode} options={MODES} disabled={disabled} onChange={mode => onChange(mode === 'city' ? { ...settings, mode, minutes: settings.minutes ?? 0, bonks: settings.bonks ?? true } : { mode, seed: settings.seed, difficulty: settings.difficulty, keepInventory: settings.keepInventory })}/>
+    {city && <Segment label="Round" value={`${settings.minutes ?? 0}`} options={ROUNDS} disabled={disabled} onChange={minutes => onChange({ ...settings, minutes: Number(minutes) as Minutes })}/>}
     {settings.mode === 'survival' && <Segment label="Difficulty" value={settings.difficulty} options={DIFFICULTIES} disabled={disabled} onChange={difficulty => onChange({ ...settings, difficulty })}/>}
     <Segment label="World seed" value={fixed ? 'fixed' : 'random'} options={SEEDS} disabled={disabled}
       onChange={choice => onChange({ ...settings, seed: choice === 'random' ? 0 : valid ? Number(draft) : randomSeed() })}/>
@@ -48,7 +54,8 @@ export function SettingsView({ settings, onChange, disabled }: SettingsViewProps
       </div>
       <small id="bw-seed-help" className={valid ? 'kp-muted' : 'bw-invalid'}>{valid ? 'The same seed always grows the same world.' : 'Use a number from 1 to 999999.'}</small>
     </div>}
-    <ToggleRow label="Keep inventory when you die" checked={settings.keepInventory} disabled={disabled} onChange={keepInventory => onChange({ ...settings, keepInventory })}/>
+    {city ? <ToggleRow label="Players can bonk each other" checked={settings.bonks ?? true} disabled={disabled} onChange={bonks => onChange({ ...settings, bonks })}/>
+      : <ToggleRow label="Keep inventory when you die" checked={settings.keepInventory} disabled={disabled} onChange={keepInventory => onChange({ ...settings, keepInventory })}/>}
   </div>;
 }
 
@@ -58,6 +65,7 @@ export function InstructionsView({ role }: InstructionsViewProps) {
     <p>Everyone explores the same boundless blocky world from their own phone or laptop. This screen follows the action.</p>
     <p>Punch trees, craft tools, dig for iron and diamonds, and get a roof over your heads before the first night.</p>
     <p>Later, brave the Nether, find the stronghold and defeat the Ender Dragon together.</p>
+    <p><b>Caper City</b> is the third mode: a whole city of residents with jobs, vehicles to borrow or buy, gigs for coins and the Watch on your heels when your mischief is seen. This screen shows the map, the most wanted and the richest.</p>
   </div>;
   return <div className="bw-instructions">
     <h2>Survive, mine, craft and build</h2>
@@ -66,12 +74,16 @@ export function InstructionsView({ role }: InstructionsViewProps) {
       <li><b>Keyboard:</b> WASD to move, mouse to look, left click mines, right click places, <kbd>E</kbd> opens your inventory.</li>
       <li>Start by punching a tree. The <b>Next goal</b> hint walks you through the rest, all the way to the Ender Dragon.</li>
       <li>Along the way: trade with villagers, craft armor, wire redstone, and hunt blazes and endermen for the eyes of ender that open the End.</li>
+      <li><b>Caper City:</b> tap the context button (or <kbd>F</kbd>) to get in a vehicle, talk or shop. Job boards pay coins for deliveries. <b>Mine</b> bonks; if someone sees it your Heat rises and the Watch comes. <kbd>M</kbd> or the minimap opens the map.</li>
     </ul>
   </div>;
 }
 
 /** World journal: days survived, world totals, and each explorer's highlights and awards. */
-export function ResultsView({ outcome, publicView, playerId }: ResultsViewProps<View>) {
+export function ResultsView(props: ResultsViewProps<View>) {
+  return props.publicView.mode === 'city' ? <CityResults {...props}/> : <WildResults {...props}/>;
+}
+function WildResults({ outcome, publicView, playerId }: ResultsViewProps<View>) {
   const view = publicView, journal = view.journal ?? [];
   const players = seatsOf(view.who), victory = view.victory;
   const won = awards(journal, players.filter(player => victory?.by.includes(player.name)).map(player => player.id));

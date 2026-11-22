@@ -23,7 +23,9 @@ export type Pivot = 'head' | 'body' | 'arm_l' | 'arm_r' | 'leg_l' | 'leg_r' | 'l
  */
 export type RigKind = 'humanoid' | 'quadruped' | 'spider' | 'creeper' | 'chicken' | 'ghast' | 'block' | 'blaze' | 'enderman' | 'silverfish' | 'dragon' | 'crystal';
 /** Mob keys, the player, and one villager model per profession (VILLAGER_MODELS[p]; plain 'villager' is the farmer). */
-export type ModelKey = typeof MOB_TYPES[number]['key'] | 'player' | typeof VILLAGER_MODELS[number];
+export type ModelKey = typeof MOB_TYPES[number]['key'] | 'player' | 'citizen' | typeof VILLAGER_MODELS[number];
+/** Models that exist only in code (no GLB is fetched for them): the Caper City figure players wear in the city. */
+const PROCEDURAL = new Set<ModelKey>(['citizen']);
 
 /** One placed entity model: pivots for animation, per-instance materials for light/hurt tinting. */
 export type Rig = {
@@ -38,7 +40,7 @@ export type Rig = {
 };
 
 export const RIG_KIND: Record<ModelKey, RigKind> = {
-  player: 'humanoid', zombie: 'humanoid', skeleton: 'humanoid', creeper: 'creeper', spider: 'spider', cow: 'quadruped', pig: 'quadruped', sheep: 'quadruped', chicken: 'chicken',
+  player: 'humanoid', citizen: 'humanoid', zombie: 'humanoid', skeleton: 'humanoid', creeper: 'creeper', spider: 'spider', cow: 'quadruped', pig: 'quadruped', sheep: 'quadruped', chicken: 'chicken',
   villager: 'humanoid', zombified_piglin: 'humanoid', ghast: 'ghast', tnt: 'block',
   villager_librarian: 'humanoid', villager_armorer: 'humanoid', villager_toolsmith: 'humanoid', villager_cleric: 'humanoid', villager_mason: 'humanoid',
   blaze: 'blaze', enderman: 'enderman', ender_dragon: 'dragon', end_crystal: 'crystal', silverfish: 'silverfish',
@@ -284,7 +286,32 @@ const crystal = (): Part[] => [
   { pivot: 'frame_inner', parent: 'frame_outer', size: [0.78, 0.78, 0.78], at: [0, 0, 0], offset: [0, 0, 0], color: 0xd7c6ff, opacity: 0.42 },
   { pivot: 'core', parent: 'frame_inner', size: [0.5, 0.5, 0.5], at: [0, 0, 0], offset: [0, 0, 0], color: 0xff6ad5, glow: true },
 ];
+/**
+ * A Caper City player: the city's own toy figure (a big head, a short body, mitten hands) in the seat's colour with a
+ * cap and a backpack, so players stand out from the residents drawn by client/city/crowd.ts in the same proportions.
+ */
+function citizen(): Part[] {
+  const k = 1.1, skin = 0xe2b48c, legs = 0x2b3f73, pack = 0x5a4632, s = (...v: number[]) => v.map(n => Math.round(n * k * 1000) / 1000) as [number, number, number];
+  return [
+    { pivot: 'leg_l', size: s(0.19, 0.44, 0.21), at: s(-0.115, 0.54, 0), offset: s(0, -0.22, 0), color: legs },
+    { pivot: 'eye', parent: 'leg_l', size: s(0.2, 0.1, 0.27), at: s(0, -0.49, -0.03), offset: [0, 0, 0], color: 0x1c1c22 },
+    { pivot: 'leg_r', size: s(0.19, 0.44, 0.21), at: s(0.115, 0.54, 0), offset: s(0, -0.22, 0), color: legs },
+    { pivot: 'eye', parent: 'leg_r', size: s(0.2, 0.1, 0.27), at: s(0, -0.49, -0.03), offset: [0, 0, 0], color: 0x1c1c22 },
+    { pivot: 'body', size: s(0.46, 0.5, 0.26), at: s(0, 0.54, 0), offset: s(0, 0.25, 0), color: 0xffffff, shirt: true },
+    { pivot: 'eye', parent: 'body', size: s(0.34, 0.36, 0.14), at: s(0, 0.27, 0.2), offset: [0, 0, 0], color: pack },
+    { pivot: 'arm_l', size: s(0.13, 0.3, 0.17), at: s(-0.3, 1.0, 0), offset: s(0, -0.13, 0), color: 0xffffff, shirt: true },
+    { pivot: 'eye', parent: 'arm_l', size: s(0.12, 0.2, 0.15), at: s(0, -0.38, 0), offset: [0, 0, 0], color: skin },
+    { pivot: 'arm_r', size: s(0.13, 0.3, 0.17), at: s(0.3, 1.0, 0), offset: s(0, -0.13, 0), color: 0xffffff, shirt: true },
+    { pivot: 'eye', parent: 'arm_r', size: s(0.12, 0.2, 0.15), at: s(0, -0.38, 0), offset: [0, 0, 0], color: skin },
+    { pivot: 'head', size: s(0.42, 0.42, 0.42), at: s(0, 1.06, 0), offset: s(0, 0.21, 0), color: skin },
+    facePart('head', -0.1 * k, 0.24 * k, 0.07 * k, 0.09 * k, 0.21 * k, 0x1d1d2a), facePart('head', 0.1 * k, 0.24 * k, 0.07 * k, 0.09 * k, 0.21 * k, 0x1d1d2a), facePart('head', 0, 0.1 * k, 0.14 * k, 0.03 * k, 0.21 * k, 0x8a5a4a),
+    { pivot: 'eye', parent: 'head', size: s(0.47, 0.11, 0.47), at: s(0, 0.47, 0), offset: [0, 0, 0], color: 0xffffff, shirt: true },
+    { pivot: 'eye', parent: 'head', size: s(0.34, 0.04, 0.18), at: s(0, 0.44, -0.31), offset: [0, 0, 0], color: 0x23232a },
+    { pivot: 'eye', parent: 'head', size: s(0.46, 0.2, 0.08), at: s(0, 0.3, 0.2), offset: [0, 0, 0], color: 0x4a2f18 },
+  ];
+}
 const FALLBACK: Record<ModelKey, () => Part[]> = {
+  citizen,
   villager, villager_librarian: villager, villager_armorer: villager, villager_toolsmith: villager, villager_cleric: villager, villager_mason: villager,
   zombified_piglin: piglin,
   ghast,
@@ -371,7 +398,7 @@ export class ModelLibrary {
 
   async load(base: string, signal: AbortSignal) {
     const loader = new GLTFLoader();
-    await Promise.all((Object.keys(RIG_KIND) as ModelKey[]).map(async key => {
+    await Promise.all((Object.keys(RIG_KIND) as ModelKey[]).filter(key => !PROCEDURAL.has(key)).map(async key => {
       try {
         const gltf = await loader.loadAsync(`${base}models/${key}.glb`);
         if (signal.aborted) return;

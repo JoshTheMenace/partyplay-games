@@ -1,6 +1,6 @@
 /** Command queue execution: every command with n > ack runs once, in order; rejected ones still advance ack. */
 import { B, blockOf, cellId, cellState, chestLoot, DAYLIGHT_INVERTED, DOOR_OPEN, DOOR_UPPER, isAir, isLiquid, makeCell } from '../shared/blocks';
-import { EDIT_LIMIT_TOAST, EYE_HEIGHT, MAX_FOOD, REACH, SNEAK_EYE_HEIGHT } from '../shared/constants';
+import { EDIT_LIMIT_TOAST, EYE_HEIGHT, MAX_FOOD, MAX_HEALTH, REACH, SNEAK_EYE_HEIGHT } from '../shared/constants';
 import { cellIndex, FACES, lookVector, type Vec3 } from '../shared/coords';
 import { addItem, removeItem, takeOne } from '../shared/inventory';
 import { armorOf, attackDamage, durabilityOf, I, isItem, itemOf, maxStack, placesBlock } from '../shared/items';
@@ -13,6 +13,7 @@ import { IF, MOB, mobBox, type Cmd, type Input } from '../shared/protocol';
 import { craftFromInventory, recipeById } from '../shared/recipes';
 import { collisionBoxes } from '../shared/shapes';
 import { equip } from './armor';
+import { cityCommand } from './city';
 import { damageMob, exhaust, mobHitBoxes, mobState, spawnArrow } from './combat';
 import { celebrate, chestSlots, click, closeScreen, furnaceAt, MAX_CHESTS, MAX_FURNACES, openScreen } from './containers';
 import { throwEye, useEndFrame } from './ender-eyes';
@@ -38,7 +39,8 @@ function inReach(state: State, player: Player, box: readonly number[]) {
   return boxDist2(ex, ey, ez, box) <= reach * reach;
 }
 const reachesBlock = (state: State, player: Player, x: number, y: number, z: number) => inReach(state, player, [x, y, z, x + 1, y + 1, z + 1]);
-const survival = (state: State) => state.settings.mode === 'survival';
+/** Survival rules (tools wear, items are used up, blocks take time): everything but creative. */
+const survival = (state: State) => state.settings.mode !== 'creative';
 
 /** Wear the tool in an inventory slot; it breaks at its durability. No wear in creative. */
 export function wearTool(state: State, player: Player, slot: number, amount: number) {
@@ -67,6 +69,10 @@ export function runCommand(state: State, player: Player, cmd: Cmd): boolean {
     if (cmd.t === 'close') closeScreen(state, player);
     return cmd.t === 'close';
   }
+  if (state.city) {
+    const handled = cityCommand(state, player, cmd);
+    if (handled !== null) return handled;
+  }
   if (cmd.t === 'wake') return wake(state, player);
   if (player.sleeping && cmd.t !== 'close' && cmd.t !== 'click') return false;
   switch (cmd.t) {
@@ -86,6 +92,7 @@ export function runCommand(state: State, player: Player, cmd: Cmd): boolean {
     case 'respawn': return false;
     case 'creative': return creativeCommand(state, player, cmd.id, cmd.slot);
     case 'trade': return player.screen?.kind === 'trade' && runTrade(state, player, cmd.i, cmd.max === true);
+    case 'city': return false;   // handled by cityCommand in the city, meaningless elsewhere
   }
 }
 
@@ -269,8 +276,10 @@ function useItemCommand(state: State, player: Player, slot: number): boolean {
   if (!stack) return false;
   const item = itemOf(stack.id), held = player.useStart < 0 ? 0 : state.clock - player.useStart;
   if (item?.food) {
-    if (player.food >= MAX_FOOD && stack.id !== I.golden_apple && survival(state)) return false;
+    // In the city food mends health directly (nobody goes hungry there).
+    if (state.city ? player.health >= MAX_HEALTH : player.food >= MAX_FOOD && stack.id !== I.golden_apple && survival(state)) return false;
     if (held < EAT_SECONDS - 0.4) return false;
+    if (state.city) player.health = Math.min(MAX_HEALTH, player.health + item.food.hunger);
     player.food = Math.min(MAX_FOOD, player.food + item.food.hunger);
     player.saturation = Math.min(player.food, player.saturation + item.food.saturation);
     if (stack.id === I.golden_apple) player.health = Math.min(20, player.health + 4);

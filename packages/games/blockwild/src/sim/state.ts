@@ -5,6 +5,7 @@ import type { Vec3 } from '../shared/coords';
 import type { Slot } from '../shared/items';
 import { q2, type Fx, type FxKind, type ScreenKind, type Settings, type Stats } from '../shared/protocol';
 import type { BlazeState } from './blaze';
+import type { CityRecord, CityState } from './city-state';
 import type { DragonState } from './dragon';
 import type { EndState } from './end';
 import type { EyeState } from './ender-eyes';
@@ -80,6 +81,13 @@ export type Player = {
    * changes, and the revision the client last confirmed in its input. The bag is sent only while those differ.
    */
   bagText: string; bagRev: number; bagAck: number;
+  /** Caper City: this screen asked for the parked vehicles round it (IF.PARKED in its last input). */
+  parkedAsk: boolean;
+  /**
+   * Caper City: the top speed of the vehicle the player rides (0 on foot: the envelope their moves are checked against)
+   * and whether it flies.
+   */
+  pace: number; aloft: boolean;
 };
 
 export type Mob = {
@@ -180,11 +188,15 @@ export type State = {
   end: EndState;
   /** Player enderman kills in a row without an ender pearl (saved): the third such kill always drops one. */
   pearlPity: number;
+  /** Caper City (mode 'city'): everything the city adds; null in survival and creative. */
+  city: CityState | null;
 };
 /** A player as stored in a save, in live shapes. */
 export type SavedPlayerState = {
   name: string; x: number; y: number; z: number; yaw: number; pitch: number; health: number; food: number; saturation: number;
   inv: (Slot | null)[]; armor: (Slot | null)[]; bed: Vec3 | null; stats: PlayerStats; milestones: number;
+  /** Caper City: coins, property and career (absent outside the city). */
+  city?: CityRecord;
 };
 
 export type NewGame = { ctx: RoundContext; settings: Settings; source?: ChunkSource };

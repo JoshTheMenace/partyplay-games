@@ -27,7 +27,7 @@ const SOIL = new Set<number>([B.grass_block, B.dirt, B.snowy_grass, B.farmland])
 const CROPS = new Set<number>([B.wheat, B.carrots, B.potatoes]);
 const SAPLINGS = new Set<number>([B.oak_sapling, B.birch_sapling, B.spruce_sapling]);
 const TILLABLE = new Set<number>([B.grass_block, B.dirt, B.snowy_grass]);
-const INTERACTIVE = new Set<number>([B.crafting_table, B.furnace, B.furnace_lit, B.chest, B.bed, B.oak_door, B.lever, B.stone_button, B.oak_button, B.repeater, B.daylight_detector]);
+const INTERACTIVE = new Set<number>([B.crafting_table, B.furnace, B.furnace_lit, B.chest, B.bed, B.oak_door, B.lever, B.stone_button, B.oak_button, B.repeater, B.daylight_detector, B.job_board]);
 const HOES = new Set<number>([I.wooden_hoe, I.stone_hoe, I.iron_hoe, I.diamond_hoe]);
 const SHOVELS = new Set<number>([I.wooden_shovel, I.stone_shovel, I.iron_shovel, I.diamond_shovel]);
 const PATHABLE = new Set<number>([B.grass_block, B.dirt]);
@@ -263,6 +263,7 @@ export function bucketUse(world: World, held: number, x: number, y: number, z: n
 /** End crystals stand only on obsidian or bedrock (the `use` command on that block places one on top). */
 export const isCrystalBase = (cell: number) => cellId(cell) === B.obsidian || cellId(cell) === B.bedrock;
 /** Items thrown at once by right-click (no block target, or a block they don't use): the client sends `useItem`. */
-export const isThrown = (held: number) => held === I.ender_pearl || held === I.ender_eye;
+/** Items a tap of Use throws or uses up at once (the city's cream pie and disguise kit among them). */
+export const isThrown = (held: number) => held === I.ender_pearl || held === I.ender_eye || held === I.cream_pie || held === I.disguise_kit;
 /** Whether holding right-click with this item is a timed use (eat or draw a bow) finished by `useItem`. */
 export const isHeldUse = (held: number, food: number) => held === I.bow || !!itemOf(held)?.food && (food < 20 || held === I.golden_apple);

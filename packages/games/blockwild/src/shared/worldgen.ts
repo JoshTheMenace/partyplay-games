@@ -18,6 +18,9 @@
 import { B } from './blocks';
 import { CHUNK, END, HEIGHT, NETHER, SEA_LEVEL, SEED_CACHE, SPAWN_X, SPAWN_Z, WORLD } from './constants';
 import { CHUNK_CELLS } from './chunk';
+import { generateCityChunk } from './city/gen';
+import { cityPlan } from './city/plan';
+import type { Terrain } from './protocol';
 import { localIndex, type Vec3 } from './coords';
 import { clamp, createRng, curve, fbm2, hash3, lerp, rand2, rand3, ridged2, rngInt, simplex3, smoothstep, subSeed, type Rng } from './noise';
 import { generateEndChunk, isEndChunk } from './end';
@@ -317,7 +320,9 @@ const gridHumid = new Float64Array(GRID * GRID);
 const FLOWERS = [B.dandelion, B.poppy, B.cornflower];
 const FLOWERY = new Set([BIOME.plains, BIOME.forest, BIOME.birch_forest]);
 
-export function generateChunk(seed: number, cx: number, cz: number): Uint16Array {
+/** The terrain of one chunk: the wild world, or Caper City when `terrain` is 'city' (the whole world is the city's island and sea then). */
+export function generateChunk(seed: number, cx: number, cz: number, terrain: Terrain = 'wild'): Uint16Array {
+  if (terrain === 'city') return generateCityChunk(seed, cx, cz);
   if (isEndChunk(cx, cz)) return generateEndChunk(seed, cx, cz);
   if (isNetherChunk(cx, cz)) {
     const cells = generateNetherChunk(seed, cx, cz);
@@ -576,7 +581,8 @@ const spawns = new Map<number, Vec3>();
  * open grass or sand. Either way nothing hazardous (water, cactus) lies within 3 blocks and eye height is clear for 2.
  * Returns block coordinates [x, feetY, z] (a fresh copy; memoized per seed); stand at x + 0.5, z + 0.5.
  */
-export function findSpawn(seed: number): Vec3 {
+export function findSpawn(seed: number, terrain: Terrain = 'wild'): Vec3 {
+  if (terrain === 'city') { const [x, y, z] = cityPlan(seed).spawn; return [Math.floor(x), y, Math.floor(z)]; }
   let spawn = spawns.get(seed);
   if (!spawn) spawns.set(seed, spawn = searchSpawn(seed));
   return [spawn[0], spawn[1], spawn[2]];

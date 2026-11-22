@@ -95,7 +95,7 @@ export function doorToggle(getCell: CellReader, x: number, y: number, z: number,
   return writes;
 }
 
-const STATIONS = new Set<number>([B.crafting_table, B.furnace, B.furnace_lit, B.chest, B.bed, B.oak_door]);
+const STATIONS = new Set<number>([B.crafting_table, B.furnace, B.furnace_lit, B.chest, B.bed, B.oak_door, B.job_board]);
 const CONTROLS = new Map<number, UseKind>([[B.lever, 'lever'], [B.stone_button, 'button'], [B.oak_button, 'button'], [B.repeater, 'repeater']]);
 export type UseKind = 'open' | 'door' | 'till' | 'path' | 'bonemeal' | 'bucket' | 'lever' | 'button' | 'repeater' | 'ignite' | 'tnt' | 'eye' | 'crystal' | 'daylight' | null;
 /**

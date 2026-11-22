@@ -14,7 +14,7 @@ import type { SceneViewProps } from '../../../../party-ui/src/index';
 import { ResourceScope } from '../../../../party-runtime/src/index';
 import { mountThreeScene } from '../../../../party-3d/src/index';
 import { EYE_HEIGHT } from '../shared/constants';
-import type { PrivateView, Settings, View } from '../shared/protocol';
+import { terrainOf, type PrivateView, type Settings, type Terrain, type View } from '../shared/protocol';
 import { findSpawn } from '../shared/worldgen';
 import { createBlockAtlas, heldAsBlock, itemSprite, texturePixels } from './art/atlas';
 import { HostMusic } from './audio/host-music';
@@ -37,7 +37,7 @@ const coarse = () => typeof matchMedia === 'function' && matchMedia('(pointer: c
 const validSeed = (seed: unknown): seed is number => typeof seed === 'number' && Number.isInteger(seed) && seed > 0;
 
 type World = {
-  seed: number; scope: ResourceScope; engine: VoxelEngine; sheet: SpriteSheet; items: ItemModels; models: ModelLibrary;
+  seed: number; terrain: Terrain; scope: ResourceScope; engine: VoxelEngine; sheet: SpriteSheet; items: ItemModels; models: ModelLibrary;
   /** Errors go to whichever SceneView currently shows this world. */
   onError(error: unknown): void;
   parked: ReturnType<typeof setTimeout> | null;
@@ -45,8 +45,8 @@ type World = {
 let cached: World | null = null;
 
 /** The world for this seed: the cached one when it matches (a remount or reload), otherwise a fresh build. */
-function takeWorld(seed: number): World {
-  if (cached?.seed === seed) {
+function takeWorld(seed: number, terrain: Terrain): World {
+  if (cached?.seed === seed && cached.terrain === terrain) {
     if (cached.parked) clearTimeout(cached.parked);
     cached.parked = null;
     return cached;
@@ -54,9 +54,9 @@ function takeWorld(seed: number): World {
   cached?.scope.dispose();
   const scope = new ResourceScope(), art = createBlockAtlas();
   scope.defer(() => art.texture.dispose());
-  const engine = new VoxelEngine({ seed, scope, atlas: art, onError: error => world.onError(error), renderDistance: store.get().settings.renderDistance });
+  const engine = new VoxelEngine({ seed, terrain, scope, atlas: art, onError: error => world.onError(error), renderDistance: store.get().settings.renderDistance });
   const sheet = new SpriteSheet({ tile: texturePixels, item: itemSprite, cube: heldAsBlock });
-  const world: World = { seed, scope, engine, sheet, items: scope.own(new ItemModels(sheet)), models: scope.own(new ModelLibrary()), onError: () => {}, parked: null };
+  const world: World = { seed, terrain, scope, engine, sheet, items: scope.own(new ItemModels(sheet)), models: scope.own(new ModelLibrary()), onError: () => {}, parked: null };
   // Models stream in behind play; entities use procedural stand-ins until then.
   void world.models.load(ASSETS, scope.signal);
   scope.defer(() => { if (world.parked) clearTimeout(world.parked); if (cached === world) cached = null; });
@@ -109,20 +109,20 @@ export default function BlockwildScene(props: SceneViewProps<Settings, View, Pri
       const sfx = new Sfx(scope, `${ASSETS}sounds/`), music = props.isHost ? new HostMusic(scope) : null;
 
       let current: { world: World; runtime: Runtime; scope: ResourceScope } | null = null;
-      const use = (seed: number) => {
+      const use = (seed: number, terrain: Terrain) => {
         if (current) { current.scope.dispose(); parkWorld(current.world); }
-        const world = takeWorld(seed), runScope = new ResourceScope(scope.signal), { engine } = world;
+        const world = takeWorld(seed, terrain), runScope = new ResourceScope(scope.signal), { engine } = world;
         world.onError = fail;
         scene.add(engine.root);
         scene.fog = engine.fog;
         runScope.defer(() => { scene.remove(engine.root); scene.fog = null; });
         // Stream the spawn area first (the same search the server runs); the Runtime moves to the player once known.
-        const spawn = findSpawn(seed);
+        const spawn = findSpawn(seed, terrain);
         spawn[0] += 0.5;
         spawn[2] += 0.5;
         camera.position.set(spawn[0], spawn[1] + EYE_HEIGHT, spawn[2]);
         const runtime = new Runtime({
-          scene, camera, canvas: element, engine, sheet: world.sheet, items: world.items, models: world.models, scope: runScope, seed, spawn, sfx, music, sun,
+          scene, camera, canvas: element, engine, sheet: world.sheet, items: world.items, models: world.models, scope: runScope, seed, terrain, spawn, sfx, music, sun,
           props: () => latest.current,
         });
         current = { world, runtime, scope: runScope };
@@ -135,15 +135,15 @@ export default function BlockwildScene(props: SceneViewProps<Settings, View, Pri
       const ready = () => { if (loaded && rendered && !scope.signal.aborted) latest.current.onReady(); };
       const preloaded = () => { loaded = true; ready(); };
       if (!loaded) {
-        use(props.settings.seed).engine.ready().then(preloaded, fail);
+        use(props.settings.seed, terrainOf(props.settings.mode)).engine.ready().then(preloaded, fail);
         setTimeout(preloaded, PRELOAD_MS);
       }
       mountThreeScene(element, {
         signal: scope.signal, scene, camera, quality: coarse() ? 'low' : 'balanced',
         resize(aspect) { camera.aspect = aspect; camera.updateProjectionMatrix(); },
         frame: (now, dt) => {
-          const seed = latest.current.publicView?.seed;
-          if (validSeed(seed) && seed !== current?.world.seed) use(seed);
+          const view = latest.current.publicView, seed = view?.seed;
+          if (view && validSeed(seed) && (seed !== current?.world.seed || terrainOf(view.mode) !== current.world.terrain)) use(seed, terrainOf(view.mode));
           current?.runtime.frame(now, dt);
           card.visible = !current || current.runtime.loading;
         },

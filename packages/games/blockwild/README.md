@@ -1,6 +1,6 @@
 # Blockwild
 
-A cooperative first-person voxel survival sandbox for 1–64 players in a shared PartyPlay room (it is tuned and measured at 32; 64 is the room's ceiling). Every playing seat (phone, tablet, computer, or a host who plays) gets its own first-person world. A watching TV shows a cinematic spectator camera with the roster (cards for up to five players, a slim side column up to twelve, then a wall of name chips with a spotlight on the player on camera), the day clock and world stats. Every start grows a new random world unless the host picks a fixed seed in Settings. Survival starts empty-handed next to a tree on a 4096×4096×128 world and leads from punching trees to diamond tools, then on to villages, armor, redstone and the Nether, and finally the End: defeat the Ender Dragon to beat the game (the world carries on as a sandbox afterwards). A **Next goal** chip guides new players. Creative gives flight, instant breaking and a block palette. Sessions never end on their own: the host saves, loads and finishes them from the Room menu.
+A first-person voxel sandbox for 1–64 players in a shared PartyPlay room (it is tuned and measured at 32; 64 is the room's ceiling), in three modes: **Survival** and **Creative** in a boundless wild world, and **Caper City**, an open-world city of residents, vehicles, gigs and mischief (its own section below). The rest of this introduction is the wild. Every playing seat (phone, tablet, computer, or a host who plays) gets its own first-person world. A watching TV shows a cinematic spectator camera with the roster (cards for up to five players, a slim side column up to twelve, then a wall of name chips with a spotlight on the player on camera), the day clock and world stats. Every start grows a new random world unless the host picks a fixed seed in Settings. Survival starts empty-handed next to a tree on a 4096×4096×128 world and leads from punching trees to diamond tools, then on to villages, armor, redstone and the Nether, and finally the End: defeat the Ender Dragon to beat the game (the world carries on as a sandbox afterwards). A **Next goal** chip guides new players. Creative gives flight, instant breaking and a block palette. Sessions never end on their own (a timed Caper City round does): the host saves, loads and finishes them from the Room menu.
 
 The design contract is [DESIGN.md](DESIGN.md) (protocol, block/item ids, rules, file ownership).
 
@@ -28,6 +28,20 @@ Click the world to capture the mouse. **WASD** move, **Space** jump (double-tap 
 
 A floating joystick appears wherever the left thumb lands; push it to the rim while moving forward to sprint. Drag anywhere else to look. Buttons: **Jump** (double-tap to fly in creative, hold to rise), **Sneak** (a toggle; in creative it is **Down**), **Mine** (hold), **Use** (tap to place or use, hold to eat or draw), **Items**, **Drop** (hold: one item after a moment, the whole stack if you keep holding; taps do nothing) and **☰** menu. Tap hotbar slots to select. In containers, tap to pick up or place, long-press to split, and switch on **Quick move** for shift-click.
 
+## Caper City
+
+Pick **Caper City** under Mode in the game rules (with a round of 10, 20 or 30 minutes, or free play, and whether players may bonk each other). Everyone lands on the town hall plaza of a pre-built city: a 10 × 10 grid of blocks on an island, with office towers, rows of shops, flats, houses, warehouses, a park, a market, a funfair, a beach with a pier and an airfield. The tone is cartoon mischief: bonks and stars, never anything worse.
+
+- **Residents.** 672 named people live here. Each has a home, a job and a day: keepers open their counters at 06:30 and the late shift closes at 02:00, office workers go out for lunch, officers of the Watch walk their beats, couriers do their rounds, and by night the streets empty. Look at someone to see who they are and what they are doing; talk to them and they stop. Shops are open exactly while a keeper stands at the counter.
+- **Vehicles.** Scooters wait on the plaza, cars and vans are parked along the streets, and traffic drives past (it brakes for you and sounds its horn). Walk up to a vehicle and press the context button (**F**) to get in; a friend can take a passenger seat. The stick or WASD steers, Jump brakes, F gets out. There are ten kinds, from the Zipster scooter to the Comet coupé, with a helicopter and a small plane at Gullwing Field. A vehicle bought at Wheel Deal Motors is yours: call it from the map.
+- **Coins.** Job boards (the corkboards on the depot, diners, cab stands and the town hall) offer three gigs at a time: parcel rounds, hot food runs and cab fares. Follow the beacon and the yellow diamond on the map. Spend coins on food (it mends hearts), gadgets, vehicles, a flat, a plot of land to build on (the only place blocks can be placed or broken; the hardware shop sells them), or to pay off heat at the Watch House.
+- **Mischief and Heat.** **Mine** bonks whoever is under the crosshair: residents see stars and drop a few coins, most run and the brave bonk back. Borrowing a parked car, pulling a driver out, running someone over, throwing a cream pie or emptying a till (hold Mine on it) are all mischief too. If a resident or an officer *sees* it your Heat rises through four tiers and the Watch comes: first a ticket, then a chase on foot, then cruisers. Break their line of sight for eight seconds and it drains. Caught means a fine, losing your loot and a walk from the Watch House; knocked out means a clinic bill.
+- **The round.** The TV shows the city map with everyone on it, the most wanted, the richest and the news. A timed round ends by itself; either way the City Ledger ranks everyone by net worth and hands out awards to whoever earned them (Tycoon, Most Wanted, Model Citizen, Slippery, Road Hog, Bonk Champion, Jailbird, Sky High).
+
+Extra controls in the city: **F** (or the yellow button) does what the prompt says, **H** sounds the horn, **M** (or a tap on the minimap) opens the map. On touch the stick steers a vehicle and the right-hand buttons become **Brake** (or **Up** and **Down** in the air).
+
+How it is built, in short: the city and its residents are pure functions of the seed shared by the server and every screen (`src/shared/city`), so the crowd costs no traffic and is never saved; only residents knocked off their script, vehicles and each seat's own state travel. A driver's own screen simulates the vehicle and the server checks the result against that vehicle's envelope, exactly as it does for walking. [DESIGN.md](DESIGN.md#caper-city-the-third-mode-mode-city) has the details.
+
 ## Architecture
 
 Server-only code lives in `src/sim/`. The browser never imports it, and `tests/boundaries.test.ts` enforces that.
@@ -47,7 +61,7 @@ Server-only code lives in `src/sim/`. The browser never imports it, and `tests/b
 
 Your own position is client-authoritative: the server checks each claimed move against speed and collision and teleports you back (`tp`) if it is impossible. Every action (break, place, click, craft) is a numbered command carried inside held input, because reliable actions are capped at 256 per round. The server runs each command once, in order, and reports the highest number it handled (`ack`). The client shows the result immediately and drops its guess once the ack arrives, so a rejected edit quietly snaps back.
 
-**Saves.** Format `blockwild` version 11 (versions 9 and 10 still load): seed (always the real one)/worldId/mode/difficulty/keepInventory, time, the edit journal packed and deflated (up to 65,536 distinct cells as long as it packs into 100,000 bytes: tidy building reaches the ceiling, scattered single cells stop near 32,000 and never before 16,384), up to 96 players matched by exact unique name (with worn armor), chests (≤ 64), furnaces (≤ 32), animals (≤ 160), villagers (≤ 64, with trade uses), a populated-chunk bitset, the End (dragon, crystals, exit portal), the victory and stats. Redstone, portals and fire rebuild from the edits on load. The worst legal save stays under the 256 KiB limit. Older saves (versions 1–8, made before the current terrain generator) are rejected with "This world was made with the previous version of Blockwild and cannot be loaded."
+**Saves.** Format `blockwild` version 11 for survival and creative worlds (versions 9 and 10 still load; a Caper City world is version 12, which adds each player's coins, property and career and holds nothing of the city itself): seed (always the real one)/worldId/mode/difficulty/keepInventory, time, the edit journal packed and deflated (up to 65,536 distinct cells as long as it packs into 100,000 bytes: tidy building reaches the ceiling, scattered single cells stop near 32,000 and never before 16,384), up to 96 players matched by exact unique name (with worn armor), chests (≤ 64), furnaces (≤ 32), animals (≤ 160), villagers (≤ 64, with trade uses), a populated-chunk bitset, the End (dragon, crystals, exit portal), the victory and stats. Redstone, portals and fire rebuild from the edits on load. The worst legal save stays under the 256 KiB limit. Older saves (versions 1–8, made before the current terrain generator) are rejected with "This world was made with the previous version of Blockwild and cannot be loaded."
 
 ## Big rooms
 
@@ -62,7 +76,27 @@ Measured on a heavily loaded shared development machine (load average 40–80 on
 
 What gives out first beyond this: terrain generation when many players travel in different directions at once (the server generates a 64 KiB chunk in 1–8 ms and each player keeps 49 of them loaded: about 200 MiB for 64 players who have all walked off alone), then the traffic of one dense crowd, which still grows with its size.
 
-Tools: `tools/scale-bench.ts` (tick time and bytes per screen without a server), `tools/room-host.ts` with the platform's `scripts/qa/room-bots.ts --hook packages/games/blockwild/tools/room-bot.ts` (a real server and real sockets, no browser) and the render sandbox in `dev/`.
+Caper City is far lighter on the server than the wild (no terrain noise, no mobs; the crowd is a function of the clock). Same machine, `tools/scale-bench.ts --mode city` (no server):
+
+| Room | Tick | Each phone | In existence |
+|---|---|---|---|
+| 32 players spread over the city | 1.0 ms median, 5.5 ms at the 95th percentile | 19 KiB/s | 1,379 chunks, 324 vehicles (104 in traffic) |
+| 64 players spread over the city | 1.2 ms median, 3.5 ms at the 95th percentile | 22 KiB/s | 1,906 chunks, 310 vehicles |
+| 32 players on the plaza | 0.3 ms median | 33 KiB/s | 49 chunks, 31 vehicles |
+| 64 players on the plaza | 0.4 ms median | 47 KiB/s | 56 chunks, 30 vehicles |
+
+The same rooms on a real server (an isolated build, `tools/room-host.ts` standing in for the TV, socket bots with the Blockwild hook for the seats; four minutes each, on the same shared machine while it was busy with other work). The bots walk to their own corner of the city and every other one gets into a parked vehicle on the way and drives:
+
+| Room | Server process | Each phone | The display |
+|---|---|---|---|
+| 32 players spread over the city | 27 % of one core (18–36 % in five-second windows) | 21–24 KiB/s (37 KiB/s for the first half minute, everyone still on the plaza) | 13 KiB/s, largest message 4.0 KiB |
+| 64 players spread over the city | 37 % of one core (29–50 %) | 25–31 KiB/s (59 KiB/s at first) | 16 KiB/s, largest message 7.5 KiB |
+
+Twenty snapshots a second held throughout, dipping to 17 when other work took the machine. A real phone page in those rooms (headless Chromium with software WebGL, 844 × 390) received 23.8 KiB/s at 32 and 25.7 KiB/s at 64, and a real TV page 12.6 KiB/s at 32.
+
+What gives out first in the city is not the server. It is traffic in two places: one dense crowd (59 KiB/s to each phone with all 64 on the plaza), and the results screen, where the room server repeats the whole results snapshot twenty times a second for as long as it is up: about 200 KiB/s to each screen at 64 players as measured (it was 430–570 KiB/s before the ledger was sent as numbers and the outcome lost its labels; the rest is the platform's repetition). On the QA machine itself the first thing to give was the software-rendered TV page: at 64 players it could not draw a frame inside the server's ten-second heartbeat and kept losing its seat.
+
+Tools: `tools/scale-bench.ts` (tick time and bytes per screen without a server; `--mode city` for Caper City), `tools/room-host.ts` with the platform's `scripts/qa/room-bots.ts --hook packages/games/blockwild/tools/room-bot.ts` (a real server and real sockets, no browser; in the city the bots step round street furniture, walk up to parked vehicles and drive) and the render sandbox in `dev/`.
 
 ## Validation
 
@@ -81,9 +115,12 @@ For anything visual, the sandbox runs the real scene and HUD from a simulation i
 npx vite --config packages/games/blockwild/dev/vite.config.mjs --host 127.0.0.1 --port <free-port> --strictPort
 # http://127.0.0.1:<port>/games/blockwild/?scene=pasture&time=6000&freeze=1          a pasture with animals, torches and a wall at noon
 # http://127.0.0.1:<port>/games/blockwild/?view=tv&players=64&scene=crowd            the TV with a full room
+# http://127.0.0.1:<port>/games/blockwild/?mode=city&time=6000                        Caper City at noon (at=x,y,z stands you elsewhere; coins=, heat=)
 # also: time=<day ticks>, yaw, pitch, mode=creative, bots=still; window.sandbox = { state, tick(n), setTime(t), loading() }
 ```
 
 Browser QA of the room flow uses a fresh isolated build per change (never rebuild a served run), `HOST=127.0.0.1 npm run serve:isolated -- <unique-name> <free-port>` and headless Chromium with software WebGL. World loads re-upload the whole cached world into a new GL context, which takes most of a minute under software rendering; the manifest allows 90 s. Software rendering can judge visuals but not frame rate or feel. Real phones, night-time play and full rosters on real Wi-Fi still need human sessions.
+
+Caper City under software rendering: a room page draws a frame every second or two at best and far fewer on a busy machine, and the server drops a screen that is silent for ten seconds, so keep sheets shut in room pages (their blurred backdrop over the 3D scene is what stalls longest) and take counters, job boards, the map, pockets, Heat, arrests and the clinic from the sandbox, where `window.sandbox.state` is the live simulation: move seat 0 by assigning its position and a new `tp`, set `city.players[0].heat`, and so on. Movement on a slow page is in slow motion (the physics step is capped per frame); a 640 × 360 sandbox page with `freeze=1` draws fast enough to drive and fly for real.
 
 Tips for driving it: headless Chromium refuses pointer lock, so click the world twice to enter the free-cursor fallback (then a middle-button drag looks without acting). Special states (villages, trading, redstone, portals, the Nether, a fight) are easiest to reach by editing a downloaded save and loading it from the Room menu, or by PUTting it to `/api/round/save` with the host's credentials. Seed 11 spawns on a beach meadow at (2056, 68, 2040) with a village 226 blocks away, a desert temple, mineshafts and dungeons nearby.

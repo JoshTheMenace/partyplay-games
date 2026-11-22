@@ -14,7 +14,7 @@ import { parseArgs } from 'node:util';
 import { WebSocket } from 'ws';
 
 const { values: args } = parseArgs({ options: { port: { type: 'string' }, players: { type: 'string', default: '32' }, mode: { type: 'string', default: 'survival' }, seed: { type: 'string', default: '11' }, seconds: { type: 'string', default: '60' }, pid: { type: 'string' } } });
-if (!args.port) throw new Error('Usage: room-host.ts --port <port> [--players 32] [--mode survival|creative] [--seed 11] [--seconds 60] [--pid <server pid>]');
+if (!args.port) throw new Error('Usage: room-host.ts --port <port> [--players 32] [--mode survival|creative|city] [--seed 11] [--seconds 60] [--pid <server pid>]');
 const players = Number(args.players), seconds = Number(args.seconds);
 const socket = new WebSocket(`ws://127.0.0.1:${args.port}/ws`, { headers: { Origin: `http://127.0.0.1:${args.port}` } });
 const send = (type: string, data: Record<string, unknown> = {}) => socket.send(JSON.stringify({ v: '1.0', type, ...data }));

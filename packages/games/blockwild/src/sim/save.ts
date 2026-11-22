@@ -1,5 +1,10 @@
 /**
- * World saves (format version 11; versions 9 and 10 still load). Everything bulky is binary in base64: the edit
+ * World saves. Survival and creative worlds are written as format version 11 (versions 9 and 10 still load); a Caper
+ * City world is written as version 12, which adds the `minutes` and `bonks` settings and one compact record per player
+ * (`c`: coins, owned vehicles, flat, plot and nine career totals). The city, its residents and its vehicles come from
+ * the seed and are never saved; a city save holds no animals or villagers.
+ *
+ * Since version 11: Everything bulky is binary in base64: the edit
  * journal is packed and deflated (sim/journal.ts), slot lists are 6-byte records (slot, item id, count, damage) and
  * the populated-chunk bitset is deflated. Versions 9 and 10 wrote 6-byte edits, [index, id, n, d?] slot tuples and a
  * raw bitset; `parseSave` reads both, validates everything and throws a readable message.
@@ -12,11 +17,15 @@ import { emptySlots } from '../shared/inventory';
 import { armorOf, durabilityOf, isItem, maxStack, type Slot } from '../shared/items';
 import { MOB_TYPES, MS, q2, q3, validateSettings, type Settings, type Stats, type Victory } from '../shared/protocol';
 import { PROFESSIONS } from '../shared/trades';
+import { RIDES } from '../shared/city/vehicles';
+import { STAT_KEYS as STAT_KEYS_CITY, type CityRecord } from './city-state';
 import { MAX_CHESTS, MAX_FURNACES } from './containers';
 import { packEdits, unpackEdits as unpackJournal } from './journal';
 import type { Furnace, PlayerStats, SavedPlayerState } from './state';
 
 export const SAVE_VERSION = 11;
+/** Caper City saves: only city worlds are written (and read) as this version. */
+export const CITY_SAVE_VERSION = 12;
 /**
  * Oldest version that still loads. Edits only record differences from generated terrain, so a world saved before the
  * expansion generator (version 8) would silently grow lava caves and structures through its builds: it is refused.
@@ -42,6 +51,8 @@ export type SavedPlayer = {
   /** Bed cell used as the respawn point, or null for the world spawn. */
   spawn: Vec3 | null;
   stats: PlayerStats; milestones: number;
+  /** Caper City (v12, city saves only): [coins, owned vehicles (bitmask), flat lot + 1, plot + 1, then STAT_KEYS in order]. */
+  c?: number[];
 };
 export type SavedFurnace = { i: number; slots: PackedSlots; burn: number; burnMax: number; cook: number };
 export type SavedAnimal = { t: number; x: number; y: number; z: number; s: number };
@@ -52,9 +63,11 @@ export type VillagerState = Omit<SavedVillager, 'home'> & { home: Vec3 | null };
 /** The End's progress (v10): the dragon's life and health, pillars (0..9) that still hold crystals, the exit portal and the egg. */
 export type SavedEnd = { dragon: 'alive' | 'dead'; health: number; crystals: number[]; portalActive: boolean; egg: boolean };
 export type SaveData = {
-  format: 'blockwild'; version: 11; seed: number;
+  format: 'blockwild'; version: 11 | 12; seed: number;
   /** Stable world identity (derived from the seed when missing). */
   worldId: string; mode: Settings['mode']; difficulty: Settings['difficulty']; keepInventory: boolean;
+  /** Caper City settings (city saves only). */
+  minutes?: Settings['minutes']; bonks?: boolean;
   time: number; day: number; edits: string;
   players: SavedPlayer[]; chests: { i: number; slots: PackedSlots }[]; furnaces: SavedFurnace[]; animals: SavedAnimal[]; villagers: SavedVillager[];
   /** Deflated bitset (base64) of chunks whose animals were already rolled (so loading does not repopulate them). */
@@ -115,7 +128,8 @@ const packBits = (keys: ReadonlySet<number>) => {
 export function exportSave(source: SaveSource): SaveData {
   const { settings } = source;
   return {
-    format: 'blockwild', version: SAVE_VERSION, seed: settings.seed, worldId: source.worldId, mode: settings.mode, difficulty: settings.difficulty, keepInventory: settings.keepInventory,
+    format: 'blockwild', version: settings.mode === 'city' ? CITY_SAVE_VERSION : SAVE_VERSION, seed: settings.seed, worldId: source.worldId, mode: settings.mode, difficulty: settings.difficulty, keepInventory: settings.keepInventory,
+    ...settings.mode === 'city' ? { minutes: settings.minutes ?? 0, bonks: settings.bonks ?? true } : {},
     time: Math.floor(source.time), day: source.day, edits: toBase64(packEdits(source.edits)),
     players: source.players.slice(0, MAX_SAVED_PLAYERS).map(p => ({
       name: p.name, x: q2(p.x), y: q2(p.y), z: q2(p.z), yaw: q3(p.yaw), pitch: q3(p.pitch),
@@ -123,11 +137,12 @@ export function exportSave(source: SaveSource): SaveData {
       // Armor makes health fractional: a sliver of health still loads (at least half a heart).
       health: p.dead ? MAX_HEALTH : Math.max(0.5, q2(p.health)), food: p.dead ? MAX_FOOD : p.food, saturation: q2(p.dead ? 5 : p.saturation),
       inv: packSlots(p.inv), armor: packSlots(p.armor), spawn: p.bed ? [...p.bed] : null, stats: { ...p.stats, distance: Math.round(p.stats.distance) }, milestones: p.milestones,
+      ...settings.mode === 'city' && p.city ? { c: [p.city.coins, p.city.own, p.city.flat + 1, p.city.plot + 1, ...STAT_KEYS_CITY.map(key => Math.round(p.city!.stats[key]))] } : {},
     })),
     chests: [...source.chests].map(([i, slots]) => ({ i, slots: packSlots(slots) })),
     furnaces: [...source.furnaces].map(([i, f]) => ({ i, slots: packSlots(f.slots), burn: q2(f.burn), burnMax: q2(f.burnMax), cook: q2(f.cook) })),
-    animals: source.animals.slice(0, MAX_SAVED_ANIMALS).map(a => ({ t: a.t, x: q2(a.x), y: q2(a.y), z: q2(a.z), s: a.s })),
-    villagers: source.villagers.slice(0, MAX_SAVED_VILLAGERS).map(v => {
+    animals: (settings.mode === 'city' ? [] : source.animals).slice(0, MAX_SAVED_ANIMALS).map(a => ({ t: a.t, x: q2(a.x), y: q2(a.y), z: q2(a.z), s: a.s })),
+    villagers: (settings.mode === 'city' ? [] : source.villagers).slice(0, MAX_SAVED_VILLAGERS).map(v => {
       const saved: SavedVillager = { x: q2(v.x), y: q2(v.y), z: q2(v.z), p: v.p, uses: v.uses.slice(0, MAX_OFFERS), seed: v.seed };
       if (v.home) saved.home = [...v.home];
       return saved;
@@ -196,9 +211,13 @@ const placedOrGenerated = (edits: ReadonlyMap<number, number>, index: number, bl
 export function parseSave(raw: unknown): ParsedSave {
   if (!isObject(raw) || raw.format !== 'blockwild') throw new Error('This is not a Blockwild world save.');
   if (typeof raw.version !== 'number' || raw.version < MIN_VERSION) throw new Error(OLD_SAVE_MESSAGE);
-  if (raw.version > SAVE_VERSION) throw new Error('This world was saved by a newer version of Blockwild.');
+  // Version 12 is the city's: any other world claiming it comes from a build newer than this one.
+  if (raw.version > CITY_SAVE_VERSION || raw.version > SAVE_VERSION && raw.mode !== 'city') throw new Error('This world was saved by a newer version of Blockwild.');
   const settings = validateSettings(raw);
   if (settings.seed < 1 || settings.seed !== raw.seed || settings.mode !== raw.mode || settings.difficulty !== raw.difficulty || settings.keepInventory !== raw.keepInventory) throw invalid('settings');
+  const city = settings.mode === 'city';
+  // The city arrived with version 12; its settings are written out in full.
+  if (city && (raw.version < CITY_SAVE_VERSION || settings.minutes !== raw.minutes || settings.bonks !== raw.bonks)) throw invalid('settings');
   if (raw.worldId !== undefined && (typeof raw.worldId !== 'string' || !/^[a-z0-9-]{1,64}$/.test(raw.worldId))) throw invalid('settings');
   if (typeof raw.edits !== 'string' || typeof raw.populated !== 'string') throw invalid('edits');
   const edits = raw.version >= 11 ? unpackEdits(raw.edits) : unpackOldEdits(raw.edits);
@@ -219,8 +238,11 @@ export function parseSave(raw: unknown): ParsedSave {
       health: number(value.health, 0.5, MAX_HEALTH, 'players'), food: integer(value.food, 0, MAX_FOOD, 'players'), saturation: number(value.saturation, 0, MAX_FOOD, 'players'),
       inv: slots(value.inv, INVENTORY_SIZE, 'inventory'), armor: armorSlots(value.armor), bed: bed && !stale(bed[0], bed[2]) ? bed : null,
       stats: statsOf(value.stats, PLAYER_STAT_KEYS), milestones: integer(value.milestones, 0, 2 ** 30, 'players'),
+      ...cityOf(value.c, city),
     };
   });
+  // Animals and villagers do not exist in the city: their room in the file is what the city records use.
+  if (city && (list(raw.animals, 0, 'animals').length || list(raw.villagers, 0, 'villagers').length)) throw invalid('animals');
   const chests = new Map<number, (Slot | null)[]>();
   for (const value of list(raw.chests, MAX_CHESTS, 'chests')) {
     if (!isObject(value)) throw invalid('chests');
@@ -263,6 +285,14 @@ export function parseSave(raw: unknown): ParsedSave {
   };
 }
 
+/** A player's city record (only city saves carry one; coins and totals are bounded so the file's size is too). */
+function cityOf(value: unknown, city: boolean): { city?: CityRecord } {
+  if (value === undefined) return {};
+  if (!city) throw invalid('players');
+  const c = list(value, 4 + STAT_KEYS_CITY.length, 'city').map(n => integer(n, 0, 99_999_999, 'city'));
+  if (c.length !== 4 + STAT_KEYS_CITY.length || c[1]! >= 2 ** RIDES.length || c[2]! > 4096 || c[3]! > 64) throw invalid('city');
+  return { city: { coins: c[0]!, own: c[1]!, flat: c[2]! - 1, plot: c[3]! - 1, stats: Object.fromEntries(STAT_KEYS_CITY.map((key, k) => [key, c[4 + k]!])) as CityRecord['stats'] } };
+}
 function endOf(value: unknown): SavedEnd {
   if (!isObject(value) || (value.dragon !== 'alive' && value.dragon !== 'dead') || typeof value.portalActive !== 'boolean' || typeof value.egg !== 'boolean') throw invalid('end');
   const crystals = list(value.crystals, END_PILLARS, 'end').map(n => integer(n, 0, END_PILLARS - 1, 'end'));

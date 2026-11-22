@@ -51,7 +51,8 @@ const NATURE = new Set<number>([B.grass_block, B.dirt, B.sand, B.gravel, B.stone
   B.coal_ore, B.iron_ore, B.gold_ore, B.diamond_ore, B.snow_block, B.snowy_grass, B.ice, B.cactus, B.clay, B.short_grass, B.fern, B.dandelion, B.poppy, B.cornflower,
   B.dead_bush, B.oak_sapling, B.birch_sapling, B.spruce_sapling, B.pumpkin, B.melon, B.bedrock, B.obsidian, B.red_mushroom, B.brown_mushroom, B.emerald_ore, B.redstone_ore, B.dirt_path]);
 const DECORATION = new Set<number>([B.crafting_table, B.furnace, B.chest, B.torch, B.ladder, B.lantern, B.bookshelf, B.jack_o_lantern, B.oak_fence, B.cobweb, B.monster_spawner,
-  B.iron_bars, B.soul_torch, B.soul_lantern, B.end_portal_frame, B.dragon_egg]);
+  B.iron_bars, B.soul_torch, B.soul_lantern, B.end_portal_frame, B.dragon_egg,
+  B.window, B.window_lit, B.awning, B.shop_sign, B.sign_band, B.steel_post, B.light_panel, B.counter, B.shelf, B.crate, B.bin, B.mailbox, B.job_board, B.till, B.vault_door, B.cone]);
 const NETHER_BLOCKS = new Set<number>([B.netherrack, B.soul_sand, B.glowstone, B.nether_quartz_ore, B.nether_gold_ore, B.magma_block, B.nether_bricks, B.quartz_block,
   B.nether_brick_fence, B.nether_brick_stairs, B.nether_brick_slab]);
 const REDSTONE_BLOCKS = new Set<number>([B.redstone_torch, B.lever, B.stone_button, B.oak_button, B.stone_pressure_plate, B.oak_pressure_plate, B.redstone_lamp,
@@ -101,11 +102,19 @@ add('ender_pearl', 'tools', { stack: 16 });
 add('ender_eye', 'tools', { name: 'Eye of Ender' });
 add('nether_wart', 'nether', { places: B.nether_wart });
 add('end_crystal', 'combat');
+// Caper City: the foam bopper everyone carries, throwables, shop food, coins and loot.
+add('bopper', 'combat', { stack: 1, name: 'Foam Bopper' });
+add('cream_pie', 'combat', { stack: 16 });
+add('disguise_kit', 'tools', { stack: 4 });
+add('coin', 'materials', { hidden: true });
+add('coin_purse', 'materials', { stack: 16 });
+add('gold_watch', 'materials', { stack: 16 });
+add('swag_bag', 'materials', { stack: 4 });
 
 const FOODS: [ItemName, number, number][] = [
   ['bread', 5, 6], ['apple', 4, 2.4], ['golden_apple', 4, 9.6], ['carrot', 3, 3.6], ['potato', 1, 0.6], ['baked_potato', 5, 6], ['melon_slice', 2, 1.2],
   ['beef', 3, 1.8], ['cooked_beef', 8, 12.8], ['porkchop', 3, 1.8], ['cooked_porkchop', 8, 12.8], ['chicken', 2, 1.2], ['cooked_chicken', 6, 7.2],
-  ['mutton', 2, 1.2], ['cooked_mutton', 6, 9.6], ['rotten_flesh', 4, 0.8],
+  ['mutton', 2, 1.2], ['cooked_mutton', 6, 9.6], ['rotten_flesh', 4, 0.8], ['burger', 8, 8], ['donut', 4, 3], ['fizz_pop', 2, 1],
 ];
 for (const [key, hunger, saturation] of FOODS) add(key, 'food', { food: { hunger, saturation } });
 table[I.carrot]!.places = B.carrots;

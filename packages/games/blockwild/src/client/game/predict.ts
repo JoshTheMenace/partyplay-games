@@ -41,7 +41,7 @@ export function replay(pv: Carried, cmds: readonly Cmd[], nearTable: boolean): P
     case 'creative': if (pv.mode === 'creative') c.inv[cmd.slot] = { id: cmd.id, n: maxStack(cmd.id) }; break;
     case 'place': {
       const slot = c.inv[cmd.slot];
-      if (pv.mode === 'survival' && slot) c.inv[cmd.slot] = slot.n > 1 ? { ...slot, n: slot.n - 1 } : null;
+      if (pv.mode !== 'creative' && slot) c.inv[cmd.slot] = slot.n > 1 ? { ...slot, n: slot.n - 1 } : null;
       break;
     }
     // Using armor in hand puts it on (swapping with what was worn); other held uses change nothing predictable.
@@ -129,7 +129,9 @@ export function closeScreen() {
   const open = store.get().screen;
   if (!open) return;
   store.set({ screen: null });
-  if (open === 'pause') return;
+  if (open === 'pause' || open === 'map') return;
+  // A city counter is the server's to close.
+  if (open === 'counter') { sendCommand({ t: 'city', a: 'shut' }); return; }
   screenKey = '';
   sendCommand({ t: 'close' });
 }

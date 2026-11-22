@@ -30,6 +30,8 @@ export type InteractContext = {
   bodies(): Iterable<readonly number[]>;
   /** Remember a predicted edit so the matching server effect is not played twice. */
   predicted(x: number, y: number, z: number): void;
+  /** Caper City: the block may not be mined or built on (it is the city's, not the player's plot). */
+  locked?(x: number, y: number, z: number, cell: number): boolean;
 };
 export type Frame = { dt: number; mode: Mode; body: Body; yaw: number; pitch: number; eye: Vec3; dir: Vec3; target: Aim | null; held: number; slot: number; food: number; hasArrows: boolean };
 
@@ -95,7 +97,7 @@ export class Interaction {
       }
       return;
     }
-    if (t?.kind !== 'block') {
+    if (t?.kind !== 'block' || this.ctx.locked?.(t.x, t.y, t.z, t.cell)) {
       if (input.minePressed) { this.swing(); this.ctx.sfx.play('swish', { volume: 0.25 }); }
       this.stopMining();
       return;
@@ -242,7 +244,7 @@ export class Interaction {
   }
 
   private place(f: Frame, t: Extract<Target, { kind: 'block' }>): boolean {
-    if (!itemOf(f.held)?.places) return false;
+    if (!itemOf(f.held)?.places || this.ctx.locked?.(t.x, t.y, t.z, B.air)) return false;
     const hy = t.face === 2 || t.face === 3 ? undefined : t.point[1] - t.y;
     const writes = placementFor({ getCell: this.ctx.getCell }, f.held, hy === undefined ? t : { ...t, hy }, f.yaw, f.pitch);
     if (!writes) return false;

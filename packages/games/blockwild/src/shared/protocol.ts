@@ -3,17 +3,26 @@ import { wrapAngle } from './coords';
 import type { Slot } from './items';
 export type { Slot };
 
-export type Mode = 'survival' | 'creative';
+export type Mode = 'survival' | 'creative' | 'city';
 export type Difficulty = 'peaceful' | 'easy' | 'normal';
-/** seed 0 = a random world each round (the server picks the real seed; View.seed always holds it). */
-export type Settings = { mode: Mode; seed: number; difficulty: Difficulty; keepInventory: boolean };
+/** Which generator makes the terrain: the wild world of survival and creative, or Caper City. */
+export type Terrain = 'wild' | 'city';
+export const terrainOf = (mode: Mode): Terrain => mode === 'city' ? 'city' : 'wild';
+/** Length of a timed city round in minutes (0 = free play until the host finishes it). */
+export type Minutes = 0 | 10 | 20 | 30;
+/**
+ * seed 0 = a random world each round (the server picks the real seed; View.seed always holds it). `minutes` and `bonks`
+ * (players may bonk each other) exist only in city settings, so survival and creative settings keep their old shape.
+ */
+export type Settings = { mode: Mode; seed: number; difficulty: Difficulty; keepInventory: boolean; minutes?: Minutes; bonks?: boolean };
 /** Gameplay never uses reliable actions (256/round cap); everything rides in held input. */
 export type Action = { type: 'noop' };
 
 /** Input flags (`Input.f`). */
-export const IF = { ON_GROUND: 1, SNEAK: 2, SPRINT: 4, FLYING: 8, USING: 16, SWINGING: 32, NO_POS: 64 } as const;
+/** PARKED (Caper City): this screen has not seen the parked vehicles round it lately, so list them in the next scene. */
+export const IF = { ON_GROUND: 1, SNEAK: 2, SPRINT: 4, FLYING: 8, USING: 16, SWINGING: 32, NO_POS: 64, PARKED: 128 } as const;
 /** Public player flags (`PubPlayer.flags`). */
-export const PF = { SNEAKING: 1, SLEEPING: 2, DEAD: 4, FLYING: 8, USING: 16, OFFLINE: 32, BURNING: 64 } as const;
+export const PF = { SNEAKING: 1, SLEEPING: 2, DEAD: 4, FLYING: 8, USING: 16, OFFLINE: 32, BURNING: 64, RIDING: 128, DIZZY: 256 } as const;
 /** Mob state bits (`PubMob.s`). ANGRY: provoked (zombified piglins). BURNING: on fire. */
 export const MS = { SHEARED: 1, BABY: 2, ANGRY: 4, BURNING: 8 } as const;
 
@@ -41,7 +50,17 @@ export type CmdBody =
   | { t: 'wake' }
   | { t: 'creative'; id: number; slot: number }
   /** Execute offer i on the open trade screen once, or as many times as possible with max. */
-  | { t: 'trade'; i: number; max?: boolean };
+  | { t: 'trade'; i: number; max?: boolean }
+  /** Caper City: one of CITY_ACTS with up to two small integers (an offer, a slot, a place). */
+  | { t: 'city'; a: CityAct; i?: number; j?: number };
+/**
+ * City commands. exit: leave the vehicle. horn. open (i = place): open its counter or job board. shut. buy (i = offer of the
+ * open place, j = count). sell (i = inventory slot). gig (i = offer of the open board). quit: drop the gig. pay: settle
+ * heat at the Watch House. heal: the clinic. call (i = vehicle kind): fetch an owned vehicle at a garage. scrap: sell the
+ * vehicle being driven. grab: empty the till or vault being looked at (i = its place).
+ */
+export const CITY_ACTS = ['exit', 'horn', 'open', 'shut', 'buy', 'sell', 'gig', 'quit', 'pay', 'heal', 'call', 'scrap', 'grab'] as const;
+export type CityAct = typeof CITY_ACTS[number];
 export type Cmd = { n: number } & CmdBody;
 export type CmdType = CmdBody['t'];
 
@@ -89,7 +108,8 @@ export const PK = { ARROW: 0, GHAST_FIREBALL: 1, BLAZE_FIREBALL: 2, EYE: 3, DRAG
 export type PubArrow = { id: number; x: number; y: number; z: number; vx: number; vy: number; vz: number; k?: number };
 export const FX_KINDS = ['break', 'place', 'hit', 'explode', 'mob', 'hurtMob', 'die', 'pickup', 'eat', 'splash', 'bow', 'door', 'chest', 'furnace', 'craft', 'levelup',
   'portal', 'travel', 'ignite', 'fizz', 'lever', 'button', 'piston', 'tnt', 'trade', 'spawner', 'ghast', 'fireball', 'lamp',
-  'eye', 'shatter', 'portalOpen', 'dragonDeath', 'acid', 'crystal', 'pearl', 'blazeShoot', 'scream', 'teleport', 'observer'] as const;
+  'eye', 'shatter', 'portalOpen', 'dragonDeath', 'acid', 'crystal', 'pearl', 'blazeShoot', 'scream', 'teleport', 'observer',
+  'bonk', 'splat', 'coins', 'siren', 'gasp', 'horn', 'crash', 'bust'] as const;
 export type FxKind = typeof FX_KINDS[number];
 /**
  * Monotonic id; clients play each once. a: cell value for break/place, mob type for mob; piston: the moved cells'
@@ -98,6 +118,8 @@ export type FxKind = typeof FX_KINDS[number];
  * centre, loud within 64 blocks); 'dragonDeath' the death animation starting; 'acid' an acid cloud (a = radius); 'crystal'
  * a crystal destroyed; 'pearl' a pearl landing (the thrower arrives); 'blazeShoot' a blaze volley; 'scream' an enderman
  * provoked; 'teleport' an enderman or player vanishing/arriving here; 'observer' an observer pulse.
+ * Caper City: 'bonk' (stars over a head), 'splat' (a cream pie), 'coins' (a = how many), 'siren' (heat rose; a = tier), 'gasp'
+ * (bystanders saw it), 'horn' (a = vehicle kind), 'crash', 'bust' (an arrest or a ticket).
  */
 export type Fx = { id: number; k: FxKind; x: number; y: number; z: number; a?: number };
 /** World totals; `dragons` counts Ender Dragons slain (0 in worlds from before save v10). */
@@ -113,8 +135,55 @@ export type JournalEntry = { id: string; mined: number; placed: number; crafted:
  * Entities on the wire are number tuples (see the encode/decode pairs below); `Scene` is what a screen draws after decoding.
  * p players, m mobs, i items, a arrows, f effects. A scene holds only what is near its viewer.
  */
-export type WireScene = { p: number[][]; m: number[][]; i: number[][]; a: number[][]; f: number[][] };
-export type Scene = { players: PubPlayer[]; mobs: PubMob[]; items: PubItem[]; arrows: PubArrow[]; fx: Fx[] };
+export type WireScene = { p: number[][]; m: number[][]; i: number[][]; a: number[][]; f: number[][]; c?: number[][]; v?: number[][] };
+/** `npcs` and `rides` exist only in Caper City scenes. */
+export type Scene = { players: PubPlayer[]; mobs: PubMob[]; items: PubItem[]; arrows: PubArrow[]; fx: Fx[]; npcs?: PubNpc[]; rides?: PubRide[] };
+/**
+ * Caper City ids for `attack` and `interact`: residents by index from CITY_ID, players by seat from CITY_PLAYER_ID.
+ * Vehicles keep their entity id (always far below).
+ */
+export const CITY_ID = 2 ** 30, CITY_PLAYER_ID = CITY_ID + 2 ** 20;
+/** Live residents without a script count on from the roster's length: bystanders first, officers from this many further. */
+export const EXTRA_OFFICERS = 4096;
+/** A live resident's state (`PubNpc.s`): what the crowd renderer animates. */
+export const NS = { WALK: 0, STAND: 1, DIZZY: 2, FLEE: 3, CHASE: 4, GRAB: 5, ANGRY: 6, HAIL: 7, DODGE: 8 } as const;
+/**
+ * A resident knocked off their script (or an extra: a reinforcement officer, an ejected driver, a waiting cab rider): `i` is the resident
+ * index (extras continue past the roster), `s` an NS state.
+ */
+export type PubNpc = { i: number; x: number; y: number; z: number; yaw: number; s: number };
+/** Vehicle flags (`PubRide.f`). ASLEEP: parked and empty (sent only once a second). */
+export const RF = { ASLEEP: 1, DRIVEN: 2, SIREN: 4, TRAFFIC: 8, OWNED: 16, BRAKING: 32 } as const;
+/** k: index into the vehicle table; paint: index into its paint colours; v: forward speed (m/s); pt: pitch (aircraft). */
+export type PubRide = { id: number; k: number; x: number; y: number; z: number; yaw: number; paint: number; f: number; v: number; pt?: number };
+/** The city scoreboard and round clock, in the public view about once a second. */
+export type CityView = {
+  /** [seat, coins, heat tier 0..4, net worth] for everyone. */
+  board: number[][];
+  /** Seconds left in a timed round (absent in free play). */
+  left?: number;
+  /** The newest news line (n counts them, so each plays once). */
+  news?: [n: number, text: string];
+};
+/** A gig on offer at a job board: kind (GIG kinds), pay and where it goes (block coordinates). */
+export type GigOffer = { k: number; pay: number; x: number; z: number; secs: number };
+/** The gig a seat is on: `stage` 0 = fetch (cab riders), 1 = deliver; (x, z) is where to go now. */
+export type GigView = { k: number; stage: number; x: number; z: number; left: number; pay: number; drops: number };
+/** A seat's own city state. */
+export type CityPrivate = {
+  coins: number;
+  /** 0..100. `seen`: an officer has eyes on this player right now. `grab`: 0..1 while one is making the arrest. */
+  heat: number; seen?: 1; grab?: number;
+  /** What the seat rides: [vehicle id, kind, seat (0 drives)]. */
+  ride?: [number, number, number];
+  gig?: GigView;
+  /** The place (index into the plan's places) whose counter or job board is open, and that board's offers. */
+  open?: number; offers?: GigOffer[];
+  /** Owned vehicle kinds as a bitmask, and the lots of the flat and plot owned (−1 none). */
+  own: number; flat: number; plot: number;
+  /** Ticks left of seeing stars after a bonk. */
+  dizzy?: number;
+};
 /** A seat's identity; `View.who` lists every player of the round in seat order (the index is the seat number). */
 export type Who = [id: string, name: string, color: string];
 /** One player on the TV's roster: where they are and how they are doing, without the per-frame detail. */
@@ -142,7 +211,20 @@ export type View = {
   journal?: JournalEntry[];
   boss?: BossView;
   victory?: Victory;
+  /** Caper City: the scoreboard, about once a second. */
+  city?: CityView;
+  /** Caper City: each seat's final ledger line as numbers in LEDGER_KEYS order (the row's index is the seat), once the round is finished. */
+  ledger?: number[][];
 };
+/** One player's career totals for the City Ledger (and the save). */
+export type LedgerEntry = { id: string; worth: number; coins: number; earned: number; gigs: number; bonks: number; busts: number; escapes: number; peak: number; drove: number; flew: number; kos: number };
+/**
+ * The ledger on the wire: these numbers for each seat (ids come from `who`). Results snapshots repeat many times a
+ * second, so a line is thirty-odd bytes, not an object with eleven names in it.
+ */
+export const LEDGER_KEYS = ['worth', 'coins', 'earned', 'gigs', 'bonks', 'busts', 'escapes', 'peak', 'drove', 'flew', 'kos'] as const;
+export const encodeLedger = (entry: LedgerEntry): number[] => LEDGER_KEYS.map(key => entry[key]);
+export const decodeLedger = (view: Pick<View, 'ledger' | 'who'>): LedgerEntry[] => (view.ledger ?? []).map((row, seat) => ({ id: view.who[seat]?.[0] ?? '', ...Object.fromEntries(LEDGER_KEYS.map((key, k) => [key, row[k] ?? 0])) }) as LedgerEntry);
 
 export type ScreenKind = 'table' | 'furnace' | 'chest' | 'trade';
 /** One villager offer: pay `buy` (+ `buyB`) from the inventory for `sell`; `left` uses remain until the next restock. */
@@ -189,6 +271,7 @@ export type PrivateView = {
   /** Portal charge 0..1 while standing in a nether portal; omitted at 0. */
   portal?: number;
   dimension: Dimension;
+  city?: CityPrivate;
 };
 
 /**
@@ -306,8 +389,20 @@ export function decodeFx(t: readonly number[]): Fx {
   if (t.length > 5) fx.a = t[5]!;
   return fx;
 }
-export const decodeScene = (wire: WireScene, who: readonly Who[]): Scene =>
-  ({ players: wire.p.map(t => decodePlayer(t, who)), mobs: wire.m.map(decodeMob), items: wire.i.map(decodeItem), arrows: wire.a.map(decodeArrow), fx: wire.f.map(decodeFx) });
+export const encodeNpc = (n: PubNpc): number[] => [n.i, q2(n.x), q2(n.y), q2(n.z), q2(n.yaw), n.s];
+export const decodeNpc = (t: readonly number[]): PubNpc => ({ i: t[0]!, x: t[1]!, y: t[2]!, z: t[3]!, yaw: t[4]!, s: t[5] ?? 0 });
+export const encodeRide = (r: PubRide): number[] => trim([r.id, r.k, q2(r.x), q2(r.y), q2(r.z), q2(r.yaw), r.paint, r.f, q2(r.v), q2(r.pt ?? 0)], 8);
+export function decodeRide(t: readonly number[]): PubRide {
+  const ride: PubRide = { id: t[0]!, k: t[1]!, x: t[2]!, y: t[3]!, z: t[4]!, yaw: t[5]!, paint: t[6]!, f: t[7]!, v: t[8] ?? 0 };
+  if (t[9]) ride.pt = t[9];
+  return ride;
+}
+export function decodeScene(wire: WireScene, who: readonly Who[]): Scene {
+  const scene: Scene = { players: wire.p.map(t => decodePlayer(t, who)), mobs: wire.m.map(decodeMob), items: wire.i.map(decodeItem), arrows: wire.a.map(decodeArrow), fx: wire.f.map(decodeFx) };
+  if (wire.c) scene.npcs = wire.c.map(decodeNpc);
+  if (wire.v) scene.rides = wire.v.map(decodeRide);
+  return scene;
+}
 /**
  * Snapshots between entity feeds. Rooms of up to 16 get a scene in every snapshot; bigger rooms get one in every
  * second snapshot (seats take turns, so the work and the traffic stay even) and draw a little further behind.
@@ -321,13 +416,15 @@ export const encodeRoster = (e: RosterEntry): number[] => [e.seat, Math.round(e.
 export const seatsOf = (who: readonly Who[]) => who.map(([id, name, color]) => ({ id, name, color }));
 export const decodeRoster = (t: readonly number[]): RosterEntry => ({ seat: t[0]!, x: t[1]!, y: t[2]!, z: t[3]!, health: t[4]!, held: t[5]!, flags: t[6]!, armor: t[7]! });
 
-const MODES: readonly Mode[] = ['survival', 'creative'], DIFFICULTIES: readonly Difficulty[] = ['peaceful', 'easy', 'normal'];
+export const MODES: readonly Mode[] = ['survival', 'creative', 'city'];
+const DIFFICULTIES: readonly Difficulty[] = ['peaceful', 'easy', 'normal'], MINUTES: readonly Minutes[] = [0, 10, 20, 30];
 const pick = <T>(value: unknown, options: readonly T[], fallback: T): T => options.includes(value as T) ? value as T : fallback;
 /** Deterministic defaults: survival, seed 0 (random world), normal, keepInventory. */
 export function validateSettings(raw: unknown): Settings {
   const r = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
   const seed = typeof r.seed === 'number' && Number.isInteger(r.seed) && r.seed >= 0 && r.seed <= 999999 ? r.seed : 0;
-  return { mode: pick(r.mode, MODES, 'survival'), seed, difficulty: pick(r.difficulty, DIFFICULTIES, 'normal'), keepInventory: typeof r.keepInventory === 'boolean' ? r.keepInventory : true };
+  const settings: Settings = { mode: pick(r.mode, MODES, 'survival'), seed, difficulty: pick(r.difficulty, DIFFICULTIES, 'normal'), keepInventory: typeof r.keepInventory === 'boolean' ? r.keepInventory : true };
+  return settings.mode === 'city' ? { ...settings, minutes: pick(r.minutes, MINUTES, 0), bonks: typeof r.bonks === 'boolean' ? r.bonks : true } : settings;
 }
 
 export const neutralInput = (): Input => ({ p: [0, 0, 0], v: [0, 0, 0], yaw: 0, pitch: 0, f: IF.NO_POS, slot: 0, mine: null, tpAck: 0, cmds: [], bag: 0 });
@@ -378,6 +475,13 @@ export function parseCmd(raw: unknown): Cmd | null {
     case 'wake': return { n, t: 'wake' };
     case 'creative': { const id = int(r.id, 1, ITEM_MAX), slot = int(r.slot, 0, SLOT_MAX); return id === null || slot === null ? null : { n, t: 'creative', id, slot }; }
     case 'trade': { const i = int(r.i, 0, 15); return i === null ? null : r.max === true ? { n, t: 'trade', i, max: true } : { n, t: 'trade', i }; }
+    case 'city': {
+      if (!CITY_ACTS.includes(r.a as CityAct)) return null;
+      const cmd: Cmd = { n, t: 'city', a: r.a as CityAct }, i = int(r.i, 0, 65535), j = int(r.j, 0, 65535);
+      if (i !== null) cmd.i = i;
+      if (j !== null) cmd.j = j;
+      return cmd;
+    }
     default: return null;
   }
 }
@@ -389,7 +493,7 @@ export function parseCmd(raw: unknown): Cmd | null {
 export function parseInput(raw: unknown): Input {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return neutralInput();
   const r = raw as Record<string, unknown>, p = vec(r.p, POS);
-  let f = int(r.f, 0, 127) ?? 0;
+  let f = int(r.f, 0, 255) ?? 0;
   if (!p) f |= IF.NO_POS;
   const mine = vec(r.mine, [[0, COORD], [0, HEIGHT - 1], [0, COORD]]);
   const seen = new Set<number>(), cmds: Cmd[] = [];

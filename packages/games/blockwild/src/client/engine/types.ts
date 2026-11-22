@@ -1,4 +1,5 @@
 import type { DataArrayTexture } from 'three';
+import type { Terrain } from '../../shared/protocol';
 
 /**
  * Block textures as one 2D array texture, structurally the same as the art atlas (src/client/art/atlas.ts);
@@ -42,7 +43,7 @@ export const OPAQUE = 0, CUTOUT = 1, TRANSLUCENT = 2;
 export const VF_LEAVES = 1, VF_PLANT = 2, VF_WATER = 4, VF_SURFACE = 8, VF_LAVA = 16, VF_PORTAL = 32, VF_FIRE = 64, VF_WIRE = 128, VF_END = 256;
 
 export type ToWorker =
-  | { type: 'init'; seed: number; layers: Record<string, number>; capacity: number }
+  | { type: 'init'; seed: number; terrain?: Terrain; layers: Record<string, number>; capacity: number }
   | { type: 'load'; keys: number[] }
   | { type: 'cancel'; keys: number[] }
   | { type: 'drop'; keys: number[] }

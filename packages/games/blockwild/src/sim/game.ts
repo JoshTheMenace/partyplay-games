@@ -7,10 +7,11 @@ import { cellXYZ, chunkKey, type Vec3 } from '../shared/coords';
 import { createRng } from '../shared/noise';
 import { bodyCollides } from '../shared/physics';
 import { returnToInventory, type Containers } from '../shared/inventory';
-import { IF, MOB, MOB_TYPES, neutralInput, MS, type Input, type Settings } from '../shared/protocol';
+import { IF, MOB, MOB_TYPES, neutralInput, MS, terrainOf, type Input, type Settings } from '../shared/protocol';
 import { reserveStructurePlans } from '../shared/structures/index';
 import { findSpawn, generateChunk } from '../shared/worldgen';
 import { newBlazeState } from './blaze';
+import { cityRecord, hottestSeat, initCity, tickCity } from './city';
 import { tickArrows } from './combat';
 import { runCommands, updateHolds } from './commands';
 import { closeScreen, tickFurnaces, validateScreens } from './containers';
@@ -41,6 +42,8 @@ import { blockChanged, indexCell, makeReader, standNear } from './world';
 const chunkCapacity = (players: number) => Math.max(640, players * 56 + 128);
 /** Chunks kept loaded around each player (mob spawning reaches 48 blocks) and the per-tick generation time budget (ms). */
 const LOAD_RADIUS = 3, GENERATE_MS = 2;
+/** A new city starts at 08:30, with the shops open and the streets busy. */
+const CITY_START_TICK = 2500;
 const CREATIVE_BREAKS_PER_SECOND = 5;
 
 /** `source` and `spawn` override worldgen (tests use flat worlds). */
@@ -50,8 +53,10 @@ export type CreateOptions = { source?: ChunkSource; save?: ParsedSave; spawn?: V
 const realSeed = (settings: Settings, ctx: RoundContext) => settings.seed || (ctx.seed >>> 0) % 999999 + 1;
 
 export function createState(ctx: RoundContext, requested: Settings, options: CreateOptions = {}): State {
-  const settings = { ...requested, seed: realSeed(requested, ctx) }, save = options.save, growables = new Set<number>();
-  const generate = options.source ?? ((cx, cz) => generateChunk(settings.seed, cx, cz));
+  const city = requested.mode === 'city';
+  // The city keeps what you carry when you are knocked out, whatever the survival setting was.
+  const settings = { ...requested, seed: realSeed(requested, ctx), ...city ? { keepInventory: true } : {} }, save = options.save, growables = new Set<number>();
+  const terrain = terrainOf(settings.mode), generate = options.source ?? ((cx, cz) => generateChunk(settings.seed, cx, cz, terrain));
   // Worldgen sugar cane and spawners are not edits, so register them whenever their chunk is generated.
   const source: ChunkSource = (cx, cz) => {
     const cells = trackCane(growables, cx, cz, generate(cx, cz));
@@ -64,14 +69,14 @@ export function createState(ctx: RoundContext, requested: Settings, options: Cre
   const state: State = {
     settings, world, worldId: save?.worldId ?? `${settings.seed}-${Math.floor(ctx.nowMs).toString(36)}`,
     get: makeReader(world, false), getLoaded: makeReader(world, true), rand: createRng((settings.seed * 7919 + ctx.seed) | 0),
-    clock: 0, time: save?.time ?? START_TICK, day: save?.day ?? 0, revision: 1, editRev: 1, tailSince: 0, foldedAt: 0, measureAt: 0, focus: -1, focusUntil: 0, frame: null,
+    clock: 0, time: save?.time ?? (city ? CITY_START_TICK : START_TICK), day: save?.day ?? 0, revision: 1, editRev: 1, tailSince: 0, foldedAt: 0, measureAt: 0, focus: -1, focusUntil: 0, frame: null,
     players: [], mobs: [], items: [], arrows: [], fx: [], nextId: 0, fxId: 0,
     chests: save?.chests ?? new Map(), furnaces: save?.furnaces ?? new Map(), lights: new Map(), growables, animalChunks: save?.populated ?? new Set(),
     spawn: [0, 0, 0], stats: save?.stats ?? { mined: 0, placed: 0, crafted: 0, mobs: 0, deaths: 0, days: 0, dragons: 0 }, finished: false, ticks: 0,
     pathBudget: 0, editsCache: { revision: 0, list: [] }, source, absent: [],
     structures: newStructureState(), portals: newPortalState(), fire: newFireState(), nether: newNetherState(), redstone: newRedstoneState(), villages: newVillageState(),
     blaze: newBlazeState(), eyes: newEyeState(), dragon: newDragonState(), endermen: newEndermanState(), pearls: newPearlState(),
-    end: newEndState(save?.end, save?.victory), pearlPity: save?.pearlPity ?? 0,
+    end: newEndState(save?.end, save?.victory), pearlPity: save?.pearlPity ?? 0, city: null,
   };
   // Chunk by chunk, so each generates once however many edits it holds (the saved y-first order thrashes the cache).
   const chunkOf = (index: number) => { const [x, , z] = cellXYZ(index); return chunkKey(x >> 4, z >> 4); };
@@ -89,7 +94,7 @@ export function createState(ctx: RoundContext, requested: Settings, options: Cre
   for (const index of state.chests.keys()) if (!holds(index, B.chest)) state.chests.delete(index);
   for (const index of state.furnaces.keys()) if (!holds(index, B.furnace, B.furnace_lit)) state.furnaces.delete(index);
   // The shared worldgen search (the same one the scene preloads), settled onto the real, possibly edited, ground.
-  const [spawnX, spawnY, spawnZ] = options.spawn ?? findSpawn(settings.seed);
+  const [spawnX, spawnY, spawnZ] = options.spawn ?? findSpawn(settings.seed, terrain);
   state.spawn = standNear(state, [spawnX + 0.5, spawnY, spawnZ + 0.5]);
   const names = new Map<string, number>(), matched = new Set<string>();
   for (const p of ctx.players) names.set(p.name, (names.get(p.name) ?? 0) + 1);
@@ -106,6 +111,7 @@ export function createState(ctx: RoundContext, requested: Settings, options: Cre
     state.players.push(player);
   });
   state.absent = save?.players.filter(saved => !matched.has(saved.name)) ?? [];
+  if (city) initCity(state, state.players.map(player => matched.has(player.name) ? save?.players.find(saved => saved.name === player.name)?.city : undefined));
   for (const a of save?.animals ?? []) {
     const mob = newMob(state, a.t, a.x, a.y, a.z, (a.s & MS.BABY) !== 0);
     mob.sheared = (a.s & MS.SHEARED) !== 0;
@@ -124,7 +130,8 @@ function withHeld(player: Player): Player {
 
 /** What the save module needs from the live state. */
 export const saveSource = (state: State): SaveSource => ({
-  settings: state.settings, worldId: state.worldId, time: state.time, day: state.day, edits: state.world.edits, players: [...state.players.map(withHeld), ...state.absent],
+  settings: state.settings, worldId: state.worldId, time: state.time, day: state.day, edits: state.world.edits,
+  players: [...state.players.map(withHeld).map(player => state.city ? { ...player, city: cityRecord(state, player) } : player), ...state.absent],
   chests: state.chests, furnaces: state.furnaces, populated: state.animalChunks, stats: state.stats, end: state.end, victory: state.end.victory, pearlPity: state.pearlPity,
   animals: state.mobs.filter(mob => MOB_TYPES[mob.t]!.kind === 'animal' && mob.health > 0).map(mob => ({ t: mob.t, x: mob.x, y: mob.y, z: mob.z, s: (mob.sheared ? MS.SHEARED : 0) | (mob.baby > 0 ? MS.BABY : 0) })),
   villagers: state.mobs.filter(mob => mob.t === MOB.villager && mob.health > 0).map(mob => ({ x: mob.x, y: mob.y, z: mob.z, p: mob.p, home: mob.home, uses: mob.uses, seed: mob.seed })),
@@ -150,7 +157,7 @@ function streamChunks(state: State) {
       if (!loaded && r > 0 && generated > 0 && performance.now() - start > GENERATE_MS) continue;
       if (!loaded || refresh) cache.get(cx, cz);
       if (!loaded) generated++;
-      if (!state.animalChunks.has(chunkKey(cx, cz)) && r >= 1) populateChunk(state, cx, cz);
+      if (!state.city && !state.animalChunks.has(chunkKey(cx, cz)) && r >= 1) populateChunk(state, cx, cz);
     }
   }
 }
@@ -163,6 +170,9 @@ const FOCUS_SECONDS = 18;
  */
 function pickFocus(state: State) {
   const players = state.players, current = players[state.focus], ok = (player?: Player) => !!player && player.connected && !player.dead;
+  // In the city the camera goes to whoever the Watch wants most.
+  const hot = state.city ? hottestSeat(state) : -1;
+  if (hot >= 0 && hot !== state.focus) { state.focus = hot; state.focusUntil = state.clock + FOCUS_SECONDS; return; }
   if (ok(current) && state.clock < state.focusUntil) return;
   const busy = (player: Player) => state.clock - Math.max(player.swingAt, player.movedAt) < 6;
   let next = -1;
@@ -203,6 +213,7 @@ export function tickState(state: State, inputs: ReadonlyMap<string, Input>, dt: 
     if (!player.connected) continue;
     const input = inputs.get(player.id) ?? neutralInput();
     player.bagAck = input.bag ?? 0;
+    player.parkedAsk = (input.f & IF.PARKED) !== 0;
     // A client still loading its world sends no position; keep its spawn protection from running out meanwhile.
     if (inputs.has(player.id) && input.f & IF.NO_POS && !player.dead && isProtected(state, player)) player.protectedUntil = state.clock + PROTECT_SECONDS;
     applyMovement(state, player, input);
@@ -214,6 +225,15 @@ export function tickState(state: State, inputs: ReadonlyMap<string, Input>, dt: 
   sleepTick(state);
   if (state.day !== day) restock(state);
   validateScreens(state);
+  if (state.city) {
+    // The city has its own inhabitants and no monsters, portals or redstone: its tick, then what lies on the ground.
+    tickCity(state, dt);
+    tickItems(state, dt);
+    tickGrowth(state);
+    foldTail(state);
+    pickFocus(state);
+    return;
+  }
   tickRedstone(state, dt);
   tickPortals(state, dt);
   tickEndPortalTravel(state, dt);

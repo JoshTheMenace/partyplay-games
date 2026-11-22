@@ -6,10 +6,11 @@ import { cellIndex } from '../shared/coords';
 import { SMELT_SECONDS } from '../shared/inventory';
 import { armorPoints, type Slot } from '../shared/items';
 import { breakTime, crackStage } from '../shared/mining';
-import {
+import { encodeLedger,
   encodeArrow, encodeFx, encodeItem, encodeMob, encodePlayer, encodeRoster, MOB, MS, nearEvery, PF, q2, rosterEvery, tvEvery,
   type Bag, type FxKind, type JournalEntry, type PrivateView, type PubMob, type PubPlayer, type Screen, type View, type Who, type WireScene,
 } from '../shared/protocol';
+import { cityLedger, cityOutcome, cityPrivate, cityPublic, cityScene, PARKED_EVERY } from './city';
 import { mobState } from './combat';
 import { screenSlots } from './containers';
 import { bossView } from './dragon';
@@ -42,17 +43,22 @@ function flagsOf(player: Player): number {
   return (player.sneaking ? PF.SNEAKING : 0) | (player.sleeping ? PF.SLEEPING : 0) | (player.dead ? PF.DEAD : 0)
     | (player.flying ? PF.FLYING : 0) | (player.useStart >= 0 ? PF.USING : 0) | (player.connected ? 0 : PF.OFFLINE) | (player.fire > 0 ? PF.BURNING : 0);
 }
+/** Flags with the city's two: riding a vehicle (the body is not drawn) and seeing stars. */
+function flagsIn(state: State, player: Player): number {
+  const cp = state.city?.players[player.seat];
+  return flagsOf(player) | (cp?.ride ? PF.RIDING : 0) | (cp && state.clock < cp.dizzyUntil ? PF.DIZZY : 0);
+}
 const armorIds = (armor: readonly (Slot | null)[]): PubPlayer['armor'] => [armor[0]?.id ?? 0, armor[1]?.id ?? 0, armor[2]?.id ?? 0, armor[3]?.id ?? 0];
 function playerTuple(state: State, player: Player): number[] {
   const held = player.inv[player.slot]?.id ?? 0, mine = player.mine;
   let crack: [number, number, number, number] | undefined;
-  if (mine && state.settings.mode === 'survival' && !player.dead) {
+  if (mine && state.settings.mode !== 'creative' && !player.dead) {
     const seconds = breakTime(state.get(mine.x, mine.y, mine.z), held, player.onGround, player.inWater);
     if (seconds > 0 && seconds < Infinity) crack = [mine.x, mine.y, mine.z, crackStage((state.clock - mine.start) / seconds)];
   }
   return encodePlayer(player.seat, {
     x: player.x, y: player.y, z: player.z, yaw: player.yaw, pitch: player.pitch, held, swing: player.swing, hurt: player.hurt, health: player.health,
-    flags: flagsOf(player), armor: armorIds(player.armor), ...crack ? { mine: crack } : {},
+    flags: flagsIn(state, player), armor: armorIds(player.armor), ...crack ? { mine: crack } : {},
   });
 }
 
@@ -121,15 +127,21 @@ export function publicView(state: State): View {
     sleeping: players.filter(player => player.sleeping).length, sleepNeed: sleepNeed(activePlayers(state).length), stats: { ...state.stats },
   };
   if (state.ticks % rosterEvery(players.length) === 0) view.roster = players.map(player => encodeRoster({
-    seat: player.seat, x: player.x, y: player.y, z: player.z, health: player.health, held: player.inv[player.slot]?.id ?? 0, flags: flagsOf(player), armor: armorPoints(player.armor),
+    seat: player.seat, x: player.x, y: player.y, z: player.z, health: player.health, held: player.inv[player.slot]?.id ?? 0, flags: flagsIn(state, player), armor: armorPoints(player.armor),
   }));
   if (state.ticks % tvEvery(players.length) === 0) {
     const subject = players[state.focus];
     view.tv = subject ? { ...tvScene(frame, subject.x, subject.z), focus: state.focus } : { p: [], m: [], i: [], a: [], f: [], focus: -1 };
+    if (state.city && subject) Object.assign(view.tv, cityScene(state, subject.x, subject.z, state.ticks % PARKED_EVERY < tvEvery(players.length)));
+  }
+  if (state.city) {
+    const city = cityPublic(state);
+    if (city) view.city = city;
+    if (state.finished) view.ledger = cityLedger(state).map(encodeLedger);
   }
   const boss = bossView(state), victory = victoryView(state);
   // The results screen and the victory celebration both read the journal.
-  if (state.finished || victory) view.journal = journalOf(state);
+  if (state.finished && !state.city || victory) view.journal = journalOf(state);
   if (boss) view.boss = boss;
   if (victory) view.victory = victory;
   return view;
@@ -167,7 +179,11 @@ export function playerView(state: State, playerId: string): PrivateView {
     dead: player.dead, mode: state.settings.mode,
     keepInventory: state.settings.keepInventory, armorPoints: armorPoints(player.armor), dimension: dimensionAt(player.x, player.z),
   };
-  if ((state.ticks + player.seat) % nearEvery(state.players.length) === 0) view.near = sceneAround(frameOf(state), player.x, player.z, NEAR);
+  if ((state.ticks + player.seat) % nearEvery(state.players.length) === 0) {
+    view.near = sceneAround(frameOf(state), player.x, player.z, NEAR);
+    if (state.city) Object.assign(view.near, cityScene(state, player.x, player.z, player.parkedAsk || (state.ticks + player.seat) % PARKED_EVERY < nearEvery(state.players.length)));
+  }
+  if (state.city) view.city = cityPrivate(state, player);
   if (player.bagAck !== bag.rev) view.bag = bag;
   const burning = Math.ceil(player.fire * 20), portal = q2(player.portal);
   if (burning > 0) view.burning = burning;
@@ -186,6 +202,7 @@ export const slayerIds = (state: State) => state.players.filter(player => state.
 
 /** Cooperative results: everyone wins once the host finishes; each row reads as a short highlight reel led by its awards. */
 export function outcome(state: State): Outcome {
+  if (state.city) return cityOutcome(state);
   const won = awards(journalOf(state), slayerIds(state));
   const rows = state.players.map(player => {
     const s = player.stats, parts = [...won.filter(award => award.ids.includes(player.id)).map(award => award.title), `${s.mined} mined`, `${s.placed} placed`, `${s.crafted} crafted`];

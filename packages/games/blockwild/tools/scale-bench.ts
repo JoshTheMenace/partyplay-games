@@ -1,11 +1,12 @@
 /**
  * Headless scale benchmark: how long a tick takes and how many bytes each screen receives per snapshot.
  *
- *   node --import tsx packages/games/blockwild/tools/scale-bench.ts [--players 10,32,64] [--layout cluster|spread|fly] [--edits 0] [--ticks 300]
+ *   node --import tsx packages/games/blockwild/tools/scale-bench.ts [--players 10,32,64] [--layout cluster|spread|fly] [--edits 0] [--ticks 300] [--mode city]
  *
  * Layouts: `cluster` puts everyone within 24 blocks of the world spawn at night (the worst case for what each phone is
  * sent), `spread` puts players 160 blocks apart (the worst case for chunks and mobs), `fly` is creative players flying
- * outward at full speed (chunk streaming). The figures are relative: they move with the load on the machine.
+ * outward at full speed (chunk streaming). With `--mode city` the world is Caper City: `cluster` is everyone on the plaza,
+ * `spread` one player at every other intersection. The figures are relative: they move with the load on the machine.
  */
 import { parseArgs } from 'node:util';
 import { SnapshotEncoder } from '../../../party-contract/src/snapshot-cache';
@@ -20,7 +21,8 @@ import type { Player, State } from '../src/sim/state';
 import { playerView, publicView } from '../src/sim/views';
 import { standNear, writeCell } from '../src/sim/world';
 
-const { values: args } = parseArgs({ options: { players: { type: 'string', default: '10,32,64' }, layout: { type: 'string', default: 'cluster' }, edits: { type: 'string', default: '0' }, ticks: { type: 'string', default: '300' }, seed: { type: 'string', default: '11' } } });
+const { values: args } = parseArgs({ options: { players: { type: 'string', default: '10,32,64' }, layout: { type: 'string', default: 'cluster' }, edits: { type: 'string', default: '0' }, ticks: { type: 'string', default: '300' }, seed: { type: 'string', default: '11' }, mode: { type: 'string', default: '' } } });
+const cityMode = args.mode === 'city';
 const layout = args.layout as 'cluster' | 'spread' | 'fly', ticks = Number(args.ticks), edits = Number(args.edits), seed = Number(args.seed);
 const quantile = (sorted: number[], q: number) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))]!;
 const summary = (times: number[]) => { const s = [...times].sort((a, b) => a - b); return `median ${quantile(s, 0.5).toFixed(2)} · p95 ${quantile(s, 0.95).toFixed(2)} · max ${s.at(-1)!.toFixed(2)} ms`; };
@@ -34,11 +36,13 @@ function place(state: State, player: Player, x: number, z: number, y?: number) {
 
 function bench(count: number) {
   const ctx = { roomId: 'bench', roundId: 'bench', seed: 7, nowMs: 0, players: Array.from({ length: count }, (_, i) => ({ id: `player-${String(i).padStart(2, '0')}-0123456789abcdef`.slice(0, 24), name: `Bot ${String(i + 1).padStart(2, '0')} Sixteen Ch`.slice(0, 16), color: '#ff5748' })) };
-  const state = createState(ctx, { ...validateSettings({}), seed, mode: layout === 'fly' ? 'creative' : 'survival' });
-  state.time = 16000;
+  const state = createState(ctx, cityMode ? validateSettings({ mode: 'city', seed }) : { ...validateSettings({}), seed, mode: layout === 'fly' ? 'creative' : 'survival' });
+  state.time = cityMode ? 6000 : 16000;
   state.players.forEach((player, i) => {
     const angle = i * 2.399963, radius = layout === 'cluster' ? 4 + Math.sqrt(i) * 3 : layout === 'spread' ? 160 * Math.sqrt(i) : 8 + i;
-    if (layout === 'fly') { place(state, player, state.spawn[0] + Math.cos(angle) * radius, state.spawn[2] + Math.sin(angle) * radius, 126); player.flying = true; }
+    // City: the plaza, or one player per intersection across the whole grid (road centres are always clear ground).
+    if (cityMode) place(state, player, layout === 'cluster' ? state.spawn[0] + (i % 8 - 4) * 1.5 : 1736 + (i % 11) * 64, layout === 'cluster' ? state.spawn[2] + Math.floor(i / 8) * 1.5 - 6 : 1736 + ((i * 3 + Math.floor(i / 11) * 5) % 11) * 64, 64);
+    else if (layout === 'fly') { place(state, player, state.spawn[0] + Math.cos(angle) * radius, state.spawn[2] + Math.sin(angle) * radius, 126); player.flying = true; }
     else place(state, player, state.spawn[0] + Math.cos(angle) * radius, state.spawn[2] + Math.sin(angle) * radius);
   });
   for (let i = 0; i < edits; i++) state.world.edits.set(cellIndex(Math.floor(state.spawn[0]) - 60 + i % 120, 100 + Math.floor(i / 14400), Math.floor(state.spawn[2]) - 60 + Math.floor(i / 120) % 120), B.stone);
@@ -88,7 +92,7 @@ function bench(count: number) {
     snapshots++;
   }
   const perSocket = publicBytes / snapshots + privateBytes / snapshots / count, hz = manifest.simulation.snapshotHz;
-  console.log(`\n${count} players · ${layout} · ${state.mobs.length} mobs · ${state.items.length} items · ${state.world.edits.size} edits · ${state.world.cache.size} chunks cached · warm-up ${(warmMs / 1000).toFixed(1)} s`);
+  console.log(`\n${count} players · ${layout} · ${state.mobs.length} mobs · ${state.items.length} items · ${state.world.edits.size} edits · ${state.world.cache.size} chunks cached · warm-up ${(warmMs / 1000).toFixed(1)} s${state.city ? ` · city: ${state.city.vehicles.length} vehicles (${state.city.vehicles.filter(v => v.rail).length} in traffic), ${state.city.npcs.size} live residents of ${state.city.people.list.length}` : ''}`);
   console.log(`  tick            ${summary(tickMs)}`);
   console.log(`  public view     ${summary(publicMs)} · ${(publicBytes / snapshots / 1024).toFixed(2)} KiB a snapshot`);
   console.log(`  private views   ${summary(privateMs)} for all ${count} · ${(privateBytes / snapshots / count / 1024).toFixed(2)} KiB each (largest ${(privateMax / 1024).toFixed(2)})`);

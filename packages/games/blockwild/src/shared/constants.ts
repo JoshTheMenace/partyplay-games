@@ -41,7 +41,7 @@ export const EDIT_LIMIT = 65536;
 export const EDIT_BYTES = 100_000;
 export const EDIT_LIMIT_TOAST = 'This world has reached its building limit.';
 /** Reach from the eye to the nearest point of a block or mob. */
-export const REACH = { survival: 4.5, creative: 5 } as const;
+export const REACH = { survival: 4.5, creative: 5, city: 4.5 } as const;
 
 export const MAX_HEALTH = 20;
 export const MAX_FOOD = 20;

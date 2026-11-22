@@ -1,11 +1,13 @@
 /** ControllerView: the playing seat's HUD and menus, layered over its own first-person SceneView. */
 import { useEffect, useRef } from 'react';
 import type { GameViewProps } from '../../../../../party-ui/src/index';
+import { RIDES } from '../../shared/city/vehicles';
 import { PF, type Action, type Input, type PrivateView, type PubPlayer, type View } from '../../shared/protocol';
 import { selfIn } from '../game/feed';
 import { hud } from '../game/hud';
 import { closeScreen, sendCommand } from '../game/predict';
 import { store, touch } from '../store';
+import { CityCounter, CityHud, CityMap, CityPockets, KnockedOut, useCityKeys } from './city';
 import { BossBar, Celebration, useCelebration } from './endgame';
 import { Crosshair, GoalChip, Hotbar, SelectedName, Toasts, Vitals } from './hud';
 import { DeathScreen, PauseSheet } from './menus';
@@ -41,11 +43,13 @@ function useMenuKeys(dead: boolean) {
   }, []);
 }
 
-function Screens({ view, me, worldId, host }: { view: PrivateView; me: PubPlayer; worldId: string; host: boolean }) {
-  const screen = useStore(store, s => s.screen), armor = useStore(hud, s => s.armor);
-  if (view.dead) return <DeathScreen message={view.deathMessage} kept={view.keepInventory}/>;
+function Screens({ view, me, world, host, playerId }: { view: PrivateView; me: PubPlayer; world: View; host: boolean; playerId: string | null }) {
+  const screen = useStore(store, s => s.screen), armor = useStore(hud, s => s.armor), worldId = world.worldId;
+  if (view.dead) return view.city ? <KnockedOut message={view.deathMessage}/> : <DeathScreen message={view.deathMessage} kept={view.keepInventory}/>;
   switch (screen) {
-    case 'inventory': return <InventoryScreen armor={armor} color={me.color}/>;
+    case 'inventory': return view.city ? <CityPockets pv={view}/> : <InventoryScreen armor={armor} color={me.color}/>;
+    case 'counter': return view.city ? <CityCounter view={world} pv={view}/> : null;
+    case 'map': return view.city ? <CityMap view={world} pv={view} playerId={playerId}/> : null;
     case 'table': return <TableScreen/>;
     case 'furnace': return <FurnaceScreen/>;
     case 'chest': return <ChestScreen/>;
@@ -71,6 +75,13 @@ export function ControllerView({ publicView, privateView, playerId, connected, i
   celebrating.current = party.open;
   useServerToasts(privateView);
   useMenuKeys(dead);
+  const city = privateView?.city, counter = city?.open;
+  useCityKeys(!!city && !dead);
+  // The server opens and closes counters and job boards: the sheet follows.
+  useEffect(() => {
+    if (counter !== undefined && !store.get().screen) openMenu('counter');
+    else if (counter === undefined && store.get().screen === 'counter') { store.set({ screen: null }); relockPointer(); }
+  }, [counter]);
   // Death closes every container (the server returns grid/cursor items); the menu may stay open.
   useEffect(() => { if (dead && screen && screen !== 'pause') closeScreen(); }, [dead, screen]);
   // Desktop MC feel: losing the pointer lock (Esc, alt-tab) with nothing open shows the menu.
@@ -88,20 +99,21 @@ export function ControllerView({ publicView, privateView, playerId, connected, i
   const playing = !screen && !dead, sleeping = !!(me.flags & PF.SLEEPING);
   // The touch look layer fills the screen, so it renders first and every later control sits above it.
   return <div className="bw-hud" data-touch={touchMode}>
-    {playing && touchMode && <TouchControls creative={privateView.mode === 'creative'}/>}
-    {playing && !sleeping && <Crosshair/>}
+    {playing && touchMode && <TouchControls creative={privateView.mode === 'creative'} drive={city?.ride ? (RIDES[city.ride[1]]?.air ? 'air' : 'ground') : undefined}/>}
+    {playing && !sleeping && !city?.ride && <Crosshair/>}
+    {city && !dead && !screen && <CityHud view={publicView} pv={privateView} playerId={playerId} touchMode={touchMode}/>}
     {publicView.boss && privateView.dimension === 'end' && <BossBar boss={publicView.boss}/>}
-    {playing && <GoalChip view={publicView} pv={privateView} me={me}/>}
+    {playing && !city && <GoalChip view={publicView} pv={privateView} me={me}/>}
     {!screen && <Toasts/>}
     {playing && !touchMode && !locked && <p className="bw-clickplay kp-hud-text">Click the world to play · <kbd>E</kbd> inventory · <kbd>Esc</kbd> menu</p>}
     {sleeping && !screen && <Sleeping view={publicView}/>}
     <div className="bw-bottom">
       <SelectedName/>
-      {privateView.mode === 'survival' && <Vitals view={privateView}/>}
-      <Hotbar/>
+      {privateView.mode !== 'creative' && <Vitals view={privateView}/>}
+      {!city?.ride && <Hotbar/>}
     </div>
     {connected === false && <p className="bw-reconnect" role="status">Reconnecting… your controls are paused.</p>}
     {party.open && !dead && <Celebration view={publicView} onClose={() => { party.close(); relockPointer(); }}/>}
-    <Screens view={privateView} me={me} worldId={publicView.worldId} host={isHost}/>
+    <Screens view={privateView} me={me} world={publicView} host={isHost} playerId={playerId}/>
   </div>;
 }

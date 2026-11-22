@@ -3,6 +3,7 @@
  * Partial shapes (torch, lantern, bed, cactus) are authored for positional UVs: a face samples the texels
  * under its block-local rectangle (±Z faces u=x, ±X faces u=z, ±Y faces u=x v=z, image top = y 1).
  */
+import { CITY_PAINTERS } from './city';
 import { ANIMATION_FRAMES, CRACK_STAGES, frameKey } from './keys';
 import { clamp, hash, mix, Pix, pick, rng, seedOf, shade, tnoise, type Palette, type Rgb } from './pixels';
 
@@ -1243,6 +1244,7 @@ const PAINTERS: Record<string, Painter> = {
   chiseled_stone_bricks: chiseledStoneBricks, soul_torch: p => torch(p, SOUL_FLAME), soul_lantern: p => lantern(p, SOUL_GLOW),
   missing,
 };
+Object.assign(PAINTERS, CITY_PAINTERS);
 for (const [key, color] of Object.entries(WOOL)) PAINTERS[key] = p => wool(p, color);
 for (let s = 0; s < 8; s++) PAINTERS[`wheat_stage${s}`] = p => wheat(p, s);
 for (let s = 0; s < 4; s++) PAINTERS[`nether_wart_stage${s}`] = p => netherWart(p, s);

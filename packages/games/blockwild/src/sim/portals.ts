@@ -23,7 +23,7 @@ export type PortalState = {
 export const newPortalState = (): PortalState => ({ cells: new Set(), fires: new Set() });
 
 /** Seconds of standing in a portal before travelling. */
-export const PORTAL_SECONDS = { survival: 4, creative: 1 } as const;
+export const PORTAL_SECONDS = { survival: 4, creative: 1, city: 4 } as const;
 /** How far from the mapped point an existing portal is reused (horizontal blocks), and how far a new one may be built. */
 const REUSE_RADIUS = { overworld: 128, nether: 16 } as const, BUILD_RADIUS = 16;
 

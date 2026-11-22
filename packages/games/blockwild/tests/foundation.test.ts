@@ -41,7 +41,7 @@ test('index math round-trips', () => {
 });
 
 test('block table is complete and consistent', () => {
-  assert.equal(BLOCK_LIST.length, 146);
+  assert.equal(BLOCK_LIST.length, 172);
   assert.equal(new Set(BLOCK_LIST.map(b => b.name)).size, BLOCK_LIST.length);
   for (const block of BLOCK_LIST) {
     assert.equal(BLOCKS[block.id], block);

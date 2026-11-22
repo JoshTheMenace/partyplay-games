@@ -44,7 +44,8 @@ function DropButton() {
     onPointerUp={clear} onPointerCancel={clear} onLostPointerCapture={clear} onContextMenu={event => event.preventDefault()}>Drop</button>;
 }
 
-export function TouchControls({ creative }: { creative: boolean }) {
+/** `drive`: the player is in a vehicle (the stick steers; the buttons become brake, or up and down in the air). */
+export function TouchControls({ creative, drive }: { creative: boolean; drive?: 'ground' | 'air' | undefined }) {
   const [sneak, setSneak] = useState(false), [stick, setStick] = useState<[number, number] | null>(null);
   const knob = useRef<HTMLSpanElement>(null), stickPointer = useRef<{ id: number; x: number; y: number } | null>(null), look = useRef<{ id: number; x: number; y: number } | null>(null);
   const toggleSneak = (on: boolean) => { touch.sneak = on; setSneak(on); };
@@ -114,20 +115,23 @@ export function TouchControls({ creative }: { creative: boolean }) {
       }}
       onPointerUp={event => release(event.pointerId)} onPointerCancel={event => release(event.pointerId)} onLostPointerCapture={event => release(event.pointerId)}>
       {stick ? <span className="bw-stick" style={{ left: stick[0], top: stick[1] }}><span ref={knob} className="bw-knob"/></span>
-        : <span className="bw-stick-hint">Move</span>}
+        : <span className="bw-stick-hint">{drive ? 'Steer' : 'Move'}</span>}
     </div>
     <div className="bw-tcorner">
       <DropButton/>
       <button type="button" className="bw-tbtn bw-tbtn-small" aria-label="Items: open inventory" onClick={toggleInventory}>Items</button>
       <button type="button" className="bw-tbtn bw-tbtn-small" aria-label="Menu" onClick={() => openMenu('pause')}>☰</button>
     </div>
-    <div className="bw-tactions">
+    {drive ? <div className="bw-tactions">
+      <HoldButton label={drive === 'air' ? 'Climb (hold)' : 'Brake (hold)'} keys={['jump']} className="bw-tbtn-jump">{drive === 'air' ? 'Up' : 'Brake'}</HoldButton>
+      {drive === 'air' && <HoldButton label="Descend (hold)" keys={['flyDown']} className="bw-tbtn-sneak">Down</HoldButton>}
+    </div> : <div className="bw-tactions">
       <HoldButton label="Mine or attack (hold)" keys={['mine']} className="bw-tbtn-mine">Mine</HoldButton>
       <HoldButton label="Use or place (hold to eat or draw)" keys={['use']} className="bw-tbtn-use">Use</HoldButton>
       <HoldButton label={creative ? 'Jump (double-tap to fly, hold to rise)' : 'Jump'} keys={['jump']} className="bw-tbtn-jump">Jump</HoldButton>
       {creative
         ? <HoldButton label="Sneak or fly down (hold)" keys={['flyDown']} className="bw-tbtn-sneak">Down</HoldButton>
         : <button type="button" className="bw-tbtn bw-tbtn-sneak" aria-label="Sneak" aria-pressed={sneak} onClick={() => toggleSneak(!sneak)}>Sneak</button>}
-    </div>
+    </div>}
   </div>;
 }

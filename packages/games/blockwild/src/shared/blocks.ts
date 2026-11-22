@@ -50,6 +50,11 @@ export type BlockDef = {
   friction: number;
   /** Movement multiplier while a body overlaps the cell: soul sand 0.4 (walking), cobweb 0.15 and lava 0.5 (also vertical). */
   slow: number;
+  /**
+   * Families (Caper City): the state picks one of `variants` textures named `${name}_${state % variants}` for the faces
+   * in `variantFaces` ('top': only the top, the rest use `tex`; 'side': the four sides; 'all').
+   */
+  variants?: number; variantFaces?: 'all' | 'top' | 'side';
 };
 
 export const drop = (item: number, min = 1, max = min, chance = 1): Drop => ({ item, min, max, chance });
@@ -243,6 +248,34 @@ rock('cracked_end_stone_bricks', 3);
 def('soul_torch', { shape: 'torch', solid: false, render: 'cutout', light: 10, hardness: 0, sound: 'wood' });
 rock('soul_lantern', 3.5, { shape: 'lantern', render: 'cutout', light: 10, sound: 'metal' });
 rock('chiseled_stone_bricks', 1.5);
+// Caper City: streets, walls, windows, roofs, signs and shop fittings (own textures; families pick a look by state).
+const family = (name: BlockName, variants: number, props: Props = {}, variantFaces: BlockDef['variantFaces'] = 'all') => rock(name, 1.5, { variants, variantFaces, ...props });
+family('asphalt', 6, { hardness: 2, tex: tex('asphalt_0') }, 'top');
+family('pavement', 3);
+family('concrete', 3, { hardness: 1.8 });
+family('stucco', 8, { hardness: 1.2 });
+family('city_bricks', 4, { hardness: 2 });
+family('window', 4, { hardness: 0.6, sound: 'glass', drops: NONE });
+family('window_lit', 3, { hardness: 0.6, sound: 'glass', light: 10, drops: NONE });
+family('roof_tiles', 3, { hardness: 1.2 });
+stairs('roof_stairs', 'roof_tiles_0', brick);
+slab('roof_slab', 'roof_tiles_0', brick);
+family('metal_sheet', 6, { hardness: 2, sound: 'metal' });
+slab('awning', 'awning', { hardness: 0.6, tool: 'shears', sound: 'wool' });
+family('shop_sign', 16, { hardness: 1, sound: 'wood', tex: tex('sign_band_0') }, 'side');
+family('sign_band', 8, { hardness: 1, sound: 'wood' });
+metal('steel', 1);
+rock('steel_post', 3, { shape: 'fence', state: 'custom', sound: 'metal', tex: tex('steel') });
+slab('light_panel', 'light_panel', { hardness: 0.4, sound: 'glass', light: 14 });
+wood('counter', { tex: tex('counter_side', 'counter_top', 'counter_side') });
+family('shelf', 4, { hardness: 1.5, tool: 'axe', tier: 0, sound: 'wood', tex: tex('oak_planks') }, 'side');
+wood('crate', { hardness: 1.2, tex: tex('crate_side', 'crate_top') });
+rock('bin', 1, { tier: 0, sound: 'metal', tex: tex('bin_side', 'bin_top', 'bin_side') });
+rock('mailbox', 1, { tier: 0, sound: 'metal', tex: tex('mailbox_side', 'mailbox_top', 'mailbox_top') });
+wood('job_board', { tex: tex('job_board', 'oak_planks') });
+rock('till', 1, { tier: 0, sound: 'metal', tex: tex('till_side', 'till_top', 'till_side') });
+rock('vault_door', 50, { tier: 4, sound: 'metal', tex: tex('vault_door', 'steel') });
+plant('cone', { hardness: 0.1, sound: 'wool' });
 def('barrier', { render: 'none', opaque: false, hardness: -1, targetable: false, drops: NONE });
 const LABELS: [number, string][] = [[B.jack_o_lantern, "Jack o'Lantern"], [B.tnt, 'TNT'], [B.redstone_wire, 'Redstone Dust'], [B.redstone_torch_off, 'Redstone Torch'],
   [B.redstone_lamp_lit, 'Redstone Lamp'], [B.repeater, 'Redstone Repeater'], [B.end_portal_frame, 'End Portal Frame'], [B.silverfish_stone, 'Infested Stone Bricks']];
@@ -357,6 +390,10 @@ export function faceTexture(cell: number, face: number): string {
       return face === 2 ? 'oak_planks' : face === 3 ? `bed_${part}_top` : face === end ? `bed_${part}_end` : `bed_${part}_side`;
     }
     case B.crafting_table: return face === 3 ? t.top : face === 2 ? t.bottom : face >= 4 ? t.front! : t.side;
+  }
+  if (block.variants) {
+    const faces = block.variantFaces, varied = faces === 'all' || (faces === 'top' ? face === 3 : face !== 2 && face !== 3);
+    if (varied) return `${block.name}_${state % block.variants}`;
   }
   if (block.state === 'axis') return (AXIS_END_FACES[state % 3] as readonly number[]).includes(face) ? t.top : t.side;
   if (face === 3) return t.top;

@@ -63,7 +63,7 @@ export function Vitals({ view }: { view: PrivateView }) {
     {!!view.protectedTicks && <span className="bw-protected" title="Spawn protection is active">Protected</span>}
     <div className="bw-meter-col bw-meter-right">
       {air !== null && <Meter kind="bubble" icons={Array.from({ length: 10 }, (_, i) => i >= 10 - air ? 'full' : 'empty')} label={`Air ${air} of 10`} className="bw-air"/>}
-      <Meter kind="shank" icons={meterIcons(view.food).reverse()} label={`Food ${Math.ceil(view.food) / 2} of 10`} className={view.food <= 6 ? 'bw-hungry' : ''}/>
+      {!view.city && <Meter kind="shank" icons={meterIcons(view.food).reverse()} label={`Food ${Math.ceil(view.food) / 2} of 10`} className={view.food <= 6 ? 'bw-hungry' : ''}/>}
     </div>
   </div>;
 }

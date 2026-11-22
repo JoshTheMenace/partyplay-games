@@ -42,7 +42,7 @@ export function Sheet({ title, className = '', tools, children, onClose }: { tit
 const closeAndResume = () => { closeScreen(); relockPointer(); };
 
 /** Touch-only toggle that makes taps act like shift-clicks (quick move between containers). */
-function QuickMove() {
+export function QuickMove() {
   const on = useStore(store, s => s.quickMove), touchMode = useTouchMode();
   if (!touchMode) return null;
   return <button type="button" className="bw-chip" aria-pressed={on} onClick={() => store.set({ quickMove: !on })}>Quick move</button>;
@@ -52,7 +52,7 @@ function BookToggle({ open, onToggle }: { open: boolean; onToggle(): void }) {
 }
 
 /** The player's 27 main slots above the 9 hotbar slots (MC layout). */
-function PlayerSlots() {
+export function PlayerSlots() {
   const inv = useStore(store, s => s.inv);
   return <div className="bw-player-slots">
     <SlotGrid slots={inv} target="inv" from={HOTBAR_SIZE} count={INVENTORY_SIZE - HOTBAR_SIZE}/>

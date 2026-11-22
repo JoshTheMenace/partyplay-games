@@ -12,11 +12,15 @@ import { DAY_TICKS, EYE_HEIGHT, REACH } from '../../shared/constants';
 import { cellIndex, FACES, inWorld, wrapAngle, type Vec3 } from '../../shared/coords';
 import { I } from '../../shared/items';
 import { eyeInWater, newBody, type Body } from '../../shared/physics';
-import { MOB_TYPES, nearEvery, PF, tvEvery, type Fx, type PrivateView, type PubPlayer, type Scene as Feed, type Settings, type View } from '../../shared/protocol';
+import { MOB_TYPES, nearEvery, PF, tvEvery, type Fx, type PrivateView, type PubPlayer, type Scene as Feed, type Settings, type Terrain, type View } from '../../shared/protocol';
 import { raycastBlocks } from '../../shared/raycast';
 import { collisionBoxes, selectionBoxes } from '../../shared/shapes';
 import { surfaceHeight } from '../../shared/worldgen';
 import { crackStage } from '../../shared/mining';
+import { RIDES } from '../../shared/city/vehicles';
+import { CITY_ID } from '../../shared/protocol';
+import { cityHud, cityLook, CityScene } from '../city/scene';
+import type { Shown } from '../city/rides';
 import { store } from '../store';
 import type { Crack, VoxelEngine } from '../engine/index';
 import type { HostMusic } from '../audio/host-music';
@@ -47,8 +51,8 @@ export type RuntimeDeps = {
   scope: ResourceScope;
   /** The light that shades entity models; it follows the sun and the moon so bodies are lit from the same side as the land. */
   sun?: { position: Vector3 };
-  /** The world seed the engine was built for (the view's real seed). */
-  seed: number;
+  /** The world seed the engine was built for (the view's real seed), and its terrain (the city has its own runtime parts). */
+  seed: number; terrain?: Terrain;
   /** Estimated world spawn (feet), the spectator's flyover centre before anyone plays. */
   spawn: Vec3;
   props(): Props;
@@ -129,6 +133,11 @@ export class Runtime {
   private readonly getCell: CellReader;
   private readonly still = reducedMotion();
   private readonly clouds = new Float64Array(MAX_CLOUDS * 5);
+  /** Caper City: the crowd, the vehicles and the local driving controller (null in the wild). */
+  private readonly city: CityScene | null = null;
+  /** The vehicle the local player drives, as the vehicle renderer draws it. */
+  private readonly ownRide: Shown = { id: 0, k: 0, x: 0, y: 0, z: 0, yaw: 0, pt: 0, paint: 0, f: 2, v: 0, spin: 0, seen: 0 };
+  private rideSeen = 0;
 
   constructor(private readonly d: RuntimeDeps) {
     const props = d.props();
@@ -162,6 +171,11 @@ export class Runtime {
     this.particles = new Particles(d.sheet.texture, d.sheet.white, (rect, rand, out) => d.sheet.chip(rect, rand, out));
     d.scene.add(this.particles.mesh);
     d.scope.defer(() => { this.entities.dispose(); this.particles.dispose(); d.scene.remove(this.particles.mesh); });
+    if (d.terrain === 'city') {
+      this.entities.playerKey = 'citizen';
+      this.city = new CityScene({ scene: d.scene, camera: d.camera, seed: d.seed, sfx: d.sfx, particles: this.particles, light: (x, y, z, out) => d.engine.lightRgb(x, y, z, out), getCell: this.getCell });
+      d.scope.defer(() => this.city?.dispose());
+    }
     if (this.controller) {
       this.controls = new Controls(d.scope, d.canvas, { creative: () => this.view?.mode === 'creative' });
       this.hand = new Hand(d.scene, d.camera, d.items, props.players.find(p => p.id === props.playerId)?.color ?? '#ffffff');
@@ -172,6 +186,8 @@ export class Runtime {
         tileOf: (cell, face) => d.sheet.tile(faceTexture(cell, face)), itemRect: id => d.sheet.item(id),
         light: (x, y, z) => d.engine.lightAt(x, y, z), bodies: () => this.entities.bodyBoxes(),
         predicted: (x, y, z) => this.recent.set(cellIndex(x, y, z), performance.now()),
+        // The city cannot be mined: only tills (to grab them) and the player's own plot.
+        locked: (x, y, z, cell) => !!this.city && cellId(cell) !== B.till && !this.city.inPlot(this.pv?.city?.plot ?? -1, x, y, z),
       });
       configurePrediction({ nearTable: () => this.nearTable(), wake: () => { this.wake = true; } });
       d.scope.defer(() => configurePrediction(null));
@@ -203,6 +219,7 @@ export class Runtime {
     this.entities.viewer = [eye.x, eye.y, eye.z];
     this.entities.ownShadow = own && !this.pv?.dead ? [own.x, own.y, own.z, 0.6] : null;
     this.entities.update(serverNow, dt);
+    this.cityFrame(dt);
     this.d.engine.setGlows(this.entities.glows, this.entities.glowCount);
     this.entities.labels(this.d.camera, this.d.canvas.clientHeight);
     this.updateCracks();
@@ -234,6 +251,7 @@ export class Runtime {
     if (this.view?.tv) this.focusSeat = this.view.tv.focus;
     this.scene = scene;
     this.entities.push(scene, serverTime, performance.now());
+    this.city?.rides.park(scene.rides);
     // Effect ids only grow: play each once, and none of the ones already in the air when this screen joined.
     for (const fx of scene.fx) if (fx.id > this.lastFx) { this.lastFx = fx.id; if (!first) this.pendingFx.push(fx); }
   }
@@ -266,7 +284,13 @@ export class Runtime {
       this.interaction?.cancel();
       if (pv.tp.yaw !== undefined && this.controls) this.controls.yaw = pv.tp.yaw;
     }
-    if (previous && pv.health < previous.health && !pv.dead && pv.mode === 'survival') {
+    if (this.city && this.controls) {
+      const drove = !!this.city.drive;
+      this.city.sync(pv, this.player?.body ?? null, pv.tp.yaw ?? this.controls.yaw, events.teleport);
+      // Stepping out, the view keeps looking where the chase camera did.
+      if (drove && !this.city.drive) { this.controls.yaw = this.city.heading; this.controls.pitch = -0.1; this.d.camera.fov = store.get().settings.fov; this.d.camera.updateProjectionMatrix(); }
+    }
+    if (previous && pv.health < previous.health && !pv.dead && pv.mode !== 'creative') {
       hud.set(state => ({ hurt: state.hurt + 1 }));
       this.effects.hurt();
       this.d.sfx.synth('hurt', { volume: 0.7 });
@@ -310,6 +334,7 @@ export class Runtime {
       return;
     }
     const body = player.body;
+    if (this.city && pv.city?.ride) { this.updateRiding(dt, p, intent, pv.city.ride, blocked); return; }
     if (controls.flyToggle) {
       controls.flyToggle = false;
       if (mode === 'creative' && !blocked) {
@@ -343,14 +368,17 @@ export class Runtime {
     const c = this.d.camera.position, eye = this.eye, dir = this.dir, reach = REACH[mode];
     eye[0] = c.x; eye[1] = c.y; eye[2] = c.z;
     dir[0] = -Math.sin(yaw) * Math.cos(pitch); dir[1] = Math.sin(pitch); dir[2] = -Math.cos(yaw) * Math.cos(pitch);
-    const target = blocked ? null : pickTarget(raycastBlocks(this.getCell, eye, dir, reach), this.entities.mobBoxes(), eye, dir, reach);
+    const boxes = this.city && view ? this.city.targets(this.entities.players.values(), view.who, p.playerId, true) : this.entities.mobBoxes();
+    const target = blocked ? null : pickTarget(raycastBlocks(this.getCell, eye, dir, reach), boxes, eye, dir, reach);
+    if (this.city && view) this.cityContext(target, body, view, pv);
     if (!sameTarget(target, state.target)) { store.set({ target }); this.d.engine.visuals.outline(target?.kind === 'block' ? target : null); }
 
     // Interaction.
     const inv = state.inv, held = inv[state.selected]?.id ?? 0, i = this.interaction!;
     if (!blocked) {
       const f = this.frameState;
-      f.dt = dt; f.mode = mode; f.body = body; f.yaw = yaw; f.pitch = pitch; f.target = target; f.held = held; f.slot = state.selected; f.food = pv.food;
+      // In the city food mends health, so being hurt is what makes a meal worth eating.
+      f.dt = dt; f.mode = mode; f.body = body; f.yaw = yaw; f.pitch = pitch; f.target = target; f.held = held; f.slot = state.selected; f.food = this.city ? (pv.health < 20 ? 10 : 20) : pv.food;
       f.hasArrows = held === I.bow && inv.some(slot => slot?.id === I.arrow);
       i.update(f, controls);
     }
@@ -382,17 +410,82 @@ export class Runtime {
 
   private selfFlags() { return this.self()?.flags ?? 0; }
 
-  private sendInput(p: Props, body: Body | null) {
+  private sendInput(p: Props, body: Body | null, heading?: { yaw: number; pitch: number }) {
     const now = performance.now();
     if (!this.wake && now - this.lastSend < INPUT_MS) return;
     this.wake = false;
     this.lastSend = now;
     const state = store.get(), i = this.interaction;
     p.setInput(buildInput({
-      body, yaw: this.controls?.yaw ?? 0, pitch: this.controls?.pitch ?? 0, sprint: this.controls?.sprinting ?? false,
+      body, yaw: heading?.yaw ?? this.controls?.yaw ?? 0, pitch: heading?.pitch ?? this.controls?.pitch ?? 0, sprint: this.controls?.sprinting ?? false,
       using: !!i?.using, swinging: !!i?.swinging, dead: !!this.pv?.dead, slot: state.selected, mine: i?.mine ?? null,
-      tpAck: this.net.tpAck, queue: state.queue, bag: feed.get().bag?.rev ?? 0,
+      tpAck: this.net.tpAck, queue: state.queue, bag: feed.get().bag?.rev ?? 0, parked: this.city?.rides.asking,
     }));
+  }
+
+  // Caper City ------------------------------------------------------------------------------------------------
+  /** Driving (seat 0: this screen simulates the vehicle) or riding along (the body is the vehicle the server carries). */
+  private updateRiding(dt: number, p: Props, intent: Controls['intent'], [id, k, seat]: readonly [number, number, number], blocked: boolean) {
+    const city = this.city!, controls = this.controls!, player = this.player!, body = player.body, drive = seat === 0 ? city.drive : null, kind = RIDES[k]!;
+    const lookYaw = wrapAngle(controls.yaw - this.lastYaw), lookPitch = controls.pitch - this.lastPitch;
+    this.lastYaw = controls.yaw;
+    this.lastPitch = controls.pitch;
+    let x = body.x, y = body.y, z = body.z, yaw = 0, pitch = 0, speed = 0;
+    if (drive) {
+      if (blocked) intent.forward = intent.strafe = 0;
+      const crash = drive.update(dt, intent, this.getCell, this.d.engine.world.isLoaded(drive.ride.x, drive.ride.z), city.rides, this.d.sfx), r = drive.ride;
+      if (crash > 5) {
+        this.effects.shake(Math.min(0.6, crash / 30));
+        this.d.sfx.synth('crash', { volume: Math.min(1, crash / 14) });
+        this.particles.burst(r.x - Math.sin(r.yaw) * kind.l / 2, r.y + 0.8, r.z - Math.cos(r.yaw) * kind.l / 2, TINTS.dark, 10, 3);
+        cityHud.set({ crashes: cityHud.get().crashes + 1 });
+      }
+      Object.assign(body, { x: r.x, y: r.y, z: r.z, vx: -Math.sin(r.yaw) * r.speed, vy: r.vy, vz: -Math.cos(r.yaw) * r.speed, onGround: r.onGround, sneaking: false, flying: false });
+      ({ x, y, z, yaw, pitch } = drive.render);
+      speed = r.speed;
+      Object.assign(this.ownRide, { id, k, x, y, z, yaw, pt: pitch, v: speed, paint: city.rides.shown.get(id)?.paint ?? this.ownRide.paint, f: 2 });
+      this.rideSeen = id;
+    } else {
+      const shown = city.rides.shown.get(id);
+      if (shown) { ({ x, y, z, yaw } = shown); speed = shown.v; Object.assign(body, { x, y, z, vx: 0, vy: 0, vz: 0 }); }
+      this.rideSeen = 0;
+    }
+    player.snap();
+    city.chase(this.d.camera, x, y, z, yaw, k, speed, lookYaw, lookPitch, dt, store.get().settings.fov);
+    this.interaction!.cancel();
+    if (store.get().target) { store.set({ target: null }); this.d.engine.visuals.outline(null); }
+    this.pose.visible = false;
+    this.hand!.update(dt, this.pose);
+    cityLook.yaw = yaw;
+    const hudNow = cityHud.get(), pace = Math.round(Math.abs(speed));
+    if (hudNow.driving?.k !== k || hudNow.driving.speed !== pace || hudNow.driving.seat !== seat || hudNow.context?.kind !== 'exit') cityHud.set({ driving: { k, speed: pace, seat }, focus: null, context: { kind: 'exit', id, label: `Leave the ${kind.name}` } });
+    const now = performance.now();
+    if (now - this.lastBodyPublish > BODY_PUBLISH_MS) { this.lastBodyPublish = now; store.set({ body: { ...body } }); }
+    this.sendInput(p, drive ? body : null, { yaw: drive?.ride.yaw ?? 0, pitch: drive?.ride.pitch ?? 0 });
+  }
+  /** What the context button would do on foot: board the vehicle beside you, talk to who you look at, read a job board. */
+  private cityContext(target: ReturnType<typeof pickTarget>, body: Body, view: View, pv: PrivateView) {
+    const city = this.city!, hud = cityHud.get();
+    cityLook.yaw = this.controls!.yaw;
+    let context: typeof hud.context = null, focus: typeof hud.focus = null;
+    if (target?.kind === 'mob') {
+      const what = city.describe(target.id, view.who);
+      if (what && what.kind !== 'ride') focus = { name: what.name, line: what.line };
+      if (what) context = what.kind === 'ride' ? { kind: 'enter', id: target.id, label: `Get in the ${what.name}` } : what.kind === 'keeper' ? { kind: 'shop', id: target.id, label: `Shop with ${what.name}` }
+        : what.kind === 'resident' && target.id >= CITY_ID ? { kind: 'talk', id: target.id, label: `Talk to ${what.name}` } : null;
+    } else if (target?.kind === 'block' && cellId(target.cell) === B.job_board) context = { kind: 'board', id: cellIndex(target.x, target.y, target.z), label: 'Read the job board' };
+    if (!context && !pv.dead) {
+      const near = city.rides.nearest(body.x, body.z, 2.4);
+      if (near && Math.abs(near.y - body.y) < 3) context = { kind: 'enter', id: near.id, label: `Get in the ${RIDES[near.k]!.name}` };
+    }
+    if (context?.kind !== hud.context?.kind || context?.id !== hud.context?.id || focus?.name !== hud.focus?.name || focus?.line !== hud.focus?.line || hud.driving) cityHud.set({ context, focus, driving: null });
+  }
+  /** Draw the crowd, the vehicles and the beacon (every screen, the TV included). */
+  private cityFrame(dt: number) {
+    const city = this.city;
+    if (!city) return;
+    const own = this.rideSeen && this.pv?.city?.ride?.[0] === this.rideSeen && city.drive ? this.ownRide : null, body = this.player?.body ?? null;
+    city.frame(dt, this.view, this.entities.interp, this.d.camera, Math.min(104, store.get().settings.renderDistance * 16 - 6), body, own, this.pv?.city ?? null);
   }
 
   /** Footsteps, landing dust and water splashes for the local player. */
@@ -627,6 +720,7 @@ export class Runtime {
       if (sample) sfx.play(sample, { at, volume, pitch: pitch * mobPitch(mob) });
       else if (synth) sfx.synth(synth, range ? { at, volume, pitch, range } : { at, volume, pitch });
     };
+    if (this.city?.fx(fx, this.isSelf(fx))) return;
     switch (fx.k) {
       case 'break': case 'place': {
         if (predicted) return;

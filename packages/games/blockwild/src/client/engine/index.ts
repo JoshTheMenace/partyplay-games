@@ -10,6 +10,7 @@ import type { ResourceScope } from '../../../../../party-runtime/src/index';
 import { isOpaque, TEXTURE_KEYS } from '../../shared/blocks';
 import { CHUNK, CHUNKS, HEIGHT, inEnd, inNether, WORLD } from '../../shared/constants';
 import { cellIndex, chunkFromKey, chunkKey, FACES, localIndex } from '../../shared/coords';
+import type { Terrain } from '../../shared/protocol';
 import type { Target } from '../store';
 import {
   AMBIENT, END_AMBIENT, END_FLAT_SKY, END_FOG_FAR, END_FOG_NEAR, END_SKY_LIGHT, lightCurve, NETHER_AMBIENT, NETHER_FOG_FAR, NETHER_FOG_NEAR, skyState, TORCH_LIGHT,
@@ -30,6 +31,8 @@ export { ClientWorld } from './world';
 
 export type EngineOptions = {
   seed: number; atlas: BlockAtlas; renderDistance: number; scope: ResourceScope; onError(error: unknown): void;
+  /** Which generator the worker runs (the wild world unless given). */
+  terrain?: Terrain;
 };
 
 /** Loads queued at the worker (small, so priorities follow the camera) and finished columns awaiting upload. */
@@ -166,7 +169,7 @@ export class VoxelEngine {
     this.worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
     this.worker.onmessage = (event: MessageEvent<FromWorker>) => this.receive(event.data);
     this.worker.onerror = event => this.fail(new Error(`World worker failed: ${event.message || 'unknown error'}`));
-    this.post({ type: 'init', seed: options.seed, layers, capacity: this.capacity() });
+    this.post({ type: 'init', seed: options.seed, terrain: options.terrain ?? 'wild', layers, capacity: this.capacity() });
     this.applyFog();
     this.setTime(1000);
     scope.defer(() => this.dispose());

@@ -5,6 +5,7 @@ import type { Vec3 } from '../shared/coords';
 import { emptyInventory, emptySlots } from '../shared/inventory';
 import { bodyBox, bodyCollides, collectBoxes, eyeInWater, newBody, regionCollides, regionTouches } from '../shared/physics';
 import { IF, MOB_TYPES, q2, q3, type Input } from '../shared/protocol';
+import { moveInCity, wakeAtClinic } from './city';
 import { damagePlayer, exhaust, explode } from './combat';
 import { activePlayers, addFx, canSleep, PROTECT_SECONDS, toast, type Player, type State } from './state';
 import { breakBlock, standNear } from './world';
@@ -20,7 +21,7 @@ export function newPlayer(id: string, name: string, color: string, spawn: Vec3):
     inv: emptyInventory(), cursor: null, grid: emptySlots(4), out: null, screen: null, armor: emptySlots(4), fire: 0, portal: 0, portalLock: false,
     ack: 0, mine: null, breakTokens: 3, attackAt: -1,
     useStart: -1, swing: 0, hurt: 0, swingAt: 0, toast: null, stats: { mined: 0, placed: 0, crafted: 0, mobs: 0, deaths: 0, distance: 0 }, milestones: 0,
-    bagText: '', bagRev: 0, bagAck: 0,
+    bagText: '', bagRev: 0, bagAck: 0, parkedAsk: false, pace: 0, aloft: false,
   };
 }
 
@@ -62,7 +63,8 @@ const MAX_RISE = 1.6;
  * sustained speed honest.
  */
 function walkBudget(state: State, player: Player) {
-  const rate = (state.settings.mode === 'creative' ? FLY_SPEED : SPRINT_SPEED) * 1.35;
+  // A ridden vehicle sets the pace (Caper City); on foot it is a sprint, in creative flight.
+  const rate = (player.pace || (state.settings.mode === 'creative' ? FLY_SPEED : SPRINT_SPEED)) * 1.35;
   return Math.min(rate * 1.1 + 0.6, player.walkBudget + rate * (state.clock - player.movedAt));
 }
 
@@ -81,7 +83,8 @@ function entersBlock(get: Get, player: Player, x: number, y: number, z: number):
  * already stuck (the world changed around them) may move within or out of the blocks they overlap, never into new ones.
  */
 export function validMove(state: State, player: Player, x: number, y: number, z: number): boolean {
-  const get = state.get, creative = state.settings.mode === 'creative';
+  const get = state.get, creative = state.settings.mode === 'creative' || player.aloft;
+  if (state.city && !moveInCity(x, y, z)) return false;
   const elapsed = Math.min(state.clock - player.movedAt, 1) + 0.1, slack = state.clock < player.slackUntil ? player.slack : 0;
   const horizontal = Math.hypot(x - player.x, z - player.z), dy = y - player.y;
   if (horizontal > walkBudget(state, player) + slack) return false;
@@ -100,7 +103,10 @@ export function applyMovement(state: State, player: Player, input: Input) {
   player.slot = input.slot;
   player.sneaking = (input.f & IF.SNEAK) !== 0;
   player.flying = state.settings.mode === 'creative' && (input.f & IF.FLYING) !== 0;
-  if (player.dead || player.sleeping || input.tpAck < player.tp.n) return;
+  const cp = state.city?.players[player.seat];
+  if (cp) cp.speed = Math.hypot(input.v[0], input.v[2]);
+  // A passenger's body is the vehicle's: the server carries it.
+  if (player.dead || player.sleeping || input.tpAck < player.tp.n || cp?.ride && cp.seat > 0) return;
   const [x, y, z] = input.p;
   if (x === player.x && y === player.y && z === player.z) return;
   if (!validMove(state, player, x, y, z)) {
@@ -127,13 +133,14 @@ export function updateEnvironment(state: State, player: Player) {
   player.inWater = regionTouches(get, ...box, isWater);
   player.eyeInWater = eyeInWater(get, { ...newBody(player.x, player.y, player.z), sneaking: player.sneaking });
   const onLadder = regionTouches(get, box[0] - 0.02, box[1], box[2] - 0.02, box[3] + 0.02, box[4], box[5] + 0.02, cell => blockOf(cell).climbable);
-  if (!(player.onGround || player.inWater || onLadder || player.flying)) {
+  if (!(player.onGround || player.inWater || onLadder || player.flying || player.aloft)) {
     player.fallPeak = Math.max(player.fallPeak, player.y);
     return;
   }
   const fall = player.fallPeak - player.y;
   if (player.inWater && !wasInWater && fall > 1.5) addFx(state, 'splash', player.x, player.y, player.z);
-  if (player.onGround && !player.inWater && fall > 3) {
+  // Nobody is hurt landing a vehicle, however hard.
+  if (player.onGround && !player.inWater && fall > 3 && !player.pace) {
     const below = cellId(get(player.x, player.y - 0.1, player.z));
     const damage = Math.floor((fall - 3) * (below === B.hay_bale ? 0.2 : below === B.bed ? 0.5 : 1));
     damagePlayer(state, player, damage, fall > 6 ? 'fell from a high place' : 'hit the ground too hard', undefined, 'fall');
@@ -150,7 +157,7 @@ export function survivalTick(state: State, player: Player, dt: number) {
     player.air = MAX_AIR;
     return;
   }
-  const { clock } = state, peaceful = state.settings.difficulty === 'peaceful';
+  const { clock } = state, city = state.settings.mode === 'city', peaceful = state.settings.difficulty === 'peaceful' || city;
   if (player.eyeInWater) {
     player.air = Math.max(0, player.air - dt * 20);
     if (player.air <= 0 && clock >= player.drownAt) {
@@ -158,6 +165,12 @@ export function survivalTick(state: State, player: Player, dt: number) {
       damagePlayer(state, player, 2, 'drowned', undefined, 'drown');
     }
   } else player.air = Math.min(MAX_AIR, player.air + dt * 100);
+  if (city) {
+    // No hunger in the city: food from the diner heals, and a rest does too, slowly.
+    player.food = MAX_FOOD;
+    if (player.health < MAX_HEALTH && clock >= player.regenAt) { player.regenAt = clock + 5; player.health = Math.min(MAX_HEALTH, player.health + 1); }
+    return;
+  }
   const box = bodyBox(player);
   if (regionTouches(state.get, box[0] - 0.02, box[1] - 0.02, box[2] - 0.02, box[3] + 0.02, box[4], box[5] + 0.02, cell => cellId(cell) === B.cactus)) {
     damagePlayer(state, player, 1, 'was pricked to death', undefined, 'cactus');
@@ -208,7 +221,8 @@ export function respawn(state: State, player: Player): boolean {
     player.bed = null;
     toast(player, 'Your home bed was missing or obstructed.');
   }
-  const [x, y, z] = bed ?? standNear(state, state.spawn, state.players.indexOf(player));
+  // In the city a knocked-out player wakes at the clinic, billed.
+  const [x, y, z] = state.city ? wakeAtClinic(state, player) : bed ?? standNear(state, state.spawn, state.players.indexOf(player));
   Object.assign(player, { dead: false, deathMessage: '', health: MAX_HEALTH, food: MAX_FOOD, saturation: 5, exhaustion: 0, air: MAX_AIR, invulnUntil: state.clock + 1, lastDamage: 0, protectedUntil: state.clock + PROTECT_SECONDS });
   teleport(state, player, x, y, z);
   // Monsters camping the respawn point quietly despawn, so one bad night is not a string of deaths.

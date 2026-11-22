@@ -10,7 +10,7 @@ import { collisionBoxes, selectionBoxes } from './shapes';
 export type Body = { x: number; y: number; z: number; vx: number; vy: number; vz: number; onGround: boolean; inWater: boolean; onLadder: boolean; sneaking: boolean; flying: boolean };
 /** forward/strafe in -1..1 (strafe +1 = right); yaw per coords.lookVector. */
 export type MoveIntent = { forward: number; strafe: number; jump: boolean; sneak: boolean; sprint: boolean; flyDown: boolean; yaw: number };
-export type GameMode = 'survival' | 'creative';
+export type GameMode = 'survival' | 'creative' | 'city';
 
 const HALF = PLAYER_WIDTH / 2, EPS = 1e-7, SNEAK_PROBE = 0.05;
 export const newBody = (x: number, y: number, z: number): Body => ({ x, y, z, vx: 0, vy: 0, vz: 0, onGround: false, inWater: false, onLadder: false, sneaking: false, flying: false });
@@ -81,7 +81,7 @@ function clip(boxes: number[], box: number[], axis: number, distance: number): n
 const shift = (box: number[], axis: number, distance: number) => { box[axis] += distance; box[axis + 3] += distance; };
 
 /** Move `box` by (dx, dy, dz) in Y, X, Z order against collisions; returns the applied displacement. */
-function moveBox(getCell: CellReader, box: number[], dx: number, dy: number, dz: number): [number, number, number] {
+export function moveBox(getCell: CellReader, box: number[], dx: number, dy: number, dz: number): [number, number, number] {
   collectBoxes(getCell, Math.min(box[0]!, box[0]! + dx) - EPS, Math.min(box[1]!, box[1]! + dy) - EPS, Math.min(box[2]!, box[2]! + dz) - EPS,
     Math.max(box[3]!, box[3]! + dx) + EPS, Math.max(box[4]!, box[4]! + dy) + EPS, Math.max(box[5]!, box[5]! + dz) + EPS, sweep);
   const y = clip(sweep, box, 1, dy);

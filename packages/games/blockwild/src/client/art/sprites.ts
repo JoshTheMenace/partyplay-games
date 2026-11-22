@@ -3,6 +3,7 @@
  * hue of each edge pixel, so every sprite shares the same crisp silhouette. Tools share five templates recoloured per tier.
  */
 import type { ItemName } from '../../shared/ids';
+import { CITY_SPRITES } from './city';
 import { hash, mix, Pix, shade, type Palette, type Rgb } from './pixels';
 import { paintTexture } from './textures';
 
@@ -488,6 +489,8 @@ for (const tier of ['wooden', 'stone', 'iron', 'diamond'] as const) for (const k
   const [W, L, M, D] = TIER[tier];
   SPRITES[`${tier}_${kind}`] = () => art(TOOLS[kind], { W, L, M, D, ...WOOD }, 0, kind === 'pickaxe' || kind === 'hoe' || kind === 'axe' ? 1 : 0);
 }
+
+for (const [key, paint] of Object.entries(CITY_SPRITES)) SPRITES[key] = () => outline(paint());
 
 /** Every non-block item key has a sprite (checked by tests). */
 export const hasSprite = (key: string) => key in SPRITES;
