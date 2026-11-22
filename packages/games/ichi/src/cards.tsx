@@ -4,9 +4,9 @@ import { colors, type Card, type Color, type Value } from './types';
 /** Resolved in client.prepare(); CSS fallbacks render until the art is known to load. table is the role's felt (landscape TV, portrait phone). */
 export const art = { base: '/games/ichi/', back: false, table: false };
 export const colorName: Record<Color, string> = { coral: 'Coral', sky: 'Sky', lime: 'Lime', sun: 'Sun' };
-const valueName: Partial<Record<Value, string>> = { skip: 'Skip', reverse: 'Reverse', draw2: '+2', wild: 'Wild', wild4: 'Wild +4' };
+const valueName: Partial<Record<Value, string>> = { skip: 'Skip', reverse: 'Reverse', draw2: '+2', gift: 'Gift', wild: 'Wild', wild4: 'Wild +4' };
 export const cardLabel = (c: Pick<Card, 'color' | 'value'>) => c.color === 'wild' ? valueName[c.value]! : `${colorName[c.color]} ${valueName[c.value] ?? c.value}`;
-const valueOrder: Value[] = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'skip', 'reverse', 'draw2', 'wild', 'wild4'];
+const valueOrder: Value[] = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'skip', 'reverse', 'draw2', 'gift', 'wild', 'wild4'];
 const colorOrder = (c: Card) => c.color === 'wild' ? 4 : colors.indexOf(c.color);
 export const sortCards = <T extends Card>(cards: readonly T[], by: 'color' | 'number') => [...cards].sort((a, b) => {
   const color = colorOrder(a) - colorOrder(b), value = valueOrder.indexOf(a.value) - valueOrder.indexOf(b.value);
@@ -29,16 +29,19 @@ const Quadrants = ({ r = 10 }: { r?: number }) => <>{colors.map((c, i) => { cons
 const Duo = ({ d }: { d: string }) => <Svg className="ichi-icon"><path className="ink" d={d}/><path className="fill" d={d}/></Svg>;
 const skipPath = 'M12 4.2a7.8 7.8 0 1 0 0 15.6 7.8 7.8 0 1 0 0-15.6zM6.6 17.4 17.4 6.6';
 const reversePath = 'M5.5 13.5V9.8a3 3 0 0 1 3-3h9m-3-3.2 3.2 3.2-3.2 3.2M18.5 10.5v3.7a3 3 0 0 1-3 3h-9m3 3.2-3.2-3.2 3.2-3.2';
+/** The Gift: a wrapped box. Box and lid take the card's color; the ribbon and bow stay paper-white. */
+const Gift = () => <Svg className="ichi-gift-icon"><g className="box"><rect x="4.6" y="11.8" width="14.8" height="8.8" rx="1"/><rect x="3.3" y="7.9" width="17.4" height="4.3" rx="1"/></g><g className="ribbon"><rect x="10.5" y="7.9" width="3" height="12.7"/><path d="M12 7.9c-1.3-3.5-5-5-6-3.2-1 1.8 2 3.5 6 3.2zM12 7.9c1.3-3.5 5-5 6-3.2 1 1.8-2 3.5-6 3.2z"/></g></Svg>;
 /** Numbers and +N cards sit on a faint suit crest; +4 stacks one crest of every color. */
 function Center({ card }: { card: Card }) {
   const v = card.value;
   if (/^\d$/.test(v)) return <><Emblem color={card.color}/><b className="ichi-card-numeral" data-under={v === '6' || v === '9'}>{v}</b></>;
   if (v === 'skip') return <Duo d={skipPath}/>;
   if (v === 'reverse') return <Duo d={reversePath}/>;
+  if (v === 'gift') return <><Emblem color={card.color}/><Gift/></>;
   if (v === 'wild') return <Svg className="ichi-wild-disc"><circle className="ring" cx="12" cy="12" r="10.8"/><Quadrants r={10}/><circle className="ring-in" cx="12" cy="12" r="3.4"/></Svg>;
   return <><span className="ichi-marks">{(v === 'draw2' ? [card.color, card.color] : colors).map((c, i) => <Emblem key={i} color={c}/>)}</span><b className="ichi-card-numeral ichi-card-plus">{v === 'draw2' ? '+2' : '+4'}</b></>;
 }
-const index = (v: Value) => ({ skip: <Duo d={skipPath}/>, reverse: <Duo d={reversePath}/>, draw2: '+2', wild: <Emblem color="wild"/>, wild4: '+4' } as Partial<Record<Value, ReactNode>>)[v] ?? v;
+const index = (v: Value) => ({ skip: <Duo d={skipPath}/>, reverse: <Duo d={reversePath}/>, gift: <Gift/>, draw2: '+2', wild: <Emblem color="wild"/>, wild4: '+4' } as Partial<Record<Value, ReactNode>>)[v] ?? v;
 function Corner({ card }: { card: Card }) {
   return <span className="ichi-card-index"><b>{index(card.value)}</b>{card.value !== 'wild' && <Emblem color={card.color}/>}</span>;
 }

@@ -42,6 +42,11 @@
 .ichi-icon .ink{stroke:var(--kp-ink);stroke-width:5}
 .ichi-icon .fill{stroke:var(--f2);stroke-width:2.9}
 .ichi-card-index .ichi-icon .ink{stroke-width:6.5}.ichi-card-index .ichi-icon .fill{stroke:#fff;stroke-width:3.4}
+.ichi-gift-icon{width:3.3em;height:3.3em;overflow:visible}
+.ichi-gift-icon *{stroke:var(--kp-ink);stroke-width:1.1;stroke-linejoin:round;paint-order:stroke}
+.ichi-gift-icon .box{fill:var(--f2)}.ichi-gift-icon .ribbon{fill:#fff6e5}
+.ichi-card-index .ichi-gift-icon{display:block;width:1.05em;height:1.05em}
+.ichi-card-index .ichi-gift-icon *{stroke-width:1.6}.ichi-card-index .ichi-gift-icon .box{fill:#fff9ec}.ichi-card-index .ichi-gift-icon .ribbon{fill:var(--f1)}
 .ichi-wild-disc{width:3.9em;height:3.9em;filter:drop-shadow(0 .08em .12em #000a)}
 .ichi-wild-disc .ring{fill:var(--ichi-paper)}
 .ichi-wild-disc .ring-in{fill:var(--kp-ink);stroke:var(--ichi-paper);stroke-width:.9}
@@ -56,15 +61,31 @@
 .ichi-chip .ichi-emblem{width:1.2em;height:1.2em;color:var(--kp-ink)}
 .ichi-chip .ichi-emblem .core{fill:var(--c)}.ichi-chip .ichi-emblem .core-line{stroke:var(--c)}
 
-/* TV table */
-.ichi-display{position:relative;height:max(470px,calc(100dvh - 96px));container-type:size;overflow:hidden;border-radius:1.4rem;background:radial-gradient(ellipse 40% 36% at 50% 50%,#1d6d74 0,#135560 45%,#0d3d4c 86%,#082a39 99%,#0000 100%),radial-gradient(ellipse 45% 42% at 50% 50%,#8d4828 0,#6c311a 82%,#3a160b 97%,#0000 100%),radial-gradient(120% 100% at 50% 0%,#1c2462,#0b1030 55%,var(--kp-ink));box-shadow:inset 0 0 0 2px #e9bb5c26}
-.ichi-display[data-art="true"]{background:var(--table) center/cover,var(--kp-ink)}
-.ichi-stage{position:absolute;inset:0;font-size:min(2.4cqh,1.25cqw)}
-.ichi-stage::before{content:'';position:absolute;inset:0;background:radial-gradient(34% 26% at 50% -4%,#ffb35c3d,#0000),radial-gradient(90% 90% at 50% 50%,#0000 60%,#05071a99);pointer-events:none}
-.ichi-wash{position:absolute;inset:20% 22%;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--c) 26%,#0000),#0000);pointer-events:none;animation:ichi-fade .6s both}
+/* TV: the stage holds one table; the parlor adds a floor rail beside it and a seating chart between rounds. */
+.ichi-display{position:relative;height:max(470px,calc(100dvh - 96px));container-type:size;overflow:hidden;border-radius:1.4rem;background:radial-gradient(120% 100% at 50% 0%,#1c2462,#0b1030 55%,var(--kp-ink));box-shadow:inset 0 0 0 2px #e9bb5c26}
+.ichi-display[data-mode="parlor"]{display:grid;grid-template-columns:minmax(0,1fr) clamp(13rem,25vw,27rem)}
+.ichi-stage{position:relative;min-width:0;height:100%;container-type:size;overflow:hidden}
+/* Everything on the table is em-based: the stage's size alone sets the scale. A parlor table seats six at most, so it can run larger. */
+.ichi-table{position:absolute;inset:0;font-size:min(2.4cqh,1.25cqw);background:radial-gradient(ellipse 40% 36% at 50% 50%,#1d6d74 0,#135560 45%,#0d3d4c 86%,#082a39 99%,#0000 100%),radial-gradient(ellipse 45% 42% at 50% 50%,#8d4828 0,#6c311a 82%,#3a160b 97%,#0000 100%);animation:ichi-cut-in .5s both}
+.ichi-display[data-mode="parlor"] .ichi-table{font-size:min(2.4cqh,1.42cqw)}
+/* Stretched, not cropped, so the oval always meets the seats' percentages. */
+.ichi-display[data-art="true"] .ichi-table{background:var(--table) center/100% 100%}
+.ichi-table::before{content:'';position:absolute;inset:0;background:radial-gradient(34% 26% at 50% -4%,#ffb35c3d,#0000),radial-gradient(90% 90% at 50% 50%,#0000 60%,#05071a99);pointer-events:none}
+/* Two paper lanterns off-screen: warm pools that breathe. */
+.ichi-table::after{content:'';position:absolute;inset:0;background:radial-gradient(22% 30% at 2% 96%,#ffb35c33,#0000),radial-gradient(22% 30% at 98% 96%,#ffb35c2b,#0000);pointer-events:none;animation:ichi-lantern 5s ease-in-out infinite alternate}
+/* Each parlor table has its own cloth, so a cut reads at a glance. The ellipse matches the felt in table.webp. */
+.ichi-felt{position:absolute;left:13.75%;right:13.75%;top:19.2%;bottom:19.2%;border-radius:50%;mix-blend-mode:hue;opacity:0;pointer-events:none}
+.ichi-table[data-felt="1"] .ichi-felt{background:#7b3fa0;opacity:.7}.ichi-table[data-felt="2"] .ichi-felt{background:#3f8a3a;opacity:.6}.ichi-table[data-felt="3"] .ichi-felt{background:#a03f55;opacity:.65}.ichi-table[data-felt="4"] .ichi-felt{background:#3f55b0;opacity:.7}.ichi-table[data-felt="5"] .ichi-felt{background:#a07a2a;opacity:.6}
+.ichi-wash{position:absolute;inset:20% 22%;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--c) 30%,#0000),#0000);pointer-events:none;animation:ichi-wash .7s cubic-bezier(.2,.8,.3,1) both}
+/* A soft light from the pile to whoever is playing. */
+.ichi-beam{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;filter:blur(1.4em);mix-blend-mode:screen;opacity:.3;animation:ichi-fade .5s both}
+.ichi-beam polygon{fill:var(--seat)}
 .ichi-orbit{position:absolute;left:25%;right:25%;top:22%;bottom:24%;border-radius:50%;border:.1em dashed #e9bb5c38}
 .ichi-orbit span{position:absolute;left:0;top:0;width:1em;height:1em;background:var(--ichi-gold);clip-path:polygon(0 0,100% 50%,0 100%,32% 50%);offset-path:ellipse(50% 50% at 50% 50%);offset-rotate:auto;offset-distance:calc(var(--k) * 25%);opacity:.75;animation:ichi-orbit 14s linear infinite}
 .ichi-orbit[data-dir="-1"] span{offset-rotate:reverse;animation-direction:reverse}
+/* A Reverse whips the arrows round once before they settle into the new direction. */
+.ichi-orbit[data-spin="true"] span{animation:ichi-orbit .8s cubic-bezier(.3,0,.2,1) 1,ichi-orbit 14s .8s linear infinite}
+.ichi-orbit[data-spin="true"][data-dir="-1"] span{animation-direction:reverse}
 @supports not (offset-path:ellipse(50% 50% at 50% 50%)){.ichi-orbit span{display:none}}
 @keyframes ichi-orbit{to{offset-distance:calc(var(--k) * 25% + 100%)}}
 .ichi-hud{position:absolute;left:1.1em;top:.9em;display:grid;justify-items:start;gap:.15em;max-width:17em;font-size:.9em;color:var(--ichi-muted)}
@@ -72,43 +93,55 @@
 .ichi-dir{font-weight:900;color:var(--ichi-paper)}
 .ichi-rules{display:flex;flex-wrap:wrap;gap:.25em;margin-top:.2em}
 .ichi-rules em{font-style:normal;font-size:.85em;padding:.1em .55em;border-radius:1em;background:#05071a99;border:1px solid #e9bb5c40}
+/* Hands lie face down on the felt, one back per card, fanned toward the middle. */
+.ichi-fan{position:absolute;z-index:1;width:0;height:0;transform:rotate(var(--rot));--spread:min(9deg,64deg / var(--n))}
+.ichi-fan .ichi-back{position:absolute;left:-2.5em;top:-3.5em;font-size:.46em;transform-origin:50% 240%;transform:rotate(calc((var(--k) - (var(--n) - 1) / 2) * var(--spread)));transition:transform .3s;animation:ichi-fan-in .4s calc(var(--k) * 35ms + .2s) cubic-bezier(.2,1.2,.4,1) backwards}
+.ichi-table[data-seats="2"] .ichi-fan .ichi-back,.ichi-table[data-seats="3"] .ichi-fan .ichi-back,.ichi-table[data-seats="4"] .ichi-fan .ichi-back{font-size:.58em}
+.ichi-fan[data-small="true"] .ichi-back{font-size:.37em}
 .ichi-seats{list-style:none;margin:0;padding:0}
-.ichi-seat{position:absolute;z-index:2;display:flex;align-items:center;gap:.55em;min-width:11.5em;max-width:17em;padding:.4em .9em .45em .45em;border-radius:1em;transform:translate(-50%,-50%);background:linear-gradient(170deg,#2e1a12f2,#140a07f2);border:.1em solid #e9bb5c4d;box-shadow:0 .4em 1em #0009,inset 0 .07em #fff2;transition:transform .3s,box-shadow .3s,opacity .3s}
+.ichi-seat{position:absolute;z-index:2;display:flex;align-items:center;gap:.5em;min-width:8.5em;max-width:15.5em;padding:.3em .85em .4em .35em;border-radius:1em;transform:translate(-50%,-50%);background:linear-gradient(170deg,#2e1a12f2,#140a07f2);border:.1em solid #e9bb5c4d;box-shadow:0 .4em 1em #0009,inset 0 .07em #fff2;transition:transform .3s,box-shadow .3s,opacity .3s}
 .ichi-seat::before{content:'';position:absolute;left:1em;right:1em;bottom:-.14em;height:.24em;border-radius:1em;background:var(--seat)}
 .ichi-seat[data-current="true"]{z-index:3;border-color:var(--ichi-gold);transform:translate(-50%,-50%) scale(1.08);box-shadow:0 0 0 .16em var(--ichi-gold),0 0 1.8em .35em #ffb35c8c,0 .4em 1em #0009;animation:ichi-glow 1.6s ease-in-out infinite alternate}
 .ichi-seat[data-next="true"]{border-color:#fff6e580}
 .ichi-seat[data-offline="true"]{opacity:.62;filter:saturate(.3)}
-.ichi-seat[data-exposed="true"]{border-color:var(--kp-coral);box-shadow:0 0 0 .16em var(--kp-coral),0 0 1.6em .3em #ff574888}
-.ichi-seat-fan{position:relative;flex:none;width:3.9em;height:3.1em}
-.ichi-seat-fan .ichi-back{position:absolute;left:.5em;top:.25em;font-size:.3em;transform-origin:50% 130%;transform:rotate(var(--r))}
-/* Cards left is the number that matters: it dominates the plate. */
-.ichi-seat-fan b{position:absolute;right:-.15em;top:50%;min-width:1.25em;padding:0 .18em;border-radius:.6em;background:var(--ichi-paper);color:var(--kp-ink);font-size:1.8em;line-height:1.3;text-align:center;transform:translateY(-50%);box-shadow:0 .06em 0 var(--kp-ink)}
+.ichi-seat[data-exposed="true"]{z-index:4;border-color:var(--kp-coral);transform:translate(-50%,-50%) scale(1.16);box-shadow:0 0 0 .16em var(--kp-coral),0 0 2em .5em #ff5748aa}
+/* Cards left is the number that matters: it leads the plate, and turns gold when a hand is nearly out. */
+.ichi-seat-count{flex:none;min-width:1.45em;padding:0 .18em;border-radius:.6em;background:var(--ichi-paper);color:var(--kp-ink);font-size:1.75em;line-height:1.3;text-align:center;box-shadow:0 .06em 0 var(--kp-ink);animation:ichi-count .35s cubic-bezier(.2,1.8,.4,1)}
+.ichi-seat[data-low="true"] .ichi-seat-count{background:var(--kp-sun)}
+/* Names break at their spaces; a single long word may still break rather than push the plate off the table. */
 .ichi-seat-text{display:flex;flex-direction:column;gap:.1em;min-width:0}
-.ichi-seat-text strong{font-family:var(--font-display);font-weight:400;font-size:1.3em;line-height:1.05;overflow-wrap:anywhere;color:var(--ichi-paper)}
-.ichi-seat-text span{font-size:.85em;color:var(--ichi-muted)}
+.ichi-seat-text strong{font-family:var(--font-display);font-weight:400;font-size:1.25em;line-height:1.05;overflow-wrap:break-word;color:var(--ichi-paper)}
+.ichi-seat[data-current="true"]{max-width:17.5em}
+.ichi-seat-text span{font-size:.85em;color:var(--ichi-muted);white-space:nowrap}
 .ichi-seat-text span b{color:var(--ichi-paper);font-size:1.1em}
 .ichi-seat-text i{font-style:normal;color:var(--ichi-gold);margin-left:.45em;letter-spacing:.1em;font-size:.8em}
+.ichi-seat .ichi-timer{font-size:.92em;margin:0 -.35em 0 auto}
 .ichi-seat-tag{position:absolute;top:-.85em;left:50%;transform:translateX(-50%);padding:.12em .65em;border-radius:1em;background:var(--ichi-gold);color:var(--kp-ink);font-size:.72em;font-weight:900;white-space:nowrap}
 .ichi-seat[data-next="true"] .ichi-seat-tag{background:var(--ichi-paper)}
 .ichi-seat[data-offline="true"] .ichi-seat-tag{background:#8e96b8}
-.ichi-seat[data-incoming="true"] .ichi-seat-tag{background:#c8281e;color:#fff4e0;font-size:.9em;border:.08em solid var(--kp-ink)}
+/* The penalty tag is bigger than the others, so it sits higher to stay clear of the name. */
+.ichi-seat[data-incoming="true"] .ichi-seat-tag{top:-1.35em;background:#c8281e;color:#fff4e0;font-size:.9em;border:.08em solid var(--kp-ink)}
 .ichi-hanko{position:absolute;top:-.9em;right:-.8em;padding:.12em .42em;border-radius:.3em;background:#c8281e;color:#fff4e0;border:.12em solid #ffd9c4;font-family:var(--font-display);font-size:1em;transform:rotate(10deg);box-shadow:0 .15em .4em #0009}
 .ichi-hanko[data-exposed="true"]{animation:ichi-flash .45s ease-in-out infinite alternate}
-.ichi-deck,.ichi-pile{position:absolute;z-index:3;width:5em;height:7em;font-size:1.6em;transform:translate(-50%,-50%)}
+/* The discard pile is the hero; the draw pile sits small beside it. */
+.ichi-deck,.ichi-pile{position:absolute;z-index:3;width:5em;height:7em;font-size:1.8em;transform:translate(-50%,-50%)}
+.ichi-deck{font-size:1.25em}
 .ichi-deck .ichi-back{position:absolute;left:0;top:0}
-.ichi-deck .ichi-back:nth-child(1){transform:translate(.16em,.2em) rotate(3deg)}.ichi-deck .ichi-back:nth-child(2){transform:translate(.08em,.1em) rotate(-2deg)}
-.ichi-deck>.kp-numeral{position:absolute;left:50%;top:100%;margin-top:.55em;transform:translateX(-50%);font-size:.55em;padding:.1em .7em;border-radius:1em;background:#05071acc;color:var(--ichi-muted);white-space:nowrap}
+.ichi-deck .ichi-back:nth-child(1){transform:translate(.22em,.3em) rotate(4deg)}.ichi-deck .ichi-back:nth-child(2){transform:translate(.14em,.2em) rotate(-3deg)}.ichi-deck .ichi-back:nth-child(3){transform:translate(.07em,.1em) rotate(1.5deg)}
+.ichi-deck>.kp-numeral{position:absolute;left:50%;top:100%;margin-top:.6em;transform:translateX(-50%);font-size:.68em;padding:.1em .7em;border-radius:1em;background:#05071acc;color:var(--ichi-muted);white-space:nowrap}
 .ichi-deck>.kp-numeral::after{content:' left'}
 .ichi-halo{position:absolute;left:50%;top:50%;width:8.6em;height:8.6em;margin:-4.3em;border-radius:50%;border:.14em solid var(--c);background:radial-gradient(circle,color-mix(in srgb,var(--c) 38%,#0000) 0,#0000 70%);box-shadow:0 0 1.2em .2em color-mix(in srgb,var(--c) 70%,#0000),inset 0 0 1em color-mix(in srgb,var(--c) 60%,#0000);transition:border-color .4s,box-shadow .4s;animation:ichi-halo 2.4s ease-in-out infinite alternate}
-.ichi-under,.ichi-top{position:absolute;inset:0;transform:rotate(var(--r))}
-.ichi-under .ichi-card{filter:brightness(.8)}
-.ichi-top[data-fly="true"]{animation:ichi-fly .55s cubic-bezier(.2,.85,.3,1)}
-.ichi-stack{position:absolute;z-index:2;right:-2em;top:-.6em;padding:.12em .42em;border-radius:.5em;background:radial-gradient(circle at 40% 30%,#ff7a62,#c8281e);color:#fff4e0;border:.1em solid var(--kp-ink);font-family:var(--font-display);font-size:calc(1.25em + min(var(--n),12) * .08em);transform:rotate(9deg);box-shadow:0 .12em 0 var(--kp-ink),0 0 1em #ff574899;animation:ichi-stamp .45s cubic-bezier(.2,1.8,.4,1)}
-.ichi-pile .ichi-chip{position:absolute;left:50%;top:100%;margin-top:.5em;transform:translateX(-50%);font-size:.8em}
-.ichi-turn{position:absolute;z-index:1;left:67.5%;top:47%;display:grid;justify-items:center;gap:.25em;width:13em;text-align:center;transform:translate(-50%,-50%)}
-.ichi-turn .ichi-timer{font-size:2.2em;margin-bottom:.1em}
-.ichi-turn strong{font-family:var(--font-display);font-weight:400;font-size:1.55em;line-height:1.05;color:var(--ichi-paper);padding-bottom:.12em;border-bottom:.14em solid var(--seat);white-space:nowrap}
-.ichi-turn>span{font-size:.95em;color:var(--ichi-muted)}
+/* The pile is a little untidy: earlier cards keep the tilt and slip they landed with. */
+.ichi-under,.ichi-top{position:absolute;inset:0;transform:translate(calc(var(--ox,0) * .05em),calc(var(--oy,0) * .05em)) rotate(var(--r))}
+.ichi-under .ichi-card{filter:brightness(.78)}
+.ichi-top[data-fly="true"]{animation:ichi-fly .52s cubic-bezier(.3,.7,.3,1)}
+.ichi-top[data-fly="true"] .ichi-card{animation:ichi-flip .52s ease-out}
+.ichi-thump{position:absolute;left:50%;top:50%;width:8em;height:8em;margin:-4em;border-radius:50%;border:.12em solid #fff6e5cc;pointer-events:none;animation:ichi-thump .6s .36s ease-out both}
+.ichi-stack{position:absolute;z-index:2;right:-2em;top:-.6em;padding:.12em .42em;border-radius:.5em;background:radial-gradient(circle at 40% 30%,#ff7a62,#c8281e);color:#fff4e0;border:.1em solid var(--kp-ink);font-family:var(--font-display);font-size:calc(1.15em + min(var(--n),12) * .07em);transform:rotate(9deg);box-shadow:0 .12em 0 var(--kp-ink),0 0 1em #ff574899;animation:ichi-stamp .45s cubic-bezier(.2,1.8,.4,1)}
+.ichi-pile .ichi-chip{position:absolute;left:50%;top:100%;margin-top:.5em;transform:translateX(-50%);font-size:.72em}
+/* Who the table is waiting for, under the active color. Their plate carries the clock. */
+.ichi-now{position:absolute;left:50%;top:100%;margin:2.45em 0 0;padding:.05em .7em .12em;border-radius:1em;transform:translateX(-50%);background:#05071ab8;border-bottom:.12em solid var(--seat);font-size:.55em;color:var(--ichi-muted);white-space:nowrap}
+.ichi-now b{font-family:var(--font-display);font-weight:400;font-size:1.15em;color:var(--ichi-paper)}
 .ichi-timer{position:relative;display:inline-grid;place-items:center;flex:none;width:2.6em;height:2.6em}
 .ichi-timer svg{position:absolute;inset:0;transform:rotate(-90deg)}
 .ichi-timer circle{fill:none;stroke-width:3.6}
@@ -116,30 +149,46 @@
 .ichi-timer .drain{stroke:var(--ichi-gold);stroke-linecap:round;transition:stroke-dashoffset .25s linear,stroke .3s}
 .ichi-timer[data-low="true"] .drain{stroke:var(--kp-coral)}
 .ichi-timer output{position:relative;font-size:.95em;line-height:1}
+/* The Ichi race puts the whole table in the dark except the player on one card. */
+.ichi-spot{position:absolute;inset:0;z-index:2;pointer-events:none;background:radial-gradient(circle at var(--x) var(--y),#0000 0 7em,#05071ac7 17em);animation:ichi-fade .3s both}
 .ichi-fx{position:absolute;inset:0;z-index:4;pointer-events:none}
 .ichi-fly-back{position:absolute;font-size:.5em;margin:-3.5em 0 0 -2.5em;animation:ichi-deal .6s var(--d) cubic-bezier(.3,.7,.3,1) both}
-.ichi-bubble{position:absolute;padding:.05em .6em;border-radius:1em;background:var(--t);color:var(--kp-ink);border:.08em solid var(--kp-ink);font-family:var(--font-display);font-size:1.5em;white-space:nowrap;transform:translate(-50%,calc(-100% - 2.1em));box-shadow:0 .1em 0 var(--kp-ink);animation:ichi-bubble 1.3s ease-out forwards}
-.ichi-bubble[data-below="true"]{transform:translate(-50%,1.6em)}
+.ichi-fly-gift{position:absolute;font-size:.62em;width:5em;height:7em;margin:-3.5em 0 0 -2.5em;animation:ichi-gift 1.1s cubic-bezier(.4,0,.2,1) both}
+/* The ribbon: the card that changes hands is never shown. */
+.ichi-fly-gift i{position:absolute;inset:0;border-radius:.5em;background:linear-gradient(90deg,#0000 42%,var(--kp-grape) 42% 58%,#0000 58%),linear-gradient(#0000 42%,var(--kp-grape) 42% 58%,#0000 58%)}
+.ichi-bubble{position:absolute;padding:.05em .6em;border-radius:1em;background:var(--t);color:var(--kp-ink);border:.08em solid var(--kp-ink);font-family:var(--font-display);font-size:1.5em;white-space:nowrap;transform:translate(-50%,calc(-100% - 1.6em));box-shadow:0 .1em 0 var(--kp-ink);animation:ichi-bubble 1.3s ease-out forwards}
+.ichi-bubble[data-below="true"]{transform:translate(-50%,1.3em)}
 .ichi-burst{position:absolute;width:8em;height:8em;margin:-4em;border-radius:50%;border:.35em solid var(--c);animation:ichi-burst .9s ease-out forwards}
+.ichi-petal-burst{position:absolute;width:0;height:0}
+.ichi-petal-burst i,.ichi-petals i{position:absolute;width:.95em;height:.62em;border-radius:70% 0 70% 0;background:#ffc2cf}
+.ichi-petal-burst i:nth-child(3n),.ichi-petals i:nth-child(3n){background:var(--ichi-gold)}.ichi-petal-burst i:nth-child(3n+1),.ichi-petals i:nth-child(3n+1){background:#ff8fa3}
+.ichi-petal-burst i{--a:calc(var(--k) * 25.7deg);animation:ichi-petal 1.6s cubic-bezier(.1,.7,.3,1) forwards}
+/* The Ichi call lands as a seal. */
+.ichi-stamp{position:absolute;display:grid;place-items:center;width:1.6em;height:1.6em;margin:-.8em;border-radius:.22em;background:#c8281e;color:#ffe9a8;border:.07em solid #ffd9c4;font-family:var(--font-display);font-size:4em;line-height:1;box-shadow:0 .08em .3em #000a;animation:ichi-seal 1.7s cubic-bezier(.2,1.4,.4,1) forwards}
 [data-tone="coral"]{--t:var(--kp-coral)}[data-tone="sky"]{--t:var(--kp-sky)}[data-tone="lime"]{--t:var(--kp-lime)}[data-tone="sun"]{--t:var(--kp-sun)}[data-tone="grape"]{--t:var(--kp-grape)}
 .ichi-splash{position:absolute;z-index:5;left:50%;top:74.5%;display:grid;justify-items:center;gap:.25em;max-width:30em;text-align:center;transform:translate(-50%,-50%);pointer-events:none;animation:ichi-pop .5s cubic-bezier(.2,1.6,.4,1)}
 .ichi-splash strong{font-size:3.2em;padding:.05em .6em;border-radius:.3em;background:linear-gradient(170deg,#2e1a12f2,#140a07f2);border:.08em solid var(--ichi-gold);color:var(--t);-webkit-text-stroke:.06em var(--kp-ink);paint-order:stroke fill;text-shadow:0 .08em 0 var(--kp-ink),0 0 .6em color-mix(in srgb,var(--t) 60%,#0000);white-space:nowrap}
 .ichi-splash[data-tone="grape"]{--t:#cfa8ff}
 /* From 9 seats the lower corner plates sit beside the splash; the ticker already carries its detail line. */
-.ichi-stage:has(.ichi-seat:nth-child(9)) .ichi-splash span{display:none}
+.ichi-table:has(.ichi-seat:nth-child(9)) .ichi-splash span{display:none}
 .ichi-splash span{font-size:.95em;padding:.2em .8em;border-radius:1em;background:#05071ad9;color:var(--ichi-paper)}
-.ichi-window{position:absolute;z-index:5;left:50%;top:25%;width:min(22em,27%);padding:.35em 1em .6em;overflow:hidden;border-radius:.8em;text-align:center;transform:translate(-50%,-50%);background:linear-gradient(#cf2c20,#8b170f);border:.13em solid var(--ichi-gold);box-shadow:0 0 2em #ff574880,0 .3em 0 #3a0905;animation:ichi-shake .5s}
-.ichi-window strong{display:block;font-size:1.75em;color:#fff4e0;text-shadow:0 .07em 0 #3a0905}
-.ichi-window span{font-size:.85em;color:#ffe3cf}
-.ichi-window i{position:absolute;left:0;bottom:0;height:.35em;background:var(--ichi-gold);transition:width .25s linear}
+/* The race and last-turn banners are one line, set on the pile's halo between the top seat's hand and the top card. */
+.ichi-window,.ichi-lap{position:absolute;z-index:5;left:50%;top:29%;display:flex;align-items:baseline;justify-content:center;gap:.6em;max-width:60%;padding:.12em 1em .32em;overflow:hidden;border-radius:.7em;white-space:nowrap;transform:translate(-50%,-50%);background:linear-gradient(#cf2c20,#8b170f);border:.12em solid var(--ichi-gold);box-shadow:0 0 2em #ff574880,0 .25em 0 #3a0905;animation:ichi-shake .5s}
+.ichi-window strong,.ichi-lap strong{font-size:1.4em;color:#fff4e0;text-shadow:0 .07em 0 #3a0905}
+.ichi-window span,.ichi-lap span{font-size:.9em;color:#ffe3cf}
+.ichi-window i{position:absolute;left:0;bottom:0;height:.26em;background:var(--ichi-gold);transition:width .25s linear}
+.ichi-lap{align-items:center;background:linear-gradient(#3a2a12,#1c1208);box-shadow:0 0 1.6em #ffb35c66,0 .25em 0 #0b0704}
+.ichi-lap strong{color:var(--ichi-gold)}
+.ichi-bell-icon{flex:none;width:1.1em;height:1.1em;fill:var(--ichi-gold)}
+.ichi-lap .ichi-bell-icon{font-size:1.2em;animation:ichi-ring .5s ease-in-out infinite alternate;transform-origin:50% 10%}
 .ichi-ticker{position:absolute;z-index:1;right:1.1em;bottom:.9em;width:17em;display:flex;flex-direction:column;align-items:flex-end;gap:.3em;margin:0;padding:0;list-style:none;font-size:.82em}
 .ichi-ticker li{padding:.25em .65em;border-radius:.7em;background:#05071ab8;color:var(--ichi-muted);text-align:right;border:1px solid #fff6e514}
 .ichi-ticker li:last-child{color:var(--ichi-paper);border-color:#e9bb5c55}
 .ichi-overlay{position:absolute;inset:0;z-index:6;display:grid;place-items:center;background:radial-gradient(#05071a8c,#05071ae0);backdrop-filter:blur(3px)}
 .ichi-overlay-late{animation:ichi-fade .35s 1.5s both}
-.ichi-tally{width:min(64em,94%);max-height:95%;padding:1em 1.4em;border-radius:1.2em;background:linear-gradient(170deg,#222a63f7,#0b1030f7);border:.12em solid #e9bb5c66;box-shadow:0 1.5em 3em #000a;animation:ichi-pop .45s ease-out}
+.ichi-tally{width:min(64em,94%);max-height:95%;padding:1em 1.4em;border-radius:1.2em;background:linear-gradient(170deg,#222a63f7,#0b1030f7);border:.12em solid #e9bb5c66;box-shadow:0 1.5em 3em #000a;animation:ichi-rise .45s ease-out}
 .ichi-tally header{display:flex;align-items:center;gap:.9em;margin-bottom:.6em}
-.ichi-tally header>.ichi-emblem,.ichi-final>.ichi-emblem{width:2.8em;height:2.8em;flex:none}
+.ichi-tally header>.ichi-emblem,.ichi-final>.ichi-emblem,.ichi-seating header>.ichi-emblem{width:2.8em;height:2.8em;flex:none}
 .ichi-tally h2{margin:0;font-size:2em;color:var(--ichi-gold)}
 .ichi-tally header p{margin:.15em 0 0;color:var(--ichi-muted)}
 .ichi-tally header p b{color:var(--ichi-paper);font-size:1.2em}
@@ -166,14 +215,88 @@
 .ichi-bar{display:block;height:.55em;border-radius:1em;background:#fff6e51a;overflow:hidden}
 .ichi-bar i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--seat,var(--ichi-gold)),var(--ichi-gold));transition:width 1s ease-out}
 .ichi-tally-foot{margin:.6em 0 0;font-size:.85em;color:var(--ichi-muted);text-align:center}
-.ichi-final{display:grid;justify-items:center;gap:.4em;text-align:center;width:min(40em,90%)}
-.ichi-final h2{font-size:2.6em}
+/* The match is decided: petals over the last table for a moment before the results. */
+.ichi-finale{font-size:min(2.4cqh,1.25cqw)}
+.ichi-final{position:relative;display:grid;justify-items:center;gap:.4em;text-align:center;width:min(42em,90%);box-shadow:0 0 4em #ffb35c66,0 1.5em 3em #000a}
+.ichi-final h2{font-size:2.8em}
+.ichi-kicker{margin:0;font-size:.85em;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--ichi-lantern)}
+.ichi-petals{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+/* Each petal's column, delay and speed are set inline. */
+.ichi-petals i{top:-5%;animation:ichi-fall 4s linear infinite}
+/* A cut to another table is announced on a lacquer card that sweeps across. */
+.ichi-cut{position:absolute;inset:0;z-index:7;display:grid;place-items:center;pointer-events:none;background:linear-gradient(100deg,#0000,#140a07fa 16% 84%,#0000);animation:ichi-cut .9s cubic-bezier(.6,0,.3,1) both}
+.ichi-cut strong{font-size:min(11cqh,8cqw);color:var(--ichi-gold);text-shadow:0 .06em 0 var(--kp-ink)}
+
+/* The parlor's floor rail: round clock, every table at a glance, the room's leaders. */
+.ichi-floor{display:flex;flex-direction:column;gap:.5em;min-height:0;padding:.7em .7em .6em;font-size:min(2.3cqh,1.2cqw);background:linear-gradient(180deg,#22123af7,#0b0718f7);border-left:.12em solid #e9bb5c40;overflow:hidden}
+.ichi-floor header{display:flex;align-items:center;justify-content:space-between;gap:.5em}
+.ichi-floor header strong{font-size:1.5em;color:var(--ichi-gold);white-space:nowrap}
+.ichi-floor header small{font-family:var(--font-body);font-size:.55em;color:var(--ichi-muted)}
+.ichi-bell{display:inline-flex;align-items:center;gap:.3em;padding:.1em .6em;border-radius:1em;background:#05071acc;border:.08em solid #e9bb5c66;color:var(--ichi-paper);font-size:1.3em;white-space:nowrap}
+.ichi-bell b{font-family:var(--font-display);font-weight:400;font-size:.85em}
+.ichi-bell[data-soon="true"]{border-color:var(--kp-coral);color:#ffd9c4}
+.ichi-bell[data-soon="true"] .ichi-bell-icon,.ichi-bell[data-rung="true"] .ichi-bell-icon{animation:ichi-ring .5s ease-in-out infinite alternate;transform-origin:50% 10%}
+.ichi-bell[data-rung="true"]{background:#c8281e;border-color:#ffd9c4;color:#fff4e0}
+.ichi-bell[data-rung="true"] .ichi-bell-icon{fill:#fff4e0}
+/* Few tables leave room for bigger tiles. */
+.ichi-tiles{flex:0 1 auto;min-height:0;display:grid;grid-template-columns:1fr;gap:.35em;margin:0;padding:0;list-style:none;font-size:calc(1em + (8 - min(var(--tiles),8)) * .055em)}
+.ichi-floor[data-dense="true"] .ichi-tiles{grid-template-columns:1fr 1fr}
+.ichi-tile-card{grid-row:1/3;font-size:.36em}
+.ichi-tile-card>*{display:block}
+.ichi-tiles>li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:.12em .55em;min-height:0;padding:.28em .55em;border-radius:.6em;background:#fff6e50d;border:.1em solid #fff6e514;border-left:.32em solid var(--c);transition:background .3s,border-color .3s}
+.ichi-tiles>li[data-on="true"]{border-color:var(--ichi-gold);border-left-color:var(--c);background:#e9bb5c2b;box-shadow:0 0 .9em #ffb35c55}
+.ichi-tiles>li[data-phase="idle"]{opacity:.5}
+.ichi-tiles>li[data-ichi="true"]{border-color:var(--kp-coral);animation:ichi-flash .45s ease-in-out infinite alternate}
+.ichi-tiles strong{font-family:var(--font-display);font-weight:400;color:var(--ichi-paper);white-space:nowrap}
+.ichi-tile-top{align-self:center;padding:0 .5em;border-radius:.4em;background:var(--c);color:var(--kp-ink);font-weight:900;font-size:.8em;white-space:nowrap}
+.ichi-tiles>li:not([data-phase="playing"]) .ichi-tile-top{background:#fff6e526;color:var(--ichi-muted)}
+.ichi-tile-seats{grid-column:2/-1;display:grid;grid-template-columns:1fr 1fr;gap:.05em .7em;min-width:0;font-size:.78em}
+/* Up to three tables of four leave room for every name in full, one to a line. */
+.ichi-tiles:not(:has(>li:nth-child(4))):not(:has(.ichi-tile-seats>span:nth-child(5))) .ichi-tile-seats{grid-template-columns:1fr}
+.ichi-tile-seats>span{display:flex;align-items:center;gap:.3em;min-width:0;color:var(--ichi-muted)}
+.ichi-tile-seats>span::before{content:'';flex:none;width:.55em;height:.55em;border-radius:50%;background:var(--seat)}
+.ichi-tile-seats em{flex:1;min-width:0;font-style:normal;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.ichi-tile-seats b{color:var(--ichi-paper)}
+.ichi-tile-seats>span[data-current="true"],.ichi-tile-seats>span[data-current="true"] b{color:var(--ichi-gold)}
+.ichi-tile-seats>span[data-low="true"] b{padding:0 .3em;border-radius:.4em;background:var(--kp-sun);color:var(--kp-ink)}
+/* Past eight tables the tiles go two abreast and keep only each seat's color and count; names are on the stage and the phones. */
+.ichi-floor[data-dense="true"] .ichi-tile-seats{display:flex;flex-wrap:wrap;gap:0 .4em;font-size:.76em}
+.ichi-floor[data-dense="true"] .ichi-tile-seats>span{gap:.2em}
+.ichi-floor[data-dense="true"] .ichi-tiles>li{gap:.05em .4em;padding:.22em .4em}
+.ichi-floor[data-dense="true"] .ichi-tiles strong{font-size:.9em}.ichi-floor[data-dense="true"] .ichi-tile-top{padding:0 .35em;font-size:.7em}
+.ichi-leaders{display:grid;gap:.2em;margin:auto 0 0;padding:.45em 0 0;list-style:none;border-top:.1em solid #e9bb5c40}
+.ichi-leaders::before{content:'Leaders';font-size:.7em;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--ichi-lantern)}
+.ichi-leaders li{display:grid;grid-template-columns:1.3em minmax(0,1fr) auto;align-items:center;gap:.4em;padding:.05em .4em;border-left:.25em solid var(--seat);font-size:.9em}
+.ichi-leaders li>span{color:var(--ichi-gold)}
+.ichi-leaders strong{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:800}
+.ichi-leaders li:first-child strong{color:var(--ichi-gold)}
+
+/* Between rounds: the seating chart takes the whole screen. */
+.ichi-seating{position:absolute;inset:0;z-index:6;display:flex;flex-direction:column;gap:.8em;padding:1.1em 1.5em 1.2em;font-size:min(2.4cqh,1.25cqw);background:radial-gradient(120% 100% at 50% 0%,#2f1848,#0b0718 72%);animation:ichi-fade .4s both}
+.ichi-seating header{display:flex;align-items:center;gap:.9em}
+.ichi-seating h2{margin:0;font-size:2.2em;color:var(--ichi-gold)}
+.ichi-seating header p{margin:.1em 0 0;color:var(--ichi-muted)}
+.ichi-seating>ol{flex:1;min-height:0;display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));grid-auto-rows:minmax(0,1fr);gap:.6em;margin:0;padding:0;list-style:none}
+.ichi-seating>ol>li{display:flex;flex-direction:column;gap:.15em;min-height:0;padding:.45em .8em .5em;border-radius:.9em;background:linear-gradient(170deg,#2e1a12f2,#140a07f2);border:.1em solid #e9bb5c4d;animation:ichi-rise .45s both}
+.ichi-seating>ol>li[data-top="true"]{border-color:var(--ichi-gold);box-shadow:0 0 1.4em #ffb35c66}
+.ichi-seating>ol>li>strong{font-size:1.15em;color:var(--ichi-gold)}
+.ichi-seating ul{flex:1;min-height:0;display:grid;align-content:space-evenly;margin:0;padding:0;list-style:none}
+.ichi-seating ul li{display:grid;grid-template-columns:1em minmax(0,1fr) auto;align-items:center;gap:.4em;padding-left:.4em;border-left:.25em solid var(--seat);font-size:calc(.95em + (16 - min(var(--tables),16)) * .02em);line-height:1.25}
+.ichi-seating ul li span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:800}
+.ichi-seating ul li i{font-style:normal;font-size:.75em;color:var(--ichi-muted)}
+.ichi-seating ul li[data-move="up"] i{color:var(--kp-lime)}.ichi-seating ul li[data-move="down"] i{color:var(--kp-coral)}
+.ichi-seating ul li b{color:var(--ichi-muted)}
 
 /* Phone */
 .ichi-phone{--card:min(7.2vw,3.3dvh);display:flex;flex-direction:column;gap:.5rem;min-height:calc(100dvh - 96px)}
 .ichi-phone[data-art="true"]{padding:.4rem .5rem 0;border-radius:1.2rem;background:#05071a url('/games/ichi/table-portrait.webp') center/cover}
 .ichi-strip{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:.6rem;padding:.4rem .6rem;border-radius:1rem;background:linear-gradient(160deg,#222a63,#0e1438);border:2px solid #fff6e51f;transition:border-color .3s,box-shadow .3s}
 .ichi-strip[data-mine="true"]{border-color:var(--ichi-gold);box-shadow:0 0 1.2rem #ffb35c55}
+.ichi-strip[data-lap="true"]{border-color:var(--kp-coral);box-shadow:0 0 1.2rem #ff574877}
+/* The parlor's line: table, round and the bell. */
+.ichi-room{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin:0;font-size:.82rem;color:var(--ichi-muted)}
+.ichi-room strong{font-family:var(--font-display);font-weight:400;font-size:1.05rem;color:var(--ichi-gold);white-space:nowrap}
+.ichi-room .ichi-bell{font-size:.95rem}
 .ichi-strip-top .ichi-card{font-size:9px;display:block}
 .ichi-strip-info{display:grid;justify-items:start;gap:.3rem;min-width:0}
 .ichi-strip-info>span{display:flex;align-items:center;gap:.4rem}
@@ -209,13 +332,17 @@
 .ichi-colors .kp-btn,.ichi-targets .kp-btn{margin:0;min-height:60px;font-size:1.2rem}
 .ichi-colors .kp-btn>span,.ichi-targets .kp-btn>span{display:flex;align-items:center;justify-content:center;gap:.45rem}
 .ichi-card-tag{position:absolute;top:-.55em;left:.15em;z-index:1;padding:.05em .35em;border-radius:.3em;background:#c8281e;color:#fff4e0;font:normal .62em/1.3 var(--font-display);pointer-events:none;transform:rotate(-6deg)}.ichi-card-button[aria-pressed="true"] .ichi-card-tag{top:.25em;left:auto;right:.25em}
+.ichi-card-tag-give{background:var(--kp-grape);color:var(--kp-ink)}
 .ichi-colors .ichi-emblem{width:1.7em;height:1.7em;color:var(--kp-ink)}
 .ichi-colors .ichi-emblem .core{fill:var(--tone)}.ichi-colors .ichi-emblem .core-line{stroke:var(--tone)}
 .ichi-targets{grid-template-columns:1fr;max-height:30dvh;overflow:auto;padding:.2rem}
 .ichi-targets .kp-btn{min-height:48px;font-size:1rem;border-left:.4rem solid var(--seat)}
 .ichi-targets .kp-btn>span{justify-content:space-between}
-@media (orientation:portrait) and (max-height:640px){.ichi-phone{gap:.35rem}.ichi-colors p,.ichi-targets p{display:none}.ichi-colors{grid-template-columns:repeat(4,1fr);gap:.4rem}.ichi-colors .kp-btn{min-height:52px;padding:.4rem .2rem;font-size:.95rem}.ichi-colors .ichi-emblem{display:none}.ichi-targets{max-height:24dvh}}
-.ichi-hand{container-type:inline-size;flex:none}
+.ichi-targets .kp-btn i{font-style:normal}
+@media (orientation:portrait) and (max-height:640px){.ichi-phone{gap:.35rem}.ichi-colors p{display:none}.ichi-colors{grid-template-columns:repeat(4,1fr);gap:.4rem}.ichi-colors .kp-btn{min-height:52px;padding:.4rem .2rem;font-size:.95rem}.ichi-colors .ichi-emblem{display:none}
+  /* A swap or Gift list keeps its heading and names each player on one line; the sort header gives it its row. */
+  .ichi-targets{max-height:34dvh;gap:.35rem}.ichi-targets p{font-size:.95rem}.ichi-targets .kp-btn{min-height:44px;padding-block:.3rem}.ichi-targets .kp-btn i{display:none}.ichi-phone:has(.ichi-targets) .ichi-hand-head{display:none}}
+.ichi-hand{position:relative;container-type:inline-size;flex:none}
 .ichi-hand-head{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
 .ichi-hand-head strong{font-size:.95rem}
 .ichi-sort{display:inline-flex;padding:2px;border-radius:.8rem;background:#fff6e514}
@@ -232,7 +359,20 @@
 .ichi-card-button .ichi-card{display:block;transition:box-shadow .2s,filter .2s}
 .ichi-card-button[data-playable="true"],.ichi-card-button[data-jumpable="true"]{transform:translateY(-.55em)}
 .ichi-card-button[data-playable="true"] .ichi-card{box-shadow:0 0 0 .09em var(--kp-sun),0 0 .7em .12em #ffd24a99,0 .16em .36em #0007}
-.ichi-card-button[aria-disabled="true"] .ichi-card{filter:brightness(.78) saturate(.75)}
+/* Cards that can't be played dim only while it is your turn to choose; while you wait the hand stays readable and what fits is edged in gold. */
+.ichi-hand[data-turn="true"] .ichi-card-button[aria-disabled="true"] .ichi-card{filter:brightness(.74) saturate(.7)}
+.ichi-card-button[data-fits="true"] .ichi-card{box-shadow:0 0 0 .07em var(--ichi-gold),0 .16em .36em #0007}
+/* One row is held like a real hand: a shallow arc that straightens under the thumb. */
+.ichi-hand-row[data-rows="1"] .ichi-card-button{--o:calc(var(--i) - (var(--cols) - 1) / 2);rotate:calc(var(--o) * min(.8deg,5deg / var(--cols)));translate:0 calc(var(--o) * var(--o) * .2em / var(--cols));transform-origin:50% 100%}
+.ichi-hand-row[data-rows="1"] .ichi-card-button[aria-pressed="true"]{rotate:0deg;translate:0 0}
+.ichi-hand[data-gifting="true"] .ichi-card-button[aria-pressed="true"]{z-index:auto;transform:translateY(-1.1em)}
+.ichi-card-button[data-giving="true"]{transform:translateY(-.3em)}
+.ichi-card-button[data-give="true"]{z-index:2;transform:translateY(-1em)}
+.ichi-card-button[data-give="true"] .ichi-card{box-shadow:0 0 0 .1em #fff,0 0 0 .2em var(--kp-grape),0 .5em 1em #000a}
+.ichi-card-button[data-gone="true"]{opacity:0}
+/* A played card leaves the hand toward the table. */
+.ichi-ghost{position:absolute;z-index:5;pointer-events:none;animation:ichi-throw .42s cubic-bezier(.3,.6,.4,1) forwards}
+.ichi-ghost .ichi-card{display:block}
 .ichi-card-button[data-arrive="true"] .ichi-card{animation:ichi-arrive .45s cubic-bezier(.2,1.3,.4,1) both}
 .ichi-land{animation:ichi-land .4s cubic-bezier(.2,1.4,.4,1)}
 .ichi-card-button[data-jumpable="true"] .ichi-card{animation:ichi-jump .8s ease-in-out infinite alternate}
@@ -254,6 +394,11 @@
 .ichi-toast{position:absolute;z-index:4;top:.25rem;left:0;right:0;pointer-events:none}
 .ichi-toast .kp-notice{margin:0;box-shadow:0 .4rem 1rem #000a}
 .ichi-ouch{justify-self:center;padding:0 .8rem;font-weight:400;border-radius:1rem;background:#c8281e;color:#fff4e0;border:2px solid var(--kp-ink);font-family:var(--font-display);font-size:1.2rem;box-shadow:0 .15rem 0 var(--kp-ink);animation:ichi-ouch .4s cubic-bezier(.2,1.6,.4,1)}
+.ichi-ouch[data-gift="true"]{background:var(--kp-grape);color:var(--kp-ink)}
+.ichi-standing{font-size:.95rem}.ichi-standing b,.ichi-break p b{color:var(--ichi-paper)}
+.ichi-break .ichi-kicker{font-size:.75rem}
+.ichi-move h2{font-size:3.2rem;line-height:1}
+.ichi-move[data-move="up"] h2::after{content:' ▲';font-size:.5em;vertical-align:middle;color:var(--kp-lime)}.ichi-move[data-move="down"] h2::after{content:' ▼';font-size:.5em;vertical-align:middle;color:var(--kp-coral)}
 .ichi-shout:focus-visible,.ichi-preset:focus-visible,.ichi-sort button:focus-visible{outline:3px solid var(--kp-sky);outline-offset:3px}
 .ichi-break{display:grid;justify-items:center;gap:.6rem;padding:1rem .25rem;text-align:center}
 .ichi-break>.ichi-emblem{width:3.2rem;height:3.2rem}
@@ -261,6 +406,8 @@
 .ichi-break p{margin:0;color:var(--muted-foreground)}
 .ichi-break .kp-btn{position:sticky;bottom:max(.5rem,var(--safe-bottom));width:100%;margin:.3rem 0}
 .ichi-break .kp-btn:disabled{opacity:1}
+/* Short phones give the crest's room to the scores and the button. */
+@media (orientation:portrait) and (max-height:640px){.ichi-break{gap:.45rem;padding-top:.4rem}.ichi-break>.ichi-emblem{display:none}.ichi-move h2{font-size:2.6rem}}
 .ichi-break-scores{display:grid;grid-template-columns:minmax(0,max-content) minmax(3rem,1fr) 2.6rem;gap:.35rem .6rem;width:100%;margin:0;padding:0;list-style:none}
 .ichi-break-scores li{grid-column:1/-1;display:grid;grid-template-columns:subgrid;align-items:center;padding:.35rem .6rem;border-radius:.7rem;background:#fff6e50d;border-left:.3rem solid var(--seat);text-align:left}
 .ichi-break-scores li[data-me="true"]{background:#e9bb5c22}
@@ -269,6 +416,7 @@
   .ichi-phone{--card:min(5.3dvh,3.3vw)}
   .ichi-phone[data-phase="playing"]{display:grid;grid-template-columns:minmax(0,1fr) minmax(200px,31%);grid-template-rows:auto minmax(0,1fr) auto;grid-template-areas:"strip strip" "hand sheet" "hand actions";gap:.4rem .7rem;height:max(260px,calc(100dvh - 92px));min-height:0}
   .ichi-strip{grid-area:strip;padding:.25rem .6rem}
+  .ichi-room{grid-column:auto;order:3;gap:.6rem}
   .ichi-strip-top .ichi-card{font-size:7px}
   .ichi-strip-info{grid-auto-flow:column;align-items:center;justify-content:start}
   .ichi-rivals{display:none}
@@ -305,13 +453,19 @@
 .ichi-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));gap:.6rem}
 .ichi-options label{display:grid;gap:.3rem;font-weight:900}
 .ichi-options select{min-height:48px;padding:0 .7rem;border-radius:.7rem;border:2px solid var(--input);background:var(--secondary);color:var(--kp-cream);font-size:1rem}
+.ichi-options-note{margin:0;font-size:.9rem;color:var(--muted-foreground)}
 .ichi-howto-cards{display:flex;justify-content:center;padding:.4rem 0 .6rem}
 .ichi-howto-cards .ichi-card{font-size:11px;margin:0 -.6em}
-.ichi-howto-cards .ichi-card:nth-child(1){transform:rotate(-10deg) translateY(.3em)}.ichi-howto-cards .ichi-card:nth-child(3){transform:rotate(10deg) translateY(.3em)}
+.ichi-howto-cards .ichi-card:nth-child(1){transform:rotate(-13deg) translateY(.45em)}.ichi-howto-cards .ichi-card:nth-child(2){transform:rotate(-4deg)}.ichi-howto-cards .ichi-card:nth-child(3){transform:rotate(4deg)}.ichi-howto-cards .ichi-card:nth-child(4){transform:rotate(13deg) translateY(.45em)}
 .ichi-howto ul{display:grid;gap:.45rem;margin:0;padding-left:1.1rem}
 .ichi-howto li::marker{color:var(--ichi-gold)}
 .ichi-howto p{color:var(--muted-foreground)}
-.ichi-results{display:grid;justify-items:center;gap:.6em;text-align:center}
+.ichi-results{position:relative;display:grid;justify-items:center;gap:.6em;overflow:hidden;text-align:center}
+.ichi-results>:not(.ichi-petals){position:relative;z-index:1}
+/* Petals fall behind the standings on the TV; a phone's list stays plain. */
+.ichi-results .ichi-petals i{opacity:.45}
+.ichi-results[data-display="false"] .ichi-petals{display:none}
+.ichi-you{margin:0;font-size:1.1em}.ichi-you b{color:var(--ichi-gold)}
 /* On the TV the results scale with the screen, bounded by height for the row count; phones keep the 16px base. */
 .ichi-results[data-display="true"]{font-size:clamp(1rem,min(1.5vw,(100vh - 270px) / (11 + 3.2 * var(--rows))),1.7rem)}
 .ichi-podium{display:flex;flex-wrap:wrap;justify-content:center;gap:1em}
@@ -329,6 +483,13 @@
 .ichi-standings li>span:nth-child(3){color:var(--muted-foreground);font-size:.9em}
 .ichi-standings .ichi-leftover{height:2.2em}
 .ichi-standings b{text-align:right;font-size:1.2em}
+/* A big room: the TV sets the standings in columns that read downward. The type is bound by height for the rows and by width for the columns (21.5em holds a rank, a 16-character name, hands and score), so 64 full names fit; phones keep one scrolling list. */
+.ichi-results[data-crowd="true"][data-display="true"]{font-size:clamp(.6rem,min((min(100vw,1600px) - 7rem) / (var(--cols) * 21.5),(100vh - 250px) / (8.5 + 2.15 * var(--rows))),1.5rem)}
+.ichi-results[data-crowd="true"] .ichi-podium>div{grid-auto-flow:column;align-items:center;gap:.6em;min-width:0;padding:.35em 1em .45em}
+.ichi-results[data-crowd="true"] .ichi-podium .ichi-emblem{width:1.6em;height:1.6em}
+.ichi-results[data-crowd="true"] .ichi-standings li{grid-template-columns:2.6em minmax(0,1fr) auto 2.8em;gap:.5em;padding:.14em .6em}
+.ichi-results[data-crowd="true"] .ichi-standings li>span:nth-child(3){font-size:.78em;white-space:nowrap}
+.ichi-results[data-crowd="true"][data-display="true"] .ichi-standings{grid-template-columns:repeat(var(--cols),minmax(0,1fr));grid-template-rows:repeat(var(--rows),auto);grid-auto-flow:column;gap:.2em .7em;width:100%}
 .ichi-last-hand{width:min(100%,34em);text-align:left}
 .ichi-last-hand summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-weight:900}
 .ichi-last-hand ul{display:grid;gap:.3em;margin:0;padding:0;list-style:none}
@@ -338,7 +499,21 @@
 
 @keyframes ichi-glow{to{box-shadow:0 0 0 .16em var(--ichi-gold),0 0 2.4em .6em #ffb35caa,0 .4em 1em #0009}}
 @keyframes ichi-halo{to{transform:scale(1.04);filter:brightness(1.15)}}
-@keyframes ichi-fly{from{transform:translate(calc(var(--dx) * 1cqw),calc(var(--dy) * 1cqh)) rotate(calc(var(--r) - 50deg)) scale(.5)}}
+@keyframes ichi-fly{from{transform:translate(calc(var(--dx) * 1cqw),calc(var(--dy) * 1cqh)) rotate(calc(var(--r) - 70deg)) scale(.26)}70%{transform:translate(0,-.25em) rotate(var(--r)) scale(1.1)}}
+@keyframes ichi-flip{from{filter:brightness(.35)}45%{filter:brightness(.35)}}
+@keyframes ichi-thump{from{transform:scale(.8);opacity:.9}to{transform:scale(1.7);opacity:0}}
+@keyframes ichi-fan-in{from{opacity:0;transform:translateY(1.6em) scale(.6)}}
+@keyframes ichi-count{from{transform:scale(1.28)}}
+@keyframes ichi-gift{from{transform:translate(calc(var(--dx) * 1cqw),calc(var(--dy) * 1cqh)) scale(.75)}50%{transform:translate(calc(var(--dx) * .5cqw),calc(var(--dy) * .5cqh - 3.5em)) rotate(170deg) scale(1.5);opacity:1}85%{opacity:1}to{transform:rotate(360deg) scale(.7);opacity:0}}
+@keyframes ichi-petal{from{transform:rotate(var(--a)) translateX(.5em) scale(.4);opacity:1}70%{opacity:1}to{transform:rotate(calc(var(--a) + 40deg)) translateX(10em) rotate(260deg) scale(1);opacity:0}}
+@keyframes ichi-fall{from{transform:translateY(0) rotate(0)}to{transform:translate(4em,112cqh) rotate(540deg)}}
+@keyframes ichi-seal{0%{transform:rotate(-8deg) scale(3.4);opacity:0}13%{transform:rotate(-8deg) scale(.9);opacity:1}21%{transform:rotate(-8deg) scale(1)}82%{transform:rotate(-8deg) scale(1);opacity:1}100%{transform:rotate(-8deg) scale(1);opacity:0}}
+@keyframes ichi-wash{from{transform:scale(.2);opacity:0}}
+@keyframes ichi-lantern{to{opacity:.6}}
+@keyframes ichi-ring{from{transform:rotate(-14deg)}to{transform:rotate(14deg)}}
+@keyframes ichi-cut{from{transform:translateX(-105%)}32%,58%{transform:translateX(0)}to{transform:translateX(105%)}}
+@keyframes ichi-cut-in{from{opacity:0}45%{opacity:0}}
+@keyframes ichi-throw{to{transform:translateY(-9em) rotate(10deg) scale(.7);opacity:0}}
 @keyframes ichi-deal{from{transform:translate(calc(var(--dx) * 1cqw),calc(var(--dy) * 1cqh)) rotate(-25deg);opacity:1}80%{opacity:1}to{transform:scale(.7);opacity:0}}
 @keyframes ichi-bubble{0%{opacity:0;scale:.5}15%{opacity:1;scale:1.12}25%{scale:1}80%{opacity:1}100%{opacity:0}}
 @keyframes ichi-burst{from{transform:scale(.4);opacity:1}to{transform:scale(1.7);opacity:0}}
@@ -353,9 +528,8 @@
 @keyframes ichi-ouch{from{opacity:0;transform:scale(.5)}}
 @keyframes ichi-fade{from{opacity:0}}
 @keyframes ichi-jump{to{box-shadow:0 0 0 .1em var(--kp-sky),0 0 1em .25em #28c6e7bb,0 .16em .36em #0007}}
-.ichi-tally{animation-name:ichi-rise}
 @keyframes ichi-rise{from{opacity:0;transform:translateY(1em)}}
-@media (prefers-reduced-motion:reduce){.ichi-bubble,.ichi-splash,.ichi-window,.ichi-stack,.ichi-land,.ichi-ouch,.ichi-wash,.ichi-overlay-late,.ichi-card-button[data-arrive="true"] .ichi-card{animation:none}.ichi-orbit span{animation:none}}
+@media (prefers-reduced-motion:reduce){.ichi-bubble,.ichi-splash,.ichi-window,.ichi-lap,.ichi-stack,.ichi-land,.ichi-ouch,.ichi-wash,.ichi-overlay-late,.ichi-card-button[data-arrive="true"] .ichi-card,.ichi-table,.ichi-table::after,.ichi-fan .ichi-back,.ichi-seat-count,.ichi-top[data-fly="true"],.ichi-top[data-fly="true"] .ichi-card,.ichi-beam,.ichi-spot,.ichi-seating,.ichi-seating>ol>li,.ichi-bell-icon,.ichi-ghost{animation:none!important}.ichi-orbit span{animation:none!important}.ichi-thump,.ichi-cut,.ichi-petal-burst,.ichi-petals,.ichi-stamp,.ichi-fly-gift{display:none}}
 
 /* immersivePhone: the shell is pinned to the visible viewport (browser bars, full screen, keyboard) under a compact header; only the area below it scrolls. */
 .kp-shell-immersive:has(.ichi){position:fixed;inset:var(--phone-top,0px) 0 auto;height:var(--phone-height,100dvh);display:flex;flex-direction:column;padding:max(.5rem,var(--safe-top)) 0 max(.4rem,var(--safe-bottom))}

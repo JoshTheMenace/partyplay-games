@@ -1,5 +1,5 @@
 /** Tiny synthesized TV effects. Follows the shell's shared mute preference and never throws. */
-export type Sfx = 'flick' | 'thud' | 'chime' | 'alarm' | 'swish';
+export type Sfx = 'flick' | 'thud' | 'chime' | 'alarm' | 'swish' | 'bell';
 let context: AudioContext | null = null;
 let muted = (() => { try { return localStorage.getItem('party.sound.muted') === 'true'; } catch { return false; } })();
 const onPreference = (event: Event) => { muted = !!(event as CustomEvent<{ muted: boolean }>).detail?.muted; };
@@ -30,6 +30,8 @@ export function play(kind: Sfx, n = 0) {
     if (kind === 'thud') { tone(context, t, 'sine', 150 + 12 * Math.min(n, 16), 48, .3, .5); noise(context, t, .08, .25, 400); }
     if (kind === 'chime') [880, 1320, 1760].forEach((hz, i) => tone(context!, t + i * .07, 'triangle', hz, hz * .995, .6, .16));
     if (kind === 'alarm') [0, .13].forEach(d => tone(context!, t + d, 'square', 520, 380, .12, .07));
+    // The parlor's round bell: a struck fundamental with two quieter partials ringing out.
+    if (kind === 'bell') [[523, .2], [1318, .08], [1760, .04]].forEach(([hz, gain]) => tone(context!, t, 'sine', hz, hz * .995, 1.6, gain));
   } catch { /* Audio is optional. */ }
 }
 export function disposeSfx() { void context?.close().catch(() => {}); context = null; }
