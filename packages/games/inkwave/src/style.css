@@ -1,8 +1,9 @@
 @font-face{font-family:Inkwave Titan;src:url('/games/inkwave/assets/fonts/TitanOne-latin.woff2') format('woff2');font-display:swap}
 @font-face{font-family:Inkwave Rubik;src:url('/games/inkwave/assets/fonts/Rubik-latin.woff2') format('woff2');font-weight:400 900;font-display:swap}
 .inkwave{color:#fff;font-family:Inkwave Rubik,sans-serif}
-.inkwave-scene{display:block;width:100%;height:100%;border:0;pointer-events:auto}
-.kp-scene-stage:has(.inkwave-scene)>.kp-scene-overlay{inset:0}.inkwave-display{position:absolute;inset:0;pointer-events:none}
+/* The arena iframe is the stage's own first child (client.tsx `Scene`), under the shell's overlay. */
+.inkwave-scene{position:absolute;inset:0;display:block;width:100%;height:100%;border:0;pointer-events:auto}
+.kp-scene-stage:has(.inkwave-scene)>.kp-scene-surface{display:none}.kp-scene-stage:has(.inkwave-scene)>.kp-scene-overlay{inset:0}.inkwave-display{position:absolute;inset:0;pointer-events:none}
 /* Shared display: the original HUD's outlined Titan type, team colours from the match. */
 .inkwave-display :is(b,strong){font:400 1em/1 Inkwave Titan,sans-serif;-webkit-text-stroke:.16em #15121c;paint-order:stroke fill}
 .inkwave-score{position:absolute;top:14px;left:50%;translate:-50% 0;display:flex;align-items:center;gap:14px}
@@ -15,7 +16,73 @@
 .inkwave-roster>li{flex:1 1 0;display:flex;gap:8px;min-width:0}.inkwave-roster>li:nth-child(2){flex-direction:row-reverse}
 .inkwave-roster div{flex:1 1 0;min-width:0;display:grid;gap:3px;padding:7px 10px;border-radius:10px;background:#15121cd9;box-shadow:inset 0 4px var(--team)}
 .inkwave-roster b{font-size:15px;overflow-wrap:anywhere}.inkwave-roster span{font-size:12px;font-weight:700;color:#d8d2e6}
-.inkwave-intro{text-align:center;padding-top:12vh;pointer-events:none}.inkwave-intro strong{font:400 48px Inkwave Titan,sans-serif;-webkit-text-stroke:6px #15121c;paint-order:stroke fill}
+/* A team-mate who is splatted dims on the strip until they are back. */
+.inkwave-roster div.is-out{opacity:.45;box-shadow:inset 0 4px #6d5e7f}
+/* Play-by-play: who splatted whom, down the right edge under the scoreboard row. */
+.inkwave-feed{position:absolute;top:100px;right:16px;display:grid;gap:6px;justify-items:end;margin:0;padding:0;list-style:none}
+.inkwave-feed li{display:flex;align-items:baseline;gap:7px;padding:5px 12px;border-radius:999px;background:#15121cd9;animation:inkwave-in .25s cubic-bezier(.2,1.4,.4,1) both}
+.inkwave-feed b{font-size:15px;color:var(--team);-webkit-text-stroke:0;filter:brightness(1.25)}.inkwave-feed i{font:800 11px Inkwave Rubik,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#d8d2e6}
+/* Call-outs share one place under the scoreboard: a lead change, the last minute, time. */
+.inkwave-callout{position:absolute;top:104px;left:50%;translate:-50% 0;margin:0;padding:8px 26px 10px;border-radius:14px;background:var(--team,#15121c);box-shadow:0 0 0 3px #fff,0 0 0 6px #15121c,0 7px 0 5px #0006;font:400 28px/1 Inkwave Titan,sans-serif;text-transform:uppercase;white-space:nowrap;-webkit-text-stroke:.16em #15121c;paint-order:stroke fill;animation:inkwave-pop .35s cubic-bezier(.2,1.5,.4,1) both}
+.inkwave-time{top:38%;font-size:72px;padding:14px 44px 18px;border-radius:24px}
+.inkwave-count{position:absolute;top:30%;left:50%;translate:-50% 0;margin:0;font:400 150px/1 Inkwave Titan,sans-serif;-webkit-text-stroke:.1em #15121c;paint-order:stroke fill;animation:inkwave-count 1s ease-out both}
+/* Match intro: the two line-ups over the establishing shot. */
+.inkwave-card{position:absolute;inset:22% 0 auto;display:grid;justify-items:center;gap:14px;animation:inkwave-in .4s ease-out both}
+.inkwave-card small{padding:6px 18px;border-radius:999px;background:#15121c;font:800 15px Inkwave Rubik,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#ffd24a}
+.inkwave-card>div{display:flex;align-items:center;gap:22px}.inkwave-card>div>b{order:1;font:400 44px Inkwave Titan,sans-serif;-webkit-text-stroke:.16em #15121c;paint-order:stroke fill}
+.inkwave-card ul{display:grid;gap:5px;min-width:230px;margin:0;padding:12px 16px 14px;list-style:none;border-radius:16px;background:#15121ce6;box-shadow:inset 0 6px var(--team),0 0 0 3px #fff,0 7px 0 4px #0006}
+.inkwave-card ul+ul{order:2;text-align:right}.inkwave-card li{font:800 18px Inkwave Rubik,sans-serif}.inkwave-card li:first-child{font:400 24px Inkwave Titan,sans-serif;color:var(--team);filter:brightness(1.2);text-transform:uppercase}.inkwave-card li.is-cpu{color:#a69fb8;font-weight:600}
+/* A room of several arenas: the room's score on top, one chip per arena under it, the arena on air named top left. */
+.inkwave-team small em{font-style:normal;letter-spacing:0;text-transform:none}
+.inkwave-arenas{position:absolute;top:88px;left:50%;translate:-50% 0;display:flex;gap:8px;margin:0;padding:0;list-style:none}
+.inkwave-arenas li{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:2px 7px;min-width:92px;padding:5px 9px 6px;border-radius:10px;background:#15121cd9;box-shadow:0 0 0 2px #15121c}
+.inkwave-arenas li.is-live{box-shadow:0 0 0 3px #ffd24a}.inkwave-arenas li.is-done{opacity:.7}
+.inkwave-arenas b{font-size:17px}.inkwave-arenas span{font:800 12px Inkwave Rubik,sans-serif;text-align:right;white-space:nowrap}
+.inkwave-arenas i{grid-column:1/-1;grid-row:2;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--a) var(--share),var(--b) 0)}
+.inkwave-onair{position:absolute;top:14px;left:16px;display:grid;gap:2px;margin:0;padding:8px 16px 10px;border-radius:14px;background:#15121ce6;box-shadow:inset 6px 0 #ffd24a;font:400 26px/1 Inkwave Titan,sans-serif;text-transform:uppercase}
+.inkwave-onair span{font:800 13px Inkwave Rubik,sans-serif;color:#d8d2e6}
+.inkwave-many .inkwave-callout{top:150px}.inkwave-many .inkwave-feed{top:200px}
+.inkwave-cut{position:absolute;inset:0;display:grid;place-items:center;margin:0;background:#15121c;font:400 96px Inkwave Titan,sans-serif;text-transform:uppercase;color:#ffd24a;animation:inkwave-cut 1.5s ease-in-out both}
+@keyframes inkwave-in{from{opacity:0;translate:0 -8px}}
+@keyframes inkwave-pop{from{opacity:0;scale:.6}}
+@keyframes inkwave-count{from{opacity:1;scale:1.25}to{opacity:.25;scale:.85}}
+@keyframes inkwave-cut{0%{clip-path:inset(0 100% 0 0)}18%,72%{clip-path:inset(0)}100%{clip-path:inset(0 0 0 100%)}}
+/* A phone whose arena is decided while others play on. */
+.inkwave-phone{position:absolute;inset:0;pointer-events:none}
+.inkwave-decided{position:absolute;left:50%;top:26%;translate:-50% 0;display:grid;gap:6px;max-width:min(80vw,460px);padding:12px 20px 14px;border-radius:16px;background:#15121cf2;box-shadow:inset 0 6px var(--team),0 0 0 3px #fff;text-align:center}
+.inkwave-decided strong{font:400 22px Inkwave Titan,sans-serif;text-transform:uppercase}.inkwave-decided span{font-size:13px;font-weight:700;color:#d8d2e6}
+/* Lobby: who is on which team, and in which arena once the room is larger than one. */
+.inkwave-lobby-stage{font-size:16px!important}.inkwave-lobby-stage b{font:400 20px Inkwave Titan,sans-serif;color:#ffd24a}
+.inkwave-lineup{display:grid;gap:12px;margin:10px 0}.inkwave-lineup-many{grid-template-columns:repeat(auto-fill,minmax(225px,1fr));gap:8px}
+.inkwave-lineup.inkwave-lineup-many section{padding:6px 6px 7px;gap:4px}.inkwave-lineup.inkwave-lineup-many ul{padding:6px 6px 6px 7px;gap:1px}.inkwave-lineup.inkwave-lineup-many li{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Eight cards on one screen leave a name about a hundred pixels: no tick column, a waiting seat is dimmed instead. */
+.inkwave-lineup.inkwave-lineup-many li::before{content:none}.inkwave-lineup.inkwave-lineup-many li:not(.is-ready,.inkwave-lineup-team,.inkwave-lineup-cpu){opacity:.5}
+.inkwave-lineup.inkwave-lineup-many li:is(.inkwave-lineup-team,.inkwave-lineup-cpu){font-size:11.5px;letter-spacing:.02em}
+/* In a room of several arenas this line-up is the roster that matters, so it goes above the shell's own wall of names. */
+.kp-room-main:has(.inkwave-lineup-many){display:flex;flex-direction:column}.kp-room-main:has(.inkwave-lineup-many)>.kp-player-details{order:1}
+.inkwave-lineup section{display:grid;grid-template-columns:1fr 1fr;gap:6px 8px;padding:10px;border-radius:14px;background:#15121cb3}
+.inkwave-lineup h3{grid-column:1/-1;margin:0;font:400 17px Inkwave Titan,sans-serif;letter-spacing:.04em;color:#ffd24a}
+.inkwave-lineup ul{display:grid;align-content:start;gap:3px;margin:0;padding:8px 10px 9px;list-style:none;border-radius:10px;background:#15121c;box-shadow:inset 0 4px var(--team)}
+.inkwave-lineup ul:only-of-type{grid-column:1/-1;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}.inkwave-lineup ul:only-of-type .inkwave-lineup-team{grid-column:1/-1}
+.inkwave-lineup li{font-size:15px;font-weight:700;overflow-wrap:anywhere}.inkwave-lineup li::before{content:'○ ';color:#6d5e7f}.inkwave-lineup li.is-ready::before{content:'✓ ';color:#78d955}.inkwave-lineup li.is-away{opacity:.5}
+.inkwave-lineup .inkwave-lineup-team{font:400 15px Inkwave Titan,sans-serif;color:var(--team);filter:brightness(1.2);text-transform:uppercase}.inkwave-lineup .inkwave-lineup-team::before,.inkwave-lineup .inkwave-lineup-cpu::before{content:none}
+.inkwave-lineup .inkwave-lineup-cpu{font-size:13px;font-weight:600;color:#a69fb8}
+.inkwave-lineup[data-arenas="1"] li{font-size:18px}.inkwave-lineup[data-arenas="1"] .inkwave-lineup-team{font-size:20px}
+.inkwave-seat{padding:5px 12px;border-radius:999px;background:var(--team);font:800 13px Inkwave Rubik,sans-serif!important;color:#15121c;white-space:nowrap}
+/* Results of a room of several arenas: the room's verdict, then every arena with its eight names. */
+.inkwave-room-results{display:grid;gap:14px}
+.inkwave-room-results header{padding:14px 18px 16px;border-radius:16px;background:#15121c;box-shadow:inset 0 8px var(--team);text-align:center}
+.inkwave-room-results h2{margin:0 0 4px;font:400 clamp(26px,4.4vw,52px)/1.05 Inkwave Titan,sans-serif;color:var(--team);filter:brightness(1.2);text-transform:uppercase}
+.inkwave-room-results header p{margin:4px 0 0;font-size:15px}.inkwave-stars{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 18px;color:#d8d2e6}.inkwave-stars b{color:var(--team);filter:brightness(1.25)}
+.inkwave-room-arenas{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:10px}
+.inkwave-room-arenas section{padding:9px 10px 10px;border-radius:12px;background:#15121cb3}.inkwave-room-arenas section.is-mine{box-shadow:0 0 0 3px #ffd24a}
+.inkwave-room-arenas h3{display:flex;justify-content:space-between;gap:8px;margin:0 0 6px;font:400 16px Inkwave Titan,sans-serif;color:var(--team);filter:brightness(1.2)}.inkwave-room-arenas h3 span{font:800 13px Inkwave Rubik,sans-serif;color:#fff}
+/* Tangerine's four on the left of every card, Cobalt's on the right; a boss squad fills both columns. */
+.inkwave-room-arenas section>div{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.inkwave-room-arenas ul{display:grid;align-content:start;gap:3px;min-width:0;margin:0;padding:0;list-style:none}.inkwave-room-arenas ul:only-child{grid-column:1/-1;grid-template-columns:1fr 1fr;gap:3px 8px}
+.inkwave-room-arenas li{display:flex;justify-content:space-between;gap:6px;min-width:0;padding:2px 6px;border-radius:6px;box-shadow:inset 3px 0 var(--team);font-size:clamp(12px,1.05vw,15px)}
+.inkwave-room-arenas li b{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.inkwave-room-arenas li span{font-weight:700;color:#d8d2e6;white-space:nowrap}
+.inkwave-room-arenas li.is-cpu b{font-weight:500;color:#a69fb8}.inkwave-room-arenas li.is-self{background:#ffd24a26}
 @media(prefers-reduced-motion:reduce){.inkwave *{animation:none!important;transition:none!important}}
 .inkwave-original{display:block;border:0;width:100%;height:620px;background:#15121c;border-radius:12px}
 .inkwave-original[hidden]{display:none}

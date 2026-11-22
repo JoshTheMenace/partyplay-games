@@ -31,7 +31,9 @@
  .party-loadout .iw-tabs__hint,.party-loadout .iw-ltag{display:none}.party-loadout .iw-tab{min-width:44px;min-height:48px;padding:8px 3px}
  .party-loadout .iw-lfoot{flex-wrap:wrap}.party-loadout .iw-lsaved{width:100%;justify-content:center}
 }
-@media(max-width:600px){
+/* A narrow frame that is taller than wide: preview above, picker below. A short landscape phone (568×320 gives a
+   544×236 frame) is narrow too, but takes the side-by-side layout underneath so the picker is not a 32px strip. */
+@media(max-width:600px) and (orientation:portrait){
  .party-loadout .iw-screen{overflow:hidden}
  .party-loadout .iw-head{right:48%;top:18px;gap:8px}.party-loadout .iw-head__title{font-size:26px}
  .party-loadout .iw-head__sub{font-size:12px;line-height:1.4}
@@ -44,7 +46,9 @@
  .party-loadout .iw-kit{flex-direction:column}.party-loadout .iw-lspin{top:145px;bottom:auto;left:12px;right:auto}
  .party-loadout .iw-ltile__name{font-size:11px}
 }
-@media(min-width:601px) and (max-width:900px){
+@media(max-width:900px) and (orientation:landscape){
+ /* The narrowest landscape frames keep the chip to the squid and LOCKER: the name is already in the shell's header. */
+ @media(max-width:600px){.party-loadout .iw-loadout__look .iw-wchip__text{display:none}.party-loadout .iw-loadout__look{width:auto}.party-loadout .iw-loadout__body{width:60%}}
  .party-loadout .iw-head{top:12px}.party-loadout .iw-head__sub{display:none}
  .party-loadout .iw-loadout__body,.party-loadout .iw-locker__body{top:60px;bottom:8px}
  .party-loadout .iw-loadout__look{top:10px}.party-loadout .iw-loadout__look .iw-wchip{min-height:44px}

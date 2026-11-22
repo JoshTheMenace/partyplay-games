@@ -1,6 +1,73 @@
 # Inkwave validation
 
-## Polish pass
+## Deep pass: big rooms, broadcast, phone presentation
+
+Validated 2026-11-22 on the shared Linux development box (12 cores, load average 10–30 from other work), headless Chromium 1.63 with **software WebGL (SwiftShader)**, emulated touch phones. No physical phone or TV, and no frame rate here says anything about real devices. Final build `iw-pass-a11` (built 2026-11-22T19:16:50Z, index SHA-256 `660a6159…2e0da7`); earlier builds of the same day are named where a check ran on them. The isolated builds and servers were removed afterwards. Evidence: `output/inkwave-pass/` in the platform checkout (37 screenshots under `shots/`, test summaries). Each real page ran in its own browser process; the rest of a roster were socket bots that pick a loadout, run, aim and fire (`tools/room-bot.mjs`).
+
+### What changed and how it was checked
+
+| Change | Check |
+| --- | --- |
+| A room of up to 64 is dealt into 4v4 arenas that play at once for two room-wide teams (`public/arenas.js`, `src/server.ts`) | Rule tests deal every size from 1 to 64 in both team layouts and Cargo; a 17-seat (three arenas) and a 64-seat (eight arenas) round run to results. Browser: 32 seats (four arenas, build a5) and 64 seats (eight arenas, builds a8, a9 and Boss Battle on a10), one real TV, one real phone, the rest bots. |
+| TV broadcast: camera eases in on the action, name tags, splat feed, call-outs, countdown, line-up card, arena chips and cuts | `shots/base-turf-tv-000.png` (before: one static shot of the whole stage, no names) against `A-tv-tv-038.png`, `a2-turf-tv-036.png` (final count), `B-tv32-tv-036.png`, `F-64-tv-043.png`, `K-32-tv-084.png`, `L-final-tv-*.png`. |
+| Phone presentation from the original game, never wired in the first port: fly-in, READY/GO, hit markers, damage direction, splat card and death camera, kill feed, last minute, final count, crane at time | `C-phone-phone-035.png`, `C-phone-phone-103.png` (count and feed). In the two-phone match the phones' own HUD text was read every four seconds: seat A's card read "SPLATTED BY Benedict Appleby · Twinfire Pistols · 5 RESPAWN", seat B's "SPLATTED BY Marisol Quinn · SPECIAL · Twister Zooka" (the other human seat), with feed lines on both. Hit markers and the damage flash are wired the same way and covered by the server test of the damage record, but were not caught in a screenshot. |
+| Characters and effects replay on the server's clock (they were stamped with arrival time, so network jitter became motion stutter and shots left the barrel before the character got there) | Code and rule test (`every event reaches a screen…`). Not measurable as smoothness under software rendering. |
+| Traffic: events once per two or three snapshots instead of for a second; run-length paint baselines; roster and result cached per socket | `tools/measure.mjs` and live bots, table below. |
+| A socket drop no longer rebuilds the 3D arena | The phone's socket was cut by the server during a slow frame; the same iframe element was still there, loaded, afterwards (frame identity unchanged across the drop, build a2), and `H-boss64-tv-000.png` shows the TV's arena still on screen under the shell's "Reconnecting" notice. |
+| Short landscape phones get a usable loadout (the picker was a 32 px strip at 568×320) | `shots/base-03-phone-lobby-568.png` against `C-00-phone-lobby-568.png`; `tests/mobile.test.ts`. |
+| Lobby shows teams and arenas on the TV and each phone's own seat | `A-00-tv-lobby-8.png`, `H-64-00-tv-lobby.png` and `-1080.png`, `a3-02-phone-lobby-568.png`. |
+
+### Measurements
+
+Server and traffic, in process (`node --import tsx packages/games/inkwave/tools/measure.mjs 8,32,64`, Tidewater, Turf War, scripted seats, 20 s, loaded box; ranges are two runs). "On connect" is the one message a socket receives when it joins or rejoins, with the roster and the paint; the platform caps messages from clients at 32 KiB, not those from the server, but every message stays under it:
+
+| Players | Arenas | Server tick mean / p95 | Round creation | TV | Phone | Largest message | Paint baseline |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 8 before this pass | 1 | 1.7 / 4.6 ms | 1.4 s | about 340 KB/s | about 340 KB/s | 57–73 KB each second | 57–73 KB |
+| 8 | 1 | 1.9–2.5 / 4.8–7.6 ms | 1.4 s | 56 KiB/s | 56 KiB/s | 12 KB (22 KB on connect) | 3–9 KB |
+| 32 | 4 | 6.0 / 14 ms | 1.2–1.5 s | 69 KiB/s | 137 KiB/s | 18 KB (27 KB on connect) | 3–6 KB |
+| 64 | 8 | 6.2–7.7 / 12–14 ms | 1.1–1.7 s (6.2 s before arenas shared their stage) | 67 KiB/s | 129 KiB/s | 18 KB (31 KB on connect) | 3–6 KB |
+
+Live rooms on the isolated server (bots' own counters and the server process's CPU time, sampled every five seconds):
+
+| Room | Per-bot traffic in play | Snapshots received | Server process |
+| --- | --- | --- | --- |
+| 8 bots, one arena (a4) | 52–55 KiB/s | 19–20 /s | not sampled |
+| 31 bots and one phone, four arenas (a10) | 89–120 KiB/s | 19–20 /s | 36–49% of one core while playing |
+| 63 bots and one phone, eight arenas (a8, a9) | 88–131 KiB/s | 14–20 /s | 54–89% of one core while playing |
+
+The 16.7 ms tick is the first thing to give out. At 64 seats the simulation takes about half of it on average here, 14 ms at the 95th percentile, and the bots saw the snapshot rate dip below 20 a second during the heaviest moments; a quieter server has headroom this box does not. Beyond 64 the single simulation thread, not traffic or phones, is the wall. A phone's cost is flat: it draws eight characters and receives two arenas however large the room is.
+
+The platform re-sends the results snapshot at the snapshot rate for as long as the room stays on the results screen. Inkwave's part of it is now a still view under 1.5 KB with the result cached per socket, but the platform's outcome rows repeat: 64 bots received about 140 KiB/s each while idle on results (190 before the result was cached). That is a platform behaviour and is reported, not changed.
+
+### Browser flows
+
+Every flow is a real join through the shell, the original loadout screen, a match, the results screen and, where noted, the host's Play again. `a11` is the final build. `a10` differs from it by two display-only lines (the TV camera eases by the wall clock so a slow browser is back on the whole stage for the count; the splat feed sits under the arena chips), rechecked on a11 with 32 bots and the TV (`L-final-tv-mid.png`, `L-final-tv-count.png`). `a7`–`a9` differ further only in lobby and results styling, two lint-only edits and the cached result.
+
+| Flow | Build | Result |
+| --- | --- | --- |
+| Turf War solo: one phone (568×320) with seven CPUs, TV; 30 s match, Play again, second match | a10 | Both matches reached results on TV and phone; no page errors (`S-solo2-tv-results.png`). Same flow with 60 s and 180 s matches on a3–a7. |
+| Turf War, two phones on opposite teams (568×320 and 844×390, held touch stick and fire), six bots, TV | a7 | Both painted (seat A 482p on its own HUD, 492p on the TV strip), each phone showed splats by and of the other seats, results on all three screens. |
+| Turf War, eight bots, TV only | a4 | `A-tv-tv-000.png`, `A-tv-tv-038.png`; results. |
+| Turf War, 31 bots and a phone, TV, 90 s (four arenas) | a10 | Phone seat "Tangerine · Arena A"; arena chips, on-air tag and name tags on the TV (`K-32-tv-084.png`), the phone in play with its feed (`K-32-phone-059.png`); "Cobalt win the room!" by 11.7% to 11.6% of combined turf with the arenas split two each; the phone's results show the room verdict, the four arenas with its own highlighted, then its own arena's original results screen (`K-32-phone-results-390x844.png`). TV-only runs with 32 bots on a5 (`B-tv32-*.png`) and a11. |
+| Turf War, 63 bots and a phone, TV, three minutes (eight arenas); the phone reloads mid-match | a8, a9 | Line-up of 64 above the fold at 1280×720; phone seat "Tangerine · Arena A"; a phone reloaded at 0:35 was back in its arena 49 s later with paint, HUD and 148p (`G-64-phone-reloaded-095.png`) while the room played on; room results with 64 names and Play again on one screen (`G-64-tv-results.png`). |
+| Boss Battle, 63 bots and a phone, TV, 60 s (eight squads) | a10 | Phone seat "Squad A"; eight squads fought their own boss; all ran out of time: "0 of 8 bosses sunk", every squad listed with damage (`H-boss64-tv-results.png`). The TV kept its arena on screen through a dropped socket (`H-boss64-tv-000.png`). |
+| Zone Control, one phone and seven bots, TV, five minutes plus overtime | a10 | 659 s to results; original zone HUD on the phone, counts and zone outlines on the TV (`Z-zones-tv-171.png`, `Z-zones-phone-045.png`). The bots do not play the objective, so the count stayed 100–100 into overtime. |
+
+The TV's overlays were also recorded from the DOM through a 30 s eight-bot match on a10, because most last a few seconds and a screenshot here takes longer: the line-up card ("Turf War · Tidewater Plaza", four names a side, VS; 1240×205 at y 193), a feed line, the count from 10 and "Time!". `I-intro-card-markup-review.png` is that card's recorded markup put back over a still of the stage to judge its styling; it is not a capture of the live moment.
+
+### Tests
+
+On the final source: `node --import tsx --test packages/games/inkwave/tests/*.test.ts tests/registry-contract.test.ts tests/catalog.test.ts tests/curated-catalog.test.ts tests/session-stall.test.ts` 67 pass, 0 fail (the same files without the new session test were 57 pass before the pass). `npm run typecheck` clean. `npm run lint` warnings only, none left in the files this pass wrote. `npm run test:platform` 121 pass, 1 skipped, 0 fail of 122. Full `npm test` 2,095 pass, 25 skipped, 4 fail of 2,124, run while 32- and 64-seat rooms were also running on the box: the four are timing budgets in other games (Blockwild mean tick and two chunk-generation medians, Night Job average tick), no functional failure and none in code this pass touched.
+
+### What this environment could not show
+
+- Software WebGL runs this renderer at seconds per frame whenever paint is flushed, and a full-page screenshot blocks a page for 5–50 s. A page blocked for more than ten seconds while snapshots arrive is disconnected by the server's heartbeat (close code 1006). That happened to the real pages in most runs; with the arena now surviving a socket drop they carried on, but it is why few in-play screenshots exist per match and why none shows a hit marker.
+- The loading barrier: one real page loads the arena in 25–40 s here, two in sequence. The harness loads the TV first and each phone after it (the phone's JavaScript is paused through the debugger until then). Real phones load in parallel on their own GPUs; that was not exercised.
+- Not seen: the "arena decided, others still playing" card on a phone (every big-room match here ended all arenas together), the broadcast's cut card (cuts themselves are in the TV shots: arena A, then D or E), a hit marker, and the intro card as live pixels.
+- Not checked: physical phones and TVs, real Wi-Fi with many phones, audio by ear, thermal behaviour, notch safe areas, iOS Safari, a host playing on the TV device in a room of several arenas, Cargo Terminal and stages other than Tidewater Plaza in the browser (all eight stages run to results in the rule tests). The 1920×1080 TV was checked for the 64-seat lobby only.
+
+## Polish pass (2026-10-17)
 
 Validated 2026-10-17. Build `inkwave-polish-03` is running on **4394** (`npm run serve:isolated -- inkwave-polish-03 4394`). Evidence: `output/playwright/inkwave-polish/`. Headless Chromium on the development Mac, emulated touch phones; no physical phone.
 

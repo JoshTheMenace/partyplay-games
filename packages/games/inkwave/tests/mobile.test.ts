@@ -32,3 +32,13 @@ test('camera follows a replicated super jump without local flight endpoints', ()
     assert.ok(camera.position.y > 10);
   } finally { G.physics = previous; }
 });
+
+test('a short landscape phone gets the side-by-side loadout, not the portrait stack', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const css = await readFile(new URL('../public/mobile.css', import.meta.url), 'utf8');
+  // A 568×320 phone gives the loadout a 544×236 frame: narrower than 600px, yet landscape. The stacked layout
+  // (preview on top, picker from 205px down) left its picker 32px tall there.
+  const stacked = css.split('@media').filter(block => block.includes('top:205px'));
+  assert.equal(stacked.length, 1); assert.ok(stacked[0].startsWith('(max-width:600px) and (orientation:portrait)'));
+  assert.match(css, /@media\(max-width:900px\) and \(orientation:landscape\)\{[^]*\.party-loadout \.iw-loadout__body,\.party-loadout \.iw-locker__body\{top:60px;bottom:8px\}/);
+});
