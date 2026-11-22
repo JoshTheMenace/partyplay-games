@@ -15,7 +15,7 @@
  */
 
 import { GRID, TILE, VIS_COLS } from './worldgen';
-import { TIER_DPR_CAP, fit } from './fit';
+import { TIER_DPR_CAP, fit, fitBroadcast } from './fit';
 import { THEMES, THEME_BY_ID } from './themes';
 import * as cameras from './camera';
 import * as terrain from './terrain';
@@ -31,6 +31,17 @@ export type StickView = {
 };
 
 const { GH } = GRID;
+
+/* Two ways to frame the same shaft.
+ *
+ * A phone is its digger's own eyes: twenty cells across, the width the game was
+ * tuned at. The shared screen is a broadcast — it fits the whole shaft across
+ * when it can and otherwise keeps a good stretch of it in view, and its camera
+ * goes wherever the scene tells it the story is. Same renderer, same art, same
+ * lamp; only the fit and the chrome differ. */
+let broadcast = false;
+/** Fine columns of the shaft being shown, which the broadcast fit depends on. */
+let shaftCols = VIS_COLS;
 
 let canvas: HTMLCanvasElement | null = null;
 let ctx: Ctx | null = null;
@@ -115,8 +126,10 @@ function fontData() {
 
 /* ── layout ───────────────────────────────────────────────────────────── */
 
-export function init(el: HTMLCanvasElement, box?: HTMLElement | null) {
+export function init(el: HTMLCanvasElement, box?: HTMLElement | null, opts?: { broadcast?: boolean }) {
   canvas = el;
+  broadcast = !!opts?.broadcast;
+  shaftCols = VIS_COLS;
   ctx = canvas.getContext('2d', { alpha: false });
   /* The element to MEASURE, handed in rather than looked up.
    *
@@ -174,9 +187,10 @@ export function resize() {
   const cssH = Math.max(1, Math.floor(rect.height));
   // Cap at 2: a 3x panel costs 2.25x the fill rate for art nobody can tell
   // apart at arm's length.
-  const { k, scale, dpr } = dprOverride
-    ? fit(cssW, cssH, dprOverride)
-    : fit(cssW, cssH, Math.min(window.devicePixelRatio || 1, perf.dprCap || 2), TIER_DPR_CAP[qualityTier]);
+  const want = dprOverride || Math.min(window.devicePixelRatio || 1, perf.dprCap || 2);
+  const { k, scale, dpr } = broadcast ? fitBroadcast(cssW, cssH, want, shaftCols)
+    : dprOverride ? fit(cssW, cssH, dprOverride)
+    : fit(cssW, cssH, want, TIER_DPR_CAP[qualityTier]);
   const devW = Math.round(cssW * dpr);
   const devH = Math.round(cssH * dpr);
 
@@ -346,7 +360,7 @@ function drawDepthGauge(g: Ctx, state: RenderState, x: number, w: number) {
 
   // Air, as a column climbing beside the ruler. Reading DOWN as it empties, so
   // it drains the same direction the player is heading.
-  if (state.airMax > 0) {
+  if (state.airMax > 0 && !broadcast) {
     const a = Math.max(0, Math.min(1, state.air / state.airMax));
     const bw = Math.max(3, Math.min(5, w - (wide ? 20 : 8)));
     const bx = wide ? x + 2 : cx + 3;
@@ -394,14 +408,66 @@ function drawOffscreen(g: Ctx, state: RenderState, top: number) {
 
   const pulse = 0.55 + 0.45 * Math.abs(Math.sin(clock() / 220));
 
+  /* The last few are marked whether they are hunting or not. Clearing the level
+   * is the only way to bank, and the final monster of a shaft 160 rows deep and
+   * several screens wide is otherwise a search with the air running out. Amber
+   * and steady rather than red and pulsing: it is where to go, not what is
+   * coming for you. */
+  const hunt = state.left <= LAST_FEW;
+  const right = L.vx + Math.min(L.visCols, state.activeGW) * L.scale;
   for (const m of state.monsters) {
-    if (m.dying || !m.hunting) continue;   // the dead never reach a client
-    const my = m.y + 1;
-    if (my >= top && my <= bot) continue;
-    const above = my < top;
-    const right = L.vx + Math.min(L.visCols, state.activeGW) * L.scale;
-    const x = Math.min(right - 12, Math.max(L.vx + 12, sxOf(m.x + 1)));
-    chevron(x, above ? 14 : L.cssH - 14, above ? -1 : 1, P.danger, pulse);
+    if (m.dying || m.kind === 'geode' || !(m.hunting || hunt)) continue;   // the dead never reach a client
+    const mx = sxOf(m.x + 1), my = (m.y + 1 - top) * L.scale;
+    if (mx >= L.vx && mx <= right && my >= 0 && my <= L.cssH) continue;
+    const x = Math.min(right - 12, Math.max(L.vx + 12, mx));
+    if (my >= 0 && my <= L.cssH) {
+      // Off to the side: a chevron turned to point along the row it is in.
+      g.save();
+      g.translate(mx < L.vx ? L.vx + 14 : right - 14, my);
+      g.rotate(mx < L.vx ? Math.PI / 2 : -Math.PI / 2);
+      chevron(0, 0, 1, m.hunting ? P.danger : P.accent, m.hunting ? pulse : 0.8);
+      g.restore();
+      continue;
+    }
+    const above = my < 0;
+    chevron(x, above ? 14 : L.cssH - 14, above ? -1 : 1, m.hunting ? P.danger : P.accent, m.hunting ? pulse : 0.8);
+  }
+
+  /* A teammate off the screen is a name at its edge, pointing their way. In a
+   * shaft 160 rows deep and several screens wide that is how a crew finds each
+   * other — and a teammate on the floor wears their clock there too, because
+   * one you cannot find is one you cannot save. */
+  const edgeL = L.vx, edgeR = L.vx + Math.min(L.visCols, state.activeGW) * L.scale;
+  for (const q of state.players) {
+    if (!q.label || q.dying) continue;
+    const qx = sxOf(q.x + 1), qy = (q.y + 1 - top) * L.scale;
+    // Gone means gone: a digger half off the edge still shows, and still wears their name.
+    if (qx >= edgeL - L.scale && qx <= edgeR + L.scale && qy >= -L.scale && qy <= L.cssH + L.scale) continue;
+    const ex = Math.min(edgeR - 14, Math.max(edgeL + 14, qx));
+    const ey = Math.min(L.cssH - 16, Math.max(16, qy));
+    const ang = Math.atan2(qy - ey, qx - ex);
+    const s = Math.max(6, L.scale * 0.45);
+    g.save();
+    g.translate(ex, ey);
+    g.globalAlpha = q.downed ? pulse : 0.9;
+    g.fillStyle = q.downed ? P.danger : (q.tint || P.text);
+    g.save();
+    g.rotate(ang);
+    g.beginPath();
+    g.moveTo(s, 0); g.lineTo(-s * 0.6, -s * 0.7); g.lineTo(-s * 0.6, s * 0.7);
+    g.closePath();
+    g.fill();
+    g.restore();
+    const px = Math.max(9, Math.round(L.scale * 0.6));
+    g.font = `800 ${px}px Nunito, system-ui, sans-serif`;
+    g.textBaseline = 'middle';
+    g.textAlign = ex > (edgeL + edgeR) / 2 ? 'right' : 'left';
+    const tx = (g.textAlign === 'right' ? -1 : 1) * s * 1.4 - Math.cos(ang) * s, ty = -Math.sin(ang) * s * 1.6;
+    const label = q.downed ? `${q.label} · ${Math.ceil(q.downT)}s` : q.label;
+    g.lineJoin = 'round'; g.lineWidth = Math.max(2, px * 0.3); g.strokeStyle = '#05071a';
+    g.strokeText(label, tx, ty);
+    g.fillText(label, tx, ty);
+    g.restore();
   }
 
   for (const r of state.rocks) {
@@ -420,6 +486,8 @@ function drawOffscreen(g: Ctx, state: RenderState, top: number) {
 }
 
 function sxOf(x: number) { return L.ox + x * L.scale; }
+/** With this many monsters left, every one of them is pointed at from the edge of the screen. */
+const LAST_FEW = 3;
 
 /* ── joystick ─────────────────────────────────────────────────────────── */
 
@@ -469,6 +537,8 @@ export function render(state: RenderState, alpha: number, stick: StickView | nul
    * cached chunk raster, and a stale one is invisible until you dig into it.
    * The width only ever changes on a new run, but a mounted view outlives a
    * run. */
+  // The broadcast fit follows the shaft's width, and the television changes shafts.
+  if (broadcast && state.activeGW !== shaftCols) { shaftCols = state.activeGW; resize(); }
   if (state.theme !== themeDrawn || state.activeGW !== widthDrawn) {
     themeDrawn = state.theme;
     widthDrawn = state.activeGW;

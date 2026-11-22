@@ -24,7 +24,8 @@
 import * as audio from './audio';
 import * as music from './music';
 import { DEPTH_PER_LEVEL } from './worldgen';
-import type { NetEvent, PublicView } from './model';
+import type { NetEvent } from './model';
+import type { ShaftView } from './viewstate';
 import type { PlayerId } from '../../../party-contract/src/index';
 
 /* How deep the bed treats as "as cold as it gets". Twelve levels of shaft,
@@ -43,6 +44,7 @@ export function createSound() {
    * dropped one costs only what it carried. -1 rather than 0 because seq 0 is a
    * real event. */
   let seen = -1;
+  let heard = '';
   let live = false;
 
   const unlock = () => {
@@ -79,7 +81,10 @@ export function createSound() {
      *
      * Deliberately takes the RAW snapshot, not an interpolated one: a blended
      * frame is a copy of the newer of two and would replay its events. */
-    play(events: readonly NetEvent[]) {
+    play(events: readonly NetEvent[], shaft = '') {
+      /* Sequences are per shaft, and the television changes shafts: a new one
+       * starts counting from wherever that crew had got to. */
+      if (shaft !== heard) { heard = shaft; seen = -1; }
       if (!live) { for (const e of events) if (e.seq > seen) seen = e.seq; return; }
       for (const e of events) {
         if (e.seq <= seen) continue;
@@ -95,17 +100,18 @@ export function createSound() {
      * budget already measures — so it is read off THIS screen's digger, and off
      * whoever is worst off when this screen has no digger of its own. Cheap
      * enough to call every frame; it only schedules ramps. */
-    ambient(view: PublicView, localId: PlayerId | null) {
+    ambient(view: ShaftView, localId: PlayerId | null) {
       if (!live || view.phase === 'gameover') return;
       const me = view.players.find(q => q.id === localId);
-      let air = 1;
-      if (me) air = me.airMax > 0 ? me.air / me.airMax : 1;
+      let air = 1, row = 0;
+      if (me) { air = me.airMax > 0 ? me.air / me.airMax : 1; row = me.y; }
       else for (const q of view.players) {
         if (q.airMax > 0) air = Math.min(air, q.air / q.airMax);
+        row = Math.max(row, q.y);
       }
       audio.setAmbient({
         theme: view.theme,
-        depth: Math.min(1, view.depth / FULL_DEPTH),
+        depth: Math.min(1, ((Math.max(1, view.level) - 1) * DEPTH_PER_LEVEL + row / 2) / FULL_DEPTH),
         intensity: 0.55 + 0.45 * (1 - air),
       });
     },

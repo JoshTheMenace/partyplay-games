@@ -27,6 +27,7 @@
 
 import * as sprites from './sprites';
 import * as anim from './anim';
+import { RELIC_BY_ID } from './worldgen';
 import type { Ctx, Palette, ViewBox } from './render';
 
 /* Hard ceiling. Effects are the first thing to sacrifice on a slow frame, and
@@ -40,7 +41,9 @@ export function setBudget(n: number) { budget = Math.max(1, Math.min(MAX, Math.f
  * because they live in one array and are stepped by one loop; `s` says which
  * fields matter. Optional throughout, since each shape uses a subset. */
 type Part = {
-  s: 'puff' | 'mote' | 'ring' | 'beam';
+  s: 'puff' | 'mote' | 'ring' | 'beam' | 'text';
+  /** Text: what it says. */
+  label?: string;
   x: number; y: number;
   life: number; max: number;
   a: number;
@@ -86,6 +89,8 @@ export function reset() {
   rngState = 0x9e3779b9;
   flashA = 0;
 }
+/** Leaving the shaft altogether: the banner goes too. A new level keeps it. */
+export function clear() { reset(); banner = null; }
 
 /* ── the shapes ───────────────────────────────────────────────────────────
  *
@@ -140,6 +145,26 @@ function beam(x: number, y: number, x2: number, y2: number, colour: string, life
   return push({ ...BLANK, s: 'beam', x, y, x2, y2, colour, life, max: life, w: w || 0.3 });
 }
 
+/* A word that rises off the thing it is about: what a cell paid, which relic
+ * that was, who just went down. The engine's own popup list never crosses the
+ * wire, so until this existed a relic was announced by a puff of sparkles. */
+function text(x: number, y: number, label: string, colour: string, size = 1.3, life = 0.9) {
+  return push({ ...BLANK, s: 'text', x, y, label, colour, size, life, max: life, vy: -1.7, drag: 1.2 });
+}
+
+/* ── banners ──────────────────────────────────────────────────────────────
+ *
+ * The few moments that belong to the whole screen rather than to a spot in the
+ * shaft: a level cleared and the haul banked, a new biome, the whistle. One at
+ * a time — a second replaces the first — and drawn over everything. */
+type Banner = { title: string; sub: string; colour: string; life: number; max: number; scale: number };
+let banner: Banner | null = null;
+
+/** `scale` below 1 is a caption rather than a headline: said, but not shouted. */
+export function announce(title: string, sub = '', colour = 'accent', seconds = 2.2, scale = 1) {
+  banner = { title, sub, colour, life: seconds, max: seconds, scale };
+}
+
 function flash(r: number, g: number, b: number, a: number) {
   if (a <= flashA) return;
   flashA = a; flashR = r; flashG = g; flashB = b;
@@ -165,7 +190,7 @@ function clipFrame(clip: string, t: number) {
  * STRING instead — a crystal's id, a hazard's kind — and none of them has a
  * look keyed off it, so those arrive with v undefined rather than forcing every
  * handler to prove what it was given. */
-type FxFn = (x: number, y: number, v?: number) => void;
+type FxFn = (x: number, y: number, v?: number, raw?: number | string) => void;
 
 const FX: Readonly<Record<string, FxFn>> = {
   /* Digging is continuous, so it must stay nearly free — one grain, sometimes a
@@ -398,10 +423,26 @@ const FX: Readonly<Record<string, FxFn>> = {
 
   /* Pickups. All four share a shape — a ring and a lift of glowing motes —
    * because they are the same verb, and differ only in colour and scale. */
-  ore(x, y, v) { pickup(x, y, 'ore', 0.8 + Math.min(3, v || 1) * 0.4); },
-  bonus(x, y) { pickup(x, y, 'fygarBelly', 2.2); flash(216, 240, 160, 0.12); },
-  crystal(x, y) { pickup(x, y, 'ore', 3.4); flash(127, 227, 255, 0.3); },
-  relic(x, y) { pickup(x, y, 'harpoon', 3.0); flash(255, 216, 138, 0.26); },
+  ore(x, y, v) {
+    pickup(x, y, 'ore', 0.8 + Math.min(3, v || 1) * 0.4);
+    text(x, y - 0.6, '+' + (v || 1), 'ore', 1.1, 0.7);
+  },
+  bonus(x, y, v) {
+    pickup(x, y, 'fygarBelly', 2.2); flash(216, 240, 160, 0.12);
+    if (v) text(x, y - 1, '+' + v, 'fygarBelly', 1.7, 1.1);
+  },
+  crystal(x, y) {
+    pickup(x, y, 'ore', 3.4); flash(127, 227, 255, 0.3);
+    text(x, y - 1.2, 'CRYSTAL', 'ore', 1.6, 1.4);
+  },
+  /* Say which one. Four of the twelve change a rule rather than a number, and
+   * a harpoon that starts ignoring dirt with no word of explanation reads as a
+   * bug. The id is the event's value; the name comes from the relic table. */
+  relic(x, y, _v, raw) {
+    pickup(x, y, 'harpoon', 3.0); flash(255, 216, 138, 0.26);
+    const relic = typeof raw === 'string' ? RELIC_BY_ID[raw] : null;
+    if (relic) { text(x, y - 1.2, relic.name, 'harpoon', 1.5, 1.8); announce(relic.name, relic.blurb, 'harpoon', 3); }
+  },
   helmet(x, y) { pickup(x, y, 'accent', 1.6); },
   extra(x, y) { pickup(x, y, 'fygarBelly', 2.4); },
 
@@ -413,6 +454,7 @@ const FX: Readonly<Record<string, FxFn>> = {
   },
 
   combo(x, y, v) {
+    if ((v || 1) > 1) text(x, y - 1.2, 'x' + v, 'accent', 1.8, 1);
     ring(x, y, 'accent', 0.8, 3 + (v || 1), 0.4, { w: 0.3, a: 0.9, glow: true });
     for (let i = 0; i < 6 + (v || 1) * 2; i++) {
       const a = rr(0, Math.PI * 2);
@@ -422,10 +464,56 @@ const FX: Readonly<Record<string, FxFn>> = {
     }
   },
 
-  bank() { flash(224, 122, 47, 0.1); },
+  /* Banking is the one thing the whole game is for, and it used to be a faint
+   * orange blink. The haul is the headline; the level-clear flash rides with it. */
+  bank(_x, _y, v) {
+    flash(255, 210, 74, 0.22);
+    announce('Level clear', v ? `${v} banked` : 'Nothing in the hoppers', 'accent', 2.4);
+  },
   level() { reset(); },
   levelclear() { flash(255, 216, 138, 0.2); },
-  gameover() { flash(0, 0, 0, 0.35); },
+  gameover() { flash(0, 0, 0, 0.35); announce('Crew wiped', 'The hoppers went down with you', 'danger', 3); },
+  whistle(_x, _y, v) {
+    flash(255, 246, 229, 0.3);
+    announce('Whistle!', v ? `Tools down · ${v} salvaged from the hoppers` : 'Tools down', 'accent', 4);
+  },
+
+  /* ── the crew ──
+   *
+   * Going down, being held, standing up and being brought back at the pocket
+   * are the whole of co-op, and none of them had a look: the events were raised
+   * and no table had a row for them. Down falls inward and red; up bursts
+   * outward and warm, in the lamp's own colour. */
+  down(x, y) {
+    anim.hold(0.05);
+    flash(255, 84, 112, 0.26);
+    ring(x, y, 'danger', 4.5, 0.6, 0.5, { w: 0.35, a: 0.9 });
+    for (let i = 0; i < 10; i++) {
+      const a = rr(0, Math.PI * 2);
+      mote(x, y, 'danger', rr(0.25, 0.5), rr(0.4, 0.8), Math.cos(a) * rr(1, 5), Math.sin(a) * rr(1, 5) - 2, { a: 0.9 });
+    }
+    text(x, y - 1.4, 'DOWN', 'danger', 1.6, 1.3);
+  },
+  grab(x, y) { ring(x, y, 'harpoon', 2.2, 0.8, 0.22, { w: 0.2, a: 0.8, glow: true }); },
+  revive(x, y) {
+    flash(255, 216, 138, 0.2);
+    ring(x, y, 'harpoon', 0.5, 4.6, 0.45, { w: 0.4, a: 1, glow: true });
+    ring(x, y, 'text', 0.4, 2.8, 0.3, { w: 0.2, a: 0.7 });
+    for (let i = 0; i < 12; i++) {
+      mote(x + rr(-0.8, 0.8), y + 0.6, 'harpoon', rr(0.2, 0.45), rr(0.5, 0.9), rr(-2, 2), rr(-7, -3), { a: 1, glow: true, g: 2 });
+    }
+    text(x, y - 1.4, 'UP!', 'harpoon', 1.7, 1.1);
+  },
+  respawn(x, y) {
+    ring(x, y, 'air', 3.6, 0.8, 0.4, { w: 0.25, a: 0.8, glow: true });
+    ring(x, y, 'text', 0.6, 3, 0.5, { w: 0.18, a: 0.6 });
+    text(x, y - 1.4, '-1 life', 'danger', 1.3, 1.3);
+  },
+  // The Breaching Tip punching a tile: grit thrown back along the line.
+  breach(x, y) {
+    ring(x, y, 'rock', 0.3, 1.8, 0.2, { w: 0.2, a: 0.7 });
+    for (let i = 0; i < 6; i++) mote(x, y, 'rock', rr(0.2, 0.4), rr(0.25, 0.5), rr(-4, 4), rr(-4, 1));
+  },
 
   /* The drill. Fires once when the descent starts; the continuous dust comes
    * from entities.js, which can see that state.phase is 'descend'. */
@@ -456,8 +544,8 @@ export function emit(type: string, x?: number, y?: number, value?: number | stri
   const fn = FX[type];
   if (!fn) return;
   const v = typeof value === 'number' ? value : undefined;
-  if (x === undefined || y === undefined) { fn(0, 0, v); return; }
-  fn(x, y, v);
+  if (x === undefined || y === undefined) { fn(0, 0, v, value); return; }
+  fn(x, y, v, value);
 }
 
 export function tick(dt: number) {
@@ -466,6 +554,7 @@ export function tick(dt: number) {
 
   flashA -= d * 3.2;
   if (flashA < 0) flashA = 0;
+  if (banner && (banner.life -= d) <= 0) banner = null;
 
   let w = 0;
   for (let i = 0; i < parts.length; i++) {
@@ -509,6 +598,7 @@ export function render(g: Ctx, view: ViewBox, palette: Palette) {
     const col = colour(palette, p.colour ?? 'text');
     const x = sx(p.x), y = sy(p.y);
 
+    if (p.s === 'text') continue;               // drawn over the lamp; see words()
     if (p.s === 'ring') {
       const r = (p.rNow === undefined ? p.r : p.rNow) * sc;
       if (r <= 0) continue;
@@ -557,15 +647,78 @@ export function render(g: Ctx, view: ViewBox, palette: Palette) {
   g.restore();
 }
 
-/* Screen-space tint. Drawn last, outside the shake, so a hit does not also
- * shear the flash. */
-export function overlay(g: Ctx, w: number, h: number) {
-  if (flashA <= 0.002) return;
+/* The words. A separate pass AFTER the lamp, because a number written in the
+ * dark is a number nobody reads. Outlined in the cave's own black so it holds
+ * against lit dirt and against the dark alike. */
+export function words(g: Ctx, view: ViewBox, palette: Palette, font: string) {
+  const sc = view.scale;
   g.save();
-  g.globalAlpha = Math.min(0.6, flashA);
-  g.globalCompositeOperation = 'lighter';
-  g.fillStyle = `rgb(${flashR},${flashG},${flashB})`;
-  g.fillRect(0, 0, w, h);
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.lineJoin = 'round';
+  for (const p of parts) {
+    if (p.s !== 'text' || !p.label) continue;
+    const fade = Math.min(1, (p.life / p.max) * 3);
+    const pop = 1 + 0.35 * Math.max(0, 1 - (p.max - p.life) * 9);       // a beat of overshoot on arrival
+    const px = Math.max(9, Math.round(p.size * sc * 0.62 * pop));
+    g.font = `${px}px ${font}`;
+    g.globalAlpha = fade;
+    g.lineWidth = Math.max(2, px * 0.24);
+    g.strokeStyle = '#05071a';
+    const x = view.ox + p.x * sc, y = view.oy + (p.y - view.top) * sc;
+    g.strokeText(p.label, x, y);
+    g.fillStyle = colour(palette, p.colour ?? 'text');
+    g.fillText(p.label, x, y);
+  }
+  g.restore();
+}
+
+/* Screen-space tint and the banner. Drawn last, outside the shake, so a hit
+ * does not also shear the flash. */
+export function overlay(g: Ctx, w: number, h: number, palette?: Palette, font = 'sans-serif', left = 0) {
+  if (flashA > 0.002) {
+    g.save();
+    g.globalAlpha = Math.min(0.6, flashA);
+    g.globalCompositeOperation = 'lighter';
+    g.fillStyle = `rgb(${flashR},${flashG},${flashB})`;
+    g.fillRect(0, 0, w, h);
+    g.restore();
+  }
+  if (!banner || !palette) return;
+  /* In from below with a little overshoot, out upward. The title is sized to
+   * the SHORT side so it reads the same on a phone held sideways and on a
+   * television. */
+  const age = banner.max - banner.life;
+  const arrive = Math.min(1, age / 0.22), leave = Math.min(1, banner.life / 0.35);
+  const ease = 1 - (1 - arrive) * (1 - arrive);
+  const size = Math.max(18, Math.min(h * 0.13, (w - left) * 0.085) * banner.scale);
+  // A caption sits near the top, out of the way of the digging; a headline takes the middle.
+  const cx = left + (w - left) / 2, cy = h * (banner.scale < 1 ? 0.12 : 0.3) + (1 - ease) * size * 0.6 - (1 - leave) * size * 0.4;
+  g.save();
+  g.globalAlpha = Math.min(arrive, leave);
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.lineJoin = 'round';
+  const band = g.createLinearGradient(0, cy - size, 0, cy + size * 1.5);
+  band.addColorStop(0, 'rgba(5,7,26,0)');
+  band.addColorStop(0.3, 'rgba(5,7,26,0.72)');
+  band.addColorStop(0.75, 'rgba(5,7,26,0.72)');
+  band.addColorStop(1, 'rgba(5,7,26,0)');
+  g.fillStyle = band;
+  g.fillRect(left, cy - size, w - left, size * 2.5);
+  g.font = `${Math.round(size * (1 + 0.12 * (1 - ease)))}px ${font}`;
+  g.lineWidth = size * 0.16;
+  g.strokeStyle = '#05071a';
+  g.strokeText(banner.title, cx, cy);
+  g.fillStyle = colour(palette, banner.colour);
+  g.fillText(banner.title, cx, cy);
+  if (banner.sub) {
+    g.font = `${Math.round(size * 0.36)}px ${font}`;
+    g.lineWidth = size * 0.08;
+    g.strokeText(banner.sub, cx, cy + size * 0.78);
+    g.fillStyle = colour(palette, 'text');
+    g.fillText(banner.sub, cx, cy + size * 0.78);
+  }
   g.restore();
 }
 

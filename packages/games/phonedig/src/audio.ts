@@ -1118,6 +1118,63 @@ const VOICES: Record<string, VoiceSpec> = {
     build(t0, out) { arp(out, t0, [76, 80, 83], 0.075, 0.26, 'square'); },
   },
 
+  /* ── the crew. Added for the party build: these four moments exist only with
+   * more than one digger, or with a shift clock, and had no voice at all. ── */
+
+  /* A digger going down: two falling notes over a dull thud. On the alert bus,
+   * because the one it is for is usually looking at a different tunnel. */
+  down: {
+    bus: 'alert', prio: 8, poly: 2, dur: 0.7, duck: { amount: 0.6, hold: 0.25, release: 0.3 },
+    build(t0, out) {
+      arp(out, t0, [67, 60], 0.13, 0.3, 'triangle');
+      const o = osc('sine', 130, t0, 0.3);
+      const g = gain(0);
+      sweep(o.frequency, t0, 130, 52, 0.26);
+      hit(g.gain, t0, 0.5, 0.28);
+      o.connect(g); g.connect(out);
+    },
+  },
+
+  /* Back on their feet: the same two notes the other way up, and one more. */
+  revive: {
+    bus: 'sfx', prio: 7, poly: 2, dur: 0.8,
+    build(t0, out) {
+      arp(out, t0, [60, 67, 72], 0.08, 0.28, 'triangle');
+      metal(out, t0 + 0.16, mtof(84), [1, 2.01, 3.02], 0.14, 0.4, 0.8);
+    },
+  },
+
+  /* A life spent bringing someone back at the pocket: lower and plainer, so it
+   * is not mistaken for a rescue. */
+  respawn: {
+    bus: 'sfx', prio: 6, poly: 2, dur: 0.6,
+    build(t0, out) { arp(out, t0, [55, 62], 0.12, 0.24, 'square'); },
+  },
+
+  /* The shift whistle: two reedy tones a fourth apart with breath in them,
+   * swelling and held. It ends the round, so it ducks everything. */
+  whistle: {
+    bus: 'alert', prio: 10, poly: 1, dur: 1.5, duck: { amount: 0.3, hold: 1.0, release: 0.5 },
+    build(t0, out) {
+      const srcs: AudioScheduledSourceNode[] = [];
+      for (const f of [880, 1174.7]) {
+        const o = osc('square', f, t0, 1.3);
+        const lp = filt('lowpass', f * 2.4, 0.8);
+        const g = gain(0);
+        adsr(g.gain, t0, 0.2, 0.06, 0.1, 0.85, 0.85, 0.22);
+        srcs.push(lfo(o.frequency, t0, 1.3, 6.5, f * 0.006));
+        o.connect(lp); lp.connect(g); g.connect(out);
+      }
+      const n = noise(t0, 1.2, 1.4);
+      const bp = filt('bandpass', 2600, 0.7);
+      const g = gain(0);
+      adsr(g.gain, t0, 0.07, 0.04, 0.1, 0.8, 0.8, 0.2);
+      n.connect(bp); bp.connect(g); g.connect(out);
+      srcs.push(n);
+      return srcs;
+    },
+  },
+
   extra: {
     bus: 'sfx', prio: 6, poly: 1, dur: 0.9, duck: { amount: 0.7, hold: 0.3, release: 0.3 },
     build(t0, out) {

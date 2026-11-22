@@ -63,3 +63,35 @@ export const COOP = Object.freeze({
    *  Without it the last person to tap never gets a second look. */
   KIT_GRACE: 2.5,
 });
+
+/* ── the shift ────────────────────────────────────────────────────────────
+ *
+ * A room bigger than one crew is a RACE between shafts, and a race needs an
+ * end everybody reaches together: a shift clock, and a whistle. One crew alone
+ * keeps the original rule — the run lasts until the crew is wiped — unless the
+ * host puts a clock on it.
+ *
+ * On a clock a wipe is a setback rather than the end: the crew loses what it
+ * was carrying and is sent back to the top of a fresh shaft, because nobody at
+ * a party should spend the rest of the round watching.
+ */
+export const SHIFT = Object.freeze({
+  /** Minutes on the clock when the host leaves it to the roster and there is
+   *  more than one crew. Long enough for a new crew to clear a level and bank;
+   *  bot crews of four clear their first in one to two and a half minutes. */
+  AUTO_MINUTES: 6,
+  /** Seconds a wiped crew looks at what happened before it is sent back up. */
+  WIPE_HOLD: 4,
+  /** Seconds of "tools down" between the whistle and the results. */
+  WHISTLE_HOLD: 3,
+  /** What a hopper is worth when the whistle catches it unbanked. Half: enough
+   *  that a crew which never cleared a level is not paid nothing, and little
+   *  enough that clearing the level before the whistle is still the play. */
+  SALVAGE: 0.5,
+  /** Dirt one piece of banked ore is weighed in at. Ore had its own purse and
+   *  no use once the shop was gone; now a seam is worth leaving your line for. */
+  ORE_PAY: 3,
+  /** The television stays on one shaft at least this long, and at most that. */
+  SPOT_MIN: 8,
+  SPOT_MAX: 14,
+});

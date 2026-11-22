@@ -9,14 +9,58 @@ and are not kept in sync. Do not edit the upstream checkout from here.
 ## Status
 
 The simulation, the networking, the round lifecycle, the art and the audio are
-all ported and running.
+all ported and running. [DESIGN.md](DESIGN.md) is the short map of how a room
+plays and what crosses the wire; this file is the reasoning.
 
 One to four diggers share a shaft that widens with the crew, each with their
 own suit, health, air, hopper, harpoon, relics and tune, against a shared bank
 and a shared pool of lives.
 
-`players.max` is 4 rather than 10, and that is spatial: the shaft is ten lanes
-wide and a digger is one lane. It rises when the shaft widens with the roster.
+**A room of five to sixty-four is several of those crews.** Each crew of up to
+four gets a shaft of its own, cut from the same seed, and they race a shift
+clock: six minutes unless the host says otherwise, then a whistle. Banked haul
+counts in full and whatever the whistle catches in the hoppers at half; a crew
+wiped on the clock loses its hoppers and is sent back to the top of a fresh
+shaft rather than left watching. The shared screen follows one shaft at a time,
+moving to wherever the action is, beside a board of the whole race.
+
+`players.max` is the room (64) because of that split, not because a shaft got
+bigger. A shaft is still tuned for at most four.
+
+## What the 2026-11 pass changed
+
+- **Rival crews and the shift clock**, above. All of it lives in `server.ts`,
+  over the engine, exactly where the kit-up already lived.
+- **The shared screen uses the real renderer.** It was a schematic: flat
+  boxes, no lamp, no effects, the dirt tiles squeezed to half size. It is now
+  the same sprites, lighting and particles a phone draws, framed as a broadcast
+  with a camera that goes to the rescue, the fight or the digger whose turn it
+  is, and a board beside it instead of chips over it.
+- **The goal is on screen.** Every HUD shows how many monsters are left before
+  the haul is banked. It was nowhere: "Hopper full — descend to bank it" was
+  the only hint, and descending is not something a digger can choose to do.
+- **Words on the field.** The engine's popup list never crossed the wire, so
+  nothing was ever written in the shaft. Ore, the bonus, a rock chain, a relic's
+  name and what it does, a digger going down and standing up, a level cleared
+  and its haul, a new biome and the whistle are now said, by `vfx.ts`, from the
+  event list.
+- **Going down and getting up have a look and a sound.** `down`, `grab`,
+  `revive`, `respawn` and `breach` were raised by the engine and had no row in
+  either table. Four small voices were added to `audio.ts` in its own style:
+  `down`, `revive`, `respawn` and `whistle`.
+- **Teammates wear their names**, and one off the screen is a named arrow at
+  its edge (with their clock if they are down).
+- **The last three monsters are pointed at** from the edge of the screen,
+  hunting or not, because clearing the level is the only way to bank and the
+  last one in a shaft 160 rows deep was otherwise a search.
+- **Ore counts.** It had its own purse and, with the shop gone, no use. Banked
+  ore is weighed in at three dirt each.
+- **Results** say who won, what each crew earned and how, what the whistle
+  caught, and who cut the most ground, burst the most monsters and pulled the
+  most people up. The tallies are taken in `server.ts` by comparing the state
+  before and after each step.
+- **The wire is about a quarter of what it was** (below), which is what made
+  the rest affordable.
 
 ## The co-op rules
 
@@ -108,8 +152,28 @@ once and used by both sides:
   ore is gone without being told. A tunnel is contiguous, so 1,549 changed
   cells became 408 runs.
 
-`players.max` stays at 4 by choice rather than by limit — ten would fit the
-wire comfortably, but nothing yet says ten would be any good.
+The engine and the generator still support a shaft of up to ten diggers, and
+those measurements stand. Nothing uses more than four: a bigger room is more
+crews, not a wider shaft. See DESIGN.md for what a 64-digger shaft would have
+been (902 columns, about 355 monsters a level, a television picture one pixel a
+cell) and why it was not built.
+
+### The wire after the 2026-11 pass
+
+A four-digger snapshot was about 4.6 KB before its ground, twenty times a
+second, most of it things that had not changed. Per snapshot:
+
+| | Before | Now |
+|---|---|---|
+| Diggers (four) | 1,370 B of named objects | about 300 B, packed like the monsters |
+| Events | 1,150 B: the last 24, however old | the last quarter second, usually under 300 B |
+| Rocks | 640–840 B | one bit per seated rock; only loose ones in full |
+| Hazards, pockets, relic pool | 600–800 B | nothing: the client generates all three |
+
+Names, colours, suits and crews go out on a change and every two seconds, not
+every frame. The cut ground is unchanged for one crew (the snapshot cache's
+keyed pairs); with several crews each phone's own shaft is in its private view
+and its ground is a journal, described in DESIGN.md.
 
 ## Controls
 
@@ -137,9 +201,14 @@ it is covered by a parity check against upstream; a pre-round phase is a
 property of the room, not of the digging.
 
 The seventeen suits in `suits.ts` are exactly the set the sprite atlas contains.
-Until that art is ported, a suit's `swatch` is simply the colour a digger is
-drawn in — and every surface has to use it, because a crew rail dot in the
-room's colour beside a body in the suit's reads as two different people.
+A suit's `swatch` is the colour that stands for its wearer everywhere a sprite
+does not fit — a name tag, an off-screen arrow, a dot beside a teammate's name —
+and every surface has to use it, because a dot in the room's colour beside a
+body in the suit's reads as two different people.
+
+In a race the picker also says which crew a digger is in and who else is in it,
+and the shared screen shows every crew's muster: who you are with is the first
+thing a crew needs to know and nothing else would tell it.
 
 ## Layout
 
@@ -149,12 +218,13 @@ room's colour beside a body in the suit's reads as two different people.
 | `src/worldgen.ts` | tuning tables and the level generator. **Pure, and imported by the browser** — clients rebuild terrain from a seed |
 | `src/themes.ts` | biome palettes |
 | `src/model.ts` | shared types, including everything that crosses the wire |
-| `src/tuning.ts` | the one upgrade preset every room runs, and the co-op numbers |
+| `src/crews.ts` | how a room splits into crews, and their names and colours. Browser-safe |
+| `src/tuning.ts` | the one upgrade preset every room runs, the co-op numbers and the shift's |
 | `src/suits.ts` | the wardrobe. Browser-safe: the picker imports it directly |
-| `src/server.ts` | `GameRules`. Never reaches the browser |
-| `src/scene.tsx` | both canvases. **The camera lives here and nowhere else** |
-| `src/client.tsx` | HUD, controller, settings, results |
-| `src/viewstate.ts` | the join: snapshot in, something the renderer can draw out |
+| `src/server.ts` | `GameRules`: crews, the kit-up, the shift, every projection. Never reaches the browser |
+| `src/scene.tsx` | the canvas, on a phone and on the shared screen, and the broadcast's director |
+| `src/client.tsx` | the phone's HUD and controls, the television's board, kit-up, settings, results |
+| `src/viewstate.ts` | the join: snapshot in, something the renderer can draw out. The roster and ground live here |
 | `src/render.ts` | the drawing layer's types — `ViewPlayer`, `ViewMonster`, … |
 | `src/view.ts` | composition: measure, drive the camera, call the draw passes |
 | `src/entities.ts` | everything that moves, and the procedural fallbacks |
@@ -165,17 +235,22 @@ room's colour beside a body in the suit's reads as two different people.
 | `src/audio.ts`, `music.ts` | the mixer and the generative score. Procedural WebAudio, no asset files |
 | `src/sound.ts` | the join: unlock, the shell's mute, events in, ambient out |
 | `art/make-pump.py` | bakes the controller's Pump label into `public/games/phonedig/pump.png` (Lilita One, OFL), so rapid taps cannot select button text |
+| `dev/` | a sandbox: the real rules and playing bots in one page, no room server. Never shipped |
+| `tools/room-bot.ts` | the hook that makes the platform's socket bots dig, fight and bank |
+| `tests/helpers/bot.ts` | the bot itself, shared by the tests, the sandbox and the hook |
 
 `worldgen.ts` is not called `content.ts` and the rules are not importable from
 the client because `vite.config.ts` blocks any game's `src/content.ts` or
 `src/server.ts` from the browser graph **by filename**. Renaming either back
 will fail the build.
 
-## Two renderers, on purpose
+## One renderer, two framings
 
 A **landscape phone** gets sprites, lighting, particles and a camera following its own digger. The viewport uses the available width, with movement on the left and pump on the right. Both controller and personal-view manifests require landscape.
 
-Renderer selection follows whether the screen holds a seat (`props.playerId`), so a playing host gets the personal view too. The **shared screen** uses the same terrain and character atlas in a wider map following the whole crew. It fits the played width and zooms out vertically as the crew spreads apart; health, air and rescue timers stay in the shared HUD.
+The framing follows whether the screen holds a seat (`props.playerId`), so a playing host gets the phone's view too. The **shared screen** runs the same renderer as a broadcast: `fitBroadcast` in `fit.ts` shows the whole shaft from wall to wall when a whole multiple allows it and otherwise keeps thirty rows in view and pans, and the camera goes to whoever `createDirector` in `scene.tsx` picks. Which SHAFT it shows in a race is the server's decision (`direct` in `server.ts`), because the server has to send it. The board beside the picture is DOM, in `client.tsx`.
+
+It used to be a second, schematic renderer in `scene.tsx`. That is gone: one integer-scaled shaft with the lamp on reads better from a sofa than a zoomed-out diagram, and it is one renderer to keep right instead of two.
 
 Three things about the art layer differ from upstream and are load-bearing:
 
@@ -379,6 +454,13 @@ NaN, so it passed the very bug it existed to catch.
 node --import tsx --test packages/games/phonedig/tests/*.test.ts
 ```
 
+`tests/crews.test.ts` covers everything above the engine that a bigger room
+adds: the split, the clock, the whistle and its salvage, a wipe with and
+without a clock, who is sent which shaft, a phone's ground rebuilt from the
+journal across a descent and after a gap, the television moving between
+shafts, and a room of 32 and of 64 played by bots with the tick cost, the
+projection cost and one phone's traffic printed.
+
 `tests/audio.test.ts` builds every voice and scores a ten-minute descent in
 every biome against a stub graph that **throws on a non-finite float exactly as
 a browser does**, and fails if the modules' own guards fire — a guard that
@@ -402,7 +484,31 @@ Porting upstream's own test suite across is still outstanding.
 
 ## Measured
 
-At one player and a 20-cell shaft: worst full baseline 6.0 KB (529 edits), mean
-delta frame 2.3 KB, about 44 KiB/s per socket at 20 Hz. Entities dominate, not
-terrain — which is what will need attention when the roster and the shaft width
-grow.
+Before the 2026-11 pass, at one player and a 20-cell shaft: worst full baseline
+6.0 KB (529 edits), mean delta frame 2.3 KB, about 44 KiB/s per socket at
+20 Hz. Entities dominated, not terrain.
+
+After it, from `tests/crews.test.ts` on a loaded development machine with a bot
+on every seat (so the tick figure includes the bots): 32 diggers in eight crews
+cost about 0.8 ms a tick and 0.5 ms to project every screen; 64 in sixteen
+about 1.5 ms and 0.9 ms. One phone is sent about 62 KiB/s at either size — its
+own shaft and the television's — and the largest single snapshot was 11.5 KB.
+
+On the real room server with socket bots digging on every seat, one real
+television page and one real phone page: at 32 the server process used 21–27%
+of one core and each phone received 46–68 KiB/s at 17.5–20 snapshots a second;
+at 64 it used 30–50% of a core and each phone received 45–75 KiB/s. That
+machine was shared and overloaded (load average 25–45 on 12 cores), and at 64
+the snapshot rate was the first thing to slip: 16–20 a second at a load of 25,
+as low as 9–15 for stretches at a load of 40. Nothing else gave way — no
+dropped seats, no desynced ground, every crew banked and the results were
+right — but it means 64 wants a core that is actually free.
+
+At the results the room re-sends one frozen frame to every phone twenty times
+a second for as long as people read it. Phonedig's part of that frame is 3 KB
+at 64 diggers (names, suits and tallies, with no shaft); the platform's own
+outcome is another 7 KB, which is why a phone still receives about 167 KiB/s
+on the results screen of a full room. That is the platform's to change.
+
+Physical phones, a real television at viewing distance and sixty-four devices
+on one access point have not been tried.

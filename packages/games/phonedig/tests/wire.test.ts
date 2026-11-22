@@ -22,6 +22,7 @@ import { COOP, PARTY_TUNE } from '../src/tuning';
 import { SUITS } from '../src/suits';
 import type { NetInput, PublicView } from '../src/model';
 import { readMonsters, readRocks } from '../src/model';
+import { createReader, crewIn, rosterOf } from '../src/viewstate';
 import { MODE_IDS, ROCK_STATE_IDS, kindName, variantName } from '../src/bestiary';
 
 const VIEW: ViewContext = { nowMs: 1000, phase: 'playing' };
@@ -50,12 +51,19 @@ function start(seed = 4242, startLevel = 1, players = 1) {
 /** Everyone picks a suit, then run the grace out so the drill starts. */
 function kitOut(round: Round) {
   round.seats.forEach((seat, i) => {
-    rules.applyAction(round, seat.id, { type: 'kit', turnId: 1, suit: SUITS[i].id }, 1000);
+    rules.applyAction(round, seat.id, { type: 'kit', turnId: 1, suit: SUITS[i % SUITS.length].id }, 1000);
   });
   for (let t = 0; t < Math.ceil(COOP.KIT_GRACE / DT) + 4 && round.stage === 'kitup'; t++) {
     rules.tick(round, new Map(), DT, 1000);
   }
   assert.equal(round.stage, 'dig', 'the crew never got out of the kit-up');
+}
+
+/** The diggers a screen would read out of a shaft: packed rows joined to the roster. */
+function diggers(round: Round, view: PublicView) {
+  return crewIn(view, rosterOf(round.seats.map(seat => ({
+    id: seat.id, name: seat.name, color: seat.color, suit: seat.suit ?? '', crew: seat.crew,
+  }))));
 }
 
 /** Exactly what a client does: rebuild the level, then apply the delta. */
@@ -278,7 +286,7 @@ test('every seat gets its own digger, in roster order', () => {
   assert.equal(round.sim.players.length, 4);
   assert.deepEqual(round.sim.players.map(p => p.seatId), ['p0', 'p1', 'p2', 'p3']);
   const view = rules.publicView(round, VIEW);
-  assert.equal(view.players.length, 4);
+  assert.deepEqual(diggers(round, view).map(q => q.id), ['p0', 'p1', 'p2', 'p3']);
   assertSerializable(view);
 });
 
@@ -351,11 +359,13 @@ test('a monster hunts the digger nearest through the tunnels, not by line', () =
 test('the outcome reports every digger against the shared bank', () => {
   const round = start(11, 1, 4);
   round.sim.phase = 'gameover';
+  round.sim.banked = 430;
   const out = rules.outcome(round);
   assert.equal(out.complete, true);
   assert.deepEqual(out.winners, []);
   assert.equal(out.rows.length, 4);
-  assert.ok(out.rows.every(r => r.score === round.sim.banked));
+  // One bank, split evenly: a digger's score is their share of it.
+  assert.ok(out.rows.every(r => r.score === 107 && r.rank === 1));
   assertSerializable(out);
 });
 
@@ -582,7 +592,7 @@ test('the down clock and revive progress reach the client', () => {
   lineUpRescue(round);
   pumper(round, 'p1').tap(14);
   const view = rules.publicView(round, VIEW);
-  const me = view.players[0];
+  const me = diggers(round, view)[0];
   assert.equal(me.downed, true);
   assert.ok(me.downT > 0 && me.downT <= COOP.DOWN_WINDOW);
   assert.ok(me.reviveProgress > 0 && me.reviveProgress <= 1);
@@ -702,8 +712,10 @@ test('the chosen suit reaches every screen', () => {
   const round = rules.create(ctx(2, 11), rules.validateSettings({}));
   rules.applyAction(round, 'p0', kitAction('verdigris'), 1000);
   const view = rules.publicView(round, VIEW);
-  assert.equal(view.players[0].suit, 'verdigris');
-  assert.equal(view.players[1].suit, null, 'an unchosen suit was invented');
+  assert.ok(view.roster, 'a suit changed and the roster did not go out');
+  assert.equal(view.roster[0].suit, 'verdigris');
+  assert.equal(view.roster[1].suit, '', 'an unchosen suit was invented');
+  assert.deepEqual(diggers(round, view).map(q => q.suit), ['verdigris', null]);
   assertSerializable(view);
 });
 
@@ -735,7 +747,6 @@ test('a round is as wide as its roster and says so to the client', () => {
     assert.equal(round.sim.activeGW, lanesFor(players) * 2);
     const view = rules.publicView(round, VIEW);
     assert.equal(view.lanes, lanesFor(players));
-    assert.equal(view.activeGW, lanesFor(players) * 2);
   }
 });
 
@@ -793,8 +804,8 @@ test('diggers are clamped to the played width, not the storage width', () => {
   assert.ok(sim.players[0].x > sim.activeGW - 4, 'the digger never reached the right wall');
 });
 
-test('a wider shaft still fits the envelope at the advertised maximum', () => {
-  const round = start(11, 1, manifest.players.max);
+test('the widest shaft, a full crew of four, still fits the envelope', () => {
+  const round = start(11, 1, 4);
   let worst = 0;
   for (let t = 0; t < 60 * 60; t++) {
     rules.tick(round, new Map(round.seats.map((s, i) =>
@@ -804,7 +815,7 @@ test('a wider shaft still fits the envelope at the advertised maximum', () => {
     worst = Math.max(worst, Buffer.byteLength(JSON.stringify(rules.publicView(round, VIEW)), 'utf8'));
   }
   assert.ok(worst < MAX_MESSAGE_BYTES,
-    `worst snapshot at ${manifest.players.max} diggers is ${worst} bytes, over the ${MAX_MESSAGE_BYTES} envelope`);
+    `worst snapshot at four diggers is ${worst} bytes, over the ${MAX_MESSAGE_BYTES} envelope`);
 });
 
 /* ── what the encodings rest on ────────────────────────────────────────────
@@ -868,15 +879,74 @@ test('packed entities survive the round trip exactly', () => {
     assert.equal(b.hunting, a.hunting);
     assert.equal(b.dying, a.dying);
   }
-  const rocks = readRocks(view.rocks, i => ROCK_STATE_IDS[i] ?? 'idle');
-  assert.equal(rocks.length, round.sim.rocks.length);
-  for (let i = 0; i < rocks.length; i++) {
-    assert.equal(rocks[i].state, round.sim.rocks[i].state, 'rock state index decoded wrongly');
-    assert.ok(Math.abs(rocks[i].x - round.sim.rocks[i].x) <= 0.005);
+  /* Rocks: the seated ones are one bit each, placed from the client's own
+   * generated level; only the ones that have let go are sent in full. */
+  const seats = generateLevel(view.level, levelSeed(view.runSeed, view.level),
+    { lanes: view.lanes, ...(view.entryLc === null ? {} : { entryLc: view.entryLc }) }).rocks;
+  const rocks = new Map(readRocks(view.rocks, i => ROCK_STATE_IDS[i] ?? 'idle', view.idle, view.rock0, seats).map(r => [r.id, r]));
+  assert.equal(rocks.size, round.sim.rocks.length, 'a rock was lost or doubled in the encoding');
+  assert.ok(round.sim.rocks.some(r => r.state === 'idle'), 'expected seated rocks to exercise the bitmask');
+  for (const rock of round.sim.rocks) {
+    const sent = rocks.get(rock.id);
+    assert.ok(sent, `rock ${rock.id} never reached the client`);
+    assert.equal(sent.state, rock.state, 'rock state decoded wrongly');
+    assert.ok(Math.abs(sent.x - rock.x) <= 0.005 && Math.abs(sent.y - rock.y) <= 0.005, 'a rock moved in the encoding');
   }
   assertSerializable(view);
 });
 
+
+test('packed diggers survive the round trip, harpoon and relics included', () => {
+  const round = start(11, 1, 3);
+  const sim = round.sim, [a, b, c] = sim.players;
+  a.x = 12.37; a.y = 44.5; a.dir = 3; a.digging = true; a.moving = true; a.invuln = 0.75;
+  a.hp = 3; a.air = 31.25; a.hopper = 417; a.relics = ['wide-bore', 'stone-sense'];
+  a.harpoon = { active: true, dir: 3, len: 4.25, state: 'hit', mon: null, ally: null };
+  b.downed = true; b.hp = 0; b.downT = 17.5; b.revivePumps = 4;
+  c.dying = true; c.dyingT = 0.6; c.drilling = true;
+  const view = rules.publicView(round, VIEW);
+  const [pa, pb, pc] = diggers(round, view);
+  assert.deepEqual([pa.id, pb.id, pc.id], ['p0', 'p1', 'p2']);
+  assert.deepEqual([pa.x, pa.y, pa.dir, pa.digging, pa.moving, pa.invuln], [12.37, 44.5, 3, true, true, 0.75]);
+  assert.deepEqual([pa.hp, pa.maxHp, pa.air, pa.airMax, pa.hopper, pa.hopperMax], [3, a.maxHp, 31.25, a.airMax, 417, a.hopperMax]);
+  assert.deepEqual(pa.relics, ['wide-bore', 'stone-sense']);
+  assert.equal(pa.lightRadius, Math.round(a.lightRadius * 100) / 100);
+  assert.deepEqual([pb.downed, pb.downT, pb.reviveProgress], [true, 17.5, 4 / COOP.REVIVE_PUMPS]);
+  assert.deepEqual([pc.dying, pc.dyingT, pc.drilling], [true, 0.6, true]);
+  // Only the digger with a line out has one; an idle harpoon is not sent as a harpoon.
+  const reader = createReader();
+  const shaft = reader.read(view, null, rosterOf(view.roster ?? round.seats.map(seat => ({ id: seat.id, name: seat.name, color: seat.color, suit: '', crew: 0 }))));
+  assert.deepEqual(shaft.harpoons.map(h => [h.ownerId, h.dir, h.len, h.state]), [['p0', 3, 4.25, 'hit']]);
+});
+
+test('a rock is seated only by the generator and never seated again', () => {
+  /* What lets a seated rock cross the wire as one bit: every idle rock is one
+   * of the generator's, in the generator's order, still where it was put. A
+   * deep level with dripstone and moles exercises both of the things that add
+   * rocks mid-level. */
+  for (const level of [7, 19]) {
+    const round = start(31, level, 2);
+    const sim = round.sim;
+    const seats = generateLevel(sim.level, levelSeed(sim.runSeed, sim.level), { lanes: sim.activeLanes }).rocks;
+    const first = sim.rocks[0].id;
+    assert.deepEqual(sim.rocks.map(r => [r.id - first, r.x, r.y]), seats.map((seat, i) => [i, seat.lc * 2, seat.lr * 2]));
+    const wasLoose = new Set<number>();
+    let added = 0;
+    drive(round, 60 * 40, () => {
+      if (sim.level !== level) return;
+      for (const r of sim.rocks) {
+        const i = r.id - first;
+        if (i >= seats.length) added++;
+        if (r.state !== 'idle') { wasLoose.add(r.id); continue; }
+        assert.ok(!wasLoose.has(r.id), 'a rock went back to being seated');
+        assert.ok(i >= 0 && i < seats.length, 'a rock was seated after the level was built');
+        assert.deepEqual([r.x, r.y], [seats[i].lc * 2, seats[i].lr * 2], 'a seated rock is not where the generator put it');
+      }
+    });
+    assert.ok(wasLoose.size > 0, `no rock came loose on level ${level}, so nothing was tested`);
+    if (level === 19) assert.ok(added > 0, 'expected a hazard or a mole to add a rock on a deep level');
+  }
+});
 
 test('Still Air reduces only its carrier’s air drain by forty percent', () => {
   const sim = start(4242, 1, 2).sim;

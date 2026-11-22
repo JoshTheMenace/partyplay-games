@@ -1283,7 +1283,8 @@ function downPlayer(state: State, p: Player) {
   p.digging = false;
   p.pendingDir = -1;
   p.harpoon = { active: false, dir: 1, len: 0, state: 'idle', mon: null, ally: null };
-  emit(state, 'down', p.x + 1, p.y + 1);
+  // The value says WHO, by seat order: the room's own bookkeeping reads it.
+  emit(state, 'down', p.x + 1, p.y + 1, state.players.indexOf(p));
   endRunIfWiped(state);
   // Not when the wipe above already ended the run: they are dying, not down.
   if (p.downed && !p.dying && !canBeReached(state, p)) spendLife(state, p);

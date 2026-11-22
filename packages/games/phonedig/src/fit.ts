@@ -29,3 +29,22 @@ export function fit(cssW: number, cssH: number, dpr: number, cap = Infinity) {
   const k = Math.max(1, Math.floor(full * Math.min(1, cap / dpr)));
   return { k, scale, dpr: (TILE * k) / scale };
 }
+
+/* The shared screen's fit.
+ *
+ * Its job is the thing a phone cannot do — let a room see a crew at once — so
+ * it takes the largest whole multiple that still shows (nearly) the whole shaft
+ * from wall to wall, as long as that leaves eighteen rows to see what is
+ * coming. "Nearly" is four fifths: a two-digger shaft that misses fitting a
+ * 720p television at double size by a few columns is better drawn large with a
+ * camera that pans a little than at half the size between two wide walls. A
+ * shaft too wide even for that is shown at whatever keeps thirty rows in view
+ * and the camera pans, so a four-digger shaft on a big television is drawn
+ * large rather than shrunk until it fits. Whole multiples for the same reason
+ * as above. */
+export function fitBroadcast(cssW: number, cssH: number, dpr: number, cols: number) {
+  const devW = Math.round(cssW * dpr), devH = Math.round(cssH * dpr);
+  const across = Math.floor(devW / (Math.max(1, cols) * TILE * 0.8));
+  const k = Math.max(1, Math.min(across, Math.floor(devH / (18 * TILE))), Math.floor(devH / (30 * TILE)));
+  return { k, scale: (TILE * k) / dpr, dpr };
+}

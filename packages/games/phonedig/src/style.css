@@ -1,7 +1,14 @@
 /* Scoped under pd- so nothing here can reach another game's chrome.
  * The scene is the full-bleed layer; the HUD and controls ride on top of it. */
 
+.pd-stage { position: absolute; inset: 0; }
 .pd-canvas { display: block; width: 100%; height: 100%; background: var(--kp-ink, #05071a); }
+
+/* The shared screen is a board beside a picture, not a picture under a board:
+   with sixteen crews the board is a table, and the shaft is dark. One width,
+   set once, that both the canvas and the board read. */
+.kp-scene-stage:has(.pd-stage-tv) { --pd-rail: clamp(17rem, 25vw, 25rem); }
+.pd-stage-tv { left: var(--pd-rail); }
 
 /* The shell insets the overlay and leaves its height to the content, which is
  * right for a few floating chips and wrong for anything that fills the stage.
@@ -10,48 +17,129 @@
  * text present and none of it visible. */
 .kp-scene-stage:has(.pd-controller) > .kp-scene-overlay,
 .kp-scene-stage:has(.pd-kitup) > .kp-scene-overlay,
-.kp-scene-stage:has(.pd-hud) > .kp-scene-overlay { inset: 0; }
+.kp-scene-stage:has(.pd-muster) > .kp-scene-overlay,
+.kp-scene-stage:has(.pd-board) > .kp-scene-overlay { inset: 0; }
 
-.pd-hud {
-  display: flex; flex-direction: column; gap: .4rem;
-  padding: .25rem; pointer-events: none;
-}
-.pd-hud-row { display: flex; flex-wrap: wrap; gap: .35rem; }
+/* ── shared pieces ──────────────────────────────────────────────────────── */
+
 .pd-chip {
-  background: rgba(5, 7, 26, .78); color: var(--kp-cream, #fff6e5);
-  border-radius: 999px; padding: .2rem .6rem;
-  font-size: .95rem; line-height: 1.3; white-space: nowrap;
+  position: relative; overflow: hidden;
+  background: rgba(5, 7, 26, .8); color: var(--kp-cream, #fff6e5);
+  border: 1px solid rgba(255, 246, 229, .14); border-radius: 999px;
+  padding: .12rem .6rem; font-size: .82rem; line-height: 1.45; white-space: nowrap;
 }
-.pd-chip-hp { color: var(--kp-coral, #ff5748); }
+.pd-chip b { font-family: var(--font-display); font-weight: 400; font-size: 1.08em; letter-spacing: .02em; }
+.pd-lives { letter-spacing: .08em; color: var(--kp-sun, #ffd24a); }
+.pd-lives i { opacity: .4; font-style: normal; }
+.pd-crew-dot { width: .7rem; height: .7rem; border-radius: 50%; flex: none; }
+.pd-crew-name {
+  flex: 1 1 auto; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; color: var(--kp-cream, #fff6e5);
+}
+.pd-crew-hp { flex: none; letter-spacing: .04em; color: var(--kp-coral, #ff5748); font-size: .8em; }
+.pd-crew-hp i { opacity: .4; font-style: normal; }
+.pd-crew-downed {
+  flex: none; color: var(--kp-coral, #ff5748);
+  font-weight: 800; letter-spacing: .04em; white-space: nowrap;
+}
+.pd-clock {
+  font-family: var(--font-display); font-size: 1.25rem; line-height: 1;
+  font-variant-numeric: tabular-nums; color: var(--kp-cream, #fff6e5);
+  background: rgba(5, 7, 26, .8); border: 1px solid rgba(255, 246, 229, .14);
+  border-radius: .5rem; padding: .2rem .5rem;
+}
+.pd-clock-late { color: var(--kp-ink, #05071a); background: var(--kp-coral, #ff5748); border-color: transparent; animation: pd-beat 1s steps(2, jump-none) infinite; }
+@keyframes pd-beat { 50% { background: var(--kp-sun, #ffd24a); } }
 
-.pd-meters { display: flex; flex-direction: column; gap: .25rem; max-width: 22rem; }
 .pd-meter {
-  height: .5rem; border-radius: 999px; overflow: hidden;
-  background: rgba(5, 7, 26, .78);
+  width: 3.4rem; height: .4rem; flex: none; border-radius: 999px; overflow: hidden;
+  background: rgba(255, 246, 229, .14);
 }
 .pd-meter > i { display: block; height: 100%; }
 .pd-meter-air { background: var(--kp-sky, #28c6e7); }
+.pd-meter-low { background: var(--kp-coral, #ff5748); }
 .pd-meter-load { background: var(--kp-sun, #ffd24a); }
 .pd-meter-full { background: var(--kp-coral, #ff5748); }
 
+/* ── the phone ──────────────────────────────────────────────────────────── */
+
 .pd-controller {
-  position: absolute; inset: auto 0 0 0;
-  display: flex; flex-direction: column; gap: .5rem;
-  padding: .5rem calc(.5rem + env(safe-area-inset-right))
-           calc(.5rem + env(safe-area-inset-bottom))
-           calc(.5rem + env(safe-area-inset-left));
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; justify-content: flex-end; gap: .5rem;
+  padding: 12px max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   pointer-events: none;
 }
-.pd-controller-status { pointer-events: none; }
+
+/* The strip along the top: the goal, the stake, the bank — then the race. It
+   sits over the shaft, so it is one line of small chips and no more. */
+.pd-phone-hud {
+  position: absolute; inset: 6px max(8px, env(safe-area-inset-right)) auto max(8px, env(safe-area-inset-left));
+  display: flex; flex-direction: column; gap: 4px; pointer-events: none;
+}
+.pd-bar { display: flex; align-items: center; gap: .3rem; flex-wrap: nowrap; min-width: 0; }
+.pd-bar-gap { flex: 1 1 0; }
+.pd-level { font-family: var(--font-display); color: var(--kp-sky, #28c6e7); }
+.pd-goal b { color: var(--kp-sun, #ffd24a); }
+.pd-goal-near { border-color: var(--kp-lime, #78d955); }
+.pd-goal-near b { color: var(--kp-lime, #78d955); }
+/* The hopper is a chip that fills: how much is riding on the next mistake. */
+.pd-load { min-width: 6.4rem; }
+.pd-load > i { position: absolute; inset: 0 auto 0 0; background: rgba(255, 210, 74, .26); }
+.pd-load > span { position: relative; }
+.pd-load-full { border-color: var(--kp-coral, #ff5748); }
+.pd-load-full > i { background: rgba(255, 87, 72, .34); }
+.pd-banked b { color: var(--kp-lime, #78d955); }
+.pd-place { border-color: var(--pd-crew, rgba(255, 246, 229, .14)); }
+.pd-place b { color: var(--pd-crew, var(--kp-cream)); }
+.pd-air {
+  height: 5px; border-radius: 999px; overflow: hidden; width: min(46%, 20rem);
+  background: rgba(5, 7, 26, .7); border: 1px solid rgba(255, 246, 229, .1);
+}
+.pd-air > i { display: block; height: 100%; background: var(--kp-sky, #28c6e7); }
+.pd-air-low > i { background: var(--kp-coral, #ff5748); animation: pd-blink .5s steps(2, jump-none) infinite; }
+@keyframes pd-blink { 50% { opacity: .45; } }
+
+.pd-mates { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; width: max-content; max-width: 40%; }
+.pd-mates li {
+  display: flex; align-items: center; gap: .35rem;
+  background: rgba(5, 7, 26, .7); border-radius: 999px; padding: .05rem .5rem;
+  font-size: .72rem; line-height: 1.5;
+}
+.pd-mates .pd-crew-name { max-width: 9rem; }
+.pd-mates .pd-crew-dot { width: .55rem; height: .55rem; }
+.pd-mate-down { outline: 2px solid var(--kp-coral, #ff5748); outline-offset: -2px; }
+.pd-mate-down b { color: var(--kp-coral, #ff5748); }
+
+/* A teammate down is the only thing worth interrupting a phone player for. */
+.pd-alert {
+  display: flex; align-items: center; gap: .4rem; align-self: center;
+  max-width: 52%; font-size: .78rem;
+  background: rgba(5, 7, 26, .92); color: var(--kp-cream, #fff6e5);
+  border-left: 4px solid var(--kp-coral, #ff5748);
+  border-radius: .4rem; padding: .35rem .6rem;
+  pointer-events: none;
+}
+
+/* What to do next, between the thumbs. */
+.pd-controller-status {
+  position: absolute; left: 50%; bottom: max(10px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+  display: flex; align-items: center; gap: .5rem; max-width: 46%;
+  text-align: center; padding: .2rem .8rem; border-radius: 999px;
+  background: rgba(5, 7, 26, .8); border: 1px solid rgba(255, 246, 229, .14);
+  font-size: .82rem; pointer-events: none;
+}
 .pd-controller-status p { margin: 0; color: var(--kp-cream, #fff6e5); }
+.pd-status-urgent { border-color: var(--kp-coral, #ff5748); background: rgba(60, 10, 20, .88); }
 
 /* Movement on the left, the repeated action under the resting right thumb. */
 .pd-controller-pads {
   display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem;
 }
 .pd-controller-pads > * { pointer-events: auto; }
+.pd-controller-pads .kp-steer-pad { width: clamp(96px, 26dvh, 144px); height: clamp(96px, 26dvh, 144px); }
 .pd-pump {
-  width: 7rem; height: 7rem; padding: 0; border: 0; border-radius: 50%; background: none;
+  width: clamp(80px, 24dvh, 128px); height: clamp(80px, 24dvh, 128px);
+  padding: 0; border: 0; border-radius: 50%; background: none;
   user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
@@ -60,52 +148,20 @@
 .pd-pump:disabled img { filter: saturate(.35) brightness(.75); opacity: .8; }
 .pd-pump:focus-visible { outline: 3px solid var(--kp-sun); outline-offset: 3px; }
 
-.pd-settings-value { margin: .25rem 0 0; font-variant-numeric: tabular-nums; }
-
-@media (prefers-reduced-motion: reduce) {
-  .pd-meter > i { transition: none; }
+/* The keyboard hint is for laptops, not phones. A coarse pointer means the
+   player has a thumb on the pad and does not need to be told about WASD. */
+.pd-keyhint { display: none; }
+@media (hover: hover) and (pointer: fine) and (min-height: 480px) {
+  .pd-keyhint {
+    display: block; position: absolute; left: 0; right: 0; bottom: 3.2rem; margin: 0; text-align: center;
+    font-size: .8rem; letter-spacing: .06em; opacity: .6;
+    color: var(--kp-cream, #fff6e5); pointer-events: none;
+  }
 }
-
-.pd-results { display: flex; flex-direction: column; gap: .75rem; }
-.pd-results-lead { margin: 0; font-size: 1.15rem; }
-.pd-results-lead strong { font-size: 1.6rem; }
-
-/* The crew rail: one row per digger, colour-coded to the room's own palette.
-   HP is dots rather than a number so it reads at TV distance. */
-.pd-crew { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .2rem; max-width: 26rem; }
-.pd-crew-row {
-  display: flex; align-items: center; gap: .4rem;
-  background: rgba(5, 7, 26, .78); border-radius: 999px;
-  padding: .15rem .55rem; font-size: .9rem;
-}
-.pd-crew-me { outline: 2px solid var(--kp-cream, #fff6e5); outline-offset: -2px; }
-.pd-crew-dot { width: .7rem; height: .7rem; border-radius: 50%; flex: none; }
-.pd-crew-name {
-  flex: 1 1 auto; min-width: 0; overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap; color: var(--kp-cream, #fff6e5);
-}
-.pd-crew-hp { flex: none; letter-spacing: .05em; color: var(--kp-coral, #ff5748); }
-.pd-crew-hp i { opacity: .45; font-style: normal; }
-.pd-meter-slim { width: 3.5rem; height: .35rem; flex: none; }
-
-.pd-chip-lives { letter-spacing: .08em; color: var(--kp-sun, #ffd24a); }
-.pd-chip-lives i { opacity: .4; font-style: normal; }
-.pd-crew-down { outline: 2px solid var(--kp-coral, #ff5748); outline-offset: -2px; }
-.pd-crew-downed {
-  flex: none; color: var(--kp-coral, #ff5748);
-  font-weight: 700; letter-spacing: .04em; white-space: nowrap;
-}
-.pd-results-lives { font-size: .9rem; opacity: .85; }
-
-.pd-crew-pull { font-style: normal; color: var(--kp-sun, #ffd24a); }
-
-/* A teammate down is the only thing worth interrupting a phone player for. */
-.pd-alert {
-  display: flex; align-items: center; gap: .4rem;
-  background: rgba(5, 7, 26, .92); color: var(--kp-cream, #fff6e5);
-  border-left: 4px solid var(--kp-coral, #ff5748);
-  border-radius: .4rem; padding: .4rem .6rem;
-  pointer-events: none;
+/* A narrow phone keeps the goal, the stake and the clock; the rest can wait for the television. */
+@media (max-width: 620px) {
+  .pd-banked, .pd-place { display: none; }
+  .pd-chip { font-size: .74rem; padding: .1rem .45rem; }
 }
 
 /* ── kit up ───────────────────────────────────────────────────────────────
@@ -126,6 +182,11 @@
   margin: 0 0 0 auto; font-variant-numeric: tabular-nums;
   color: var(--kp-sun, #ffd24a); font-weight: 700;
 }
+.pd-kitup-crew {
+  margin: 0; padding: .35rem .6rem; font-size: .88rem;
+  border-left: 4px solid var(--pd-crew); border-radius: .3rem; background: rgba(255, 246, 229, .06);
+}
+.pd-kitup-crew strong { color: var(--pd-crew); }
 .pd-suits {
   list-style: none; margin: 0; padding: 0;
   display: grid; gap: .4rem;
@@ -146,45 +207,193 @@
    belt and braces: the canvas is already drawn unsmoothed, but a browser that
    scales the ELEMENT would undo that. */
 .pd-suit-chip {
-  grid-row: 1 / span 2; width: 2rem; height: 2rem;
+  grid-row: 1 / span 2; width: 2rem; height: 2rem; flex: none;
   border-radius: .3rem; border: 1px solid rgba(5, 7, 26, .5);
   background: rgba(5, 7, 26, .55);
   image-rendering: pixelated;
 }
+.pd-figure-blank { display: block; opacity: .6; }
 .pd-suit-name { font-weight: 700; text-transform: capitalize; font-size: 1rem; }
 .pd-suit-note { font-size: .78rem; opacity: .75; line-height: 1.25; }
 .pd-suit-taken {
   grid-column: 2; font-size: .72rem;
   color: var(--kp-sun, #ffd24a);
 }
-.pd-crew-suit { flex: none; text-transform: capitalize; opacity: .9; }
-.pd-crew-waiting { flex: none; opacity: .55; font-style: italic; }
 
-/* The keyboard hint is for laptops, not phones. A coarse pointer means the
-   player has a thumb on the pad and does not need to be told about WASD. */
-.pd-keyhint { display: none; }
-@media (hover: hover) and (pointer: fine) {
-  .pd-keyhint {
-    display: block; margin: .1rem 0 0; text-align: center;
-    font-size: .8rem; letter-spacing: .06em; opacity: .6;
-    color: var(--kp-cream, #fff6e5); pointer-events: none;
-  }
+/* The muster: every crew and who is in it, while they dress. It covers the
+   picture on purpose — the shaft is not moving yet and the room wants names. */
+.pd-muster {
+  position: absolute; inset: 0; display: flex; flex-direction: column; gap: 1rem;
+  padding: 1.25rem 1.5rem; background: rgba(5, 7, 26, .9); overflow: hidden;
 }
-
-/* Keep the world visible between two thumbs, including short landscape phones. */
-@media (orientation: landscape) {
-  .pd-controller { inset: 0; justify-content: flex-end; padding: 12px max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left)); }
-  .pd-controller-status { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); text-align: center; padding: 4px 14px; border-radius: 20px; background: #05071acc; }
-  .pd-controller-pads .kp-steer-pad { width: clamp(96px, 26dvh, 144px); height: clamp(96px, 26dvh, 144px); }
-  .pd-pump { width: clamp(80px, 24dvh, 128px); height: clamp(80px, 24dvh, 128px); }
-  .pd-alert { max-width: 48%; margin: 0 auto; font-size: 12px; }
-  .pd-keyhint { display: none; }
+.pd-muster-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem 1rem; }
+.pd-muster-head h2 { margin: 0; font-size: clamp(1.4rem, 2.6vw, 2.2rem); }
+.pd-muster-head p { margin: 0; flex-basis: 100%; color: var(--muted-foreground, #a9b3e6); }
+.pd-muster-crews {
+  list-style: none; margin: 0; padding: 0; flex: 1; min-height: 0;
+  display: grid; gap: .6rem; align-content: start;
+  grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
 }
-.pd-hud { padding: 12px; gap: 8px; }
-.pd-hud > .pd-crew { flex-direction: row; flex-wrap: wrap; max-width: none; }
-.pd-hud > .pd-crew .pd-crew-row { flex: 0 1 260px; border: 1px solid #ffffff26; padding: 6px 10px; }
+.pd-muster-crew {
+  border-top: 4px solid var(--pd-crew); border-radius: .5rem;
+  background: rgba(255, 246, 229, .06); padding: .45rem .6rem .55rem;
+}
+.pd-muster-crew h3 { margin: 0 0 .3rem; font-size: 1.1rem; color: var(--pd-crew); font-family: var(--font-display); font-weight: 400; }
+.pd-muster-crew ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .2rem; }
+.pd-muster-crew li { display: flex; align-items: center; gap: .45rem; font-size: .95rem; min-width: 0; }
+.pd-muster-crew .pd-suit-chip { width: 1.6rem; height: 1.6rem; }
+.pd-muster-waiting { opacity: .55; }
+/* Sixteen crews of four is sixty-four names: smaller figures, tighter rows. */
+.pd-muster[data-crews="9"], .pd-muster[data-crews="10"], .pd-muster[data-crews="11"], .pd-muster[data-crews="12"],
+.pd-muster[data-crews="13"], .pd-muster[data-crews="14"], .pd-muster[data-crews="15"], .pd-muster[data-crews="16"] { gap: .6rem; padding: .9rem 1.1rem; }
+.pd-muster:is([data-crews="9"], [data-crews="10"], [data-crews="11"], [data-crews="12"], [data-crews="13"], [data-crews="14"], [data-crews="15"], [data-crews="16"]) .pd-muster-crews { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .4rem; }
+.pd-muster:is([data-crews="9"], [data-crews="10"], [data-crews="11"], [data-crews="12"], [data-crews="13"], [data-crews="14"], [data-crews="15"], [data-crews="16"]) .pd-muster-crew { padding: .25rem .45rem .3rem; }
+.pd-muster:is([data-crews="9"], [data-crews="10"], [data-crews="11"], [data-crews="12"], [data-crews="13"], [data-crews="14"], [data-crews="15"], [data-crews="16"]) .pd-muster-crew h3 { font-size: .95rem; margin-bottom: .1rem; }
+.pd-muster:is([data-crews="9"], [data-crews="10"], [data-crews="11"], [data-crews="12"], [data-crews="13"], [data-crews="14"], [data-crews="15"], [data-crews="16"]) .pd-muster-crew li { font-size: .8rem; gap: .3rem; }
+.pd-muster:is([data-crews="9"], [data-crews="10"], [data-crews="11"], [data-crews="12"], [data-crews="13"], [data-crews="14"], [data-crews="15"], [data-crews="16"]) .pd-suit-chip { width: 1.15rem; height: 1.15rem; }
 
-@media (orientation: landscape) { .kp-scene-stage:has(.pd-hud) .pd-controller-status { top: auto; bottom: 12px; } }
+/* ── the television's board ─────────────────────────────────────────────── */
+
+.pd-board {
+  position: absolute; inset: 0 auto 0 0; width: var(--pd-rail);
+  display: flex; flex-direction: column; gap: .6rem;
+  padding: .8rem .8rem .7rem; overflow: hidden;
+  background: linear-gradient(180deg, #121a47, #0a0f2e);
+  border-right: 2px solid rgba(255, 246, 229, .12);
+  font-size: .95rem;
+}
+.pd-board-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-height: 2rem; }
+.pd-board-head .kp-eyebrow { margin: 0; }
+.pd-board-head .pd-clock { font-size: 1.9rem; }
+
+.pd-totals { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; }
+.pd-total {
+  margin: 0; padding: .4rem .6rem; border-radius: .6rem; background: rgba(5, 7, 26, .5);
+  display: flex; flex-direction: column; line-height: 1.1;
+}
+.pd-total b { font-family: var(--font-display); font-weight: 400; font-size: 1.9rem; color: var(--kp-lime, #78d955); font-variant-numeric: tabular-nums; }
+.pd-total span { font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted-foreground, #a9b3e6); }
+.pd-total-risk b { color: var(--kp-sun, #ffd24a); }
+.pd-total-goal b { color: var(--kp-cream, #fff6e5); }
+.pd-total-goal.pd-goal-near b { color: var(--kp-lime, #78d955); }
+.pd-total .pd-lives { font-size: 1.5rem; line-height: 1.25; }
+
+/* The race, one crew to a row, in the order they stand. */
+.pd-race { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .25rem; min-height: 0; }
+.pd-race-row {
+  display: grid; grid-template-columns: 1.5rem 1fr auto auto; align-items: center; gap: 0 .45rem;
+  padding: .25rem .5rem .3rem; border-radius: .5rem;
+  background: rgba(5, 7, 26, .45); border-left: 5px solid var(--pd-crew);
+}
+.pd-race-on { background: color-mix(in srgb, var(--pd-crew) 22%, #05071a); outline: 1px solid color-mix(in srgb, var(--pd-crew) 60%, transparent); }
+.pd-race-place { font-family: var(--font-display); font-size: 1.15rem; color: var(--muted-foreground, #a9b3e6); text-align: center; }
+.pd-race-name { font-family: var(--font-display); font-size: 1.15rem; color: var(--pd-crew); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pd-race-pay { font-family: var(--font-display); font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+.pd-race-marks { display: flex; gap: 3px; }
+.pd-race-marks i { width: .5rem; height: .5rem; border-radius: 50%; background: var(--kp-lime, #78d955); }
+.pd-race-marks .pd-mark-hurt { background: var(--kp-sun, #ffd24a); }
+.pd-race-marks .pd-mark-down { background: var(--kp-coral, #ff5748); animation: pd-blink .5s steps(2, jump-none) infinite; }
+.pd-race-sub { grid-column: 2 / -1; font-size: .74rem; color: var(--muted-foreground, #a9b3e6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pd-race-sub em { font-style: normal; color: var(--kp-sun, #ffd24a); }
+/* More crews than fit as cards: one line each, and the detail goes to the crew
+   on screen. A dozen or so always; six to ten only where the screen is short. */
+.pd-board[data-size="many"] { gap: .35rem; padding: .5rem .6rem .45rem; }
+.pd-board[data-size="many"] .pd-race { gap: 2px; }
+.pd-board[data-size="many"] .pd-race-row { padding: 0 .4rem; grid-template-columns: 1.3rem 1fr auto auto; border-left-width: 4px; border-radius: .3rem; line-height: 1.25; }
+.pd-board[data-size="many"] .pd-race-sub { display: none; }
+.pd-board[data-size="many"] .pd-race-name, .pd-board[data-size="many"] .pd-race-place { font-size: .92rem; }
+.pd-board[data-size="many"] .pd-race-pay { font-size: 1rem; }
+.pd-board[data-size="many"] .pd-race-marks i { width: .4rem; height: .4rem; }
+.pd-board[data-size="many"] .pd-board-head .pd-clock { font-size: 1.5rem; }
+.pd-board[data-size="many"] .pd-digger { padding: .04rem .4rem; font-size: .82rem; }
+.pd-board[data-size="many"] .pd-digger .pd-suit-chip { width: 1.1rem; height: 1.1rem; }
+.pd-board[data-size="many"] .pd-feed { font-size: .74rem; }
+@media (max-height: 899px) {
+  .pd-board[data-size="some"] { gap: .45rem; }
+  .pd-board[data-size="some"] .pd-race { gap: 3px; }
+  .pd-board[data-size="some"] .pd-race-row { padding: .1rem .45rem; }
+  .pd-board[data-size="some"] .pd-race-sub { display: none; }
+  .pd-board[data-size="some"] .pd-digger { padding: .1rem .45rem; }
+  .pd-board[data-size="some"] .pd-digger .pd-suit-chip { width: 1.3rem; height: 1.3rem; }
+}
+/* Whatever the count, the race gives way before the crew on screen does. */
+.pd-race { flex: 0 1 auto; overflow: hidden; }
+.pd-onscreen, .pd-feed, .pd-board-head { flex: none; }
+
+.pd-onscreen { border-top: 3px solid var(--pd-crew, rgba(255, 246, 229, .2)); padding-top: .45rem; margin-top: auto; }
+.pd-onscreen h3 { margin: 0 0 .35rem; font-size: .85rem; font-family: var(--font-body); font-weight: 800; color: var(--pd-crew); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pd-onscreen h3 span { font-size: .62rem; letter-spacing: .12em; text-transform: uppercase; color: var(--kp-ink, #05071a); background: var(--pd-crew); border-radius: .25rem; padding: .05rem .3rem; margin-right: .4rem; }
+.pd-board:not(:has(.pd-race)) .pd-onscreen { margin-top: 0; border-top: 0; padding-top: 0; }
+.pd-board:not(:has(.pd-race)) .pd-feed { margin-top: auto; }
+.pd-diggers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .25rem; }
+.pd-digger {
+  display: flex; align-items: center; gap: .4rem; min-width: 0;
+  background: rgba(5, 7, 26, .5); border-radius: .5rem; padding: .2rem .45rem;
+}
+.pd-digger .pd-suit-chip { width: 1.5rem; height: 1.5rem; }
+.pd-digger .pd-meter { width: 2.4rem; }
+.pd-digger-down { outline: 2px solid var(--kp-coral, #ff5748); outline-offset: -2px; }
+
+.pd-feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: .8rem; color: var(--muted-foreground, #a9b3e6); }
+.pd-feed li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pd-feed li:last-child { color: var(--kp-cream, #fff6e5); }
+.pd-feed b { color: var(--pd-crew); font-weight: 800; }
+
+/* ── settings, how-to ───────────────────────────────────────────────────── */
+
+.pd-settings-value { margin: .25rem 0 .8rem; font-variant-numeric: tabular-nums; }
+
+/* ── results ────────────────────────────────────────────────────────────── */
+
+.pd-results-title { margin: .1em 0 .2em; font-size: clamp(2rem, 4.6vw, 3.6rem); line-height: 1; }
+/* A wall of crews needs the room the headline was taking. */
+.pd-results-title:has(+ .pd-results-dense) { font-size: clamp(1.6rem, 3vw, 2.4rem); }
+.pd-results { display: flex; flex-direction: column; gap: .7rem; }
+.pd-results-lead { margin: 0; font-size: 1.1rem; }
+.pd-results-lead strong { font-family: var(--font-display); font-weight: 400; font-size: 1.35em; color: var(--kp-sun, #ffd24a); }
+.pd-results-note { margin: 0; font-size: .85rem; color: var(--muted-foreground, #a9b3e6); }
+.pd-podium { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); }
+.pd-podium-crew {
+  border-left: 6px solid var(--pd-crew); border-radius: .7rem;
+  background: rgba(5, 7, 26, .45); padding: .5rem .7rem .55rem; min-width: 0;
+}
+.pd-podium-first { background: color-mix(in srgb, var(--pd-crew) 18%, #05071a); outline: 2px solid color-mix(in srgb, var(--pd-crew) 70%, transparent); }
+.pd-podium-mine { box-shadow: 0 0 0 2px var(--kp-cream, #fff6e5); }
+.pd-podium-head { display: flex; align-items: baseline; gap: .5rem; }
+.pd-podium-head h2 { margin: 0; font-size: 1.5rem; color: var(--pd-crew); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pd-podium-place { font-family: var(--font-display); font-size: 1.2rem; color: var(--muted-foreground, #a9b3e6); }
+.pd-podium-pay { margin: 0 0 0 auto; white-space: nowrap; }
+.pd-podium-pay b { font-family: var(--font-display); font-weight: 400; font-size: 1.7rem; color: var(--kp-lime, #78d955); font-variant-numeric: tabular-nums; }
+.pd-podium-run { margin: .1rem 0 .35rem; font-size: .82rem; color: var(--muted-foreground, #a9b3e6); }
+.pd-podium-crew-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .15rem; }
+.pd-podium-crew-list li { display: flex; align-items: center; gap: .4rem; font-size: .9rem; min-width: 0; }
+.pd-podium-crew-list .pd-suit-chip { width: 1.35rem; height: 1.35rem; }
+.pd-podium-me .pd-crew-name { color: var(--kp-sun, #ffd24a); font-weight: 800; }
+.pd-podium-stats { flex: none; font-size: .78rem; color: var(--muted-foreground, #a9b3e6); white-space: nowrap; }
+/* Seven crews and up: the podium is a wall of narrow cards and the run line goes. */
+.pd-results-dense .pd-podium { grid-template-columns: repeat(auto-fit, minmax(min(100%, 15.5rem), 1fr)); gap: .35rem; }
+.pd-results-dense .pd-podium-crew { padding: .3rem .5rem .35rem; border-left-width: 5px; }
+.pd-results-dense .pd-podium-head h2 { font-size: 1.1rem; }
+.pd-results-dense .pd-podium-pay b { font-size: 1.25rem; }
+.pd-results-dense .pd-podium-run { display: none; }
+.pd-results-dense .pd-podium-crew-list li { font-size: .78rem; }
+.pd-results-dense .pd-podium-crew-list .pd-suit-chip { width: 1rem; height: 1rem; }
+.pd-results-dense .pd-podium-stats { font-size: .7rem; }
+.pd-podium-stats i { font-style: normal; }
+/* In a wall of crews the name matters more than the third number; the awards carry the rescues. */
+.pd-results-dense .pd-podium-stats i { display: none; }
+.pd-awards { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .4rem; }
+.pd-awards li {
+  flex: 1 1 12rem; display: grid; grid-template-columns: 1fr auto; gap: 0 .5rem;
+  background: rgba(255, 210, 74, .1); border: 1px solid rgba(255, 210, 74, .35); border-radius: .6rem; padding: .35rem .6rem;
+}
+.pd-awards span { grid-column: 1 / -1; font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--kp-sun, #ffd24a); }
+.pd-awards b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pd-awards i { font-style: normal; color: var(--muted-foreground, #a9b3e6); font-size: .85rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pd-clock-late, .pd-air-low > i, .pd-race-marks .pd-mark-down { animation: none; }
+}
 
 /* immersivePhone: the shell is pinned to the visible viewport (browser bars, full screen) under a compact header.
  * The landscape controller fills what the header leaves instead of guessing its height; the lobby and results

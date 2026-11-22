@@ -1,3 +1,4 @@
+import { MAX_ROOM_PLAYERS } from '../../../party-contract/src/index';
 import type { GameManifest } from '../../../party-contract/src/index';
 
 /* Phonedig runs its own fixed-step simulation, so stepHz is not a preference:
@@ -8,34 +9,36 @@ import type { GameManifest } from '../../../party-contract/src/index';
  *
  * Landscape controls keep movement left and pumping right.
  *
- * The shaft widens with the crew — ten lanes for one digger, seventy-three for
- * ten, on the same curve the monster count uses — and players.max is 4 by
- * CHOICE, not by any remaining limit.
+ * players.max is the whole room, and that is a statement about CREWS rather
+ * than about one shaft. A shaft is tuned for one to four diggers — it widens
+ * with its crew, and so does everything in it — and nothing here stretches it
+ * further. A bigger room is several crews, each in a shaft of its own on the
+ * same seed, racing a shift clock; see crews.ts and DESIGN.md.
  *
- * Nothing technical stops ten. Measured after twenty seconds of digging on
- * level 20, with entities packed and the cut ground run-length encoded:
- * 4 diggers 9.4 KiB, 8 diggers 16.8 KiB, 10 diggers 20.9 KiB against a 32 KiB
- * envelope. The generator places 2.2 monsters per lane across 73 lanes without
- * ever coming up short, and ten diggers with fifty monsters tick in 0.14 ms
- * against a 16.7 ms budget.
- *
- * Four is where it stays until four have actually been played properly. The
- * numbers say the room would hold ten; nothing yet says ten would be any good,
- * and a roster is a promise about the experience rather than about the wire. */
+ * That is also what makes sixty-four affordable. A phone is sent its own
+ * crew's shaft and the one the television is showing, so its traffic is the
+ * same in a room of eight and a room of sixty-four (about 62 KiB/s, measured in
+ * tests/crews.test.ts), and the server steps sixteen small simulations rather
+ * than one enormous one: about 1.5 ms a tick with every seat digging. */
 export const manifest = {
   contractVersion: '1.0',
   id: 'phonedig',
   title: 'Phonedig',
-  description: 'Dig for your pay, not your kills. Cut a shaft, clear the ground and bank the haul before the roof comes in.',
+  description: 'Dig for your pay, not your kills. Clear a level to bank the haul before the roof comes in. Up to four share a shaft; a bigger room splits into rival crews.',
   assetBase: '/games/phonedig/',
   modes: ['shared-display'],
-  players: { min: 1, max: 4 },
+  players: { min: 1, max: MAX_ROOM_PLAYERS },
   orientation: { controller: 'landscape', personalView: 'landscape' },
   timing: 'realtime',
   input: ['state', 'action'],
   privatePlayerViews: true,
   supportsSolo: true,
   simulation: { stepHz: 60, snapshotHz: 20, maxCatchUpSteps: 6 },
+  /* The scene is ready the moment its canvas exists, so what this waits on is
+   * one 200 KB sprite sheet — on every phone in the room. Sixty-four phones on
+   * party Wi-Fi get longer than the default twenty seconds to fetch it before
+   * one slow one sends everybody back to the lobby. */
+  prepareTimeoutMs: 45_000,
   /* Terrain is a pure function of (level, seed, entryLc), so clients rebuild it
    * and only changed cells cross the wire. See buildEdits in server.ts. */
   snapshotCache: {

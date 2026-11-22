@@ -206,7 +206,7 @@ function playerFlat(g: Ctx, p: ViewPlayer, s: number) {
 
 /* One digger. Takes the digger rather than the state, because a co-op shaft has
  * up to four of them and each carries its own harpoon and its own suit. */
-function drawPlayer(g: Ctx, p: ViewPlayer, alpha: number) {
+function drawPlayer(g: Ctx, p: ViewPlayer, alpha: number, crowd = 1) {
   // Blink while invulnerable, but stay visible more than half the time so the
   // player never loses track of where they are.
   if (p.invuln > 0 && Math.floor(p.invuln * 12) % 2 === 1) return;
@@ -242,8 +242,11 @@ function drawPlayer(g: Ctx, p: ViewPlayer, alpha: number) {
 
   /* The helmet lamp has a source. Small and warm, sitting on the player rather
    * than centred on them, so the light reads as coming FROM the helmet. */
+  /* Shared out among lamps standing together: four helmets in one tunnel are
+   * additive, and summed at full strength they are a white disc with the crew
+   * invisible inside it. */
   light.add(lerp(p.px, p.x, alpha) + 1, lerp(p.py, p.y, alpha) + 0.7,
-            2.6, P.harpoon, 0.5);
+            2.6, P.harpoon, 0.5 / crowd);
 }
 
 /* ── monsters ─────────────────────────────────────────────────────────── */
@@ -1320,6 +1323,54 @@ export function syncWorld(worldKey: string, levelSerial: number) {
   return true;
 }
 
+/* The display face for anything written on the field — the room's own, so a
+ * popup and the HUD beside it are visibly one game. Falls back through the same
+ * stack the stylesheet does. */
+const display = "'Lilita One','Arial Black',Impact,sans-serif";
+
+/* Who that is, and how long they have.
+ *
+ * A teammate wears their name: four suits in one shaft are four colours, and a
+ * colour is not who to shout at. Small, and in their own colour, so it tags the
+ * digger rather than competing with them. A digger on the floor wears their
+ * clock instead, large, because "can I get there in time" is the only question
+ * a rescuer has. */
+function drawTag(g: Ctx, p: ViewPlayer, alpha: number, font: string, lift = 0) {
+  if (!p.label && !p.downed) return;
+  if (p.dying) return;
+  const x = sx(lerp(p.px, p.x, alpha) + 1);
+  // `lift` stacks the tags of diggers standing on the same spot instead of overprinting them.
+  const y = sy(lerp(p.py, p.y, alpha)) - lift * V.scale * 0.72;
+  g.save();
+  g.textAlign = 'center';
+  g.textBaseline = 'alphabetic';
+  g.lineJoin = 'round';
+  g.strokeStyle = '#05071a';
+  if (p.downed) {
+    const urgent = p.downT < 8;
+    const px = Math.max(12, Math.round(V.scale * (urgent ? 1.25 : 1.05)));
+    g.font = `${px}px ${font}`;
+    g.lineWidth = Math.max(3, px * 0.28);
+    const label = p.reviveProgress > 0 ? `${Math.round(p.reviveProgress * 100)}%` : `${Math.ceil(p.downT)}s`;
+    if (urgent && p.reviveProgress <= 0) g.globalAlpha = 0.6 + 0.4 * Math.abs(Math.sin(clock() / 140));
+    g.strokeText(label, x, y - V.scale * 0.15);
+    g.fillStyle = p.reviveProgress > 0 ? P.harpoon : P.danger;
+    g.fillText(label, x, y - V.scale * 0.15);
+    g.globalAlpha = 1;
+  }
+  if (p.label) {
+    const px = Math.max(9, Math.round(V.scale * 0.62));
+    g.font = `800 ${px}px Nunito, system-ui, sans-serif`;
+    g.lineWidth = Math.max(2, px * 0.3);
+    const ty = y - V.scale * (p.downed ? 1.25 : 0.2);
+    g.globalAlpha = 0.92;
+    g.strokeText(p.label, x, ty);
+    g.fillStyle = p.tint || P.text;
+    g.fillText(p.label, x, ty);
+  }
+  g.restore();
+}
+
 export function render(g: Ctx, state: RenderState, alpha: number, font: string) {
   /* Render-rate delta, from the SAME injected clock view.js pins for the
    * harness. Everything animated downstream of here reads this and nothing
@@ -1378,7 +1429,9 @@ export function render(g: Ctx, state: RenderState, alpha: number, font: string) 
 
   /* Every digger, this screen's own included. Drawn after the monsters so a
    * teammate standing in a Pooka never disappears behind it. */
-  for (const q of state.players) drawPlayer(g, q, a);
+  for (const q of state.players) {
+    drawPlayer(g, q, a, state.players.reduce((n, o) => n + (Math.abs(o.x - q.x) + Math.abs(o.y - q.y) < 3 ? 1 : 0), 0));
+  }
   for (const f of state.fire) drawFire(g, f);
   for (const w of state.wheels) drawWheel(g, w, a);
 
@@ -1412,7 +1465,11 @@ export function render(g: Ctx, state: RenderState, alpha: number, font: string) 
   else light.reset();
   perf.add('light', tPass);
   tPass = perf.now();
-  if (!perf.skip('vfx')) vfx.overlay(g, cssW, cssH);
+  /* Words after the lamp: a tag or a number written in the dark is one nobody
+   * reads. The screen-space flash and banner go on last of all. */
+  state.players.forEach((q, i) => drawTag(g, q, a, display, state.players.reduce(
+    (n, o, j) => n + (j < i && o.label && Math.abs(o.x - q.x) < 5 && Math.abs(o.y - q.y) < 1 ? 1 : 0), 0)));
+  if (!perf.skip('vfx')) { vfx.words(g, view, P, display); vfx.overlay(g, cssW, cssH, P, display); }
   perf.add('overlay', tPass);
 
   if (state.popups.length) {

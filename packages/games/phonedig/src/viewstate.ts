@@ -20,11 +20,14 @@
  * may read a clock — the renderer's only time source is the one view.ts injects.
  */
 
-import { GRID, generateLevel, levelSeed } from './worldgen';
-import { readMonsters, readRocks } from './model';
+import {
+  GRID, RELIC_IDS, generateLevel, levelSeed, skyRowsFor, themeOf,
+} from './worldgen';
+import { readMonsters, readPlayers, readRocks } from './model';
 import type { PlayerId } from '../../../party-contract/src/index';
 import type {
-  Dir, NetMonster, NetPlayer, NetRock, PublicView,
+  Dir, Edit, LaneNode, NetEvent, NetFire, NetHarpoon, NetMonster, NetPlayer, NetRock,
+  NetWheel, Phase, PrivateView, PublicView, RosterEntry, ShaftCuts, ShaftWire, SiteWire,
 } from './model';
 import type {
   RenderState, ViewFire, ViewHarpoon, ViewMonster, ViewPlayer, ViewRock,
@@ -33,8 +36,31 @@ import type {
 import {
   MODE_IDS, ROCK_STATE_IDS, VARIANT_TINTS, kindName, variantName,
 } from './bestiary';
+import { SUIT_BY_ID } from './suits';
 
 const { GW, GH } = GRID;
+
+/* ── the roster ───────────────────────────────────────────────────────────
+ *
+ * Names, colours, suits and crews are sent every couple of seconds rather than
+ * every frame, so each screen keeps the last list it was given. One per page:
+ * the scene and the HUD are separate React trees looking at the same room. */
+export type Roster = { round: string; entries: RosterEntry[]; byCrew: RosterEntry[][] };
+
+let kept: Roster = { round: '', entries: [], byCrew: [] };
+
+export function rosterOf(entries: readonly RosterEntry[], round = ''): Roster {
+  const byCrew: RosterEntry[][] = [];
+  for (const entry of entries) (byCrew[entry.crew] ??= []).push(entry);
+  return { round, entries: [...entries], byCrew };
+}
+
+/** The roster for this round: the one just sent if there is one, else the last. */
+export function remember(round: string, sent?: readonly RosterEntry[]): Roster {
+  if (sent) kept = rosterOf(sent, round);
+  else if (kept.round !== round) kept = { round, entries: [], byCrew: [] };
+  return kept;
+}
 
 /* ── the ground ───────────────────────────────────────────────────────── */
 
@@ -48,27 +74,60 @@ export type Ground = {
   pocketHint: Uint8Array;
   /** Bumped per row as cells are cut; terrain.ts invalidates chunks on it. */
   rowRev: Int32Array;
-  /** The revision this grid reflects, so a repeat snapshot is free. */
+  /** Bumps whenever a cell is cut here; the lamp and the map repaint on it. */
   revision: number;
+  /** The published revision this grid reflects, so a repeat snapshot is free. */
+  applied: number;
+  /** The newest journal batch applied. See ShaftCuts in model.ts. */
+  have: number;
+  /** The journal has a hole in it: ask the server for the whole ground. */
+  gap: boolean;
   /** The generator's own, kept because the wire does not resend them. */
   skyRows: number;
   theme: string;
+  rocks: LaneNode[];
+  bonusAt: LaneNode;
+  relicSite: { x: number; y: number; pool: string[] } | null;
+  crystalAt: (LaneNode & { id: string }) | null;
 };
 
 /* A level is a pure function of (level, seed, lanes, entryLc), which is the
  * whole reason terrain does not have to cross the wire. Keyed on exactly those
- * four so a descent regenerates and a redelivered snapshot does not. */
-type WorldFields = Pick<PublicView, 'runSeed' | 'level' | 'entryLc' | 'lanes'>;
+ * four — and on whose shaft it is, because rival crews start on the same seed —
+ * so a descent regenerates and a redelivered snapshot does not. */
+type WorldFields = Pick<ShaftWire, 'crew' | 'run' | 'runSeed' | 'level' | 'entryLc' | 'lanes'>;
 const keyOf = (v: WorldFields) =>
-  `${v.runSeed}/${v.level}/${v.entryLc}/${v.lanes}`;
+  `${v.crew}.${v.run}/${v.runSeed}/${v.level}/${v.entryLc}/${v.lanes}`;
 /** Whether two snapshots describe the same generated world. */
 export const sameWorld = (a: WorldFields, b: WorldFields) => keyOf(a) === keyOf(b);
 
-export function createGround(): { update(view: PublicView): Ground } {
+/** Where a shaft's cut ground comes from: the cached public list, or a journal. */
+export type GroundSource = { revision: number; edits: Edit[] } | ShaftCuts;
+
+export function createGround(): { update(view: ShaftWire, source: GroundSource): Ground } {
   let g: Ground | null = null;
 
+  /* Applied to the LIVE grid rather than to a fresh copy of the generated
+   * one. Both are correct — see property 1 above — but only this way can a
+   * row be marked dirty, because only this way is there anything to
+   * compare against. A cell that is already cut costs one branch. */
+  const cut = (ground: Ground, runs: readonly Edit[]) => {
+    const { dirt, ore, rowRev } = ground;
+    let changed = false;
+    for (const [start, len] of runs) {
+      for (let i = start; i < start + len; i++) {
+        if (dirt[i] === 0) continue;
+        dirt[i] = 0;
+        ore[i] = 0;
+        rowRev[(i / GW) | 0]++;
+        changed = true;
+      }
+    }
+    if (changed) ground.revision++;
+  };
+
   return {
-    update(view: PublicView): Ground {
+    update(view: ShaftWire, source: GroundSource): Ground {
       const key = keyOf(view);
       if (!g || g.key !== key) {
         const data = generateLevel(
@@ -88,29 +147,158 @@ export function createGround(): { update(view: PublicView): Ground } {
           /* Fresh zeros, exactly as startLevel hands out upstream: every chunk
            * is stale against a cache built for the previous level. */
           rowRev: new Int32Array(GH),
-          revision: -1,
+          revision: 0,
+          applied: -1,
+          have: 0,
+          gap: false,
           skyRows: data.skyRows,
           theme: data.theme,
+          rocks: data.rocks,
+          bonusAt: data.bonusAt,
+          relicSite: data.relicSite
+            ? { x: data.relicSite.at.x, y: data.relicSite.at.y, pool: data.relicSite.pool } : null,
+          crystalAt: data.crystalAt
+            ? { lc: data.crystalAt.lc, lr: data.crystalAt.lr, id: data.crystalAt.id } : null,
         };
       }
-      if (g.revision === view.revision) return g;
-
-      /* Applied to the LIVE grid rather than to a fresh copy of the generated
-       * one. Both are correct — see property 1 above — but only this way can a
-       * row be marked dirty, because only this way is there anything to
-       * compare against. A cell that is already cut costs one branch. */
-      const { dirt, ore, rowRev } = g;
-      for (const [start, len] of view.edits) {
-        for (let i = start; i < start + len; i++) {
-          if (dirt[i] === 0) continue;
-          dirt[i] = 0;
-          ore[i] = 0;
-          rowRev[(i / GW) | 0]++;
-        }
+      if ('edits' in source) {
+        if (g.applied === source.revision) return g;
+        cut(g, source.edits);
+        g.applied = source.revision;
+        return g;
       }
-      g.revision = view.revision;
+      /* The journal. A batch is safe to replay, so the only question is whether
+       * one was MISSED: the tail has to reach back to the last one applied. */
+      if (source.base) { cut(g, source.base); g.have = source.cutTo; g.gap = false; }
+      if (g.have >= source.cutFrom - 1) {
+        if (source.cutTo > g.have) { cut(g, source.cuts); g.have = source.cutTo; }
+        g.gap = false;
+      } else {
+        cut(g, source.cuts);            // true as far as it goes
+        g.gap = true;
+      }
       return g;
     },
+  };
+}
+
+/* ── one shaft, decoded ───────────────────────────────────────────────── */
+
+/* A shaft as every screen reads it: the packed wire turned back into named
+ * things, with what the client can work out for itself filled in. Decoding
+ * happens once per snapshot — twenty a second — rather than once per draw. */
+export type ShaftView = {
+  crew: number; run: number;
+  runSeed: number; level: number; entryLc: number | null; lanes: number;
+  activeGW: number; skyRows: number; theme: string;
+  phase: Phase;
+  deepest: number;
+  shake: number;
+  banked: number; oreBanked: number;
+  lives: number; livesMax: number;
+  left: number;
+  /** The crew's hoppers together: what is at risk right now. */
+  hopper: number;
+  events: NetEvent[];
+  players: NetPlayer[];
+  monsters: NetMonster[];
+  rocks: NetRock[];
+  fire: NetFire[];
+  wheels: NetWheel[];
+  harpoons: NetHarpoon[];
+  bonus: { x: number; y: number; value: number } | null;
+  relicSite: { x: number; y: number; pool: string[] } | null;
+  crystalAt: (LaneNode & { id: string }) | null;
+};
+/** The old name, kept for the modules that grew up with it. */
+export type DecodedView = ShaftView;
+
+const relicsOf = (bits: number) => RELIC_IDS.filter((_, i) => (bits >> i) & 1);
+
+export function decodeShaft(wire: ShaftWire, ground: Ground, roster: Roster): ShaftView {
+  const members = roster.byCrew[wire.crew] ?? [];
+  const harpoons: NetHarpoon[] = [];
+  let hopper = 0;
+  const players = readPlayers(wire.players).map((row, i): NetPlayer => {
+    const who = members[i];
+    // Until the roster lands a digger is still a digger: placed, coloured, unnamed.
+    const id = who?.id ?? `#${wire.crew}.${i}`;
+    const { harpoon, relicBits, ...body } = row;
+    if (harpoon) harpoons.push({ ownerId: id, x: row.x, y: row.y, ...harpoon });
+    hopper += row.hopper;
+    return {
+      ...body, id,
+      name: who?.name ?? 'Digger', color: who?.color ?? '#8b8378', suit: who?.suit || null,
+      relics: relicsOf(relicBits),
+    };
+  });
+  return {
+    crew: wire.crew, run: wire.run,
+    runSeed: wire.runSeed, level: wire.level, entryLc: wire.entryLc, lanes: wire.lanes,
+    activeGW: wire.lanes * 2, skyRows: skyRowsFor(wire.level), theme: themeOf(wire.level).id,
+    phase: wire.phase, deepest: wire.deepest, shake: wire.shake,
+    banked: wire.banked, oreBanked: wire.oreBanked,
+    lives: wire.lives, livesMax: wire.livesMax, left: wire.left,
+    hopper,
+    events: wire.events,
+    players,
+    monsters: readMonsters(wire.monsters, kindName,
+      (k, i) => variantName(k, i), i => MODE_IDS[i] ?? 'patrol'),
+    rocks: readRocks(wire.rocks, i => ROCK_STATE_IDS[i] ?? 'idle', wire.idle, wire.rock0, ground.rocks),
+    fire: wire.fire,
+    wheels: wire.wheels,
+    harpoons,
+    bonus: wire.bonus > 0
+      ? { x: ground.bonusAt.lc * 2, y: ground.bonusAt.lr * 2, value: wire.bonus } : null,
+    relicSite: wire.buried & 1 ? ground.relicSite : null,
+    crystalAt: wire.buried & 2 ? ground.crystalAt : null,
+  };
+}
+
+/* The crew of a shaft and nothing else, for the HUD: it needs names, health and
+ * hoppers twenty times a second and has no use for the ground. */
+export function crewIn(wire: ShaftWire, roster: Roster): NetPlayer[] {
+  const members = roster.byCrew[wire.crew] ?? [];
+  return readPlayers(wire.players).map((row, i): NetPlayer => {
+    const who = members[i];
+    const { harpoon: _harpoon, relicBits, ...body } = row;
+    return {
+      ...body, id: who?.id ?? `#${wire.crew}.${i}`,
+      name: who?.name ?? 'Digger', color: who?.color ?? '#8b8378', suit: who?.suit || null,
+      relics: relicsOf(relicBits),
+    };
+  });
+}
+
+/* The site summary arrives a few times a second rather than every frame, so —
+ * like the roster — each screen keeps the last one. */
+let site: { round: string; view: SiteWire | null } = { round: '', view: null };
+export function recall(round: string, sent?: SiteWire): SiteWire | null {
+  if (sent) site = { round, view: sent };
+  else if (site.round !== round) site = { round, view: null };
+  return site.view;
+}
+
+/* Which shaft a screen shows, and where its ground comes from.
+ *
+ * With one crew the public view is the shaft. With several it is the one the
+ * television is on, and a phone's own arrives in its private view. */
+export function shaftFor(view: PublicView, mine: PrivateView | null): { wire: ShaftWire; source: GroundSource } {
+  return mine?.shaft ? { wire: mine.shaft, source: mine.shaft } : { wire: view, source: view };
+}
+
+/* One screen's reader: keeps the ground and turns each snapshot into a view. */
+export function createReader() {
+  const ground = createGround();
+  let g: Ground | null = null;
+  return {
+    read(view: PublicView, mine: PrivateView | null, roster: Roster): ShaftView {
+      const { wire, source } = shaftFor(view, mine);
+      g = ground.update(wire, source);
+      return decodeShaft(wire, g, roster);
+    },
+    /** The ground as of the last read. Null before the first. */
+    ground: () => g,
   };
 }
 
@@ -137,21 +325,17 @@ const IDLE_HARPOON: ViewHarpoon = Object.freeze({
 export type Adapter = ReturnType<typeof createAdapter>;
 
 export function createAdapter() {
-  const ground = createGround();
   const numberFor = seatNumbers();
 
   return {
-    /* `raw` is the snapshot as it arrived — the terrain and the level identity
-     * come from it. `shown` is the same snapshot interpolated toward the next
-     * one, and is where every position is read from. They differ by a fraction
-     * of a tick and never by a level, because blend() refuses to mix two. */
-    build(
-      raw: PublicView,
-      shown: DecodedView,
-      localId: PlayerId | null,
-    ): RenderState {
-      const g = ground.update(raw);
-
+    /* `g` is the ground as of the newest snapshot. `shown` is a snapshot
+     * interpolated toward the next one, and is where every position is read
+     * from. They differ by a fraction of a tick and never by a level, because
+     * blend() refuses to mix two and the buffer is cleared on a new world.
+     *
+     * `follow` is the digger the camera is on: this screen's own on a phone,
+     * and whoever the television has picked out. */
+    build(g: Ground, shown: ShaftView, follow: PlayerId | null, localId: PlayerId | null = follow): RenderState {
       const harpoons = new Map<PlayerId, ViewHarpoon>();
       for (const h of shown.harpoons) {
         harpoons.set(h.ownerId, {
@@ -159,11 +343,11 @@ export function createAdapter() {
         });
       }
 
-      const players = shown.players.map(
-        (q): ViewPlayer => toPlayer(q, numberFor(q.id), harpoons.get(q.id)));
-      /* The followed digger's own readouts, not the lead's. The top-level fields
-       * are the crew summary a shared screen shows; a phone shows its own. */
-      const mine = Math.max(0, shown.players.findIndex(q => q.id === localId));
+      const players = shown.players.map((q): ViewPlayer => toPlayer(
+        // Negative so a digger's track can never collide with a monster's id.
+        q, -1 - numberFor(q.id), harpoons.get(q.id), q.id === localId));
+      /* The followed digger's own readouts, not the crew's. */
+      const mine = Math.max(0, shown.players.findIndex(q => q.id === follow));
       const followed = shown.players[mine];
       const me = players[mine] ?? ABSENT_PLAYER;
 
@@ -175,8 +359,9 @@ export function createAdapter() {
         level: shown.level,
         skyRows: shown.skyRows,
         shake: shown.shake,
-        depth: shown.depth,
+        depth: (Math.max(1, shown.level) - 1) * GRID.LH + Math.floor((followed?.y ?? 0) / 2),
         deepest: shown.deepest,
+        left: shown.left,
 
         dirt: g.dirt,
         ore: g.ore,
@@ -186,10 +371,10 @@ export function createAdapter() {
         activeGW: shown.activeGW,
         activeLanes: shown.lanes,
 
-        lightRadius: followed?.lightRadius ?? shown.lightRadius,
-        air: followed?.air ?? shown.air,
-        airMax: followed?.airMax ?? shown.airMax,
-        relics: followed?.relics ?? shown.relics,
+        lightRadius: followed?.lightRadius ?? 0,
+        air: followed?.air ?? 0,
+        airMax: followed?.airMax ?? 0,
+        relics: followed?.relics ?? [],
 
         player: me,
         players,
@@ -200,7 +385,7 @@ export function createAdapter() {
         bonus: shown.bonus
           ? { active: true, x: shown.bonus.x, y: shown.bonus.y, value: shown.bonus.value }
           : null,
-        pockets: shown.pockets,
+        pockets: [],
 
         /* Empty, and staying empty. Upstream the engine owns the particle and
          * popup lists; here they are made on the client by vfx.ts off the event
@@ -215,20 +400,6 @@ export function createAdapter() {
     },
   };
 }
-
-/* The snapshot with its packed entities unpacked. Decoding happens once per
- * snapshot — twenty a second — rather than once per draw. */
-export type DecodedView = Omit<PublicView, 'monsters' | 'rocks'> & {
-  monsters: NetMonster[];
-  rocks: NetRock[];
-};
-
-export const decode = (v: PublicView): DecodedView => ({
-  ...v,
-  monsters: readMonsters(v.monsters, kindName,
-    (k, i) => variantName(k, i), i => MODE_IDS[i] ?? 'patrol'),
-  rocks: readRocks(v.rocks, i => ROCK_STATE_IDS[i] ?? 'idle'),
-});
 
 /* Past this many fine cells between two snapshots a thing was MOVED, not
  * walked: a respawn, a revive pull, a descent. The fastest digger covers under
@@ -250,7 +421,7 @@ const byId = <T extends { id: unknown }>(list: T[]) => new Map(list.map(e => [e.
  * Only a new WORLD breaks continuity. A terrain revision does not: dirt changes
  * under a digger precisely while it is moving, and snapping on it turned every
  * dig into a stutter. */
-export function blend(a: DecodedView, b: DecodedView, k: number): DecodedView {
+export function blend(a: ShaftView, b: ShaftView, k: number): ShaftView {
   if (!sameWorld(a, b)) return b;
   const people = byId(a.players), monsters = byId(a.monsters), rocks = byId(a.rocks), wheels = byId(a.wheels);
   return {
@@ -269,7 +440,7 @@ export function blend(a: DecodedView, b: DecodedView, k: number): DecodedView {
  * between two authoritative frames by the time it gets here, so the renderer's
  * own lerp has nothing left to do. See the note in render.ts. */
 
-function toPlayer(q: NetPlayer, id: number, harpoon?: ViewHarpoon): ViewPlayer {
+function toPlayer(q: NetPlayer, id: number, harpoon: ViewHarpoon | undefined, local: boolean): ViewPlayer {
   return {
     id,
     x: q.x, y: q.y, px: q.x, py: q.y,
@@ -283,6 +454,8 @@ function toPlayer(q: NetPlayer, id: number, harpoon?: ViewHarpoon): ViewPlayer {
     downed: q.downed,
     downT: q.downT,
     reviveProgress: q.reviveProgress,
+    // Everyone but this screen's own digger wears their name.
+    ...(local ? {} : { label: q.name, tint: (q.suit && SUIT_BY_ID[q.suit]?.swatch) || q.color }),
   };
 }
 
@@ -310,7 +483,7 @@ function toRock(r: NetRock): ViewRock {
   return { id: r.id, x: r.x, y: r.y, px: r.x, py: r.y, state: r.state, t: r.t };
 }
 
-function toFire(f: PublicView['fire'][number]): ViewFire {
+function toFire(f: NetFire): ViewFire {
   return {
     x: f.x, y: f.y, w: f.w, h: f.h,
     dir: f.dir,
@@ -323,7 +496,7 @@ function toFire(f: PublicView['fire'][number]): ViewFire {
   };
 }
 
-function toWheel(w: PublicView['wheels'][number]): ViewWheel {
+function toWheel(w: NetWheel): ViewWheel {
   return {
     id: w.id,
     x: w.x, y: w.y, px: w.x, py: w.y,

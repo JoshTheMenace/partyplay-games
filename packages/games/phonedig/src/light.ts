@@ -280,9 +280,11 @@ export function render(g: Ctx, state: RenderState, view: ViewBox, palette: Palet
    * straight off state.lightRadius, so buying it visibly widens the pool. */
   if (dark > 0.02) {
     for (const q of state.players) {
+      // Lamps standing together share the pool rather than stacking into a glare.
+      const near = state.players.reduce((n, o) => n + (Math.abs(o.x - q.x) + Math.abs(o.y - q.y) < 3 ? 1 : 0), 0);
       blit(g, glow((palette.harpoon as string) || '#ffd88a'),
            view.ox + (q.x + 1) * sc, view.oy + (q.y + 1 - view.top) * sc,
-           (q.lightRadius || state.lightRadius || 8) * 0.6 * sc, 0.06 + dark * 0.16);
+           (q.lightRadius || state.lightRadius || 8) * 0.6 * sc, (0.06 + dark * 0.16) / Math.max(1, near));
     }
   }
   for (const e of emitters) {

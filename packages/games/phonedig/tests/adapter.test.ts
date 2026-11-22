@@ -2,9 +2,17 @@ import { strict as assert } from 'node:assert';
 import test from 'node:test';
 import type { RoundContext, ViewContext } from '../../../party-contract/src/index';
 import { rules } from '../src/server';
-import { createAdapter, decode } from '../src/viewstate';
+import { createAdapter, createReader, rosterOf } from '../src/viewstate';
+import type { Round } from '../src/server';
 
 const VIEW: ViewContext = { nowMs: 1000, phase: 'playing' };
+
+/** What a screen does with a snapshot: rebuild the ground, decode the shaft, hand both to the adapter. */
+function drawFor(round: Round, playerId: string) {
+  const view = rules.publicView(round, VIEW), reader = createReader();
+  const shaft = reader.read(view, null, rosterOf(view.roster ?? []));
+  return createAdapter().build(reader.ground()!, shaft, playerId);
+}
 
 function crew(players: number): RoundContext {
   return {
@@ -17,14 +25,13 @@ test('a phone renders its own digger’s lamp, air and relics, not the lead’s'
   const round = rules.create(crew(2), rules.validateSettings({}));
   const [lead, second] = round.sim.players;
   lead.lightRadius = 8; lead.air = 30; lead.relics = [];
-  second.lightRadius = 21; second.air = 4; second.relics = ['lantern'];
+  second.lightRadius = 21; second.air = 4; second.relics = ['long-lungs'];
 
-  const view = rules.publicView(round, VIEW);
-  const drawn = createAdapter().build(view, decode(view), 'p1');
+  const drawn = drawFor(round, 'p1');
 
   assert.equal(drawn.lightRadius, 21);
   assert.equal(drawn.air, 4);
-  assert.deepEqual(drawn.relics, ['lantern']);
+  assert.deepEqual(drawn.relics, ['long-lungs']);
   assert.equal(drawn.player, drawn.players[1]);
 });
 
@@ -33,8 +40,7 @@ test('every digger carries their own lamp reach to the renderer', () => {
   round.sim.players[0].lightRadius = 8;
   round.sim.players[1].lightRadius = 21;
 
-  const view = rules.publicView(round, VIEW);
-  const drawn = createAdapter().build(view, decode(view), 'p0');
+  const drawn = drawFor(round, 'p0');
 
   assert.deepEqual(drawn.players.map(q => q.lightRadius), [8, 21]);
   assert.equal(drawn.lightRadius, 8);

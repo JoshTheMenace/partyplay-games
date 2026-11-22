@@ -6,23 +6,23 @@ type Player = DecodedView['players'][number];
 type Wheel = DecodedView['wheels'][number];
 
 const view = (over: Partial<DecodedView>) => ({
-  runSeed: 9, level: 3, entryLc: null, lanes: 2, revision: 10,
+  crew: 0, run: 1, runSeed: 9, level: 3, entryLc: null, lanes: 2, left: 10,
   players: [], monsters: [], rocks: [], wheels: [], ...over,
 }) as unknown as DecodedView;
 const player = (x: number, y: number) => ({ id: 'p1', x, y }) as Player;
 const wheel = (x: number, travel: number) => ({ id: 1, x, y: 5, dir: 1, travel }) as Wheel;
 
 test('digging between snapshots keeps players moving smoothly', () => {
-  const a = view({ revision: 10, players: [player(4, 10)] });
-  const b = view({ revision: 11, players: [player(5, 10)] });
+  const a = view({ left: 10, players: [player(4, 10)] });
+  const b = view({ left: 9, players: [player(5, 10)] });
   const shown = blend(a, b, 0.5);
   assert.equal(shown.players[0].x, 4.5);
-  assert.equal(shown.revision, 11);
+  assert.equal(shown.left, 9, 'state snaps to the newer frame; only positions blend');
 });
 
 test('monsters and rocks keep interpolating while terrain changes', () => {
-  const a = view({ revision: 1, monsters: [{ id: 2, x: 0, y: 0 }], rocks: [{ id: 3, x: 0, y: 4 }] } as Partial<DecodedView>);
-  const b = view({ revision: 2, monsters: [{ id: 2, x: 2, y: 0 }], rocks: [{ id: 3, x: 0, y: 6 }] } as Partial<DecodedView>);
+  const a = view({ monsters: [{ id: 2, x: 0, y: 0 }], rocks: [{ id: 3, x: 0, y: 4 }] } as Partial<DecodedView>);
+  const b = view({ monsters: [{ id: 2, x: 2, y: 0 }], rocks: [{ id: 3, x: 0, y: 6 }] } as Partial<DecodedView>);
   const shown = blend(a, b, 0.25);
   assert.equal(shown.monsters[0].x, 0.5);
   assert.equal(shown.rocks[0].y, 4.5);
@@ -38,8 +38,11 @@ test('a new level or a new run snaps to the newer snapshot', () => {
   const a = view({ players: [player(4, 10)] });
   const nextLevel = view({ level: 4, players: [player(4, 90)] });
   const nextRun = view({ runSeed: 10, players: [player(4, 90)] });
+  // Rival crews start on one seed, and the television moves between them.
+  const otherCrew = view({ crew: 1, players: [player(4, 90)] });
   assert.equal(blend(a, nextLevel, 0.5), nextLevel);
   assert.equal(blend(a, nextRun, 0.5), nextRun);
+  assert.equal(blend(a, otherCrew, 0.5), otherCrew);
 });
 
 test('an entity that jumps a long way snaps instead of sliding', () => {

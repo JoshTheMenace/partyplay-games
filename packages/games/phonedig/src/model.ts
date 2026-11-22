@@ -357,14 +357,25 @@ export type Passable = (state: State, lc: number, lr: number) => boolean;
  * arrays, no Maps, no undefined — an explicitly-undefined property throws
  * rather than being dropped the way JSON.stringify would drop it. Omit an
  * absent optional instead of assigning undefined to it.
+ *
+ * A room is one or more CREWS, each in its own shaft. One shaft crosses the
+ * wire as a `ShaftWire`; `decodeShaft` in viewstate.ts turns it back into the
+ * `ShaftView` every screen draws from. See DESIGN.md for who is sent which.
  */
 
 /** Host-facing settings. validateSettings({}) must return working defaults. */
 export type Settings = {
   startLevel: number;
-  /** Team lives. Spent only when nobody reaches a downed digger in time. */
+  /** Lives per crew. Spent only when nobody reaches a downed digger in time. */
   lives: number;
+  /** Diggers to a crew. A bigger room splits into rival crews of this size. */
+  crewSize: number;
+  /** Minutes on the shift clock. SHIFT_AUTO lets the roster decide; SHIFT_OPEN
+   *  is no clock at all, where a crew plays until it is wiped. */
+  shift: number;
 };
+export const SHIFT_AUTO = 0;
+export const SHIFT_OPEN = 99;
 
 /** Held input, sampled at the server tick.
  *
@@ -382,17 +393,21 @@ export type NetInput = {
  *  happen rarely — never for per-frame intent, which has a 256/round budget. */
 /*  `turnId` is the game's own, alongside the platform's round id: it names the
  *  kit-up the pick belongs to, so a tap that arrives after the drill started is
- *  rejected rather than silently changing somebody mid-shift. */
+ *  rejected rather than silently changing somebody mid-shift.
+ *
+ *  `sync` asks for this seat's whole cut ground again. A phone that slept
+ *  through more than the journal's tail sends it once; see ShaftCuts. */
 export type Action =
-  | { type: 'kit'; turnId: number; suit: string };
+  | { type: 'kit'; turnId: number; suit: string }
+  | { type: 'sync'; turnId: number };
 
 /** One run of cut ground: [first cell index, run length]. See refreshEdits. */
 export type Edit = [number, number];
 
+/** One digger as every screen draws them: the packed wire row joined to the
+ *  roster by decodeShaft. */
 export type NetPlayer = {
   id: PlayerId;
-  /* Carried here rather than looked up from the room: only SceneView is handed
-   * the roster, and the HUD needs to say who is who too. */
   name: string;
   color: string;
   x: number; y: number;
@@ -439,12 +454,18 @@ export type NetRock = {
   id: number; x: number; y: number; state: Rock['state']; t: number;
 };
 
+export type NetHarpoon = {
+  ownerId: PlayerId; x: number; y: number; dir: Dir;
+  len: number; state: Harpoon['state'];
+};
+
 /* ── packed entities ──────────────────────────────────────────────────────
  *
- * Monsters and rocks go over the wire as flat number arrays rather than as
- * objects, because at four diggers on a deep level they are most of the
- * snapshot and the envelope is 32 KiB. A JSON object repeats its key names once
- * per entity; a hundred monsters is a hundred copies of "telegraph".
+ * Diggers, monsters and rocks go over the wire as flat number arrays rather
+ * than as objects, because they are most of a snapshot. A JSON object repeats
+ * its key names once per entity; a hundred monsters is a hundred copies of
+ * "telegraph", and a digger written out by name was 340 bytes twenty times a
+ * second to say mostly what the roster already said.
  *
  * The layout is defined here, once, and both sides use these functions — the
  * server to pack and the renderer to unpack. Editing one half of a pair by hand
@@ -452,11 +473,60 @@ export type NetRock = {
  * Positions are quantised to a hundredth of a cell, which is a fifth of a pixel
  * at the largest scale anyone plays at.
  */
+export const PLAYER_STRIDE = 19;
 export const MONSTER_STRIDE = 13;
 export const ROCK_STRIDE = 5;
 
 const q = (v: number) => Math.round(v * 100);
 const u = (v: number) => v / 100;
+
+const HARPOON_STATES = ['idle', 'out', 'hit', 'back'] as const;
+
+/** What a packed digger row says, before the roster names them. */
+export type PlayerRow = Omit<NetPlayer, 'id' | 'name' | 'color' | 'suit' | 'relics'> & {
+  relicBits: number;
+  harpoon: { dir: Dir; len: number; state: Harpoon['state'] } | null;
+};
+
+export function packPlayers(list: readonly Player[], revivePumps: number, relicBits: (p: Player) => number): number[] {
+  const out: number[] = [];
+  for (const p of list) {
+    const h = p.harpoon;
+    out.push(
+      q(p.x), q(p.y), p.dir,
+      (p.digging ? 1 : 0) | (p.moving ? 2 : 0) | (p.dying ? 4 : 0) | (p.drilling ? 8 : 0)
+        | (p.downed ? 16 : 0) | (h.active ? 32 : 0),
+      q(p.dyingT), q(Math.max(0, p.invuln)),
+      p.hp, p.maxHp, q(p.air), q(p.airMax), p.hopper, p.hopperMax,
+      q(p.lightRadius), q(Math.max(0, p.downT)),
+      q(Math.max(0, Math.min(1, p.revivePumps / revivePumps))),
+      h.dir, q(h.len), Math.max(0, HARPOON_STATES.indexOf(h.state)),
+      relicBits(p),
+    );
+  }
+  return out;
+}
+
+export function readPlayers(flat: readonly number[]): PlayerRow[] {
+  const out: PlayerRow[] = [];
+  for (let i = 0; i + PLAYER_STRIDE <= flat.length; i += PLAYER_STRIDE) {
+    const f = flat[i + 3];
+    out.push({
+      x: u(flat[i]), y: u(flat[i + 1]), dir: flat[i + 2],
+      digging: (f & 1) !== 0, moving: (f & 2) !== 0, dying: (f & 4) !== 0,
+      drilling: (f & 8) !== 0, downed: (f & 16) !== 0,
+      dyingT: u(flat[i + 4]), invuln: u(flat[i + 5]),
+      hp: flat[i + 6], maxHp: flat[i + 7], air: u(flat[i + 8]), airMax: u(flat[i + 9]),
+      hopper: flat[i + 10], hopperMax: flat[i + 11],
+      lightRadius: u(flat[i + 12]), downT: u(flat[i + 13]), reviveProgress: u(flat[i + 14]),
+      harpoon: (f & 32) !== 0
+        ? { dir: flat[i + 15], len: u(flat[i + 16]), state: HARPOON_STATES[flat[i + 17]] ?? 'idle' }
+        : null,
+      relicBits: flat[i + 18],
+    });
+  }
+  return out;
+}
 
 export function packMonsters(
   list: readonly Monster[],
@@ -508,14 +578,40 @@ export function readMonsters(
   return out;
 }
 
-export function packRocks(list: readonly Rock[], stateIndex: (s: string) => number): number[] {
-  const out: number[] = [];
-  for (const r of list) out.push(r.id, q(r.x), q(r.y), stateIndex(r.state), q(r.t));
-  return out;
+/* Rocks, and why most of them are a single bit.
+ *
+ * A seated boulder does not move and the client already knows where the
+ * generator put every one of them, so a rock that is still `idle` crosses the
+ * wire as one bit of `idle` — indexed by its place in the generator's list —
+ * instead of five numbers twenty times a second. Only a rock that has let go
+ * is sent in full. This holds because the engine never seats a rock after the
+ * level is built (a hazard's or a Mole's arrives already wobbling) and never
+ * puts one back; tests/wire.test.ts asserts both. */
+export const ROCK_WORD = 30;
+
+export function packRocks(
+  list: readonly Rock[], stateIndex: (s: string) => number, first: number, seated: number,
+): { rocks: number[]; idle: number[] } {
+  const rocks: number[] = [];
+  const idle: number[] = Array.from({ length: Math.ceil(seated / ROCK_WORD) }, () => 0);
+  for (const r of list) {
+    const i = r.id - first;
+    if (r.state === 'idle' && i >= 0 && i < seated) idle[(i / ROCK_WORD) | 0] |= 1 << (i % ROCK_WORD);
+    else rocks.push(r.id, q(r.x), q(r.y), stateIndex(r.state), q(r.t));
+  }
+  return { rocks, idle };
 }
 
-export function readRocks(flat: readonly number[], stateName: (i: number) => Rock['state']): NetRock[] {
+export function readRocks(
+  flat: readonly number[], stateName: (i: number) => Rock['state'],
+  idle: readonly number[] = [], first = 0, seats: readonly LaneNode[] = [],
+): NetRock[] {
   const out: NetRock[] = [];
+  for (let i = 0; i < seats.length; i++) {
+    if (((idle[(i / ROCK_WORD) | 0] ?? 0) >> (i % ROCK_WORD)) & 1) {
+      out.push({ id: first + i, x: seats[i].lc * 2, y: seats[i].lr * 2, state: 'idle', t: 0 });
+    }
+  }
   for (let i = 0; i + ROCK_STRIDE <= flat.length; i += ROCK_STRIDE) {
     out.push({
       id: flat[i], x: u(flat[i + 1]), y: u(flat[i + 2]),
@@ -547,10 +643,6 @@ export type NetWheel = {
   travel: number;
 };
 
-export type NetHazard = {
-  kind: string; lc: number; lr: number; warnT: number; dir: Dir;
-};
-
 /* One thing that happened, for the ears and the eyes.
  *
  * Events are how the simulation tells a client that a cell was cut, a monster
@@ -559,7 +651,7 @@ export type NetHazard = {
  * table is silently ignored — so they cross the wire whole rather than being
  * filtered to what today's client happens to use.
  *
- * `seq` is monotonic for the round. The client replays anything newer than the
+ * `seq` is monotonic for the shaft. The client replays anything newer than the
  * last one it saw, which makes a resent snapshot harmless and a dropped one
  * cost only the effects it carried. They are cosmetic: nothing in the
  * simulation depends on a client having heard them. */
@@ -571,65 +663,138 @@ export type NetEvent = {
   value?: number | string;
 };
 
-export type PublicView = {
-  /** Bumps whenever `edits` changes; the snapshot cache diffs against it. */
-  revision: number;
-  edits: Edit[];
-
-  /* Everything the client needs to regenerate this level's terrain locally. */
+/* One shaft on the wire: the world's identity, the crew's shared numbers and
+ * everything that moves. What is NOT here is anything a client can work out:
+ * the ground (rebuilt from the seed), the sky, the biome, where the rocks were
+ * seated and where the relic, the crystal and the bonus lie are all functions
+ * of the first four fields. */
+export type ShaftWire = {
+  /** Which crew this is; an index into the roster's crews. */
+  crew: number;
+  /** Counts this crew's shafts, so a crew sent back to the top is a new world. */
+  run: number;
   runSeed: number;
   level: number;
   entryLc: number | null;
-  /** Lane columns in play, and the same in fine cells. Fixed for the run. */
+  /** Lane columns in play. Fixed for the run. */
   lanes: number;
-  activeGW: number;
 
   phase: Phase;
-  tick: number;
-  skyRows: number;
-  theme: string;
-  depth: number;
   deepest: number;
-  carved: number;
-
-  air: number; airMax: number;
-  hopper: number; hopperMax: number; hopperFull: boolean;
-  banked: number; oreHeld: number; oreBanked: number;
-  relics: string[];
+  shake: number;
+  /** Banked this run, in dirt and in ore. Only what was banked survives. */
+  banked: number; oreBanked: number;
   lives: number; livesMax: number;
+  /** Monsters still standing between the crew and the descent. */
+  left: number;
+
+  /** Newest last, and only the recent ones. See EVENT_TICKS in server.ts. */
+  events: NetEvent[];
+
+  /** Packed, in crew order; see packPlayers / readPlayers above. */
+  players: number[];
+  monsters: number[];
+  /** The rocks that have let go, the id of the generator's first, and one bit
+   *  for each of its rocks that is still seated. */
+  rocks: number[];
+  rock0: number;
+  idle: number[];
+  fire: NetFire[];
+  wheels: NetWheel[];
+  /** The bonus's worth while it is out, else 0. */
+  bonus: number;
+  /** Bit 0: the relic is still in its chamber. Bit 1: the crystal is. */
+  buried: number;
+};
+
+/* A phone's own shaft arrives in its private view, which the transport does
+ * not cache, so the cut ground travels as a journal instead: every snapshot
+ * repeats the cells cut in the last CUT_TAIL seconds, numbered so a client can
+ * tell whether it has missed any. Ground is only ever cut, so replaying a run
+ * is harmless. A client that did miss some asks once (`sync`) and is sent the
+ * whole list as `base`. */
+export type ShaftCuts = {
+  /** The newest batch in `cuts`, and the oldest. */
+  cutTo: number;
+  cutFrom: number;
+  cuts: Edit[];
+  base?: Edit[];
+};
+
+/** Who is who. Sent rarely; the client keeps the last one. */
+export type RosterEntry = {
+  id: PlayerId;
+  name: string;
+  color: string;
+  /** '' while they are still choosing. */
+  suit: string;
+  crew: number;
+};
+
+/* One line of the site's story for the television: a crew banked, went down a
+ * level, lost somebody. `seq` works as it does on NetEvent. */
+export type SiteEvent = {
+  seq: number;
+  type: 'bank' | 'descend' | 'down' | 'revive' | 'life' | 'wipe' | 'relic' | 'crystal';
+  crew: number;
+  /** The digger it is about, as an index into the roster. */
+  who?: number;
+  value?: number | string;
+};
+
+/** Numbers per crew in `site.crews`: level, depth in metres, pay per digger so
+ *  far, haul at risk, lives, monsters left, state, diggers. */
+export const CREW_STRIDE = 8;
+export const CREW_STATE = { dig: 0, clearing: 1, wiped: 2, out: 3 } as const;
+
+/** The whole site in a few numbers, for the board and for every phone's rank. */
+export type SiteWire = {
+  crews: number[];
+  /** One per digger in roster order: health, plus 16 if down. */
+  marks: number[];
+  /** The last few things that happened anywhere on the site, newest last. */
+  feed: SiteEvent[];
+  /** At the results only: each crew's shift in TALLY_STRIDE numbers — earned in
+   *  all, levels cleared, wipes, what the whistle caught and what of that was
+   *  salvaged, and the deepest it got. */
+  tallies?: number[];
+  /** At the results only: each digger's shift in roster order, DIGGER_STRIDE
+   *  numbers apiece — cells cut, monsters burst, teammates pulled up, falls. */
+  diggers?: number[];
+};
+export const TALLY_STRIDE = 6;
+export const DIGGER_STRIDE = 4;
+
+export type PublicView = ShaftWire & {
+  /** Bumps whenever `edits` changes; the snapshot cache diffs against it. */
+  revision: number;
+  /** The cut ground of the shaft this view carries. */
+  edits: Edit[];
+  tick: number;
+  /** How many crews there are. With one, this view IS every screen's shaft;
+   *  with more it is the shaft the television is showing, and each phone gets
+   *  its own in its private view. */
+  crewCount: number;
 
   /* Non-null while the crew is kitting up and the shaft is holding still.
    * The suit catalogue is not sent — it never changes, so the picker imports
    * it directly from suits.ts. */
   kitup: { secondsLeft: number; everyonePicked: boolean } | null;
-  lightRadius: number;
-  shake: number;
+  /** Seconds left on the shift clock, or null when there is no clock. */
+  shiftLeft: number | null;
+  /** The whistle has gone: tools down, and the results follow. */
+  whistle: boolean;
 
-  /** Newest last, bounded. See EVENT_LIMIT in server.ts. */
-  events: NetEvent[];
-
-  players: NetPlayer[];
-  /** Packed; see packMonsters / readMonsters above. */
-  monsters: number[];
-  rocks: number[];
-  fire: NetFire[];
-  wheels: NetWheel[];
-  hazards: NetHazard[];
-  /** One per digger currently firing; absent diggers simply are not listed. */
-  harpoons: {
-    ownerId: PlayerId; x: number; y: number; dir: Dir;
-    len: number; state: Harpoon['state'];
-  }[];
-  bonus: { x: number; y: number; value: number } | null;
-  /** Only the untaken ones; a taken pocket is just terrain again. */
-  pockets: LaneNode[];
-  /* `pool` is this chamber's pre-shuffled candidates. Sent so the view can ask
-   * the same question the engine will ask on pickup — "the first of these the
-   * finder is not already carrying" — and draw the relic that will actually be
-   * handed over. Showing one object and giving another is worse than the
-   * generic disc. */
-  relicSite: { x: number; y: number; pool: string[] } | null;
-  crystalAt: (LaneNode & { id: string }) | null;
+  /** Present every couple of seconds and on a change, while the shift runs. */
+  roster?: RosterEntry[];
+  /** Present a few times a second, and at the results. */
+  site?: SiteWire;
+  /* At the results only: who dug, as names and indices into SUITS, in the same
+   * order as the outcome's rows. The room projects the results once and then
+   * re-sends that frame to every phone twenty times a second for as long as
+   * people are reading it, so it carries the least that names everybody — no
+   * ids (the outcome has them), no colours, no crews (the site's sizes say). */
+  cast?: { names: string[]; suits: number[] };
 };
 
 /** Per-player, never cached or delta'd by the transport. */
@@ -649,4 +814,8 @@ export type PrivateView = {
   /** Someone is with you and the hold is running. */
   beingRevived: boolean;
   message: string;
+  /** This seat's crew, or -1 for a spectator. */
+  crew: number;
+  /** This seat's own shaft, when the room has more than one. */
+  shaft?: ShaftWire & ShaftCuts;
 };

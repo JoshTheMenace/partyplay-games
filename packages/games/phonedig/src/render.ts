@@ -105,6 +105,9 @@ export type ViewPlayer = {
    *  times the going-down clip; the second IS the inflate clip's frame. */
   downT: number;
   reviveProgress: number;
+  /** A name to wear and the colour to write it in. Absent on this screen's own. */
+  label?: string;
+  tint?: string;
 };
 
 export type ViewMonster = {
@@ -167,6 +170,8 @@ export type RenderState = {
   shake: number;
   depth: number;
   deepest: number;
+  /** Monsters still between the crew and the descent. */
+  left: number;
 
   dirt: Uint8Array;
   ore: Uint8Array;
