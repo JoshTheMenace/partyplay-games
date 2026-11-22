@@ -2,6 +2,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { ArcadeButton, StatusNotice } from '../../../../../party-ui/src/index';
 import type { MiniClient, MiniViewProps, PackPlayer } from '../../core/contract';
+import { COSY } from '../../core/crowd';
 import {
   Avatar, AvatarBadge, AvatarStack, Confetti, PhoneChoices, PhoneDone, PhoneShell, PhoneTextEntry, PhoneWaiting, PlayerStrip, Scoreboard, Timer,
   fitText, ordinal, rankOf, useNow, useSend, useTimeline,
@@ -16,7 +17,8 @@ const ACCENT = '#e0301e';
 const find = (players: readonly PackPlayer[], id: string) => players.find(p => p.id === id);
 const people = (players: readonly PackPlayer[], ids: readonly string[]) => ids.map(id => find(players, id)).filter(p => !!p);
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-const names = (list: readonly PackPlayer[]) => list.length <= 2 ? list.map(p => p.name).join(' & ') : `${list.slice(0, -1).map(p => p.name).join(', ')} & ${list.at(-1)!.name}`;
+/** "A & B", "A, B & C"; more than ten (only a big room can) is two names and a count. */
+const names = (list: readonly PackPlayer[]) => list.length <= 2 ? list.map(p => p.name).join(' & ') : list.length > COSY ? `${list[0]!.name}, ${list[1]!.name} & ${list.length - 2} more` : `${list.slice(0, -1).map(p => p.name).join(', ')} & ${list.at(-1)!.name}`;
 const round = (view: TallPublic) => ROUNDS[view.round - 1]!;
 const shell = (view: TallPublic, player: PackPlayer, vip: string | null, now: () => number, timer = true) =>
   ({ player, vip: vip === player.id, accent: ACCENT, ...(timer ? { timer: { deadline: view.deadline, now, total: view.deadline - view.at } } : {}) });
@@ -133,20 +135,31 @@ function ChooseTV({ view, players, vip, now }: P) {
   return <section className="tt-choose">
     <Masthead view={view}><Timer deadline={view.deadline} now={now} total={view.deadline - view.at} size={120} /></Masthead>
     <article className="tt-clip tt-headline"><Story text={view.fact!.text} size={fitText(view.fact!.text, 58)} /></article>
+    {view.field ? <>
+      <p className="tt-instruct"><b>{view.field.answers - 1} lies and one truth</b> went to press. Your phone has {view.field.ballot} of them: the truth is in there.</p>
+      {/* A big room's answers never share one screen (a public sample would give the truth away), so the TV shows the press run. */}
+      <div className="tt-pressrun" aria-hidden="true">{Array.from({ length: Math.min(view.field.answers, 40) }, (_, i) => <i key={i} style={{ '--tilt': `${(i * 37) % 11 - 5}deg`, animationDelay: `${i * 45}ms` } as CSSProperties}>?</i>)}</div>
+      <div className="tt-tally tt-tally-wide" role="status"><b className="kp-numeral">{view.done.length}<small>/{players.length}</small></b><span>readers have picked</span></div>
+    </> : <>
     <p className="tt-instruct"><b>One of these is true.</b> Find it on your phone, and ♥ your favourite lies.</p>
     <ol className="tt-clips" style={{ '--cols': cols } as CSSProperties} data-dense={n > 6 || undefined}>
       {options.map((o, i) => <li key={o.id} className="tt-cutting" style={{ animationDelay: `${i * 70}ms` }}>
         <span className="tt-letter">{letter(i)}</span><p style={{ fontSize: fitText(o.text, n > 9 ? 40 : n > 6 ? 46 : n > 4 ? 52 : 64) }}>{o.text}</p>
       </li>)}
-    </ol>
+    </ol></>}
     <Band><PlayerStrip players={players} done={view.done} vip={vip} size={72} /></Band>
   </section>;
 }
 
 /** One reveal beat, timed from its server start so a reloaded TV lands on the same moment. */
 function BeatTV({ beat, players, now }: { beat: Beat; players: readonly PackPlayer[]; now: () => number }) {
-  const offsets = beat.kind === 'truth' ? [TRUTH_STEPS.stamp, TRUTH_STEPS.found] : beat.kind === 'likes' ? [600] : [LIE_STEPS.fooled, LIE_STEPS.stamp, LIE_STEPS.points];
+  const offsets = beat.kind === 'truth' ? [TRUTH_STEPS.stamp, TRUTH_STEPS.found] : beat.kind === 'likes' || beat.kind === 'rest' ? [600] : [LIE_STEPS.fooled, LIE_STEPS.stamp, LIE_STEPS.points];
   const step = useTimeline(beat.at, offsets, now);
+  if (beat.kind === 'rest') return <div className="tt-beat tt-lead-in tt-rest">
+    <span className="tt-spinner kp-title">{plural(beat.lies, 'small fib')} first…</span>
+    <p>{beat.lies === 1 ? 'It' : 'Together they'} fooled <b>{plural(beat.fooled, 'reader')}</b>. {step >= 1 ? 'Paid out: check your phone.' : ''}</p>
+    <p className="tt-rest-next">Now the whoppers.</p>
+  </div>;
   if (beat.kind === 'likes') return <div className="tt-beat tt-likes">
     <h2 className="kp-title">Readers’ favourites</h2>
     <ol>{beat.top.slice(0, 3).map((t, i) => <li key={t.id} style={{ animationDelay: `${300 + i * 250}ms` }}>
@@ -195,7 +208,7 @@ function BeatTV({ beat, players, now }: { beat: Beat; players: readonly PackPlay
 function RevealTV({ view, players, now }: P) {
   const beats = view.beats ?? [], current = beats.at(-1), truth = beats.find(b => b.kind === 'truth');
   const shown = useNow(now, 200) >= (truth ? stampAt(truth) : Infinity);
-  const past = beats.slice(0, -1).filter((b): b is Exclude<Beat, { kind: 'likes' }> => b.kind !== 'likes');
+  const past = beats.slice(0, -1).filter((b): b is Exclude<Beat, { kind: 'likes' | 'rest' }> => b.kind !== 'likes' && b.kind !== 'rest');
   return <section className="tt-reveal">
     <Masthead view={view} />
     <article className="tt-clip tt-headline"><Story text={view.fact!.text} fill={shown && truth?.kind === 'truth' ? truth.text : undefined} size={fitText(view.fact!.text, 54)} /></article>
@@ -299,7 +312,7 @@ function WritePhone({ view, me, player, players, vip, now, send, sessionKey }: P
 }
 
 function Ballot({ view, me, send }: Phone) {
-  const [pick, runPick] = useSend(), [heart, runHeart] = useSend(), options = view.options ?? [], likes = me.likes ?? [], mine = new Set(me.mine);
+  const [pick, runPick] = useSend(), [heart, runHeart] = useSend(), options = me.ballot ?? view.options ?? [], likes = me.likes ?? [], mine = new Set(me.mine);
   const row = (o: Option, i: number) => {
     const own = mine.has(o.id), chosen = me.choice === o.id, liked = likes.includes(o.id);
     return <li key={o.id} data-mine={own || undefined} data-chosen={chosen || undefined}>
@@ -336,9 +349,13 @@ function RevealPhone({ view, me, player, players, vip, now }: Phone) {
       if (mine) lines.push({ tone: 'win', text: `Your lie fooled ${plural(b.fooled.length, 'player')}!`, pts: mine.points });
       if (b.fooled.includes(player.id)) lines.push({ tone: 'lose', text: <>You fell for {name(b.authors.map(a => a.id))}’s lie: “{b.text}”</> });
     } else if (b.kind === 'house' && b.fooled.includes(player.id)) lines.push({ tone: 'lose', text: <>You fell for the Tribune’s own fib: “{b.text}”</> });
+    else if (b.kind === 'rest') {
+      if (me.fooled) lines.push({ tone: 'win', text: `Your lie fooled ${plural(me.fooled.count, 'player')}!`, pts: me.fooled.points });
+      if (me.fell) lines.push({ tone: 'lose', text: me.fell.authors.length ? <>You fell for {name(me.fell.authors)}’s lie: “{me.fell.text}”</> : <>You fell for the Tribune’s own fib: “{me.fell.text}”</> });
+    }
     else if (b.kind === 'truth') {
       lines.push(b.found.includes(player.id) ? { tone: 'win', text: 'You found the truth!', pts: b.points } : { tone: 'meh', text: <>The truth was “{b.text}”.</> });
-      if (me.mine?.length && !beats.some(x => x.kind === 'lie' && x.authors.some(a => a.id === player.id))) lines.push({ tone: 'meh', text: 'Nobody fell for your lie this time.' });
+      if (me.mine?.length && !me.fooled && !beats.some(x => x.kind === 'lie' && x.authors.some(a => a.id === player.id))) lines.push({ tone: 'meh', text: 'Nobody fell for your lie this time.' });
     }
     else if (b.kind === 'likes') {
       const got = b.top.filter(x => x.authors.includes(player.id)).reduce((sum, x) => sum + x.likes, 0);
@@ -346,7 +363,7 @@ function RevealPhone({ view, me, player, players, vip, now }: Phone) {
     }
   }
   const truth = beats.find((b): b is Extract<Beat, { kind: 'truth' }> => b.kind === 'truth'), done = !!truth;
-  const recap = (view.options ?? []).flatMap(o => [...(me.mine?.includes(o.id) ? [['Your lie', o.text]] : []), ...(me.choice === o.id ? [['Your pick', o.text]] : [])]);
+  const recap = [...(me.wrote ? [['Your lie', me.wrote]] : []), ...(me.ballot ?? view.options ?? []).flatMap(o => [...(me.mine?.includes(o.id) ? [['Your lie', o.text]] : []), ...(me.choice === o.id ? [['Your pick', o.text]] : [])])];
   return <PhoneShell {...shell(view, player, vip, now, false)} eyebrow={`Story ${view.q + 1} of ${QUESTIONS}`} title={done ? 'The truth is out!' : 'Stop the presses…'}>
     <PhoneStory fact={view.fact!} fill={truth?.text} />
     {!done && recap.length > 0 && <dl className="tt-recap">{recap.map(([label, text]) => <div key={label}><dt>{label}</dt><dd>{text}</dd></div>)}</dl>}

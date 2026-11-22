@@ -20,7 +20,13 @@ export type Kind = typeof KINDS[number] | 'status';
 /** One dealt format variant: what the twister is asked to write, the label it gets on the post and a decoration line. */
 export type Format = { kind: Kind; ask: string; label: string; meta: string };
 
-export type Phase = 'round' | 'answer' | 'twist' | 'feed' | 'vote' | 'results' | 'scores';
+export type Phase = 'round' | 'answer' | 'twist' | 'trend' | 'feed' | 'vote' | 'results' | 'scores';
+/**
+ * Big rooms: more posts than a feed can play (above `FEED_SIZE` + 2). Every phone gets `TREND_BALLOT` posts and boosts up
+ * to `TREND_PICKS`; the `FEED_SIZE` most-boosted trend onto the TV feed for the whole room's vote. A boost pays its
+ * twister `BOOST_PTS` × round (half for a house twist), so a post that misses the feed still scores.
+ */
+export const FEED_SIZE = 8, TREND_BALLOT = 5, TREND_PICKS = 2, TREND_S = 30, BOOST_PTS = 50;
 export type Reply = { who: string; text: string };
 /** A twisted post. `author` wrote the answer to `question` (both public from the feed on); the twister stays secret until the results. */
 export type Post = { id: string; author: string; question: string; kind: Kind; label: string; meta: string; twist: string; answer: string; likes: number; replies: Reply[] };
@@ -40,6 +46,8 @@ export type CommentPublic = {
   stage?: number;
   /** Feed: posts that have started, with their server start times. Vote/results: every post in grid order. */
   posts?: Post[]; beats?: number[];
+  /** Big rooms, from the trend phase on: how many posts were made, what each phone boosts from and how many reach the feed. */
+  field?: { posts: number; ballot: number; picks: number; slots: number };
   /** Results: verdicts in reveal order (fewest votes first) and the reported (top) post ids. */
   result?: { verdicts: Verdict[]; reported: string[] };
 };
@@ -52,11 +60,16 @@ export type CommentPrivate = {
   twist?: string; auto?: true;
   /** Feed onwards: the post you twisted and the post made from your answer; your confirmed votes. */
   mine?: string; about?: string; votes?: string[];
+  /** Big rooms: the posts on your phone in the trend phase and the ones you boosted. From the feed on: how many boosts
+      your twist got (and what they paid), and `cut` when it did not reach the feed. */
+  ballot?: Post[]; boosts?: string[];
+  boosted?: { count: number; points: number }; cut?: true;
 };
 export type CommentAction =
   | { turn: string; k: 'answer'; text: string }
   | { turn: string; k: 'twist'; text: string }
   | { turn: string; k: 'auto' }
+  | { turn: string; k: 'boost'; posts: string[] }
   | { turn: string; k: 'vote'; posts: string[] };
 
 // ---------- timing (ms), shared so the TV and phones land on the server's beats ----------

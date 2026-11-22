@@ -8,7 +8,7 @@ import { Stage, PromptCard, Timer, PlayerStrip, VoteReveal, PhoneShell, PhoneTex
 
 ## Ground rules
 
-- **TV**: your `Display` already renders inside `Stage`, a fixed **1920×1080 px** canvas scaled to fit. Size TV things in px, design for 10 players and maximum-length text, and lay out with flex/grid in the full box. The pack provides the backdrop. `--hj-accent` is your catalog accent.
+- **TV**: your `Display` already renders inside `Stage`, a fixed **1920×1080 px** canvas scaled to fit. Size TV things in px, design for 10 players and maximum-length text, and lay out with flex/grid in the full box. Above ten players (`isCrowd` in `core/crowd.ts`) the roster components below switch to their big-room form by themselves; anything you list per player yourself needs a cap and a count (see DESIGN.md, Big rooms). The pack provides the backdrop. `--hj-accent` is your catalog accent.
 - **Phone**: wrap every `Controller` screen in `PhoneShell`: one task, big targets, and the primary button in `action`.
 - **Time** always comes from `props.now()` (server clock). Drive reveals from server timestamps (`useTimeline`) so a reloaded TV lands on the same beat.
 - **Drafts**: use `props.sessionKey` + your turn id as the draft key. After a reload, read your private view to decide whether to show `PhoneDone`.
@@ -18,20 +18,20 @@ import { Stage, PromptCard, Timer, PlayerStrip, VoteReveal, PhoneShell, PhoneTex
 
 | Export | Props | Notes |
 |---|---|---|
-| `Stage` | `accent?, fill?, children` | The pack wraps minigame displays for you (with `fill`: the stage covers the whole browser window, letterboxed only by aspect ratio, and the platform header floats on top, hiding after 3.5 s idle). Use it directly only in tests. |
+| `Stage` | `accent?, fill?, reserve?, children` | The pack wraps minigame displays for you (with `fill`: the stage covers the whole browser window, letterboxed only by aspect ratio, and the platform header floats on top, hiding after 3.5 s idle). Use it directly only in tests. |
 | `Spotlight` | `children` | A spotlight cone and floor pool around centred content. |
 | `Enter` | `k, variant?: 'pop'\|'rise'\|'slide'\|'zoom'\|'drop', delay?` | Keyed entrance: change `k` (phase, round) to replay it. |
 | `BigTitle` | `children, kicker?, size?=120` | Huge stroked Lilita title. |
 | `Callout` | `children, tone?` | Swooping ribbon banner, e.g. "Time's up!". |
 | `Confetti` | `burst?, count?=80` | One-shot burst over its positioned parent. Change `burst` to fire it again. |
 | `Timer` | `deadline, now, total?, size?=168` | Ring timer that turns urgent under 5 s. Pass `total` (ms) for an exact ring. |
-| `PlayerStrip` | `players, done?, vip?, badges?, size?` | Everyone in roster order. With `done` (submitted ids), slots light up and still-working players show thinking faces. |
-| `StillWorking` | `players, label?` | Small row of thinking avatars. |
+| `PlayerStrip` | `players, done?, vip?, badges?, size?` | Everyone in roster order. With `done` (submitted ids), slots light up and still-working players show thinking faces. Above ten players: a "23/32" counter and one or two rows of faces without names (`size` is ignored). |
+| `StillWorking` | `players, label?` | Small row of thinking avatars (twelve, then `+N`). |
 | `PromptCard` | `children, eyebrow?, size?=64` | Big paper card. String text auto-shrinks with length. |
 | `AnswerCard` | `text? \| children, label?, author?, showAuthor?, voters?, points?, tag?, state?: 'idle'\|'win'\|'lose', size?` | One answer. `children` can hold a `DrawingRenderer`. |
 | `VoteReveal` | `entries: VoteEntry[], step` | Steps are 0 answers, 1 voters fly in, 2 authors, 3 points + winner/loser. Two entries use a VS layout. |
-| `Scoreboard` | `players, scores, from?, delay?, highlight?, rowHeight?=84` | Rows slide to new ranks while scores count up. `from` sets the previous scores. |
-| `Podium` | `players, scores, winners?, unit?` | Steps for 1st, 2nd and 3rd (tied players share a step), plus everyone else listed below. |
+| `Scoreboard` | `players, scores, from?, delay?, highlight?, rowHeight?=84` | Rows slide to new ranks while scores count up. `from` sets the previous scores. Above ten players: two columns in the height ten rows take, everyone up to 32, then the last cell counts the rest. |
+| `Podium` | `players, scores, winners?, unit?` | Steps for 1st, 2nd and 3rd (tied players share a step; in a big room four or more tied stand as a cluster of up to eight faces with a count), the winner in turning rays, plus everyone else listed below (the next nine in a big room). |
 | `Avatar` | `avatar, color, mood?, size?, crown?, label?` | One of 16 characters (`CHARACTERS[i].name`). Moods are `idle`, `happy`, `sad`, `thinking` and `done`. Sizes are `xs` 32, `sm` 48, `md` 72, `lg` 112, `xl` 168, or a number. |
 | `AvatarBadge` | `player, mood?, size?, vip?, detail?, layout?` | Avatar plus the full name, underlined in the player's colour. Long names wrap instead of being clipped. |
 | `AvatarStack` | `players, size?, max?=8, mood?` | Overlapping voters with a `+N` count. Screen readers get every name. |

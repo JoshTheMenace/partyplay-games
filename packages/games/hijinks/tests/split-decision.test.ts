@@ -6,7 +6,7 @@ import { LINES } from '../src/minis/split-decision/narration';
 import { DILEMMAS, DILEMMAS_ADULT, FINALS, FINALS_ADULT, HOUSE_CLAUSES, HOUSE_OPTIONS, RATHERS, RATHERS_ADULT } from '../src/minis/split-decision/content.server';
 import type { SplitState } from '../src/minis/split-decision/server';
 import { PACE } from '../src/server';
-import { BLANK, MAX_FILL, RESULT, WRITE_S, carousel, minority, splitPoints, verdictOf, type Side, type SplitPrivate, type SplitPublic } from '../src/minis/split-decision/types';
+import { BLANK, FINAL_SHOWN, MAX_FILL, RESULT, SIFT, SPOTLIGHT, WRITE_S, carousel, minority, splitPoints, verdictOf, type Side, type SplitPrivate, type SplitPublic } from '../src/minis/split-decision/types';
 
 const pub = (n: Night) => n.mini<SplitPublic>();
 const me = (n: Night, id: string) => n.miniMe<SplitPrivate>(id);
@@ -77,6 +77,62 @@ test('full games with bots: 3, 6 and 10 players reach a sane result', async () =
     assert.ok(n.now - begin < 15 * 60_000, `fits the time budget (${Math.round((n.now - begin) / 1000)} s)`);
     n.toMenu(); assert.equal(n.state.phase, 'menu');
   }
+});
+
+test('big rooms: 32 and 64 players judge eight scenarios each on phones, the TV replays five, and the game is no longer than ten players', async () => {
+  const spans: Record<number, number> = {};
+  for (const players of [10, 32, 64]) {
+    const n = start(players, { seed: players }), begin = n.now, original = n.advance.bind(n);
+    const seen = { sift: 0, replays: 0, votes: 0, shown: 0, checked: '' };
+    n.advance = (ms: number) => {
+      original(ms);
+      const v = pub(n);
+      if (!v) return;
+      if (v.phase === 'vote') seen.votes++;
+      if (v.card?.replay) seen.replays = Math.max(seen.replays, v.card.count);
+      if (v.final?.result) seen.shown = v.final.result.entries.length;
+      if ((v.phase === 'sift' || (v.phase === 'final-vote' && v.final?.field)) && seen.checked !== v.turn) {
+        seen.checked = v.turn; seen.sift++;
+        const s = inner(n), counts = new Map<string, number>();
+        for (const id of n.ids) {
+          const queue = me(n, id).queue!;
+          assert.equal(queue.length, SIFT); assert.ok(queue.every(c => s.cards.find(x => x.id === c.id)!.author !== id), 'never your own');
+          for (const c of queue) counts.set(c.id, (counts.get(c.id) ?? 0) + 1);
+        }
+        assert.equal(counts.size, s.cards.length, 'every scenario is judged by somebody');
+        assert.ok(Math.max(...counts.values()) - Math.min(...counts.values()) <= 2, 'dealt evenly');
+        if (v.phase === 'final-vote') assert.deepEqual(v.final!.entries, [], 'takes stay on phones until the reveal');
+        const other = s.cards.find(c => c.author !== 'p0' && !me(n, 'p0').queue!.some(q => q.id === c.id))!;
+        rejects(n.trySend('p0', { turn: v.turn, k: 'judge', entry: other.id, side: 0 }), /not on the board/);
+      }
+    };
+    const { result, rejected } = await n.playMini();
+    spans[players] = n.now - begin;
+    assert.deepEqual(rejected, [], `${players}p bots were never rejected`);
+    assert.equal(Object.keys(result.scores).length, players);
+    if (players > 10) {
+      assert.equal(seen.sift, 3, 'both rounds and The Big Split were judged on phones');
+      assert.equal(seen.votes, 0, 'no card needed a room-wide vote'); assert.ok(seen.replays >= 1 && seen.replays <= SPOTLIGHT, `${seen.replays} replays`);
+      assert.equal(seen.shown, FINAL_SHOWN);
+    } else { assert.equal(seen.sift, 0); assert.ok(seen.votes > 0); }
+  }
+  for (const players of [32, 64]) assert.ok(spans[players]! <= spans[10]!, `${players} players took ${spans[players]} ms, ten took ${spans[10]} ms`);
+});
+
+test('big rooms: a sifted card pays its author by the phones’ split, and their phone shows it', () => {
+  const n = start(12, { seed: 3 });
+  fillAll(n); at(n, 'sift');
+  const s = inner(n), target = s.cards.find(c => c.author === 'p0')!, judges = n.ids.filter(id => me(n, id).queue!.some(q => q.id === target.id));
+  for (const id of n.ids) for (const q of me(n, id).queue!) n.send(id, { turn: pub(n).turn, k: 'judge', entry: q.id, side: q.id === target.id ? (judges.indexOf(id) % 2) as Side : 0 });
+  n.until(() => pub(n).phase !== 'sift');
+  const yes = judges.filter((_, i) => i % 2 === 0).length, no = judges.length - yes;
+  assert.deepEqual(me(n, 'p0').own, { yes, no, points: splitPoints(yes, no), verdict: verdictOf(yes, no) });
+  assert.equal(inner(n).scores.p0! >= splitPoints(yes, no), true);
+  assert.equal(pub(n).card!.replay, true); assert.equal(pub(n).phase, 'show');
+  // The best split is replayed last.
+  const order = inner(n).cards.map(c => c.outcome!.points);
+  assert.equal(order.at(-1), Math.max(...inner(n).pool.map(c => c.outcome!.points)));
+  n.until(() => pub(n).phase === 'result'); assert.equal(pub(n).card!.outcome!.author, inner(n).cards[0]!.author);
 });
 
 test('round 1: everyone gets their own dilemma; a perfect split pays the author 1000 and the room nothing extra', () => {

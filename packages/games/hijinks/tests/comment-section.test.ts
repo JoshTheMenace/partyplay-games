@@ -6,7 +6,7 @@ import { LINES } from '../src/minis/comment-section/narration';
 import { ADULT_QUESTIONS, ADULT_TWISTS, FORMATS, HOUSE_ANSWERS, HOUSE_TWISTS, QUESTIONS, REPLIES, twistPool } from '../src/minis/comment-section/content.server';
 import type { CommentState } from '../src/minis/comment-section/server';
 import { PACE } from '../src/server';
-import { ANSWER_S, KINDS, MAX_ANSWER, MAX_TWIST, type CommentPrivate, type CommentPublic } from '../src/minis/comment-section/types';
+import { ANSWER_S, BOOST_PTS, FEED_SIZE, KINDS, MAX_ANSWER, MAX_TWIST, TREND_BALLOT, TREND_PICKS, type CommentPrivate, type CommentPublic } from '../src/minis/comment-section/types';
 
 const pub = (n: Night) => n.mini<CommentPublic>();
 const me = (n: Night, id: string) => n.miniMe<CommentPrivate>(id);
@@ -73,6 +73,49 @@ test('full games with bots: 3, 6 and 10 players reach a sane result', async () =
     assert.ok(n.now - begin < 16 * 60_000, `fits the time budget even with bots (${Math.round((n.now - begin) / 1000)} s)`);
     n.toMenu(); assert.equal(n.state.phase, 'menu');
   }
+});
+
+test('big rooms: 13+ players boost posts on phones, eight trend onto the feed, and the game is no longer than ten players', async () => {
+  const spans: Record<number, number> = {};
+  for (const players of [10, 13, 32, 64]) {
+    const n = start(players, { seed: players }), begin = n.now, original = n.advance.bind(n);
+    const seen = { trends: 0, feed: 0, key: '' };
+    n.advance = (ms: number) => {
+      original(ms);
+      const v = pub(n);
+      if (!v || v.turn === seen.key) return;
+      seen.key = v.turn;
+      if (v.phase === 'trend') {
+        seen.trends++;
+        assert.deepEqual(v.field, { posts: players, ballot: TREND_BALLOT, picks: TREND_PICKS, slots: FEED_SIZE }); assert.equal(v.posts, undefined, 'posts stay on phones until they trend');
+        const counts = new Map<string, number>(), s = inner(n);
+        for (const id of n.ids) { const ballot = me(n, id).ballot!; assert.equal(ballot.length, TREND_BALLOT); assert.ok(ballot.every(p => s.entries.find(e => e.id === p.id)!.twister !== id), 'never your own twist'); for (const p of ballot) counts.set(p.id, (counts.get(p.id) ?? 0) + 1); }
+        assert.equal(counts.size, players); assert.ok(Math.max(...counts.values()) - Math.min(...counts.values()) <= 2);
+        const off = s.entries.find(e => !me(n, 'p0').ballot!.some(p => p.id === e.id))!;
+        rejects(n.trySend('p0', { turn: v.turn, k: 'boost', posts: [off.id] }), /isn’t on your feed/);
+      }
+      if (v.phase === 'vote') { seen.feed = v.posts!.length; if (players > 10) assert.equal(n.ids.filter(id => me(n, id).cut).length, players - FEED_SIZE); }
+    };
+    const { result, rejected } = await n.playMini();
+    spans[players] = n.now - begin;
+    assert.deepEqual(rejected, [], `${players}p bots were never rejected`);
+    assert.equal(Object.keys(result.scores).length, players);
+    assert.equal(seen.trends, players > 10 ? 3 : 0); assert.equal(seen.feed, players > 10 ? FEED_SIZE : players);
+  }
+  for (const players of [13, 32, 64]) assert.ok(spans[players]! <= spans[10]! * 1.1, `${players} players took ${spans[players]} ms, ten took ${spans[10]} ms`);
+});
+
+test('big rooms: a boost pays the twister 50 × round whether or not the post reaches the feed', () => {
+  const n = start(13, { seed: 8 });
+  at(n, 'answer', 1); answerAll(n); at(n, 'twist', 1); twistAll(n); at(n, 'trend', 1);
+  const s = inner(n), target = s.entries[0]!, holders = n.ids.filter(id => me(n, id).ballot!.some(p => p.id === target.id));
+  for (const id of n.ids) { const ballot = me(n, id).ballot!; n.send(id, { turn: pub(n).turn, k: 'boost', posts: [holders.includes(id) ? target.id : ballot[0]!.id] }); }
+  n.until(() => pub(n).phase === 'feed');
+  assert.equal(inner(n).scores[target.twister], holders.length * BOOST_PTS);
+  assert.deepEqual(me(n, target.twister).boosted, { count: holders.length, points: holders.length * BOOST_PTS });
+  assert.equal(inner(n).entries.length, FEED_SIZE); assert.ok(inner(n).entries.includes(target), 'the most-boosted post trends');
+  const missed = inner(n).all.find(e => !inner(n).entries.includes(e))!;
+  assert.equal(me(n, missed.twister).cut, true); assert.equal(me(n, missed.twister).mine, undefined);
 });
 
 test('dealing: everyone twists exactly one other answer; distinct apps; the Final Feed is all status updates; no repeat pairs in a game', () => {

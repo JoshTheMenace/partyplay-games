@@ -29,7 +29,12 @@ export const weight = (kind: Kind) => kind === 'smackdown' ? 2 : 1;
 /** Entries are numbered by bracket position: e0 is the top seed line of the left wing. */
 export const seedOf = (id: string) => Number(id.slice(1)) + 1;
 
-export type Phase = 'write' | 'twist' | 'predict' | 'stage' | 'vote' | 'result' | 'champ' | 'scores';
+export type Phase = 'write' | 'heats' | 'twist' | 'predict' | 'stage' | 'vote' | 'result' | 'champ' | 'scores';
+/**
+ * Qualifying heats: when a room writes more answers than the bracket has slots (17 players and up), every phone gets
+ * `HEAT_BALLOT` answers it did not write and sends `HEAT_PICKS` through; the most-picked fill the bracket.
+ */
+export const HEAT_BALLOT = 6, HEAT_PICKS = 2, HEATS_S = 25;
 /** A bracket entry. Its author (`by`) or `house` appears once it is knocked out, and for every entry at the champion reveal. */
 export type Slot = { id: string; text: string; by?: string; house?: true };
 /** One matchup. Sides are entry ids once known. `winner` and the vote counts appear from the result phase on. */
@@ -59,6 +64,8 @@ export type BrawlPublic = {
   entries: Slot[];
   /** Matchups per round (round 1 first). */
   bouts: Bout[][];
+  /** Heats phase: how many answers are fighting for how many slots, and what each phone holds. */
+  field?: { answers: number; slots: number; ballot: number; picks: number };
   /** Vote and result: the live matchup and how many votes are in (never who). */
   match?: { index: number; votes: number };
   champ?: Champ;
@@ -75,11 +82,16 @@ export type BrawlPrivate = {
   /** Vote and result: you wrote a side of this matchup, or you get a vote. */
   role?: 'author' | 'voter';
   vote?: 0 | 1;
+  /** Heats: the answers on your phone and the ones you sent through. From then on, `cut` when your answer missed the bracket. */
+  ballot?: { id: string; text: string }[];
+  heat?: string[];
+  cut?: true;
   /** Points you have won in this bracket so far (kept from the room until the champion is crowned). */
   earned: number;
 };
 export type BrawlAction =
   | { turn: string; k: 'answer'; slot: number; text: string }
+  | { turn: string; k: 'heat'; picks: string[] }
   | { turn: string; k: 'predict'; entry: string }
   | { turn: string; k: 'vote'; side: 0 | 1 };
 

@@ -8,7 +8,7 @@ import { server, type BrawlState } from '../src/minis/bracket-brawl/server';
 import { mix, pick as pickN, random, shuffle } from '../src/core/server/rng';
 import type { MiniApi, PackPlayer } from '../src/core/contract';
 import { PACE } from '../src/server';
-import { MAX_ANSWER, PTS, WRITE_S, type BrawlPrivate, type BrawlPublic } from '../src/minis/bracket-brawl/types';
+import { HEAT_BALLOT, HEAT_PICKS, MAX_ANSWER, PTS, WRITE_S, type BrawlPrivate, type BrawlPublic } from '../src/minis/bracket-brawl/types';
 
 const pub = (n: Night) => n.mini<BrawlPublic>();
 const me = (n: Night, id: string) => n.miniMe<BrawlPrivate>(id);
@@ -71,6 +71,55 @@ test('full games with bots: 3, 6 and 10 players reach a sane result', async () =
     assert.ok(n.now - begin < (players === 10 ? 17 : 12) * 60_000, `${players}p took ${Math.round((n.now - begin) / 1000)} s`);
     n.toMenu(); assert.equal(n.state.phase, 'menu');
   }
+});
+
+test('big rooms: 17+ players qualify on phones for sixteen slots; 11–16 fit without heats; no longer than ten players', async () => {
+  const spans: Record<number, number> = {};
+  for (const players of [10, 16, 17, 32, 64]) {
+    const n = start(players, { seed: players }), begin = n.now, original = n.advance.bind(n);
+    const seen = { heats: 0, key: '', cut: 0 };
+    n.advance = (ms: number) => {
+      original(ms);
+      const v = pub(n);
+      if (!v || v.turn === seen.key) return;
+      seen.key = v.turn;
+      if (v.phase === 'heats') {
+        seen.heats++;
+        assert.deepEqual(v.field, { answers: players, slots: 16, ballot: HEAT_BALLOT, picks: HEAT_PICKS }); assert.deepEqual(v.entries, []);
+        if (v.kind === 'blind') assert.equal(v.prompt, undefined, 'the blind prompt stays classified through qualifying');
+        const counts = new Map<string, number>(), s = inner(n);
+        for (const id of n.ids) { const ballot = me(n, id).ballot!; assert.equal(ballot.length, HEAT_BALLOT); assert.ok(ballot.every(a => s.field.find(f => f.id === a.id)!.by !== id)); for (const a of ballot) counts.set(a.id, (counts.get(a.id) ?? 0) + 1); }
+        assert.equal(counts.size, players); assert.ok(Math.max(...counts.values()) - Math.min(...counts.values()) <= 2);
+        rejects(n.trySend('p0', { turn: v.turn, k: 'heat', picks: [me(n, 'p0').ballot![0]!.id] }), /Send 2 different/);
+        rejects(n.trySend('p0', { turn: v.turn, k: 'heat', picks: [me(n, 'p0').ballot![0]!.id, s.field.find(f => f.by === 'p0')!.id] }), /not on your list/);
+      }
+      if (v.phase === 'predict') {
+        assert.equal(v.entries.length, v.size);
+        const cut = n.ids.filter(id => me(n, id).cut); seen.cut = cut.length;
+        if (players > 16) { assert.equal(cut.length, players - 16); assert.equal(inner(n).entries.filter(e => e.by).length, 16, 'no house answers once the room fills the bracket'); for (const id of cut) assert.deepEqual(me(n, id).mine, []); }
+      }
+    };
+    const { result, rejected } = await n.playMini();
+    spans[players] = n.now - begin;
+    assert.deepEqual(rejected, [], `${players}p bots were never rejected`);
+    assert.equal(Object.keys(result.scores).length, players);
+    assert.equal(seen.heats, players > 16 ? 3 : 0, `${players} players`);
+  }
+  for (const players of [17, 32, 64]) assert.ok(spans[players]! <= spans[10]! * 1.2, `${players} players took ${spans[players]} ms, ten took ${spans[10]} ms`);
+});
+
+test('qualifying: the most-picked answers make the bracket and ties fall by lot', () => {
+  const n = start(20, { seed: 2 });
+  writeAll(n); at(n, 'heats');
+  const s = inner(n), favourite = s.field.find(a => a.by === 'p7')!, snubbed = s.field.find(a => a.by === 'p8')!;
+  for (const id of n.ids) {
+    const ballot = me(n, id).ballot!, rest = ballot.filter(a => a.id !== snubbed.id && a.id !== favourite.id);
+    n.send(id, { turn: pub(n).turn, k: 'heat', picks: ballot.some(a => a.id === favourite.id) ? [favourite.id, rest[0]!.id] : [rest[0]!.id, rest[1]!.id] });
+  }
+  n.until(() => pub(n).phase !== 'heats');
+  assert.equal(me(n, 'p7').cut, undefined); assert.equal(me(n, 'p7').mine.length, 1);
+  assert.equal(me(n, 'p8').cut, true, 'an answer nobody picked misses a bracket that 20 answers fight for');
+  assert.equal(inner(n).entries.length, 16); assert.equal(inner(n).cut.length, 4);
 });
 
 test('seeding: small rooms write two answers in opposite halves; nobody faces themselves; players meet the House first', () => {

@@ -1,12 +1,14 @@
 /* Tall Tales rules: seven true-but-weird stories (3 ×1, 3 ×2, one ×3 finale). Write a lie, find the truth, like the best fibs. Server only. */
 import type { MiniApi, MiniResult, MiniServer } from '../../core/contract';
+import { isCrowd } from '../../core/crowd';
 import { variant } from '../../core/narration';
+import { dealBallots } from '../../core/server/ballots';
 import { freshDeck } from '../../core/server/deck';
 import { integer, record } from '../../core/server/validate';
 import { factPool, type Fact } from './content.server';
 import {
-  CATEGORIES, CHOOSE_S, FINAL_MS, FOOL_PTS, HOUSE_RATE, LEAD_MS, LIKES, LIKES_MS, LIKE_GRACE_MS, LIKE_PTS, MAX_LIE, MIN_OPTIONS, MIN_READ_MS, PICKED_MS, PICK_S,
-  QUESTIONS, ROUNDS, ROUND_MS, SCORES_MS, TRUTH_MS, TRUTH_PTS, WRITE_S, lieMs, roundOf, same, stampAt, type Beat, type Phase, type TallPrivate, type TallPublic,
+  BALLOT, CATEGORIES, CHOOSE_S, FINAL_MS, FOOL_PTS, HOUSE_RATE, LEAD_MS, LIKES, LIKES_MS, LIKE_GRACE_MS, LIKE_PTS, MAX_LIE, MIN_OPTIONS, MIN_READ_MS, PICKED_MS, PICK_S,
+  QUESTIONS, REST_MS, REVEAL_LIES, ROUNDS, ROUND_MS, SCORES_MS, TRUTH_MS, TRUTH_PTS, WRITE_S, lieMs, roundOf, same, stampAt, type Beat, type Phase, type TallPrivate, type TallPublic,
 } from './types';
 
 type Filed = { text: string; house: boolean };
@@ -19,6 +21,8 @@ export type TallState = {
   pool: Fact[]; cats: Fact[]; picked: number | null; chooser: string; rotation: number;
   fact: Fact | null; lies: Record<string, Filed>; offers: Record<string, string[]>; house: string[];
   options: Choice[]; choices: Record<string, string>; likes: Record<string, string[]>; lastPick: number;
+  /** Big rooms: each player's own ballot (option ids), and the fooling options the TV skipped in this reveal. */
+  ballots: Record<string, string[]>; unshown: string[];
   beats: Beat[]; stage: number; banked: number; points: Record<string, number>[];
   scores: Record<string, number>; prev: Record<string, number>; stats: Record<Stat, Record<string, number>>;
   done: boolean;
@@ -96,7 +100,13 @@ function endWrite(s: TallState, api: MiniApi) {
     if (!groups.some(g => same(g.text, text))) groups.push({ id: '', text, kind: 'house', authors: [] });
   }
   s.options = api.shuffle(groups).map((g, i) => ({ ...g, id: `o${i}` }));
-  s.choices = {}; s.likes = {}; s.lastPick = 0;
+  s.choices = {}; s.likes = {}; s.lastPick = 0; s.ballots = {}; s.unshown = [];
+  // More answers than one screen can hold: every phone gets the truth and seven lies it did not write, dealt evenly.
+  if (isCrowd(s.ids.length) && s.options.length > BALLOT) {
+    const truth = s.options.find(o => o.kind === 'truth')!, lies = s.options.filter(o => o !== truth);
+    const hands = dealBallots(api, s.ids, lies, BALLOT - 1, (o, id) => o.authors.some(a => a.id === id));
+    for (const id of s.ids) s.ballots[id] = api.shuffle([truth, ...hands[id]!]).map(o => o.id);
+  }
   api.music('vote'); api.sfx('whoosh');
   go(s, api, 'choose', api.seconds(CHOOSE_S));
 }
@@ -106,14 +116,24 @@ function startReveal(s: TallState, api: MiniApi) {
   const m = mult(s), pickers = (o: Choice) => s.ids.filter(id => own(s.choices, id) === o.id);
   const fooling = s.options.filter(o => o.kind !== 'truth' && pickers(o).length).sort((a, b) => pickers(a).length - pickers(b).length);
   const truth = s.options.find(o => o.kind === 'truth')!, liked = (o: Choice) => s.ids.filter(id => own(s.likes, id)?.includes(o.id)).length;
-  const lead = Math.max(LEAD_MS, api.say(variant('host.reveal', api.random)) + 300), step = lieMs(fooling.length);
+  // A big room unmasks only the lies that fooled the most (still fewest first); the rest are paid together in one short beat.
+  const dealt = Object.keys(s.ballots).length > 0, shown = dealt ? fooling.slice(-REVEAL_LIES) : fooling, rest = fooling.slice(0, fooling.length - shown.length);
+  const lead = Math.max(LEAD_MS, api.say(variant('host.reveal', api.random)) + 300), step = lieMs(shown.length);
+  const pay = (o: Choice) => o.authors.map(a => ({ id: a.id, points: Math.round(pickers(o).length * FOOL_PTS * m * (a.house ? HOUSE_RATE : 1)), ...(a.house ? { house: true as const } : {}) }));
   let at = api.now + lead;
   const beats: Beat[] = [], points: Record<string, number>[] = [];
-  for (const o of fooling) {
+  s.unshown = rest.map(o => o.id);
+  if (rest.length) {
+    const gain: Record<string, number> = {};
+    for (const o of rest) for (const a of pay(o)) gain[a.id] = (gain[a.id] ?? 0) + a.points;
+    beats.push({ kind: 'rest', at, lies: rest.length, fooled: rest.reduce((sum, o) => sum + pickers(o).length, 0) }); points.push(gain);
+    at += REST_MS;
+  }
+  for (const o of shown) {
     const fooled = pickers(o);
     if (o.kind === 'house') { beats.push({ kind: 'house', at, id: o.id, text: o.text, fooled }); points.push({}); }
     else {
-      const authors = o.authors.map(a => ({ id: a.id, points: Math.round(fooled.length * FOOL_PTS * m * (a.house ? HOUSE_RATE : 1)), ...(a.house ? { house: true as const } : {}) }));
+      const authors = pay(o);
       beats.push({ kind: 'lie', at, id: o.id, text: o.text, authors, fooled });
       points.push(Object.fromEntries(authors.map(a => [a.id, a.points])));
     }
@@ -146,6 +166,10 @@ function bank(s: TallState, api: MiniApi) {
     api.sfx('stamp'); api.sfx(beat.fooled.length >= 3 ? 'gasp' : 'laugh');
     if (beat.fooled.length >= 3) hold(s, api, api.say('tall-tales.fooled'));
   } else if (beat.kind === 'house') { api.sfx('stamp'); api.sfx('boo'); }
+  else if (beat.kind === 'rest') {
+    for (const o of s.options) if (s.unshown.includes(o.id)) for (const a of o.authors) s.stats.fooled[a.id]! += s.ids.filter(id => own(s.choices, id) === o.id).length;
+    api.sfx('stamp'); api.sfx('laugh');
+  }
   else if (beat.kind === 'truth') {
     for (const id of beat.found) s.stats.truths[id]!++;
     api.sfx('reveal'); api.sfx(beat.found.length ? 'correct' : 'aww');
@@ -173,7 +197,7 @@ export const server: MiniServer<TallState, TallPublic, TallPrivate> = {
       ids, online: Object.fromEntries(players.map(p => [p.id, p.connected])),
       phase: 'round', q: 0, turn: '', seq: 0, at: api.now, deadline: api.now, hurried: false,
       pool, cats: [], picked: null, chooser: ids[0]!, rotation: Math.floor(api.random() * ids.length),
-      fact: null, lies: {}, offers: {}, house: [], options: [], choices: {}, likes: {}, lastPick: 0,
+      fact: null, lies: {}, offers: {}, house: [], options: [], choices: {}, likes: {}, lastPick: 0, ballots: {}, unshown: [],
       beats: [], stage: 0, banked: 0, points: [],
       scores: zero(), prev: zero(), stats: { fooled: zero(), truths: zero(), liked: zero() }, done: false,
     };
@@ -185,7 +209,7 @@ export const server: MiniServer<TallState, TallPublic, TallPrivate> = {
     if (!s.ids.includes(id)) throw new Error('You are watching this one.');
     const a = record(raw);
     if (a.turn !== s.turn) throw new Error('Too late! The game has moved on.');
-    const option = (value: unknown) => { const o = s.options.find(x => x.id === value); if (!o) throw new Error('That answer is not on the list.'); return o; };
+    const option = (value: unknown) => { const o = s.options.find(x => x.id === value); if (!o || own(s.ballots, id)?.includes(o.id) === false) throw new Error('That answer is not on the list.'); return o; };
     const mine = (o: Choice) => o.authors.some(x => x.id === id);
     switch (a.k) {
       case 'pick': {
@@ -284,7 +308,9 @@ export const server: MiniServer<TallState, TallPublic, TallPrivate> = {
     if (s.fact && (s.phase === 'write' || s.phase === 'choose' || s.phase === 'reveal')) pub.fact = { teaser: s.fact.teaser, text: s.fact.text };
     if (s.phase === 'write') pub.done = s.ids.filter(id => filed(s, id));
     if (s.phase === 'choose') pub.done = s.ids.filter(id => Object.hasOwn(s.choices, id));
-    if (s.phase === 'choose' || s.phase === 'reveal') pub.options = s.options.map(o => ({ id: o.id, text: o.text }));
+    const dealt = Object.keys(s.ballots).length > 0;
+    if (s.phase === 'choose' || s.phase === 'reveal') pub.options = dealt ? [] : s.options.map(o => ({ id: o.id, text: o.text }));
+    if (dealt && (s.phase === 'choose' || s.phase === 'reveal')) pub.field = { answers: s.options.length, ballot: BALLOT };
     if (s.phase === 'reveal') pub.beats = structuredClone(s.beats.slice(0, s.stage));
     return pub;
   },
@@ -302,6 +328,14 @@ export const server: MiniServer<TallState, TallPublic, TallPrivate> = {
       me.mine = s.options.filter(o => o.authors.some(a => a.id === id)).map(o => o.id);
       if (choice) me.choice = choice;
       if (likes?.length) me.likes = [...likes];
+      const ballot = own(s.ballots, id), lie = own(s.lies, id);
+      if (ballot) { me.ballot = ballot.map(o => { const x = s.options.find(c => c.id === o)!; return { id: x.id, text: x.text }; }); if (lie) me.wrote = lie.text; }
+      if (s.phase === 'reveal' && s.unshown.length) {
+        const pickers = (o: Choice) => s.ids.filter(p => own(s.choices, p) === o.id).length, m = mult(s);
+        const mine = s.options.find(o => s.unshown.includes(o.id) && o.authors.some(a => a.id === id)), fell = s.options.find(o => s.unshown.includes(o.id) && o.id === choice);
+        if (mine) me.fooled = { count: pickers(mine), points: Math.round(pickers(mine) * FOOL_PTS * m * (mine.authors.find(a => a.id === id)!.house ? HOUSE_RATE : 1)) };
+        if (fell) me.fell = { text: fell.text, authors: fell.authors.map(a => a.id) };
+      }
     }
     return me;
   },

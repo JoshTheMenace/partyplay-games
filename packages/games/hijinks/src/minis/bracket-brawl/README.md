@@ -1,6 +1,6 @@
 # Bracket Brawl
 
-Hijinks minigame `bracket-brawl`: answer tournaments for 3–10 players. Everyone writes an answer to a prompt. The
+Hijinks minigame `bracket-brawl`: answer tournaments for 3–64 players. Everyone writes an answer to a prompt. The
 answers (plus house answers) are seeded into a knockout bracket, everyone calls the champion, and then the room votes
 every matchup head to head until one answer lifts the trophy. There are three brackets a game: **Standard**, **Blind**
 and **Smackdown**.
@@ -55,7 +55,7 @@ Three brackets: **1 Standard**, **2 Blind**, **3 Smackdown**. Each one runs:
    who called it at 3.6 s, and every author in the bracket is unmasked at 4.8 s.
 6. **Standings** (8 s) after brackets 1 and 2. The night's podium follows bracket 3.
 
-**Seeding.** 8 slots when the room's answers fit, otherwise 16 (9–10 players). A player's two answers start in
+**Seeding.** 8 slots when the room's answers fit, otherwise 16 (9 players and up). A player's two answers start in
 opposite halves (they can only meet in the final), player answers face house answers before each other in round one,
 and nobody ever faces themselves. House answers are written for each Standard prompt (two each) or come from the Blind/
 Smackdown category pool, then a generic pool; they never copy a player's answer (ignoring case, punctuation and a leading
@@ -64,6 +64,13 @@ Smackdown category pool, then a generic pool; they never copy a player's answer 
 **Anonymity.** Answers stay anonymous while they are alive: an author is unmasked only when their answer is knocked
 out, and everyone at the champion reveal. Scores won inside a bracket are kept off the TV until the champion is
 crowned (each phone sees its own running total), so the scoreboard can't give authors away.
+
+## Big rooms (17–64 players)
+
+Sixteen slots, more answers. After writing, a **qualifying** phase (25 s, paced): every phone gets six answers it did not
+write (`HEAT_BALLOT`, dealt evenly) and sends two through. The sixteen most-picked answers fill the bracket (ties by
+lot), so there are no house answers; everyone else's answer is cut, and they still call the champion and vote every
+matchup. A Blind bracket's real prompt stays classified through qualifying. Rooms of 11–16 fit the bracket without it.
 
 ## Scoring
 

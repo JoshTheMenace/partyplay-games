@@ -19,6 +19,7 @@ export const bot: MiniBot<CommentPublic, CommentPrivate> = ({ view, me, random }
     if (random() < .1) return { turn, k: 'auto' };
     return { turn, k: 'twist', text: long ? grow(any(THINGS), MORE, MAX_TWIST) : any(THINGS) };
   }
+  if (view.phase === 'trend' && !me.boosts && me.ballot?.length) { const first = any(me.ballot).id, rest = me.ballot.filter(p => p.id !== first); return { turn, k: 'boost', posts: rest.length && random() < .7 ? [first, any(rest).id] : [first] }; }
   if (view.phase === 'vote' && !me.votes) {
     const others = (view.posts ?? []).filter(p => p.id !== me.mine).map(p => p.id);
     if (!others.length) return null;

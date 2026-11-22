@@ -1,6 +1,6 @@
 # Tall Tales
 
-Hijinks minigame `tall-tales`: bluffing trivia for 3–10 players. Art direction: a retro tabloid newsroom ("The Tall Tales
+Hijinks minigame `tall-tales`: bluffing trivia for 3–64 players. Art direction: a retro tabloid newsroom ("The Tall Tales
 Tribune"): newsprint with halftone dots, ink rules, taped cuttings, an EXTRA! starburst, red rubber stamps (FIB!, TRUTH,
 PICKED!) and an original typewriter illustration. Theme music: `music/tracks/tall-tales.ts`, "Hot Off the Press" (newsreel
 ragtime with a typewriter breakdown).
@@ -24,6 +24,17 @@ Seven true-but-weird stories: Round 1 (3 stories, ×1), Round 2 (3 stories, ×2)
    stamp, the blank fills in on the headline, finders + points), then Readers’ favourites if anyone liked a lie (top three on the TV plus a count of the rest; every like pays, and phones
    list each player's own).
 5. Standings after rounds 1 and 2; Final edition (winner front page + board) after the finale; then the pack podium.
+
+## Big rooms (11–64 players)
+
+Thirty lies cannot share a screen, so above ten players (and more than eight answers):
+
+- **Choose:** every phone gets its own ballot of eight (`BALLOT`): the truth and seven lies it did not write, dealt so
+  each lie reaches about the same number of phones. The TV shows the press run and a count, never a sample: a public
+  sample could be intersected with a phone's ballot to find the truth. Likes are limited to your ballot.
+- **Reveal:** the TV unmasks the five lies that fooled the most (`REVEAL_LIES`, still fewest first). The lesser fibs are
+  paid together in one short beat (`rest`), and each author's phone says how many their lie fooled and for what.
+- Scoring is unchanged. The game is the same length as a ten-player one (tested within 10 %).
 
 ## Scoring
 

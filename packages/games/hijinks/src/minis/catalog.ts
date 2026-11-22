@@ -1,16 +1,21 @@
+import { MAX_ROOM_PLAYERS as ROOM } from '../../../../party-contract/src/index';
 import type { MiniInfo } from '../core/contract';
 
-/** Client-safe menu/intro metadata. A catalog id without a server in registry.server.ts is shown but never playable. */
+/**
+ * Client-safe menu/intro metadata. A catalog id without a server in registry.server.ts is shown but never playable.
+ * `players.max` is the room ceiling (ROOM) for minigames with big-room rules (heats, dealt ballots, replays; see DESIGN.md)
+ * and ten for the ones whose rules need every player on one screen.
+ */
 export const MINIS: MiniInfo[] = [
   {
     id: 'quip-clash', title: 'Quip Clash', tagline: 'Two answers enter. One gets the laughs.',
-    howTo: ['Write funny answers to two prompts on your phone.', 'Answers face off head-to-head on the big screen.', 'Vote for the one that made you laugh. Big wins score big.'],
-    players: { min: 3, max: 10 }, minutes: '8–12', tags: ['writing', 'comedy', 'voting'], accent: '#ff5748', intro: ['quip-clash.intro'],
+    howTo: ['Write funny answers to prompts on your phone.', 'Answers face off on the big screen.', 'Vote for the one that made you laugh. Big wins score big.'],
+    players: { min: 3, max: ROOM }, minutes: '8–12', tags: ['writing', 'comedy', 'voting'], accent: '#ff5748', intro: ['quip-clash.intro'],
   },
   {
     id: 'tall-tales', title: 'Tall Tales', tagline: 'Every story is true. Except the bit you made up.',
     howTo: ['A true but weird story appears with one word missing.', 'Write a believable lie to fill the blank on your phone.', 'Find the truth among the fibs. Every friend you fool pays.'],
-    players: { min: 3, max: 10 }, minutes: '12–16', tags: ['bluffing', 'trivia', 'writing'], accent: '#e0301e', intro: ['tall-tales.intro'],
+    players: { min: 3, max: ROOM }, minutes: '12–16', tags: ['bluffing', 'trivia', 'writing'], accent: '#e0301e', intro: ['tall-tales.intro'],
   },
   {
     id: 'sketch-bluff', title: 'Sketch Bluff', tagline: 'Draw the truth. Title the lies.',
@@ -25,7 +30,7 @@ export const MINIS: MiniInfo[] = [
   {
     id: 'quiz-panic', title: 'Quiz Panic', tagline: 'Check in. Answer right. Try to check out.',
     howTo: ['Answer spooky trivia on your phone. Right answers pay cash.', 'Wrong answers visit the Panic Room. Fail and you become a ghost.', 'Race for the exit in the final. Ghosts can steal a body back!'],
-    players: { min: 2, max: 10 }, minutes: '8–12', tags: ['trivia', 'survival', 'spooky'], accent: '#4ff0a0', intro: ['quiz-panic.intro'],
+    players: { min: 2, max: ROOM }, minutes: '8–12', tags: ['trivia', 'survival', 'spooky'], accent: '#4ff0a0', intro: ['quiz-panic.intro'],
   },
   {
     id: 'odd-one-in', title: 'Odd One In', tagline: 'Everyone’s in on it. Except the faker.',
@@ -35,22 +40,22 @@ export const MINIS: MiniInfo[] = [
   {
     id: 'ballpark', title: 'Ballpark', tagline: 'How many of you have…? Only this room knows.',
     howTo: ['Answer a secret yes-or-no question on your phone. It’s anonymous.', 'One agent dials in what % of the room said yes.', 'Everyone else bets: higher or lower? The needle reveals the truth.'],
-    players: { min: 3, max: 10 }, minutes: '8–13', tags: ['guessing', 'social', 'betting'], accent: '#ffb238', intro: ['ballpark.intro'],
+    players: { min: 3, max: ROOM }, minutes: '8–13', tags: ['guessing', 'social', 'betting'], accent: '#ffb238', intro: ['ballpark.intro'],
   },
   {
     id: 'comment-section', title: 'Comment Section', tagline: 'You said it. They just added context.',
-    howTo: ['Answer an innocent question about yourself on your phone.', 'Get a friend’s answer and a fake app. Write the context that ruins it.', 'The feed plays every post. Vote for the most ruinous one.'],
-    players: { min: 3, max: 10 }, minutes: '9–13', tags: ['writing', 'comedy', 'voting'], accent: '#4d7cff', intro: ['comment-section.intro'],
+    howTo: ['Answer an innocent question about yourself on your phone.', 'Get a friend’s answer and a fake app. Write the context that ruins it.', 'The feed plays the posts. Vote for the most ruinous one.'],
+    players: { min: 3, max: ROOM }, minutes: '9–13', tags: ['writing', 'comedy', 'voting'], accent: '#4d7cff', intro: ['comment-section.intro'],
   },
   {
     id: 'bracket-brawl', title: 'Bracket Brawl', tagline: 'Every answer gets a title shot.',
-    howTo: ['Write an answer on your phone. It enters a knockout bracket.', 'Call the champion, then vote every matchup head-to-head.', 'Winners climb the bracket. Blind and Smackdown rounds twist the rules.'],
-    players: { min: 3, max: 10 }, minutes: '8–13', tags: ['writing', 'voting', 'tournament'], accent: '#c8ff2e', intro: ['bracket-brawl.intro'],
+    howTo: ['Write an answer on your phone for the knockout bracket.', 'Call the champion, then vote every matchup head-to-head.', 'Winners climb the bracket. Blind and Smackdown rounds twist the rules.'],
+    players: { min: 3, max: ROOM }, minutes: '8–13', tags: ['writing', 'voting', 'tournament'], accent: '#c8ff2e', intro: ['bracket-brawl.intro'],
   },
   {
     id: 'split-decision', title: 'Split Decision', tagline: 'Half the room says yes. That’s the whole trick.',
     howTo: ['Finish your own dilemma: “You can fly, but…” Fill in the catch.', 'Everyone else votes yes or no. Nobody votes on their own.', 'A perfect 50/50 split scores big. Unanimous scores nothing.'],
-    players: { min: 3, max: 10 }, minutes: '6–12', tags: ['writing', 'voting', 'social'], accent: '#ffe23a', intro: ['split-decision.intro'],
+    players: { min: 3, max: ROOM }, minutes: '6–12', tags: ['writing', 'voting', 'social'], accent: '#ffe23a', intro: ['split-decision.intro'],
   },
   {
     id: 'airlock', title: 'Airlock', tagline: 'Somebody aboard isn’t human. Push the button.',

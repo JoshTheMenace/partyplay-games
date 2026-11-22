@@ -47,6 +47,6 @@ const dud: MiniServer = { ...tap, id: 'dud', create() { throw new Error('fixture
 const entry = (id: string, min: number, max: number): MiniInfo => ({
   id, title: id.toUpperCase(), tagline: 'Fixture', howTo: ['One', 'Two', 'Three'], players: { min, max }, minutes: '1', tags: [], accent: '#ffd24a', intro: [`${id}.intro`, `${id}.rules`],
 });
-/** tap 2–10, big 5–10, dud (create throws), ghost (catalog entry without a server). */
-export const fixtureCatalog: MiniInfo[] = [entry('tap', 2, 10), entry('big', 5, 10), entry('dud', 2, 10), entry('ghost', 2, 10)];
-export const fixtureServers: Record<string, MiniServer> = { tap, big: { ...tap, id: 'big' }, dud };
+/** tap 2–10, big 5–10, crowd 2–64, dud (create throws), ghost (catalog entry without a server). */
+export const fixtureCatalog: MiniInfo[] = [entry('tap', 2, 10), entry('big', 5, 10), entry('crowd', 2, 64), entry('dud', 2, 10), entry('ghost', 2, 10)];
+export const fixtureServers: Record<string, MiniServer> = { tap, big: { ...tap, id: 'big' }, crowd: { ...tap, id: 'crowd' }, dud };

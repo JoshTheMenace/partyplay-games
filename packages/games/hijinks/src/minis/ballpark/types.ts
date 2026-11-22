@@ -3,6 +3,8 @@
 export type Phase = 'survey' | 'guess' | 'bet' | 'reveal' | 'scores' | 'tick' | 'pick' | 'wanted';
 export type Bet = 'much-lower' | 'lower' | 'higher' | 'much-higher';
 export const BETS: readonly Bet[] = ['much-lower', 'lower', 'higher', 'much-higher'];
+/** Round 1 agents in a room above ten players (smaller rooms: everyone takes the dial once). */
+export const CROWD_AGENTS = 6;
 export const ROUND_NAMES = ['Round 1', 'Round 2 · Long shots', 'Final round'] as const;
 
 /** A "much" bet needs the truth more than this many points away from the agent's guess. */

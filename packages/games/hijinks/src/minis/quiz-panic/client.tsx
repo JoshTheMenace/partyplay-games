@@ -2,12 +2,13 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { ArcadeButton, StatusNotice } from '../../../../../party-ui/src/index';
 import type { MiniClient, MiniViewProps, PackPlayer } from '../../core/contract';
+import { COSY, isCrowd } from '../../core/crowd';
 import {
   Avatar, AvatarStack, BigTitle, Callout, Confetti, PhoneChoices, PhoneDone, PhoneShell, PhoneWaiting, Timer, fitText, useDraft, useSend, useTimeline, type Mood,
 } from '../../core/ui';
 import { Candle, Cobweb, Coin, Concierge, Cup, Door, Ghoul, MemorySymbol } from './art';
 import {
-  ANSWER, CHALLENGES, EXIT, FINAL, FINAL_TURNS, LONE_PRIZE, ROOM_NAMES, SCRAMBLE_TRIES, SEQUENCE, SYMBOLS, SYMBOL_NAMES, letter, panicBeats,
+  ANSWER, CHALLENGES, EXIT, FINAL, FINAL_TURNS, LONE_PRIZE, ROOM_NAMES, SCRAMBLE_TRIES, SEQUENCE, SYMBOLS, SYMBOL_NAMES, letter, beatOf, panicBeats,
   type Kind, type QuizPrivate, type QuizPublic, type Side,
 } from './types';
 import './styles.css';
@@ -20,7 +21,14 @@ const cash = (n: number) => `$${n.toLocaleString('en-US')}`;
 const find = (players: readonly PackPlayer[], id: string) => players.find(p => p.id === id);
 const pick = (players: readonly PackPlayer[], ids: readonly string[]) => ids.map(id => find(players, id)).filter((p): p is PackPlayer => !!p);
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-const names = (ps: readonly PackPlayer[]) => ps.length <= 2 ? ps.map(p => p.name).join(' & ') : `${ps.slice(0, -1).map(p => p.name).join(', ')} & ${ps.at(-1)!.name}`;
+/** "A & B", "A, B & C"; more than ten (only a big room can) is two names and a count, so a sentence never runs off the stage. */
+const names = (ps: readonly PackPlayer[]) => ps.length <= 2 ? ps.map(p => p.name).join(' & ') : ps.length > COSY ? `${ps[0]!.name}, ${ps[1]!.name} & ${ps.length - 2} more` : `${ps.slice(0, -1).map(p => p.name).join(', ')} & ${ps.at(-1)!.name}`;
+/** Faces with names up to twelve; a bigger crowd shows eighteen smaller faces and counts the rest. */
+function Doomed({ players, big }: { players: readonly PackPlayer[]; big?: boolean }) {
+  const crowd = players.length > 12, shown = crowd ? players.slice(0, 18) : players;
+  return <div className="qp-doom-row" data-crowd={crowd || undefined}>{shown.map(p => <span key={p.id} className="qp-doomed"><Face player={p} size={crowd ? 72 : players.length > 6 ? (big ? 100 : 96) : big ? 130 : 120} mood="sad" />{!crowd && <b className="hj-name">{p.name}</b>}</span>)}
+    {players.length > shown.length && <b className="qp-doom-more kp-numeral">+{players.length - shown.length}</b>}</div>;
+}
 const ghostly = (p: PackPlayer, ghost: boolean): PackPlayer => ghost ? { ...p, color: GHOST } : p;
 
 const SPOOKY_LINES = [
@@ -61,6 +69,13 @@ function Guests({ players, ghost, money, done, vip, marks, moods, size }: {
   marks?: Record<string, ReactNode>; moods?: Record<string, Mood>; size?: number;
 }) {
   const small = players.length <= 3, px = size ?? (players.length > 8 ? 74 : players.length > 5 ? 88 : small ? 108 : 104), base = small ? 28 : 24;
+  // The guest book for a big room: one or two rows of faces (ghosts, done lights and marks still show); names and cash stay on phones.
+  if (isCrowd(players.length)) { const per = Math.ceil(players.length / (players.length > 20 ? 2 : 1)), face = Math.floor(Math.min(72, 1700 / per - 12));
+    return <ol className="qp-guests" data-crowd style={{ '--per': per } as CSSProperties}>{players.map(p => { const lit = done?.includes(p.id), g = ghost(p.id);
+      return <li key={p.id} data-lit={lit || undefined} data-ghost={g || undefined} data-offline={!p.connected || undefined} style={{ '--c': g ? GHOST : p.color } as CSSProperties}>
+        <Face player={p} ghost={g} size={face} crown={vip === p.id} mood={!p.connected ? 'sad' : moods?.[p.id] ?? (lit ? 'done' : done ? 'thinking' : 'idle')} />
+        {p.connected && marks?.[p.id] !== undefined && <em className="qp-mark kp-numeral">{marks[p.id]}</em>}
+      </li>; })}</ol>; }
   return <ol className="qp-guests" data-n={players.length}>{players.map(p => {
     const lit = done?.includes(p.id), g = ghost(p.id), fit = Math.floor((small ? 270 : 150) / .62 / Math.max(...p.name.split(' ').map(w => w.length)));
     return <li key={p.id} data-lit={lit || undefined} data-ghost={g || undefined} data-offline={!p.connected || undefined} style={{ '--c': g ? GHOST : p.color } as CSSProperties}>
@@ -108,7 +123,7 @@ function QuestionTV({ view, players, vip, now }: P) {
     <Guests players={players} ghost={ghost} money={money} done={a ? undefined : view.done} vip={vip} marks={marks} moods={moods} />
     {step >= 4 && doomed.length > 0 && <div className="qp-doom" role="status">
       <Callout tone="coral">To the Panic Room!</Callout>
-      <div className="qp-doom-row">{doomed.map(p => <span key={p.id} className="qp-doomed"><Face player={p} size={doomed.length > 6 ? 100 : 130} mood="sad" /><b className="hj-name">{p.name}</b></span>)}</div>
+      <Doomed players={doomed} big />
     </div>}
   </section>;
 }
@@ -141,7 +156,7 @@ function PanicIntroTV({ view, players }: P) {
       <Concierge className="qp-gloat-loop" />
     </div>
     <div className="qp-cast"><h3>{doomed.length === 1 ? 'Doomed guest' : `${doomed.length} doomed guests`}</h3>
-      <div className="qp-doom-row">{doomed.map(d => <span key={d.id} className="qp-doomed"><Face player={d} size={doomed.length > 6 ? 96 : 120} mood="sad" /><b className="hj-name">{d.name}</b></span>)}</div></div>
+      <Doomed players={doomed} /></div>
   </section>;
 }
 
@@ -183,18 +198,25 @@ function PanicRevealTV({ view, players, now }: P) {
   const p = view.panic!, r = p.reveal!, beats = panicBeats(p.kind, p.kind === 'poison' ? p.cups ?? 0 : p.kind === 'hide' ? r.searched?.length ?? 0 : p.doomed.length);
   const step = useTimeline(view.at, [...beats.steps, beats.verdict], now), verdict = step > beats.steps.length;
   const doomed = pick(players, p.doomed), dead = pick(players, r.dead), isGhost = (id: string) => verdict && r.dead.includes(id);
-  const row = (d: PackPlayer, i: number, body: ReactNode) => <li key={d.id} data-shown={step > i || undefined} data-dead={(step > i && r.dead.includes(d.id)) || undefined}>
+  // More doomed guests than rows fit: a wall of faces that flip to Lives!/Dead a group per beat (each phone shows its own detail).
+  const wall = doomed.length > 10;
+  const row = (d: PackPlayer, k: number, body: ReactNode) => { const i = k < 0 ? k : beatOf(k, doomed.length); return wall
+    ? <li key={d.id} data-shown={step > i || undefined} data-dead={(step > i && r.dead.includes(d.id)) || undefined}>
+      <Face player={d} ghost={isGhost(d.id)} size={doomed.length > 32 ? 64 : doomed.length > 18 ? 80 : 96} mood={step > i ? (r.dead.includes(d.id) ? 'sad' : 'happy') : 'thinking'} /><span className="hj-sr">{d.name}</span>
+      {step > i && <em className={r.dead.includes(d.id) ? 'qp-tag-dead' : 'qp-tag-live'}>{r.dead.includes(d.id) ? 'Dead' : 'Lives!'}</em>}
+    </li>
+    : <li key={d.id} data-shown={step > i || undefined} data-dead={(step > i && r.dead.includes(d.id)) || undefined}>
     <Face player={d} ghost={isGhost(d.id)} size={doomed.length > 6 ? 64 : doomed.length > 3 ? 84 : 110} mood={step > i ? (r.dead.includes(d.id) ? 'sad' : 'happy') : 'thinking'} />
     <b className="hj-name">{d.name}</b><span className="qp-row-body">{step > i ? body : <span className="qp-pending" aria-label="Checking"><i /><i /><i /></span>}</span>
     {step > i && <em className={r.dead.includes(d.id) ? 'qp-tag-dead' : 'qp-tag-live'}>{r.dead.includes(d.id) ? 'Dead' : 'Lives!'}</em>}
-  </li>;
-  return <section className="qp-reveal" data-kind={p.kind}>
+  </li>; };
+  return <section className="qp-reveal" data-kind={p.kind} data-wall={wall || undefined}>
     <Sign>{CHALLENGES[p.kind].name}</Sign>
     <div className="qp-reveal-main">
       {p.kind === 'poison' && <div className="qp-table qp-table-reveal">{Array.from({ length: p.cups ?? 0 }, (_, c) => {
         const open = step > c, drinkers = doomed.filter(d => r.drinks?.[d.id] === c), poison = r.poisoned?.includes(c), spikers = pick(players, Object.keys(r.poisoners ?? {}).filter(id => r.poisoners![id] === c));
         return <div key={c} className="qp-cup-slot" data-open={open || undefined} data-poison={(open && poison) || undefined}>
-          <div className="qp-drinkers">{drinkers.map(d => <Face key={d.id} player={d} ghost={isGhost(d.id)} size={drinkers.length > 3 ? 64 : drinkers.length > 1 ? 84 : 110} mood={open ? (poison ? 'sad' : 'happy') : 'thinking'} />)}</div>
+          <div className="qp-drinkers">{drinkers.slice(0, drinkers.length > COSY ? COSY - 1 : COSY).map(d => <Face key={d.id} player={d} ghost={isGhost(d.id)} size={drinkers.length > 3 ? 64 : drinkers.length > 1 ? 84 : 110} mood={open ? (poison ? 'sad' : 'happy') : 'thinking'} />)}{drinkers.length > COSY && <b className="qp-more kp-numeral">+{drinkers.length - COSY + 1}</b>}</div>
           {drinkers.length > 0 && <small className="qp-drinker-names">{names(drinkers)}</small>}
           <Cup n={c + 1} poison={open && poison} />
           <b className="kp-title">{open ? (poison ? 'Poison!' : 'Just punch') : '…'}</b>
@@ -204,12 +226,12 @@ function PanicRevealTV({ view, players, now }: P) {
       {p.kind === 'hide' && <div className="qp-doors qp-doors-reveal">{ROOM_NAMES.map((name, room) => {
         const at = r.searched?.indexOf(room) ?? -1, searched = at >= 0 && step > at, opened = searched || verdict, hiders = doomed.filter(d => r.rooms?.[d.id] === room);
         return <div key={name} className="qp-room" data-searched={searched || undefined}>
-          <Door open={opened}>{searched && <Ghoul className="qp-ghoul-peek" />}{opened && hiders.map(d => <Face key={d.id} player={d} ghost={isGhost(d.id)} size={hiders.length > 3 ? 52 : hiders.length > 1 ? 64 : 84} mood={searched ? 'sad' : 'happy'} />)}</Door>
+          <Door open={opened}>{searched && <Ghoul className="qp-ghoul-peek" />}{opened && hiders.slice(0, hiders.length > COSY ? COSY - 1 : COSY).map(d => <Face key={d.id} player={d} ghost={isGhost(d.id)} size={hiders.length > 3 ? 52 : hiders.length > 1 ? 64 : 84} mood={searched ? 'sad' : 'happy'} />)}{opened && hiders.length > COSY && <b className="qp-more kp-numeral">+{hiders.length - COSY + 1}</b>}</Door>
           <b>{name}</b>
         </div>;
       })}</div>}
       {p.kind === 'memory' && <div className="qp-sequence qp-sequence-small">{r.sequence?.map((s, i) => <MemorySymbol key={i} i={s} size={110} />)}</div>}
-      {['math', 'memory', 'scramble', 'coin'].includes(p.kind) && <ol className="qp-rows" data-n={doomed.length}>{doomed.map((d, i) => row(d, p.kind === 'coin' ? -1 : i,
+      {['math', 'memory', 'scramble', 'coin'].includes(p.kind) && <ol className="qp-rows" data-n={doomed.length} data-wall={wall || undefined}>{doomed.map((d, i) => row(d, p.kind === 'coin' ? -1 : i,
         p.kind === 'math' ? (r.sums?.[d.id] ?? []).map((x, k) => <span key={k} className="qp-sum kp-numeral" data-ok={x.given === x.answer || undefined}>{x.sum.a} {x.sum.op} {x.sum.b} = {x.given ?? '?'}</span>)
         : p.kind === 'memory' ? (r.attempts?.[d.id] ? r.attempts[d.id]!.map((s, k) => <span key={k} className="qp-attempt" data-ok={s === r.sequence?.[k] || undefined}><MemorySymbol i={s} size={doomed.length <= 3 ? 84 : 54} /></span>) : <i>No answer</i>)
         : p.kind === 'scramble' ? <span className="qp-word kp-title">{r.words?.[d.id]}</span>
@@ -227,13 +249,14 @@ function PanicRevealTV({ view, players, now }: P) {
 function Track({ players, pos, ghoul, ghost, marks, moving, done }: { players: readonly PackPlayer[]; pos: Record<string, number>; ghoul: number; ghost(id: string): boolean; marks?: Record<string, ReactNode>; moving?: boolean; done?: readonly string[] }) {
   const slot: Record<string, number> = {}, count: Record<number, number> = {};
   for (const p of players) { const at = pos[p.id] ?? 0; slot[p.id] = count[at] = (count[at] ?? -1) + 1; }
-  const tok = players.length <= 4 ? 100 : players.length <= 6 ? 84 : 72;
-  return <div className="qp-track" data-moving={moving || undefined} style={{ '--tok': `${tok}px` } as CSSProperties}>
+  // Tokens stack two abreast per space; a big room packs smaller tokens three to five abreast so 64 guests fit the Lobby.
+  const n = players.length, tok = n <= 4 ? 100 : n <= 6 ? 84 : n <= 10 ? 72 : n <= 16 ? 60 : n <= 32 ? 50 : 36, cols = n <= 10 ? 2 : n <= 16 ? 3 : n <= 32 ? 4 : 5;
+  return <div className="qp-track" data-moving={moving || undefined} data-crowd={n > 10 || undefined} style={{ '--tok': `${tok}px`, '--cols': cols } as CSSProperties}>
     <ol className="qp-lane">{Array.from({ length: EXIT + 1 }, (_, i) => <li key={i} data-exit={i === EXIT || undefined} data-ghoul={i <= ghoul && ghoul > 0 || undefined}>
       {i === EXIT ? <span className="qp-exit kp-title">Exit</span> : <span className="kp-numeral">{i === 0 ? 'Lobby' : i}</span>}
     </li>)}</ol>
     <span className="qp-ghoul-token" style={{ '--at': ghoul } as CSSProperties}><Ghoul /></span>
-    {players.map(p => <span key={p.id} className="qp-token" style={{ '--at': pos[p.id] ?? 0, '--col': slot[p.id]! % 2, '--row': Math.floor(slot[p.id]! / 2), '--c': p.color } as CSSProperties}>
+    {players.map(p => <span key={p.id} className="qp-token" style={{ '--at': pos[p.id] ?? 0, '--col': slot[p.id]! % cols, '--row': Math.floor(slot[p.id]! / cols), '--c': p.color } as CSSProperties}>
       <Face player={p} ghost={ghost(p.id)} size={tok} mood={done?.includes(p.id) ? 'done' : ghost(p.id) ? 'sad' : 'idle'} />
       {marks?.[p.id] !== undefined && <em className="qp-token-mark kp-numeral">{marks[p.id]}</em>}
     </span>)}

@@ -1,21 +1,30 @@
 import type { GameRules, Outcome } from '../../../party-contract/src/index';
 import { assertSerializable } from '../../../party-contract/src/serializable';
-import { AVATAR_COUNT } from './core/contract';
+import { AVATAR_COUNT, LOCK_MS } from './core/contract';
+import { manifest } from './manifest';
 import type { Cue, MiniApi, MiniInfo, MiniResult, MiniServer, PackAction, PackPhase, PackPlayer, PackPrivateView, PackPublicView, PackSettings, TimerPace } from './core/contract';
 import { VO } from './core/vo-manifest';
 import { mix, pick, random, shuffle } from './core/server/rng';
 import { bool, integer, record, text } from './core/server/validate';
 import { MINIS, eligible } from './minis/catalog';
+import { isCrowd } from './core/crowd';
 import { SERVERS } from './minis/registry.server';
 
 /** Decision-timer scale. Standard gives phones 60% more than each minigame's base seconds; reveals are never scaled. */
 export const PACE: Record<TimerPace, number> = { relaxed: 2.4, standard: 1.6, speedy: 1.1 };
-export const CUE_LIMIT = 24, LOCK_MS = 4000, PODIUM_MS = 12000, MAX_MINI_ACTION = 31 * 1024;
+export const CUE_LIMIT = 24, PODIUM_MS = 12000, MAX_MINI_ACTION = 31 * 1024;
+export { LOCK_MS };
+/** Cues leave the public view after this long: the mixer ignores anything older than 4 s, and every snapshot would otherwise carry 24 stale ones. */
+export const CUE_TTL_MS = 8000;
+/** Podium headline of a minigame that threw: it ends with zero scores and the night goes on. */
+export const CRASH_HEADLINE = 'That game tripped over its own feet. On to the next one!';
+/** Above ten seats somebody is always elsewhere: once two thirds of a big room have voted, the pick locks after this long. */
+export const CROWD_LOCK_MS = 15000;
 
 type Running = { server: MiniServer; state: unknown; crashed: boolean };
 export type State = {
   players: PackPlayer[]; settings: PackSettings; seed: number; now: number; phase: PackPhase; ended: boolean;
-  trophies: Record<string, number>; points: Record<string, number>; played: string[];
+  trophies: Record<string, number>; points: Record<string, number>; played: string[]; champions: string[][];
   votes: Record<string, string>; lockAt: number | null; session: number;
   current: { id: string; session: number; startedAt: number } | null;
   intro: { endsAt: number; skips: string[] } | null; mini: Running | null;
@@ -110,7 +119,7 @@ export function createRules({ servers, catalog }: PackDeps): PackRules {
     const result = sanitize(s, raw);
     for (const id of result.winners) s.trophies[id]!++;
     for (const [id, n] of Object.entries(result.scores)) s.points[id]! += n;
-    s.played.push(s.current!.id);
+    s.played.push(s.current!.id); s.champions.push([...result.winners]);
     set(s, { phase: 'podium', mini: null, music: 'podium', podium: { result, endsAt: s.now + PODIUM_MS } });
     cue(s, 'sfx', 'fanfare'); say(s, 'host.podium');
   }
@@ -160,21 +169,22 @@ export function createRules({ servers, catalog }: PackDeps): PackRules {
     },
     create(ctx, settings) {
       const ids = ctx.players.map(p => p.id);
-      if (ids.length < 2 || ids.length > 10 || new Set(ids).size !== ids.length || ids.some(id => !id)) throw new Error('Hijinks needs 2–10 unique players.');
-      const used = new Set<number>();
+      if (ids.length < manifest.players.min || ids.length > manifest.players.max || new Set(ids).size !== ids.length || ids.some(id => !id)) throw new Error(`Hijinks needs ${manifest.players.min}–${manifest.players.max} unique players.`);
+      // Up to sixteen players each get their own character; a bigger room shares them (seat colours still differ), fewest wearers first.
+      const worn = Array.from({ length: AVATAR_COUNT }, () => 0), share = ids.length > AVATAR_COUNT;
       const chosen = ctx.players.map(p => {
         const avatar = (p.lobbyChoice as { avatar?: unknown } | undefined)?.avatar;
-        if (!Number.isInteger(avatar) || (avatar as number) < 0 || (avatar as number) >= AVATAR_COUNT || used.has(avatar as number)) return null;
-        used.add(avatar as number); return avatar as number;
+        if (!Number.isInteger(avatar) || (avatar as number) < 0 || (avatar as number) >= AVATAR_COUNT || (!share && worn[avatar as number])) return null;
+        worn[avatar as number]!++; return avatar as number;
       });
       const players = ctx.players.map((p, i) => {
         let avatar = chosen[i];
-        if (avatar == null) { avatar = Array.from({ length: AVATAR_COUNT }, (_, k) => k).find(k => !used.has(k)) ?? i % AVATAR_COUNT; used.add(avatar); }
+        if (avatar == null) { avatar = worn.indexOf(Math.min(...worn)); worn[avatar]!++; }
         return { id: p.id, name: p.name, color: p.color, avatar, connected: true };
       });
       const s: State = {
         players, settings: rules.validateSettings(settings), seed: mix(ctx.seed), now: ctx.nowMs, phase: 'menu', ended: false,
-        trophies: Object.fromEntries(ids.map(id => [id, 0])), points: Object.fromEntries(ids.map(id => [id, 0])), played: [],
+        trophies: Object.fromEntries(ids.map(id => [id, 0])), points: Object.fromEntries(ids.map(id => [id, 0])), played: [], champions: [],
         votes: {}, lockAt: null, session: 0, current: null, intro: null, mini: null, podium: null,
         music: 'menu', cues: [], seq: 0, media: {}, mediaRev: 0, used: {},
       };
@@ -227,14 +237,16 @@ export function createRules({ servers, catalog }: PackDeps): PackRules {
       s.now = now;
       if (s.ended) return;
       if (s.phase === 'menu') {
-        const online = s.players.filter(p => p.connected);
-        if (s.lockAt === null && online.length && online.every(p => own(s.votes, p.id))) { s.lockAt = now + LOCK_MS; cue(s, 'sfx', 'drumroll'); say(s, 'host.locked'); }
+        const online = s.players.filter(p => p.connected), voted = online.filter(p => own(s.votes, p.id)).length;
+        if (online.length && voted === online.length) {
+          if (s.lockAt === null || s.lockAt > now + LOCK_MS) { s.lockAt = now + LOCK_MS; cue(s, 'sfx', 'drumroll'); say(s, 'host.locked'); }
+        } else if (s.lockAt === null && isCrowd(online.length) && voted * 3 >= online.length * 2) { s.lockAt = now + CROWD_LOCK_MS; cue(s, 'sfx', 'tick-fast'); }
         if (s.lockAt !== null && now >= s.lockAt && Object.keys(s.votes).length) lock(s);
       } else if (s.phase === 'intro') {
         if (introDone(s)) startMini(s);
       } else if (s.phase === 'mini') {
         const result = contain(s, m => { m.server.tick(m.state, miniApi(s)); return m.server.result(m.state); });
-        if (s.mini?.crashed) finish(s, { scores: zeroes(s), winners: [], headline: 'That game tripped over its own feet. On to the next one!' });
+        if (s.mini?.crashed) finish(s, { scores: zeroes(s), winners: [], headline: CRASH_HEADLINE });
         else if (result) finish(s, result);
       } else if (now >= s.podium!.endsAt) toMenu(s, 'host.pick');
     },
@@ -242,6 +254,7 @@ export function createRules({ servers, catalog }: PackDeps): PackRules {
       s.now = now;
       const player = s.players.find(p => p.id === playerId);
       if (!player) return;
+      if (player.connected !== connected) s.mediaRev++; // the roster travels in the snapshot cache: a new revision resends it
       player.connected = connected;
       if (s.phase === 'mini') contain(s, m => m.server.presence?.(m.state, playerId, connected, miniApi(s)));
     },
@@ -249,10 +262,10 @@ export function createRules({ servers, catalog }: PackDeps): PackRules {
       const mini = s.phase === 'mini' ? contain(s, m => m.server.publicView(m.state, ctx.nowMs)) ?? null : null;
       return {
         phase: s.phase, players: s.players.map(p => ({ ...p })), vip: vip(s), settings: { ...s.settings },
-        trophies: { ...s.trophies }, played: [...s.played],
+        trophies: { ...s.trophies }, played: [...s.played], champions: s.champions.map(ids => [...ids]),
         menu: s.phase === 'menu' ? { votes: { ...s.votes }, lockAt: s.lockAt } : null,
         current: s.current && { ...s.current }, intro: s.intro && { endsAt: s.intro.endsAt, skips: [...s.intro.skips] },
-        mini, podium: s.podium && { ...s.podium }, music: s.music, cues: s.cues.map(c => ({ ...c })),
+        mini, podium: s.podium && { ...s.podium }, music: s.music, cues: s.cues.filter(c => ctx.nowMs - c.at <= CUE_TTL_MS).map(c => ({ ...c })),
         mediaRev: s.mediaRev, media: { ...s.media },
       };
     },

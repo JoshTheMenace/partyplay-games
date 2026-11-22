@@ -1,6 +1,7 @@
 /* TV cards: roster strip, prompt, answer and the anticipation → reveal → reaction → score choreography. */
 import type { CSSProperties, ReactNode } from 'react';
 import type { PackPlayer } from '../contract';
+import { isCrowd } from '../crowd';
 import { Avatar, AvatarBadge, AvatarStack, type AvatarSize } from './avatar';
 
 /** Font size (px) that keeps long player text readable inside a card: base for short lines, smaller as it grows. */
@@ -14,6 +15,7 @@ export function fitText(text: string, base: number): number {
  * `badges` adds a small pill per player (score, trophies…). Sized for 10 players across the TV.
  */
 export function PlayerStrip({ players, done, vip, badges, size, className = '' }: { players: readonly PackPlayer[]; done?: readonly string[]; vip?: string | null; badges?: Record<string, ReactNode>; size?: AvatarSize; className?: string }) {
+  if (isCrowd(players.length)) return <CrowdStrip players={players} done={done} vip={vip} badges={badges} className={className} />;
   const px = size ?? (players.length > 8 ? 80 : 100);
   return <ol className={`hj-strip ${className}`} aria-label={done ? `${players.filter(p => done.includes(p.id)).length} of ${players.length} players ready` : 'Players'}>
     {players.map(p => { const lit = done?.includes(p.id), fit = Math.floor(156 / .62 / Math.max(...p.name.split(' ').map(w => w.length))); return <li key={p.id} data-lit={lit || undefined} data-waiting={(done && !lit) || undefined} data-offline={!p.connected || undefined} style={{ '--c': p.color } as CSSProperties}>
@@ -23,6 +25,23 @@ export function PlayerStrip({ players, done, vip, badges, size, className = '' }
       <span className="hj-sr">{!p.connected ? 'offline' : lit ? 'ready' : done ? 'still working' : ''}</span>
     </li>; })}
   </ol>;
+}
+
+/**
+ * PlayerStrip above ten players: a big "23/32" counter and one or two rows of faces that light up as people finish.
+ * Names would be unreadable at this size, so they stay on the phones; screen readers still get the count.
+ */
+function CrowdStrip({ players, done, vip, badges, className }: { players: readonly PackPlayer[]; done?: readonly string[]; vip?: string | null; badges?: Record<string, ReactNode>; className: string }) {
+  const n = players.length, per = Math.ceil(n / (n > 20 ? 2 : 1)), px = Math.floor(Math.min(72, 1540 / per - 12)), lit = done ? players.filter(p => done.includes(p.id)).length : 0;
+  return <div className={`hj-strip-crowd ${className}`}>
+    {done && <p className="hj-strip-count" aria-hidden="true"><b className="kp-numeral" key={lit}>{lit}</b><small className="kp-numeral">/{n}</small></p>}
+    <ol style={{ '--per': per } as CSSProperties} aria-label={done ? `${lit} of ${n} players ready` : `${n} players`}>
+      {players.map(p => { const on = done?.includes(p.id); return <li key={p.id} data-lit={on || undefined} data-waiting={(done && !on) || undefined} data-offline={!p.connected || undefined} style={{ '--c': p.color } as CSSProperties}>
+        <Avatar avatar={p.avatar} color={p.color} size={px} crown={vip === p.id} mood={!p.connected ? 'sad' : on ? 'done' : done ? 'thinking' : 'idle'} />
+        {p.connected && badges?.[p.id] !== undefined && <em className="kp-numeral">{badges[p.id]}</em>}
+      </li>; })}
+    </ol>
+  </div>;
 }
 
 /** The current prompt as a big TV card. Strings auto-shrink with length. */
@@ -69,5 +88,5 @@ export function VoteReveal({ entries, step, className = '' }: { entries: readonl
 /** Waiting-room helper for the TV: who still owes an answer, as a row of thinking avatars. */
 export function StillWorking({ players, label = 'Still writing…' }: { players: readonly PackPlayer[]; label?: ReactNode }) {
   if (!players.length) return null;
-  return <div className="hj-still"><span>{label}</span>{players.map(p => <Avatar key={p.id} avatar={p.avatar} color={p.color} mood="thinking" size={52} />)}</div>;
+  return <div className="hj-still"><span>{label}</span>{players.slice(0, 12).map(p => <Avatar key={p.id} avatar={p.avatar} color={p.color} mood="thinking" size={52} />)}{players.length > 12 && <b className="kp-numeral">+{players.length - 12}</b>}</div>;
 }

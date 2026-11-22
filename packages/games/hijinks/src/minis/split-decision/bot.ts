@@ -21,11 +21,12 @@ export const bot: MiniBot<SplitPublic, SplitPrivate> = ({ view, me, now, random 
     if (random() < .1) return { turn, k: 'house', slot: open };
     const rather = me.task!.kind === 'rather', base = any(rather ? ACTIONS : CATCHES);
     const text = random() < .25 ? grow(base, rather ? ACTION_MORE : CATCH_MORE) : base;
-    return { turn, k: 'fill', slot: open, text: slots.some(x => x.text?.toLowerCase() === text.toLowerCase()) ? `${text} instead` : text };
+    // Option B must differ from option A; the retry stays inside the 60-character limit.
+    return { turn, k: 'fill', slot: open, text: slots.some(x => x.text?.toLowerCase() === text.toLowerCase()) ? (`${text} instead`.length <= MAX_FILL ? `${text} instead` : `${base} instead`) : text };
   }
   if (view.phase === 'vote' && me.role === 'voter' && me.side === undefined && t >= THINK.vote) return { turn, k: 'vote', side: random() < .5 ? 0 : 1 };
-  if (view.phase === 'final-vote' && view.final) {
-    const judged = me.judged ?? {}, next = carousel(view.final.entries, me.mine).find(e => !Object.hasOwn(judged, e.id));
+  if ((view.phase === 'final-vote' && view.final) || view.phase === 'sift') {
+    const judged = me.judged ?? {}, next = (me.queue ?? carousel(view.final?.entries ?? [], me.mine)).find(e => !Object.hasOwn(judged, e.id));
     if (next && t >= THINK.judge + THINK.judgeEach * Object.keys(judged).length) return { turn, k: 'judge', entry: next.id, side: random() < .5 ? 0 : 1 };
   }
   return null;

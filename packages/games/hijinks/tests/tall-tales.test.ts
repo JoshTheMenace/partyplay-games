@@ -6,7 +6,7 @@ import { LINES } from '../src/minis/tall-tales/narration';
 import { ADULT, FAMILY } from '../src/minis/tall-tales/content.server';
 import type { TallState } from '../src/minis/tall-tales/server';
 import { PACE } from '../src/server';
-import { MAX_LIE, MIN_OPTIONS, QUESTIONS, WRITE_S, same, tokens, type Beat, type TallPrivate, type TallPublic } from '../src/minis/tall-tales/types';
+import { BALLOT, MAX_LIE, MIN_OPTIONS, QUESTIONS, REVEAL_LIES, WRITE_S, same, tokens, type Beat, type TallPrivate, type TallPublic } from '../src/minis/tall-tales/types';
 
 const pub = (n: Night) => n.mini<TallPublic>();
 const me = (n: Night, id: string) => n.miniMe<TallPrivate>(id);
@@ -74,6 +74,44 @@ test('full games with bots: 3, 6 and 10 players finish with a sane result', asyn
     assert.ok(n.now - begin < 20 * 60_000, 'fits the time budget');
     n.toMenu(); assert.equal(n.state.phase, 'menu');
   }
+});
+
+test('big rooms: 32 and 64 players get personal ballots, the TV unmasks five lies, and the game is no longer than ten players', async () => {
+  const spans: Record<number, number> = {};
+  for (const players of [10, 32, 64]) {
+    const n = start(players, { seed: players }), begin = n.now, original = n.advance.bind(n);
+    let dealt = 0, lieBeats = 0, rest = 0, checked = '';
+    n.advance = (ms: number) => {
+      original(ms);
+      const v = pub(n);
+      if (v?.phase === 'choose' && v.field && checked !== v.turn) {
+        checked = v.turn; dealt++;
+        assert.deepEqual(v.options, [], 'a big room never lists every answer in public');
+        const s = inner(n), truth = s.options.find(o => o.kind === 'truth')!, seen = new Map<string, number>();
+        for (const id of n.ids) {
+          const mine = me(n, id), ballot = mine.ballot!;
+          assert.equal(ballot.length, BALLOT); assert.ok(ballot.some(o => o.id === truth.id), 'the truth is on every ballot');
+          assert.ok(ballot.every(o => !mine.mine!.includes(o.id)), 'never your own lie');
+          for (const o of ballot) if (o.id !== truth.id) seen.set(o.id, (seen.get(o.id) ?? 0) + 1);
+          const off = s.options.find(o => !ballot.some(b => b.id === o.id) && !mine.mine!.includes(o.id));
+          if (off) rejects(n.trySend(id, { turn: v.turn, k: 'choose', option: off.id }), /not on the list/);
+        }
+        const counts = [...seen.values()];
+        assert.equal(seen.size, s.options.length - 1, 'every lie reaches somebody');
+        assert.ok(Math.max(...counts) - Math.min(...counts) <= 2, `lies are dealt evenly: ${Math.min(...counts)}–${Math.max(...counts)} ballots`);
+      }
+      if (v?.phase === 'reveal') { lieBeats = Math.max(lieBeats, v.beats!.filter(b => b.kind === 'lie' || b.kind === 'house').length); rest += v.beats!.at(-1)?.kind === 'rest' ? 1 : 0; }
+    };
+    const { result, rejected } = await n.playMini();
+    spans[players] = n.now - begin;
+    assert.deepEqual(rejected, [], `${players}p bots were never rejected`);
+    assert.equal(Object.keys(result.scores).length, players);
+    if (players > 10) { assert.equal(dealt, QUESTIONS, 'every story used personal ballots'); assert.ok(lieBeats <= REVEAL_LIES, `${lieBeats} lies unmasked`); assert.ok(rest > 0, 'the lesser fibs were paid in one beat'); }
+    else assert.equal(dealt, 0, 'ten players still see every answer on the TV');
+    // Every banked point is accounted for by a beat or a private line.
+    assert.equal(Object.values(result.scores).reduce((a, b) => a + b, 0) % 25, 0);
+  }
+  for (const players of [32, 64]) assert.ok(spans[players]! <= spans[10]! * 1.1, `${players} players took ${spans[players]} ms, ten took ${spans[10]} ms`);
 });
 
 test('flow: round cards, a chooser per story, seven stories, scores after rounds 1 and 2, pace-scaled timers', () => {

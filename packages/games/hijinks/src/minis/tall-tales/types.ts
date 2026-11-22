@@ -7,6 +7,8 @@ export const PICK_S = 10, WRITE_S = 45, CHOOSE_S = 20;
 export const MIN_READ_MS = 1500, LIKE_GRACE_MS = 2500, PICKED_MS = 1800, ROUND_MS = 4600, SCORES_MS = 8000, FINAL_MS = 11000;
 /** Points: finding the truth, each player fooled by your lie (a house-assisted lie earns 25% less), each like. */
 export const TRUTH_PTS = 1000, FOOL_PTS = 500, HOUSE_RATE = .75, LIKE_PTS = 50;
+/** Big rooms: a phone lists the truth and seven lies dealt to it; the TV unmasks the five lies that fooled the most. */
+export const BALLOT = 8, REVEAL_LIES = 5, REST_MS = 3200;
 export const BLANK = '___';
 export const ROUNDS = [
   { name: 'Round 1', mult: 1, blurb: 'Three stories. Every sucker you fool pays 500.' },
@@ -25,6 +27,8 @@ export type Beat =
   | { kind: 'lie'; at: number; id: string; text: string; authors: Author[]; fooled: string[] }
   | { kind: 'house'; at: number; id: string; text: string; fooled: string[] }
   | { kind: 'truth'; at: number; id: string; text: string; found: string[]; points: number }
+  /** Big rooms: the fooling lies and decoys that did not make the TV's top five, paid together. Phones show each player's own. */
+  | { kind: 'rest'; at: number; lies: number; fooled: number }
   /** Every liked lie, most liked first (the TV features the top three). */
   | { kind: 'likes'; at: number; top: { id: string; text: string; likes: number; authors: string[] }[] };
 
@@ -45,6 +49,8 @@ export type TallPublic = {
   fact?: { teaser: string; text: string };
   /** Choose and reveal: every distinct answer (lies, the truth, house decoys) in display order. Ids are opaque. */
   options?: Option[];
+  /** Big rooms (more answers than fit one ballot): `options` stays empty, every phone gets its own ballot of `ballot` answers out of `answers`. */
+  field?: { answers: number; ballot: number };
   /** Reveal: beats that have started so far. */
   beats?: Beat[];
 };
@@ -58,6 +64,10 @@ export type TallPrivate = {
   offers?: string[];
   /** Choose/reveal: option ids you wrote, your pick and your likes. */
   mine?: string[]; choice?: string; likes?: string[];
+  /** Big rooms: the answers on your phone (the truth and lies you did not write) and your own lie's text. */
+  ballot?: Option[]; wrote?: string;
+  /** Big rooms, reveal: what the TV does not show. Your lie fooled this many for these points; the unshown lie you fell for. */
+  fooled?: { count: number; points: number }; fell?: { text: string; authors: string[] };
 };
 export type TallAction =
   | { turn: string; k: 'pick'; index: number }
@@ -102,4 +112,4 @@ export const TRUTH_STEPS = { stamp: 1400, found: 2300 } as const;
 export const LEAD_MS = 1800, LIKES_MS = 4600, TRUTH_MS = 5600;
 export const lieMs = (count: number) => count > 5 ? 3600 : 4400;
 /** When the beat's stamp lands (points are banked then). */
-export const stampAt = (b: Beat) => b.at + (b.kind === 'truth' ? TRUTH_STEPS.stamp : b.kind === 'likes' ? 900 : LIE_STEPS.stamp);
+export const stampAt = (b: Beat) => b.at + (b.kind === 'truth' ? TRUTH_STEPS.stamp : b.kind === 'likes' || b.kind === 'rest' ? 900 : LIE_STEPS.stamp);

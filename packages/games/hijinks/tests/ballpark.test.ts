@@ -5,7 +5,7 @@ import { miniInfo } from '../src/minis/catalog';
 import { LINES } from '../src/minis/ballpark/narration';
 import { ADULT, FAMILY, QUESTIONS, WANTED, WANTED_ADULT, WANTED_FAMILY } from '../src/minis/ballpark/content.server';
 import type { BallparkState } from '../src/minis/ballpark/server';
-import { AIM_MS, BET_POINTS, LOCK_MS, REVEAL, TIERS, WANTED_POINTS, WANTED_SIZE, betCopy, possible, tierOf, wins, type BallparkPrivate, type BallparkPublic, type Phase } from '../src/minis/ballpark/types';
+import { AIM_MS, BET_POINTS, CROWD_AGENTS, LOCK_MS, REVEAL, TIERS, WANTED_POINTS, WANTED_SIZE, betCopy, possible, tierOf, wins, type BallparkPrivate, type BallparkPublic, type Phase } from '../src/minis/ballpark/types';
 
 const pub = (n: Night) => n.mini<BallparkPublic>();
 const me = (n: Night, id: string) => n.miniMe<BallparkPrivate>(id);
@@ -93,6 +93,28 @@ test('full games with bots: 3, 6 and 10 players; every player is the agent once 
     assert.ok(n.now - begin < 15 * 60_000, 'fits the time budget even with bots');
     n.toMenu(); assert.equal(n.state.phase, 'menu');
   }
+});
+
+test('big rooms: 11, 32 and 64 players get six round-1 agents and three round-2 agents, and take no longer than ten players', async () => {
+  const bot = await import('../src/minis/ballpark/bot').then(m => m.bot), spans: Record<number, number> = {};
+  for (const players of [10, 11, 32, 64]) {
+    const n = start(players, { seed: players }), begin = n.now, agents: string[][] = [[], []];
+    let last = '', bets = 0;
+    const tracked: typeof bot = input => {
+      const v = pub(n);
+      if (v?.q && v.phase === 'survey' && v.turn !== last) { last = v.turn; agents[v.round - 1]!.push(v.q.agent); }
+      if (v?.phase === 'reveal') bets = Math.max(bets, Object.keys(v.result!.bets).length);
+      return bot(input);
+    };
+    const { result, rejected } = n.runMini(tracked);
+    spans[players] = n.now - begin;
+    assert.deepEqual(rejected, [], `${players}p bots were never rejected`);
+    assert.equal(agents[0]!.length, players > 10 ? CROWD_AGENTS : players); assert.equal(new Set(agents[0]).size, agents[0]!.length, 'nobody dials twice in round 1');
+    assert.equal(agents[1]!.length, 3);
+    assert.equal(bets, players - 1, 'everyone but the agent bets on every question');
+    assert.equal(Object.keys(result.scores).length, players);
+  }
+  for (const players of [11, 32, 64]) assert.ok(spans[players]! <= spans[10]!, `${players} players took ${spans[players]} ms, ten took ${spans[10]} ms`);
 });
 
 test('round 2 with seven or more players: the three lowest connected scorers take the dial', () => {

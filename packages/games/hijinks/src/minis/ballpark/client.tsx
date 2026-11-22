@@ -2,6 +2,7 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { ArcadeButton, StatusNotice } from '../../../../../party-ui/src/index';
 import type { MiniClient, MiniViewProps, PackPlayer } from '../../core/contract';
+import { isCrowd } from '../../core/crowd';
 import {
   Avatar, AvatarBadge, AvatarStack, BigTitle, Callout, Confetti, PhoneDone, PhoneShell, PhoneWaiting, PlayerStrip, Scoreboard, StillWorking, Timer,
   fitText, ordinal, rankOf, useDraft, useNow, useSend, useTimeline,
@@ -97,6 +98,8 @@ function Meter({ dial, guess, truth, much, winning, live }: { dial: number | nul
 }
 
 // ---------- TV ----------
+/** Big rooms: a booth names up to nine bettors (ten players or fewer) or shows up to 40 faces; Most Wanted lists its ten best hunters. */
+const BOOTH_NAMES = 9, BOOTH_FACES = 40, HUNTERS = 10;
 
 /** Survey: radar blips (one per anonymous answer), the question on teleprinter paper and the agent on deck. */
 function SurveyTV({ view, players, vip, now }: P) {
@@ -123,13 +126,19 @@ function SurveyTV({ view, players, vip, now }: P) {
 
 /** One side of the betting floor. Bets stay hidden until the reveal; then avatars drop in and a winning booth stamps its pay.
     Everyone in a booth wins or loses together, so the pay shows once (a crowd of nine still fits). */
-function Booth({ zone, guess, bettors, step, r, shrink }: { zone: Bet; guess: number; bettors: PackPlayer[]; step: number; r?: Reveal; shrink?: boolean }) {
+function Booth({ zone, guess, bettors, step, r, shrink, crowd }: { zone: Bet; guess: number; bettors: PackPlayer[]; step: number; r?: Reveal; shrink?: boolean; crowd?: boolean }) {
   const copy = betCopy(zone, guess), settled = step >= 4 && !!r, won = settled && wins(zone, r.guess, r.truth), dense = bettors.length > 4, empty = step >= 1 && !!r && !bettors.length;
-  return <div className="bp-booth" data-bet={zone} data-win={(settled && won) || undefined} data-lose={(settled && !won) || undefined} style={empty && shrink ? { flex: 'none' } : { flexGrow: 1 + (step >= 1 ? bettors.length : 0) }}>
-    <header><b className="kp-title">{zone.endsWith('higher') ? '▲' : '▼'} {copy.label}</b><small>{possible(zone, guess) ? copy.range : 'Off the scale'}{zone.startsWith('much') && <em>×2</em>}</small></header>
-    {step >= 1 && r && <ul data-dense={dense || undefined}>{bettors.map((p, i) => <li key={p.id} style={{ animationDelay: `${i * 90}ms` }}>
-      <AvatarBadge player={p} size={dense ? 52 : 68} layout="column" mood={settled ? (won ? 'happy' : 'sad') : 'thinking'} />
-    </li>)}</ul>}
+  // A big room's booths show a head count and faces (names would not fit two booths a side); they share the floor by the rows they need.
+  const faces = crowd || bettors.length > BOOTH_NAMES, face = bettors.length > 24 ? 34 : bettors.length > 14 ? 40 : bettors.length > 8 ? 52 : 64, rows = Math.ceil(Math.min(bettors.length, BOOTH_FACES) / Math.floor(340 / (face + 4)));
+  return <div className="bp-booth" data-bet={zone} data-win={(settled && won) || undefined} data-lose={(settled && !won) || undefined} style={empty && shrink ? { flex: 'none' } : { flexGrow: step < 1 ? 1 : faces ? 120 + rows * (face + 4) : 1 + bettors.length }}>
+    <header><b className="kp-title">{zone.endsWith('higher') ? '▲' : '▼'} {copy.label}{faces && step >= 1 && r && bettors.length > 0 && <i className="bp-booth-n kp-numeral" aria-label={`${bettors.length} agents`}>{bettors.length}</i>}</b><small>{possible(zone, guess) ? copy.range : 'Off the scale'}{zone.startsWith('much') && <em>×2</em>}</small></header>
+    {step >= 1 && r && (faces
+      ? <ul data-crowd>{bettors.slice(0, BOOTH_FACES).map((p, i) => <li key={p.id} style={{ animationDelay: `${Math.min(i * 40, 900)}ms` }}>
+          <Avatar avatar={p.avatar} color={p.color} size={face} mood={settled ? (won ? 'happy' : 'sad') : 'thinking'} label={p.name} /></li>)}
+          {bettors.length > BOOTH_FACES && <li className="bp-booth-more kp-numeral">+{bettors.length - BOOTH_FACES}</li>}</ul>
+      : <ul data-dense={dense || undefined}>{bettors.map((p, i) => <li key={p.id} style={{ animationDelay: `${i * 90}ms` }}>
+          <AvatarBadge player={p} size={dense ? 52 : 68} layout="column" mood={settled ? (won ? 'happy' : 'sad') : 'thinking'} />
+        </li>)}</ul>)}
     {settled && won && bettors.length > 0 && <span className="bp-stamp bp-booth-pay">+{zone.startsWith('much') ? BET_POINTS.much : BET_POINTS.plain}{bettors.length > 1 && <small> each</small>}</span>}
     {empty && <p className="bp-booth-empty">Nobody</p>}
     {!r && <span className="bp-booth-sealed kp-title" aria-hidden="true">?</span>}
@@ -141,7 +150,7 @@ function Floor({ side, guess, much, view, players, step }: { side: 'lower' | 'hi
   const crowds = list.map(zone => r ? players.filter(p => r.bets[p.id] === zone) : []);
   // Round 2: an empty booth shrinks to its header when the booth beside it has bettors, so a crowd of nine still fits.
   return <div className="bp-floor" data-side={side}>
-    {list.map((zone, i) => <Booth key={zone} zone={zone} guess={guess} step={r ? step : 0} r={r} bettors={crowds[i]!} shrink={crowds.some(c => c.length > 0)} />)}
+    {list.map((zone, i) => <Booth key={zone} zone={zone} guess={guess} step={r ? step : 0} r={r} bettors={crowds[i]!} shrink={crowds.some(c => c.length > 0)} crowd={isCrowd(players.length)} />)}
   </div>;
 }
 
@@ -194,9 +203,11 @@ function DialTV({ view, players, now }: P) {
 /** The two crowds: anonymous agents (or real faces when the question is on the record). */
 function Crowds({ r, players }: { r: Reveal; players: readonly PackPlayer[] }) {
   if (r.house) return <span className="bp-house">Not enough intel came in, so the lab made up a number.</span>;
+  // Every answer is one figure; a big room's figures shrink so both crowds still share the footer.
+  const all = r.yes + r.no, face = all > 40 ? 26 : all > 20 ? 36 : 56;
   const side = (said: 'yes' | 'no', n: number, ids?: string[]) => <span className="bp-crowd" data-said={said}>
     <b className="kp-numeral">{n}</b><small>said {said}</small>
-    <span className="bp-crowd-row">{ids ? ids.map(id => { const p = find(players, id); return p && <Avatar key={id} avatar={p.avatar} color={p.color} size={56} mood={said === 'yes' ? 'happy' : 'idle'} />; })
+    <span className="bp-crowd-row" style={all > 20 ? { '--spy': face / 56 } as CSSProperties : undefined}>{ids ? ids.map(id => { const p = find(players, id); return p && <Avatar key={id} avatar={p.avatar} color={p.color} size={face} mood={said === 'yes' ? 'happy' : 'idle'} />; })
       : Array.from({ length: n }, (_, i) => <Spy key={i} />)}</span>
   </span>;
   return <span className="bp-crowds">{side('yes', r.yes, r.yesIds)}<i className="bp-crowds-vs">{r.yesIds ? 'on the record' : 'anonymous'}</i>{side('no', r.no, r.noIds)}</span>;
@@ -248,8 +259,9 @@ function WantedTV({ view, players, vip, now }: P) {
       </li>;
     })}</ol>
     {view.phase !== 'wanted' ? <PlayerStrip players={players} done={view.done} vip={vip} size={players.length > 8 ? 64 : 76} />
-      : <div className="bp-hunters" role="status">{totals ? hunters.map((p, i) => <span key={p.id} className="bp-hunter" style={{ animationDelay: `${i * 80}ms` }}>
-          <Avatar avatar={p.avatar} color={p.color} size={56} mood={r!.gains[p.id]! > 0 ? 'happy' : 'sad'} /><b className="hj-name">{p.name}</b><em className="kp-numeral">+{r!.gains[p.id]}</em></span>)
+      : <div className="bp-hunters" role="status">{totals ? <>{hunters.slice(0, HUNTERS).map((p, i) => <span key={p.id} className="bp-hunter" style={{ animationDelay: `${i * 80}ms` }}>
+          <Avatar avatar={p.avatar} color={p.color} size={56} mood={r!.gains[p.id]! > 0 ? 'happy' : 'sad'} /><b className="hj-name">{p.name}</b><em className="kp-numeral">+{r!.gains[p.id]}</em></span>)}
+          {hunters.length > HUNTERS && <span className="bp-hunter bp-hunter-more">+{hunters.length - HUNTERS} more hunters · totals on your phone</span>}</>
         : <p>Counting the ticks…</p>}</div>}
     {totals && hunters.some(p => r!.gains[p.id]! > 0) && <Confetti burst="most-wanted" count={110} />}
   </section>;

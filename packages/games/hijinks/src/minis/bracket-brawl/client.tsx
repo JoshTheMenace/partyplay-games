@@ -76,6 +76,7 @@ function tickerItems(view: BrawlPublic, players: readonly PackPlayer[]): string[
   const decided = decidedBouts(view), left = view.entries.length - decided.length;
   const outs = decided.slice(-4).map(b => slotOf(view, b.sides[1 - b.winner!])).map(e => `KO: “${short(e?.text ?? '')}” (${e?.house ? 'the House' : find(players, e?.by)?.name ?? 'someone'})`);
   const base = [`Bracket ${view.bracket} of ${BRACKETS}: ${KIND_NAMES[view.kind]}`, KIND_RULES[view.kind], 'Call the champion for bonus points', 'House answers fight for pride only'];
+  if (view.phase === 'heats') return [...base, 'Qualifying heats under way', `${view.field?.answers ?? 'Too many'} answers, ${view.size} slots`, 'Send the funniest two through'];
   if (view.phase === 'write') return [...base, 'Answers flooding the locker room', 'Keep it under 50 characters', 'Funny beats clever. Clever beats nothing.'];
   if (view.champ) return [`Champion crowned: “${short(slotOf(view, view.champ.entry)?.text ?? '')}”`, view.champ.oracles.length ? `${plural(view.champ.oracles.length, 'player')} called it` : 'Nobody called it', ...base];
   return [...(view.entries.length ? [`${left} answers still standing`] : []), ...outs, ...base, 'Ties are settled by coin flip. No appeals.'];
@@ -278,17 +279,18 @@ const GhostBracket = () => <svg className="bb-ghost" viewBox="0 0 1792 560" aria
 </svg>;
 
 function WriteTV({ view, players, vip, now }: P) {
-  const blind = view.kind === 'blind', smack = view.kind === 'smackdown';
+  const blind = view.kind === 'blind', smack = view.kind === 'smackdown', field = view.phase === 'heats' ? view.field : undefined;
   return <section className="bb-write">
     <GhostBracket />
     <Screen className="bb-write-screen" glow={blind ? '#ff3d7f' : smack ? '#ffd24a' : undefined}>
-      <p className="bb-write-kicker">{blind ? 'Blind bracket · answer the category' : smack ? 'Smackdown · part one' : 'Write an answer · it enters the bracket'}</p>
+      <p className="bb-write-kicker">{field ? `Qualifying · ${field.answers} answers fight for ${field.slots} slots` : blind ? 'Blind bracket · answer the category' : smack ? 'Smackdown · part one' : 'Write an answer · it enters the bracket'}</p>
       <p className="bb-write-prompt" style={{ fontSize: fitText((blind ? view.hint : view.prompt) ?? '', 112) }}>{blind ? view.hint : view.prompt}</p>
       {blind && <div className="bb-classified-row"><span className="bb-classified">Real prompt: classified</span></div>}
-      {smack && <p className="bb-write-note">Part two: a brand-new question every round. <b>Votes count double!</b></p>}
+      {field ? <p className="bb-write-note">Your phone has {field.ballot} answers. <b>Send your best {field.picks} through.</b></p>
+        : smack && <p className="bb-write-note">Part two: a brand-new question every round. <b>Votes count double!</b></p>}
     </Screen>
     <div className="bb-write-row">
-      <div className="bb-tally-big" role="status"><b className="kp-numeral">{view.done.length}<small>/{players.length}</small></b><span>ready to brawl<small>{view.size}-slot bracket · max {MAX_ANSWER} characters</small></span></div>
+      <div className="bb-tally-big" role="status"><b className="kp-numeral">{view.done.length}<small>/{players.length}</small></b><span>{field ? 'phones have picked' : 'ready to brawl'}<small>{field ? `The top ${field.slots} make the bracket` : `${view.size}-slot bracket · max ${MAX_ANSWER} characters`}</small></span></div>
       <Timer deadline={view.deadline} now={now} total={view.deadline - view.at} size={132} />
     </div>
     <PlayerStrip players={players} done={view.done} vip={vip} />
@@ -311,8 +313,8 @@ function Display(props: P) {
   const { view } = props;
   return <div className="hj-bracket-brawl bb-tv" data-phase={view.phase} data-kind={view.kind}>
     <Arena />
-    <Bug view={view}>{view.phase === 'write' ? null : <span className="bb-bug-note">{view.phase === 'scores' ? `Bracket ${view.bracket} complete` : view.champ ? 'Champion crowned' : <><b className="kp-numeral">{view.entries.length - decidedBouts(view).length}</b> still standing</>}</span>}</Bug>
-    {view.phase === 'write' ? <WriteTV {...props} /> : view.phase === 'scores' ? <ScoresTV {...props} /> : <BracketTV {...props} />}
+    <Bug view={view}>{view.phase === 'write' || view.phase === 'heats' ? null : <span className="bb-bug-note">{view.phase === 'scores' ? `Bracket ${view.bracket} complete` : view.champ ? 'Champion crowned' : <><b className="kp-numeral">{view.entries.length - decidedBouts(view).length}</b> still standing</>}</span>}</Bug>
+    {view.phase === 'write' || view.phase === 'heats' ? <WriteTV {...props} /> : view.phase === 'scores' ? <ScoresTV {...props} /> : <BracketTV {...props} />}
     <Ticker {...props} />
   </div>;
 }
@@ -346,6 +348,21 @@ function WritePhone({ view, me, player, players, vip, now, send, sessionKey }: P
   </PhoneShell>;
 }
 
+/** Qualifying heats (big rooms): six answers that are not yours; send two through to the bracket. */
+function HeatsPhone({ view, me, player, vip, now, send }: Phone) {
+  const shell = { player, vip: vip === player.id, accent: ACCENT, eyebrow: `Bracket ${view.bracket} · qualifying`, timer: { deadline: view.deadline, now, total: view.deadline - view.at } };
+  const ballot = me.ballot ?? [], picks = Math.min(view.field?.picks ?? 2, ballot.length);
+  if (me.heat || !ballot.length) return <PhoneShell {...shell} title={me.heat ? 'Sent through!' : 'Sit tight'}>
+    <PhoneDone title={me.heat ? 'Picks locked in.' : 'Nothing to pick'} detail={`The top ${view.field?.slots ?? view.size} answers make the bracket.`}>
+      {me.heat && <ul className="bb-mine">{me.heat.map(id => <li key={id}><span>{ballot.find(a => a.id === id)?.text}</span></li>)}</ul>}
+    </PhoneDone>
+  </PhoneShell>;
+  return <PhoneShell {...shell} title={`Send ${picks} through`}>
+    <p className="bb-phone-prompt">{view.kind === 'blind' ? view.hint : view.prompt}</p>
+    <PhoneChoices multi min={picks} max={picks} label="Answers" submitLabel="Send them through" options={ballot.map(a => ({ id: a.id, label: a.text }))} onSubmit={ids => send({ turn: view.turn, k: 'heat', picks: ids })} />
+  </PhoneShell>;
+}
+
 function TwistPhone({ view, me, player, vip, now }: Phone) {
   const shown = useTimeline(view.at, [TWIST.reveal], now) > 0, mine = me.mine.map(id => slotOf(view, id)?.text).filter(Boolean);
   return <PhoneShell player={player} vip={vip === player.id} accent={ACCENT} eyebrow={`Bracket ${view.bracket} · Blind`} title={shown ? 'Plot twist!' : 'Drumroll…'}>
@@ -374,7 +391,7 @@ function Status({ view, me }: { view: BrawlPublic; me: BrawlPrivate }) {
   const out = (id: string) => { const e = slotOf(view, id); return !!(e?.by || e?.house) && view.champ?.entry !== id; };
   const alive = me.mine.filter(id => !out(id)).length;
   return <ul className="bb-status">
-    <li data-good={alive > 0 || undefined}>{me.mine.length ? alive ? `${plural(alive, 'answer')} still standing` : 'Your answers are out. Vote for chaos!' : 'The House answered for you.'}</li>
+    <li data-good={alive > 0 || undefined}>{me.cut ? 'Your answer missed the cut. Call the champion and vote!' : me.mine.length ? alive ? `${plural(alive, 'answer')} still standing` : 'Your answers are out. Vote for chaos!' : 'The House answered for you.'}</li>
     {me.pick && <li data-good={!out(me.pick) || undefined}><Seed id={me.pick} /><span>Your pick “{slotOf(view, me.pick)?.text}” {out(me.pick) ? 'is out' : 'is still alive'}</span></li>}
   </ul>;
 }
@@ -467,6 +484,7 @@ function Controller(props: P) {
   const phone: Phone = { ...props, me, player };
   return <div className="hj-bracket-brawl bb-phone">
     {view.phase === 'write' ? <WritePhone {...phone} />
+      : view.phase === 'heats' ? <HeatsPhone {...phone} />
       : view.phase === 'twist' ? <TwistPhone {...phone} />
       : view.phase === 'predict' ? <PredictPhone {...phone} />
       : view.phase === 'stage' ? <StagePhone {...phone} />

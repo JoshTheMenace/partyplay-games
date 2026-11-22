@@ -1,12 +1,14 @@
 /* Split Decision rules: everyone finishes their own dilemma to split the room 50/50 (×1), then writes both sides of a
    would-you-rather (×2), then The Big Split: one dilemma, everyone's take, judged yes/no in a carousel (×3). Server only. */
 import type { MiniApi, MiniResult, MiniServer } from '../../core/contract';
+import { isCrowd } from '../../core/crowd';
 import { variant } from '../../core/narration';
+import { dealBallots } from '../../core/server/ballots';
 import { dealFresh } from '../../core/server/deck';
 import { integer, record } from '../../core/server/validate';
 import { HOUSE_CLAUSES, HOUSE_OPTIONS, dilemmaPool, finalPool, ratherPool } from './content.server';
 import {
-  BOLD, FINAL_WRITE_S, LAST_ROUND, MAX_FILL, MIN_READ_MS, RATHER_S, RESULT, SCORES_MS, VOTE_S, WRITE_S, finalBeats, judgeSeconds,
+  BOLD, FINAL_SHOWN, FINAL_WRITE_S, LAST_ROUND, MAX_FILL, MIN_READ_MS, RATHER_S, RESULT, SCORES_MS, SIFT, SPOTLIGHT, VOTE_S, WRITE_S, finalBeats, judgeSeconds,
   minority, partsOf, sentence, showBeats, splitPoints, verdictOf,
   type FinalOutcome, type Kind, type Outcome, type Phase, type Side, type SplitPrivate, type SplitPublic, type Verdict,
 } from './types';
@@ -22,6 +24,8 @@ export type SplitState = {
   dilemmas: string[]; rathers: string[]; finalParts: string[]; clauses: string[]; options: string[];
   /** This round's scenarios in presentation order (The Big Split: the takes, in grid order once writing ends). */
   cards: Scenario[]; index: number;
+  /** Big rooms: each judge's carousel (scenario ids), every scenario of the round once `cards` holds only the TV's replays, and the takes the TV skips. */
+  ballots: Record<string, string[]>; pool: Scenario[]; hidden: FinalOutcome[];
   reveal: FinalOutcome[]; best: string[]; bold: Record<string, number>;
   scores: Record<string, number>; prev: Record<string, number>; stats: Record<Stat, Record<string, number>>;
   done: boolean;
@@ -33,8 +37,9 @@ const texts = (c: Scenario) => c.fills.map(f => f.text ?? '');
 const writing = (s: SplitState) => s.phase === 'write' || s.phase === 'final-write';
 const taskOf = (s: SplitState, id: string) => writing(s) ? s.cards.find(c => c.author === id) : undefined;
 const written = (s: SplitState, id: string) => taskOf(s, id)?.fills.every(f => f.text !== null) ?? true;
-/** Takes a judge still owes in The Big Split (every take but their own). */
-const owed = (s: SplitState, id: string) => s.cards.filter(c => c.author !== id && !Object.hasOwn(c.votes, id));
+/** Scenarios a judge still owes: every one but their own, or the ones dealt to their carousel in a big room. */
+const owed = (s: SplitState, id: string) => { const dealt = own(s.ballots, id); return s.cards.filter(c => c.author !== id && (!dealt || dealt.includes(c.id)) && !Object.hasOwn(c.votes, id)); };
+const votesOn = (c: Scenario) => Object.keys(c.votes).length;
 
 /** Words that start a catch but never a name: a phone's automatic capital on them is lowered. */
 const STARTERS = /^(?:You|Your|Yours|A|An|The|Every\w*|All|It|Its|There|They|Their|People|No|Nobody|Someone|Somebody|My|We|Our|Only|Half|One|Each|Some\w*|Any\w*|This|That|After|When|If|Never|Always)\b/;
@@ -74,7 +79,7 @@ const scenario = (author: string, kind: Kind, parts: string[], i: number): Scena
 
 /** Rounds 1–2: everyone gets their own template (presentation order shuffled). Round 3: one template for everyone. */
 function startRound(s: SplitState, api: MiniApi) {
-  s.round++; s.prev = { ...s.scores }; s.index = 0;
+  s.round++; s.prev = { ...s.scores }; s.index = 0; s.ballots = {}; s.pool = []; s.hidden = [];
   if (s.round > 1) api.sfx('gong');
   if (s.round === LAST_ROUND) {
     s.cards = s.ids.map((id, i) => scenario(id, 'dilemma', [...s.finalParts], i));
@@ -82,7 +87,8 @@ function startRound(s: SplitState, api: MiniApi) {
     return go(s, api, 'final-write', api.seconds(FINAL_WRITE_S));
   }
   const kind: Kind = s.round === 1 ? 'dilemma' : 'rather', deck = kind === 'dilemma' ? s.dilemmas : s.rathers;
-  s.cards = api.shuffle(s.ids).map((id, i) => scenario(id, kind, partsOf(deck[i]!), i));
+  // A room bigger than the bank (64 players, 63 family would-you-rathers) shares a few templates rather than running dry.
+  s.cards = api.shuffle(s.ids).map((id, i) => scenario(id, kind, partsOf(deck[i % deck.length]!), i));
   api.music('split-decision');
   if (kind === 'rather') api.say('split-decision.rather');
   go(s, api, 'write', api.seconds(kind === 'dilemma' ? WRITE_S : RATHER_S));
@@ -92,11 +98,28 @@ function startRound(s: SplitState, api: MiniApi) {
 function endWrite(s: SplitState, api: MiniApi) {
   s.cards = s.cards.filter(c => s.online[c.author] || c.fills.some(f => f.text !== null));
   for (const c of s.cards) for (const f of c.fills) if (f.text === null) Object.assign(f, { text: house(s, c), house: true });
+  // A big room can't vote through 32 cards one by one: every phone judges eight of them at once, dealt evenly.
+  const crowd = isCrowd(s.ids.length) && s.cards.length > SIFT + 1;
+  if (s.phase === 'final-write') s.cards = api.shuffle(s.cards).map((c, i) => ({ ...c, id: `e${i}` }));
+  if (crowd) { const hands = dealBallots(api, s.ids, s.cards, SIFT, (c, id) => c.author === id); s.ballots = Object.fromEntries(s.ids.map(id => [id, hands[id]!.map(c => c.id)])); }
   if (s.phase === 'final-write') {
-    s.cards = api.shuffle(s.cards).map((c, i) => ({ ...c, id: `e${i}` }));
     api.music('vote'); api.sfx('whoosh'); api.speak(sentence(s.finalParts, ['blank']));
-    return go(s, api, 'final-vote', api.seconds(judgeSeconds(Math.max(1, s.cards.length - 1))));
+    return go(s, api, 'final-vote', api.seconds(judgeSeconds(crowd ? SIFT : Math.max(1, s.cards.length - 1))));
   }
+  if (crowd) { api.music('vote'); api.sfx('whoosh'); return go(s, api, 'sift', api.seconds(judgeSeconds(SIFT))); }
+  return s.cards.length ? showCard(s, api) : endRound(s, api);
+}
+
+/**
+ * Big rooms: the phones have voted. Every scenario is scored now; the TV replays one room-uniter (if any) and then the
+ * closest splits, best last. Everyone's own result is on their phone.
+ */
+function endSift(s: SplitState, api: MiniApi) {
+  for (const c of s.cards) settleCard(s, c);
+  s.pool = s.cards;
+  const ranked = [...s.cards].sort((a, b) => b.outcome!.points - a.outcome!.points || votesOn(b) - votesOn(a));
+  const flop = [...ranked].reverse().find(c => c.outcome!.verdict === 'unanimous' && votesOn(c) >= 3);
+  s.cards = [...(flop ? [flop] : []), ...ranked.filter(c => c !== flop && votesOn(c)).slice(0, SPOTLIGHT - (flop ? 1 : 0)).reverse()]; s.index = 0;
   return s.cards.length ? showCard(s, api) : endRound(s, api);
 }
 
@@ -122,11 +145,16 @@ function settle(s: SplitState, c: Scenario, mult: number) {
   return { sides, yes, no, points, bold, verdict, isHouse, low };
 }
 
-function reveal(s: SplitState, api: MiniApi) {
-  const c = card(s), r = settle(s, c, s.round);
+function settleCard(s: SplitState, c: Scenario) {
+  const r = settle(s, c, s.round);
   c.outcome = { author: c.author, sides: r.sides, points: r.points, verdict: r.verdict, bold: r.bold, ...(r.isHouse ? { house: true as const } : {}) };
+}
+/** The result beat of the card on the TV: scored now (a live vote) or already scored by the phones (a big-room replay). */
+function reveal(s: SplitState, api: MiniApi) {
+  const c = card(s);
+  if (!c.outcome) settleCard(s, c);
   api.music('reveal');
-  go(s, api, 'result', RESULT.end + (r.verdict === 'perfect' || r.verdict === 'unanimous' ? RESULT.bonus : 0));
+  go(s, api, 'result', RESULT.end + (c.outcome!.verdict === 'perfect' || c.outcome!.verdict === 'unanimous' ? RESULT.bonus : 0));
 }
 
 function callout(s: SplitState, api: MiniApi, verdict: Verdict, bold: boolean) {
@@ -147,6 +175,8 @@ function finalReveal(s: SplitState, api: MiniApi) {
   }).sort((a, b) => a.points - b.points);
   const top = Math.max(0, ...s.reveal.map(r => r.points));
   s.best = top ? s.reveal.filter(r => r.points === top).map(r => r.author) : [];
+  // A big room's TV reveals the best eight takes; the rest are on their authors' phones.
+  if (Object.keys(s.ballots).length) s.hidden = s.reveal.splice(0, Math.max(0, s.reveal.length - FINAL_SHOWN));
   api.music('reveal'); api.sfx('drumroll');
   go(s, api, 'final-result', finalBeats(s.reveal.length).end);
 }
@@ -160,7 +190,7 @@ export const server: MiniServer<SplitState, SplitPublic, SplitPrivate> = {
       phase: 'write', round: 0, turn: '', seq: 0, at: api.now, deadline: api.now, stage: 0, hurried: false,
       dilemmas: dealFresh(api, dilemmaPool(family), ids.length), rathers: dealFresh(api, ratherPool(family), ids.length),
       finalParts: partsOf(dealFresh(api, finalPool(family), 1)[0]!), clauses: api.shuffle(HOUSE_CLAUSES), options: api.shuffle(HOUSE_OPTIONS),
-      cards: [], index: 0, reveal: [], best: [], bold: {},
+      cards: [], index: 0, ballots: {}, pool: [], hidden: [], reveal: [], best: [], bold: {},
       scores: zero(), prev: zero(), stats: { perfect: zero(), bold: zero(), unanimous: zero() }, done: false,
     };
     startRound(s, api);
@@ -196,9 +226,9 @@ export const server: MiniServer<SplitState, SplitPublic, SplitPrivate> = {
       }
       case 'judge': {
         record(a, ['turn', 'k', 'entry', 'side']);
-        if (s.phase !== 'final-vote') throw new Error('Judging is closed.');
+        if (s.phase !== 'final-vote' && s.phase !== 'sift') throw new Error('Judging is closed.');
         const c = s.cards.find(x => x.id === a.entry);
-        if (!c) throw new Error('That take is not on the board.');
+        if (!c || own(s.ballots, id)?.includes(c.id) === false) throw new Error('That take is not on the board.');
         if (c.author === id) throw new Error('No judging your own take!');
         if (Object.hasOwn(c.votes, id)) throw new Error('You already judged that one.');
         c.votes[id] = integer(a.side, 0, 1) as Side; api.sfx('tap');
@@ -225,6 +255,7 @@ export const server: MiniServer<SplitState, SplitPublic, SplitPrivate> = {
           if (stage === b.fills.length - 1) api.speak(sentence(c.parts, texts(c)));
         });
         if (now < s.deadline) return;
+        if (c.outcome) return reveal(s, api);
         if (s.index === 0 && s.round === 1) api.say('host.vote.2');
         api.sfx('ding');
         return go(s, api, 'vote', api.seconds(VOTE_S));
@@ -248,8 +279,8 @@ export const server: MiniServer<SplitState, SplitPublic, SplitPrivate> = {
       case 'scores':
         if (now >= s.deadline) startRound(s, api);
         return;
-      case 'final-vote': {
-        if ((online.every(id => !owed(s, id).length) && t >= MIN_READ_MS) || now >= s.deadline) return finalReveal(s, api);
+      case 'sift': case 'final-vote': {
+        if ((online.every(id => !owed(s, id).length) && t >= MIN_READ_MS) || now >= s.deadline) return s.phase === 'sift' ? endSift(s, api) : finalReveal(s, api);
         if (!s.hurried && s.deadline - now <= 6000 && s.deadline - s.at > 15_000) { s.hurried = true; api.sfx('tick-fast'); }
         return;
       }
@@ -273,15 +304,20 @@ export const server: MiniServer<SplitState, SplitPublic, SplitPrivate> = {
     const pub: SplitPublic = { phase: s.phase, round: s.round, turn: s.turn, at: s.at, deadline: s.deadline, scores: { ...s.scores }, done: [] };
     if (s.phase === 'scores') pub.prev = { ...s.prev };
     if (writing(s)) pub.done = s.ids.filter(id => taskOf(s, id) && written(s, id));
-    if (s.phase === 'final-vote') pub.done = s.ids.filter(id => s.cards.length > 1 && !owed(s, id).length);
+    const dealt = Object.keys(s.ballots).length > 0;
+    if (s.phase === 'final-vote' || s.phase === 'sift') pub.done = s.ids.filter(id => s.cards.length > 1 && !owed(s, id).length);
+    if (s.phase === 'sift') pub.sift = { cards: s.cards.length, ballot: SIFT };
     if (s.phase === 'show' || s.phase === 'vote' || s.phase === 'result') {
       const c = card(s), o = c.outcome;
-      pub.card = { index: s.index, count: s.cards.length, kind: c.kind, parts: [...c.parts], fills: texts(c), votes: Object.keys(c.votes).length };
+      pub.card = { index: s.index, count: s.cards.length, kind: c.kind, parts: [...c.parts], fills: texts(c), votes: votesOn(c), ...(s.pool.length ? { replay: true as const } : {}) };
       if (s.phase === 'result' && o) pub.card.outcome = { ...o, sides: [[...o.sides[0]], [...o.sides[1]]] };
     }
     if (s.phase === 'final-write' || s.phase === 'final-vote' || s.phase === 'final-result') pub.final = {
-      parts: [...s.finalParts], entries: s.phase === 'final-write' ? [] : s.cards.map(c => ({ id: c.id, fill: c.fills[0]!.text! })),
+      parts: [...s.finalParts],
+      // A big room's takes stay on the phones that were dealt them; the TV only ever lists the ones it reveals.
+      entries: s.phase === 'final-write' || (dealt && s.phase === 'final-vote') ? [] : dealt ? s.reveal.map(r => ({ id: r.id, fill: r.fill })) : s.cards.map(c => ({ id: c.id, fill: c.fills[0]!.text! })),
       ...(s.phase === 'final-result' ? { result: { entries: s.reveal.map(r => ({ ...r })), best: [...s.best], bold: { ...s.bold } } } : {}),
+      ...(dealt && s.phase !== 'final-write' ? { field: { takes: s.cards.length, ballot: SIFT } } : {}),
     };
     return pub;
   },
@@ -294,11 +330,17 @@ export const server: MiniServer<SplitState, SplitPublic, SplitPrivate> = {
       me.role = c.author === id ? 'author' : 'voter';
       if (side !== undefined) me.side = side;
     }
-    if (s.phase === 'final-vote' || s.phase === 'final-result') {
+    if (s.phase === 'final-vote' || s.phase === 'final-result' || s.phase === 'sift') {
       const mine = s.cards.find(c => c.author === id);
-      if (mine) me.mine = mine.id;
+      if (mine && s.phase !== 'sift') me.mine = mine.id;
       me.judged = Object.fromEntries(s.cards.filter(c => Object.hasOwn(c.votes, id)).map(c => [c.id, c.votes[id]!]));
     }
+    const dealt = own(s.ballots, id);
+    if (dealt && (s.phase === 'sift' || s.phase === 'final-vote')) me.queue = dealt.map(x => { const c = s.cards.find(k => k.id === x)!; return { id: c.id, kind: c.kind, parts: [...c.parts], fills: texts(c) }; });
+    // Big rooms: your own scenario's split, once the phones have settled it (rounds: from the first replay; The Big Split: with the reveal).
+    const mine = s.pool.find(c => c.author === id)?.outcome, take = s.phase === 'final-result' && dealt ? [...s.hidden, ...s.reveal].find(r => r.author === id) : undefined;
+    if (mine && s.phase !== 'sift') me.own = { yes: mine.sides[0].length, no: mine.sides[1].length, points: mine.points, verdict: mine.verdict, ...(mine.house ? { house: true as const } : {}) };
+    if (take) me.own = { yes: take.yes, no: take.no, points: take.points, verdict: take.verdict, ...(take.house ? { house: true as const } : {}) };
     return me;
   },
 

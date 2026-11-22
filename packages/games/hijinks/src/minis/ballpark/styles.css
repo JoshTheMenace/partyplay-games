@@ -122,6 +122,9 @@
 .bp-booth li { position: relative; width: 116px; display: flex; justify-content: center; animation: hj-drop .5s cubic-bezier(.2, 1.4, .4, 1) backwards; }
 .bp-booth li .hj-badge { font-size: 19px; max-width: 100%; text-align: center; overflow-wrap: anywhere; }
 /* The pay stamp straddles the booth's bottom edge, clear of the title and the bettors' names. */
+.bp-booth ul[data-crowd] { gap: 4px; align-content: flex-start; } .bp-booth ul[data-crowd] li { width: auto; animation-name: hj-pop; }
+.bp-booth-n { margin-left: 14px; padding: 0 12px; border-radius: 99px; background: var(--kp-cream); color: var(--kp-ink); font-style: normal; font-size: 34px; -webkit-text-stroke: 0; }
+.bp-booth ul[data-crowd] .bp-booth-more { align-self: center; padding: 0 10px; font-size: 26px; color: var(--bp-amber); }
 .bp-booth-pay { position: absolute; bottom: -24px; left: 50%; translate: -50% 0; z-index: 2; padding: 0 14px; font-size: 32px; border-width: 5px; color: #17853a; background: #fbfaf2; }
 .bp-booth-pay small { font-size: .55em; }
 .bp-booth-sealed { margin: auto; font-size: 150px; color: #fff6e51f; -webkit-text-stroke: 0; filter: none; animation: hj-throb 2.4s ease-in-out infinite; }
@@ -133,6 +136,8 @@
 .bp-crowd[data-said=yes] { flex-direction: row-reverse; color: var(--bp-teal); } .bp-crowd[data-said=no] { color: var(--bp-amber); }
 .bp-crowd > b { font-size: 72px; line-height: 1; font-weight: 400; } .bp-crowd > small { font-family: var(--font-display); font-size: 30px; text-transform: uppercase; white-space: nowrap; }
 .bp-crowd-row { display: flex; flex-wrap: wrap; gap: 2px 4px; } .bp-crowd[data-said=yes] .bp-crowd-row { justify-content: flex-end; }
+.bp-crowd-row[style] .bp-spy { width: calc(34px * var(--spy)); height: calc(54px * var(--spy)); }
+.bp-hunter-more { padding-inline: 18px; font-size: 22px; font-weight: 900; color: var(--muted-foreground); border-style: dashed; }
 .bp-crowd-row > * { animation: hj-pop .4s cubic-bezier(.2, 1.6, .4, 1) backwards; }
 .bp-crowds-vs { flex: none; font-style: normal; font-family: var(--bp-mono); font-size: 20px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted-foreground); }
 .bp-house { font-size: 32px; color: var(--bp-amber); }

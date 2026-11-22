@@ -158,3 +158,5 @@
 @keyframes qc-sway { 50% { rotate: 1.5deg; } }
 @keyframes qc-wobble { 50% { rotate: -6deg; scale: 1.04; } }
 @media (prefers-reduced-motion: reduce) { .qc-sign, .qc-marquee, .qc-stage-mic .qc-mic, .qc-mystery, .qc-wipe::before { animation: none; } }
+/* Big-room Last Laugh: phones hold the ballots, so the TV shows the count where the answer grid would be. */
+.hj-quip-clash .qc-field { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; gap: 90px; }

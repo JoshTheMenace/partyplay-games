@@ -140,8 +140,14 @@ export const ANSWER = { picks: 900, correct: 2600, money: 3900, doom: 5300, end:
 /** Panic reveal: one beat per cup / searched room / doomed player, then the verdict and a hold. */
 export function panicBeats(kind: Kind, count: number) {
   const first = kind === 'coin' ? 600 : 1300, step = kind === 'hide' ? 1700 : kind === 'poison' ? 1000 : 800;
-  const steps = Array.from({ length: kind === 'coin' ? 0 : count }, (_, i) => first + i * step), verdict = first + steps.length * step + 500;
+  const steps = Array.from({ length: kind === 'coin' ? 0 : Math.min(count, PANIC_BEATS) }, (_, i) => first + i * step), verdict = first + steps.length * step + 500;
   return { steps, verdict, end: verdict + 4800 };
 }
+/** A reveal never runs longer than eleven beats (a ten-player room's worst case): a bigger doomed crowd is revealed a group per beat. */
+export const PANIC_BEATS = 11;
+/** The beat (0-based) on which item `i` of `count` is revealed. */
+export const beatOf = (i: number, count: number) => count <= PANIC_BEATS ? i : Math.floor(i * PANIC_BEATS / count);
+/** Poison Punch cups: one more than the doomed, at most nine in a big room (cups are shared from there). */
+export const MAX_CUPS = 9;
 /** Final turn reveal: items one by one, moves, body swaps, then the ghoul's step. */
 export const FINAL = { items: [700, 1500, 2300], move: 3400, swap: 5000, ghoul: 6200, end: 8200 } as const;

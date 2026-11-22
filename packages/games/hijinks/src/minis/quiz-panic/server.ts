@@ -1,5 +1,6 @@
 /* Quiz Panic rules: nine trivia questions with Panic Room challenges for the wrong, ghosts, then the Escape the Hotel race. Server only. */
 import type { MiniApi, MiniResult, MiniServer, PackPlayer } from '../../core/contract';
+import { isCrowd } from '../../core/crowd';
 import { variant } from '../../core/narration';
 import { dealFresh, freshDeck } from '../../core/server/deck';
 import { integer, record } from '../../core/server/validate';
@@ -7,7 +8,7 @@ import { WORDS, categoryPool, triviaPool, type Category } from './content.server
 import {
   ANSWER, CALL_S, DRINK_S, ESCAPE_BONUS, ESCAPE_MS, EXIT, FINAL, FINAL_INTRO_MS, FINAL_S, FINAL_TURNS, HIDE_S, LONE_PRIZE, MATH_S, MAX_WORD, MEMORIZE_MS,
   MIN_READ_MS, OPTIONS, PANIC_INTRO_MS, POISON_S, PRIZE, QUESTIONS, QUESTION_S, RECALL_S, ROOMS, SCRAMBLE_S, SCRAMBLE_TRIES, SEQUENCE, SUMS, SYMBOLS,
-  FLIP_MS, panicBeats, type AnswerReveal, type FinalResult, type Kind, type PanicPublic, type PanicReveal, type Phase, type QuizPrivate, type QuizPublic,
+  FLIP_MS, MAX_CUPS, beatOf, panicBeats, type AnswerReveal, type FinalResult, type Kind, type PanicPublic, type PanicReveal, type Phase, type QuizPrivate, type QuizPublic,
   type Side, type Stage, type Sum,
 } from './types';
 
@@ -104,7 +105,7 @@ function startPanic(s: QuizState, api: MiniApi, doomed: string[]) {
     rooms: {}, searched: [], words: {}, solved: [], misses: {}, miss: {}, flips: [], calls: {}, safe: [], out: [], dead: [],
   };
   if (kind === 'poison') {
-    p.poisoners = living(s).filter(id => !doomed.includes(id) && s.online[id]); p.cups = doomed.length + 1; p.stage = p.poisoners.length ? 'poison' : 'drink';
+    p.poisoners = living(s).filter(id => !doomed.includes(id) && s.online[id]); p.cups = isCrowd(s.ids.length) ? Math.min(doomed.length + 1, MAX_CUPS) : doomed.length + 1; p.stage = p.poisoners.length ? 'poison' : 'drink';
     if (!p.poisoners.length) p.poisoned = [int(api, 0, p.cups - 1)];
   }
   if (kind === 'math') for (const id of doomed) p.sums[id] = sums(api);
@@ -154,8 +155,12 @@ function endStage(s: QuizState, api: MiniApi) {
   const p = s.panic!, random = <T>(items: readonly T[]) => items[int(api, 0, items.length - 1)]!, cups = [...Array(p.cups).keys()];
   switch (p.stage) {
     case 'poison': {
-      // At least one poisoned cup and always at least one safe cup.
-      p.poisoned = [...new Set(Object.values(p.poisons))].sort((a, b) => a - b);
+      // At least one poisoned cup and always at least one safe cup. A big room has more spikers than cups, so only the
+      // most-spiked half of the table is deadly (ties by lot); otherwise twenty survivors would poison everything.
+      const spikes = (cup: number) => Object.values(p.poisons).filter(c => c === cup).length;
+      p.poisoned = [...new Set(Object.values(p.poisons))];
+      if (isCrowd(s.ids.length)) p.poisoned = api.shuffle(p.poisoned).sort((a, b) => spikes(b) - spikes(a)).slice(0, Math.max(1, p.cups >> 1));
+      p.poisoned.sort((a, b) => a - b);
       if (!p.poisoned.length) p.poisoned = [random(cups)];
       if (p.poisoned.length === p.cups) p.poisoned.splice(int(api, 0, p.cups - 1), 1);
       api.sfx('splat');
@@ -401,7 +406,7 @@ export const server: MiniServer<QuizState, QuizPublic, QuizPrivate> = {
           const i = s.stage++;
           if (p.kind === 'poison') api.sfx(p.poisoned.includes(i) ? 'splat' : 'pop');
           else if (p.kind === 'hide') { api.sfx('crash'); api.sfx(p.doomed.some(id => p.rooms[id] === p.searched[i]) ? 'gasp' : 'boing'); }
-          else api.sfx(p.dead.includes(p.doomed[i]!) ? 'wrong' : 'correct');
+          else api.sfx(p.doomed.some((id, k) => beatOf(k, p.doomed.length) === i && p.dead.includes(id)) ? 'wrong' : 'correct');
         } else if (s.stage === beats.steps.length && t >= beats.verdict) {
           s.stage++;
           if (p.dead.length) { api.sfx('sting'); hold(s, api, api.say('quiz-panic.ghost')); } else { api.sfx('cheer'); api.sfx('applause'); }
@@ -515,7 +520,8 @@ export const server: MiniServer<QuizState, QuizPublic, QuizPrivate> = {
     best('Panic Room regular', s.stats.survived, 2);
     best('Body snatcher', s.stats.swaps);
     if (s.firstDead) awards.push({ title: 'First to fall', playerId: s.firstDead });
-    const names = s.winners.map(id => s.names[id]!).join(' & ');
+    // A big room's exit can be crowded; a headline cannot list them all.
+    const names = isCrowd(s.ids.length) && s.winners.length > 3 ? `${s.winners.length} guests` : s.winners.map(id => s.names[id]!).join(' & ');
     const headline = s.how === 'escaped' ? `${names} escaped the hotel!` : s.how === 'furthest' ? `${names} got closest to the exit!` : 'The ghoul got everyone!';
     return { scores, winners: [...s.winners], headline, ...(awards.length ? { awards } : {}) };
   },

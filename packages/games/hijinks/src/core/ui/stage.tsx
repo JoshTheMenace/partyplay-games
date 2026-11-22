@@ -9,12 +9,12 @@ const PALETTE = ['var(--kp-sun)', 'var(--kp-coral)', 'var(--kp-sky)', 'var(--kp-
  * viewport. `accent` tints the lights and floor; `--hj-accent` is available to everything inside. `fill` (the pack's host
  * display) covers the whole browser viewport and floats the platform header over the top, hiding it while idle.
  */
-export function Stage({ accent = '#b58aff', children, className = '', fill = false }: { accent?: string; children: ReactNode; className?: string; fill?: boolean }) {
+export function Stage({ accent = '#b58aff', children, className = '', fill = false, reserve = 12 }: { accent?: string; children: ReactNode; className?: string; fill?: boolean; /** Px kept free under a non-filling stage (e.g. for a pinned button row). */ reserve?: number }) {
   const frame = useRef<HTMLDivElement>(null), [fit, setFit] = useState({ scale: .5, left: 0, top: 0 });
   useLayoutEffect(() => {
     const el = frame.current!;
     const measure = () => {
-      const width = el.clientWidth, height = fill ? el.clientHeight : Math.max(240, document.documentElement.clientHeight - (el.getBoundingClientRect().top + window.scrollY) - 12);
+      const width = el.clientWidth, height = fill ? el.clientHeight : Math.max(240, document.documentElement.clientHeight - (el.getBoundingClientRect().top + window.scrollY) - reserve);
       const scale = Math.min(width / STAGE_W, height / STAGE_H), left = (width - STAGE_W * scale) / 2, top = fill ? (height - STAGE_H * scale) / 2 : 0;
       setFit(old => old.scale === scale && old.left === left && old.top === top ? old : { scale, left, top });
     };
@@ -22,7 +22,7 @@ export function Stage({ accent = '#b58aff', children, className = '', fill = fal
     const observer = new ResizeObserver(measure); observer.observe(el);
     window.addEventListener('resize', measure);
     return () => { observer.disconnect(); window.removeEventListener('resize', measure); };
-  }, [fill]);
+  }, [fill, reserve]);
   const full = useTvChrome(fill);
   return <div ref={frame} className={`hj-stage-frame${fill ? ' hj-stage-fill' : ''}`} style={fill ? undefined : { height: STAGE_H * fit.scale }}>
     <div className={`hj-stage ${className}`} style={{ '--hj-accent': accent, transform: `translate(${fit.left}px, ${fit.top}px) scale(${fit.scale})` } as CSSProperties}>

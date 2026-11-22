@@ -17,9 +17,9 @@ export const bot: MiniBot<QuipPublic, QuipPrivate> = ({ view, me, random }) => {
     return { turn: view.turn, k: 'answer', slot: open.slot, text };
   }
   if (view.phase === 'vote' && me.role === 'voter' && me.side === undefined) return { turn: view.turn, k: 'vote', side: random() < .5 ? 0 : 1 };
-  const others = view.final?.entries.filter(e => e.id !== me.mine) ?? [];
+  const others = (me.ballot ?? view.final?.entries ?? []).filter(e => e.id !== me.mine);
   if (view.phase === 'final-vote' && !me.picks && others.length)
-    return { turn: view.turn, k: 'picks', picks: Array.from({ length: FINAL_VOTES }, () => others[Math.floor(random() * others.length)]!.id) };
+    return { turn: view.turn, k: 'picks', picks: Array.from({ length: view.final?.votes ?? FINAL_VOTES }, () => others[Math.floor(random() * others.length)]!.id) };
   return null;
 };
 export default bot;

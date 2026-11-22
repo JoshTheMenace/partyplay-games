@@ -64,7 +64,7 @@ function WriteTV({ view, players, vip, now }: P) {
           ? <PromptCard eyebrow="One prompt for everyone" size={58}>{view.final.prompt}</PromptCard>
           : <p className="qc-quipline" key={line}>{MARQUEE_LINES[line]}</p>}
         <div className="qc-tally" role="status"><b className="kp-numeral">{view.done.length}<small>/{players.length}</small></b>
-          <span>{final ? 'answers in' : 'players finished'}<small>{final ? 'Everyone gets three votes next.' : 'Two prompts each. Every prompt is shared with a rival.'}</small></span></div>
+          <span>{final ? 'answers in' : 'players finished'}<small>{final ? 'Everyone gets three votes next.' : players.length > 32 ? 'Half the room writes this round, the other half next. Everyone votes.' : players.length > 10 ? 'One prompt each, shared with a few rivals. Then the whole room votes.' : 'Two prompts each. Every prompt is shared with a rival.'}</small></span></div>
       </div>
     </div>
     <PlayerStrip players={players} done={view.done} vip={vip} />
@@ -132,11 +132,13 @@ function FinalTV({ view, final, players, vip, now }: P & { final: Final }) {
   const step = useTimeline(view.at, result ? [...beats.reveals, beats.winner] : [Infinity], now);
   const order = new Map(result?.entries.map((r, i) => [r.id, i]));
   const crowned = !!result && step > result.entries.length, champs = result?.winners.map(id => find(players, id)).filter(p => !!p) ?? [];
-  const cols = n <= 4 ? Math.max(1, n) : n <= 6 ? 3 : n <= 8 ? 4 : 5;
+  const cols = n <= 4 ? Math.max(1, n) : n <= 6 ? 3 : n <= 8 ? 4 : 5, heat = final.heat, waiting = !!final.field && !result;
   return <section className="qc-final" data-phase={view.phase}>
-    <Head view={view}>{view.phase === 'final-vote' ? <Timer deadline={view.deadline} now={now} total={view.deadline - view.at} size={120} /> : null}</Head>
-    <PromptCard className="qc-final-prompt" eyebrow="One prompt for everyone" size={50}>{final.prompt}</PromptCard>
-    <ol className="qc-grid" style={{ '--cols': cols } as CSSProperties} data-dense={n > 6 || undefined} data-roomy={n <= 4 || undefined}>
+    <Head view={view}>{heat && <span className="qc-match-count">Heat <b className="kp-numeral">{heat.index + 1}</b> of {heat.count}</span>}{view.phase === 'final-vote' ? <Timer deadline={view.deadline} now={now} total={view.deadline - view.at} size={120} /> : null}</Head>
+    <PromptCard className="qc-final-prompt" eyebrow={heat ? 'The prompt' : final.field ? `One prompt · ${final.field.answers} answers${result ? ` · the top ${n}` : ''}` : 'One prompt for everyone'} size={50}>{final.prompt}</PromptCard>
+    {waiting && <div className="qc-field" role="status"><div className="qc-tally"><b className="kp-numeral">{view.done.length}<small>/{players.length}</small></b>
+      <span>ballots cast<small>Your phone has {final.field!.ballot} of the {final.field!.answers} answers. Give out {final.votes} votes.</small></span></div><Mic className="qc-mic-small" /></div>}
+    {!waiting && <ol className="qc-grid" style={{ '--cols': cols } as CSSProperties} data-dense={n > 6 || undefined} data-roomy={n <= 4 || undefined}>
       {final.entries.map((e, i) => {
         const at = order.get(e.id) ?? -1, r = result?.entries[at], shown = !!r && step > at, author = r && find(players, r.author);
         const won = crowned && !!r && result!.winners.includes(r.author), voters = r ? r.voters.map(id => find(players, id)).filter(p => !!p) : [];
@@ -152,10 +154,10 @@ function FinalTV({ view, final, players, vip, now }: P & { final: Final }) {
           {shown && r?.safety && <span className="qc-safety">Safety quip</span>}
         </li>;
       })}
-    </ol>
+    </ol>}
     {view.phase === 'final-vote'
       ? <PlayerStrip className="qc-final-strip" players={players} done={view.done} vip={vip} size={64} />
-      : <p className="qc-final-foot" role="status">{!crowned ? 'Counting the votes…' : champs.length ? <><b>{champs.map(p => p.name).join(' & ')}</b> {champs.length > 1 ? 'share' : 'gets'} the Last Laugh!</> : 'Nobody voted. The silence is deafening.'}</p>}
+      : <p className="qc-final-foot" role="status">{!crowned ? 'Counting the votes…' : champs.length ? <><b>{(heat || final.field) && champs.length > 3 ? `${champs.length} players` : champs.map(p => p.name).join(' & ')}</b> {heat ? (champs.length > 1 ? 'share the heat!' : 'wins the heat!') : <>{champs.length > 1 ? 'share' : 'gets'} the Last Laugh!</>}</> : 'Nobody voted. The silence is deafening.'}</p>}
     {crowned && champs.length > 0 && <Confetti burst="last-laugh" count={130} />}
   </section>;
 }
@@ -246,9 +248,9 @@ function ScoresPhone({ view, player, players, vip }: Phone) {
 
 /** Last Laugh ballot: tap answers to give them votes (stacking allowed, never your own), then cast all three. */
 function FinalVotePhone({ view, me, player, vip, now, send, sessionKey }: Phone) {
-  const entries = view.final?.entries ?? [], [draft, setDraft] = useDraft<string[]>(`${sessionKey}:${view.turn}:picks`, []), [state, run] = useSend();
-  const picks = draft.filter(id => id !== me.mine && entries.some(e => e.id === id)).slice(0, FINAL_VOTES), left = FINAL_VOTES - picks.length;
-  const count = (id: string) => picks.filter(x => x === id).length, shell = { player, vip: vip === player.id, accent: ACCENT, eyebrow: 'The Last Laugh', timer: { deadline: view.deadline, now, total: view.deadline - view.at } };
+  const entries = me.ballot ?? view.final?.entries ?? [], votes = view.final?.votes ?? FINAL_VOTES, heat = view.final?.heat, [draft, setDraft] = useDraft<string[]>(`${sessionKey}:${view.turn}:picks`, []), [state, run] = useSend();
+  const picks = draft.filter(id => id !== me.mine && entries.some(e => e.id === id)).slice(0, votes), left = votes - picks.length;
+  const count = (id: string) => picks.filter(x => x === id).length, shell = { player, vip: vip === player.id, accent: ACCENT, eyebrow: heat ? `${ROUND_NAMES[view.round - 1]} · heat ${heat.index + 1} of ${heat.count}` : 'The Last Laugh', timer: { deadline: view.deadline, now, total: view.deadline - view.at } };
   if (me.picks) return <PhoneShell {...shell} title="Votes cast!">
     <PhoneDone detail="Watch the TV for the big reveal.">
       <ul className="qc-mine">{[...new Set(me.picks)].map(id => <li key={id}><b>{entries.find(e => e.id === id)?.text}</b><em>×{me.picks!.filter(x => x === id).length}</em></li>)}</ul>
@@ -257,7 +259,7 @@ function FinalVotePhone({ view, me, player, vip, now, send, sessionKey }: Phone)
   if (!entries.some(e => e.id !== me.mine)) return <PhoneShell {...shell} title="Sit back"><PhoneWaiting title="Nothing to vote on" detail="Enjoy the show!" lines={WAIT_LINES} /></PhoneShell>;
   return <PhoneShell {...shell} title={left ? `Give out ${plural(left, 'vote')}` : 'Ready to cast!'}>
     <p className="qc-phone-prompt">{view.final?.prompt}</p>
-    <p className="qc-pips" aria-label={`${left} of ${FINAL_VOTES} votes left`}>{Array.from({ length: FINAL_VOTES }, (_, i) => <i key={i} data-on={i < picks.length || undefined} />)}<span>Tap an answer to give it a vote. Stack them if you love it.</span></p>
+    <p className="qc-pips" aria-label={`${left} of ${votes} votes left`}>{Array.from({ length: votes }, (_, i) => <i key={i} data-on={i < picks.length || undefined} />)}<span>{votes === 1 ? 'Tap the funniest answer.' : 'Tap an answer to give it a vote. Stack them if you love it.'}</span></p>
     <ul className="qc-ballot">{entries.map((e, i) => { const mine = e.id === me.mine, n = count(e.id);
       return <li key={e.id} data-on={n > 0 || undefined} data-mine={mine || undefined}>
         <button type="button" className="qc-ballot-add" disabled={mine || !left || state.status === 'pending'} aria-label={mine ? `Your answer: ${e.text}` : `Give a vote to answer ${letter(i)}: ${e.text}`} onClick={() => setDraft([...picks, e.id])}>
@@ -268,15 +270,16 @@ function FinalVotePhone({ view, me, player, vip, now, send, sessionKey }: Phone)
       </li>; })}</ul>
     {state.status === 'rejected' && <StatusNotice tone="error">{state.reason}</StatusNotice>}
     <div className="hj-sticky"><ArcadeButton tone="lime" size="lg" disabled={left > 0 || state.status === 'pending'} onClick={() => void run(() => send({ turn: view.turn, k: 'picks', picks }))}>
-      {state.status === 'pending' ? 'Sending…' : `Cast my votes (${picks.length}/${FINAL_VOTES})`}</ArcadeButton></div>
+      {state.status === 'pending' ? 'Sending…' : votes === 1 ? 'Cast my vote' : `Cast my votes (${picks.length}/${votes})`}</ArcadeButton></div>
   </PhoneShell>;
 }
 
 function FinalResultPhone({ view, me, player, players, vip, now }: Phone) {
   const result = view.final?.result, beats = finalBeats(result?.entries.length ?? 0), step = useTimeline(view.at, [...beats.reveals, beats.winner], now);
-  const at = result?.entries.findIndex(r => r.id === me.mine) ?? -1, mine = at >= 0 ? result!.entries[at] : undefined, shown = !!mine && step > at;
-  const crowned = !!result && step > result.entries.length, won = crowned && result.winners.includes(player.id);
-  return <PhoneShell player={player} vip={vip === player.id} accent={ACCENT} eyebrow="The Last Laugh" title={won ? 'You got the Last Laugh!' : crowned ? 'That’s the show!' : 'Counting the votes…'}>
+  const crowned = !!result && step > result.entries.length, won = crowned && result.winners.includes(player.id), heat = view.final?.heat;
+  // An answer the TV does not reveal (big-room Last Laugh) shows on its author's phone with the crowning beat.
+  const at = result?.entries.findIndex(r => r.id === me.mine) ?? -1, mine = at >= 0 ? result!.entries[at] : me.own, shown = !!mine && (at >= 0 ? step > at : crowned);
+  return <PhoneShell player={player} vip={vip === player.id} accent={ACCENT} eyebrow={heat ? `Heat ${heat.index + 1} of ${heat.count}` : 'The Last Laugh'} title={won ? (heat ? 'You won the heat!' : 'You got the Last Laugh!') : crowned ? (heat ? 'Heat over!' : 'That’s the show!') : 'Counting the votes…'}>
     <div className="qc-phone-result" data-won={won || undefined}>
       <Avatar avatar={player.avatar} color={player.color} size={132} mood={won ? 'happy' : shown ? 'idle' : 'thinking'} />
       {shown && <b className="qc-phone-points kp-numeral">+{mine.points}</b>}

@@ -1,6 +1,6 @@
 # Ballpark
 
-Hijinks minigame `ballpark`: honest room-polling percentage guessing for 3–10 players. Every question is answered by
+Hijinks minigame `ballpark`: honest room-polling percentage guessing for 3–64 players. Every question is answered by
 the people on the sofa, so the true percentage is **this room's** answer. Everyone answers a yes/no question in secret.
 One rotating agent dials in the percentage of the room that said yes. Everyone else bets on whether the truth is higher
 or lower. A final round, **Most Wanted**, has everyone tick confessions and then guess the room's top three.
@@ -30,7 +30,8 @@ keeps it apart from Odd One In's teal interrogation room.
 
 There are **2 rounds of questions**, then **Most Wanted**.
 
-- **Round 1:** every player is the agent once, in random order.
+- **Round 1:** every player is the agent once, in random order. Above ten players, six agents are drawn at random
+  (`CROWD_AGENTS`): the whole room still answers and bets on every question.
 - **Round 2 ("Long shots"):** with 3–6 players everyone is the agent again. With 7 or more players, round 2 has 3
   questions, and the agents are the three lowest connected scorers (lowest first), as a comeback chance. Either way the
   first agent is never the one who just had the dial.
@@ -73,6 +74,13 @@ After each round, a **Debrief** scoreboard shows for 7.5 s.
 3. **Reveal** (≈18 s). The posters reveal their tick counts from fewest to most: the bottom six quickly, the top three
    slowly. Each poster shows a meter ("4 of 9"), the pickers' avatars and a "#1 · +1000" stamp. Then every hunter's
    total drops in.
+
+## Big rooms (11–64 players)
+
+Nine questions whatever the room size (six agents, then three), so a 64-player game is no longer than a ten-player one.
+The truth gets finer with every extra answer. On the TV the betting booths show a head count and faces without names
+(everyone in a booth wins or loses together), the yes/no crowds shrink their figures to share the footer, the done strip
+is a counter over rows of faces, and Most Wanted lists its ten best hunters; each phone shows its own totals.
 
 ## Scoring
 

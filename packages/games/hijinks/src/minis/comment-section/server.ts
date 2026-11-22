@@ -1,12 +1,14 @@
 /* Comment Section rules: answer an innocent question, twist a friend's answer into an out-of-context post, vote for the most
    ruinous. Three rounds (×1, ×2, then the Final Feed: profile status updates, ×3, two votes each). Server only. */
 import type { MiniApi, MiniResult, MiniServer } from '../../core/contract';
+import { isCrowd } from '../../core/crowd';
 import { variant } from '../../core/narration';
+import { dealBallots } from '../../core/server/ballots';
 import { dealFresh } from '../../core/server/deck';
 import { record } from '../../core/server/validate';
 import { HOUSE_ANSWERS, REPLIES, formatPool, questionPool, twistPool, type FormatItem } from './content.server';
 import {
-  ANSWER_S, AUTHOR_PTS, FEED_LEAD, FINAL_VOTE_S, KINDS, MAX_ANSWER, MAX_TWIST, MIN_READ_MS, POST, ROUNDS, ROUND_MS, SCORES_MS, TWIST_PTS, TWIST_S, VOTE_S,
+  ANSWER_S, AUTHOR_PTS, BOOST_PTS, FEED_LEAD, FEED_SIZE, FINAL_VOTE_S, TREND_BALLOT, TREND_PICKS, TREND_S, KINDS, MAX_ANSWER, MAX_TWIST, MIN_READ_MS, POST, ROUNDS, ROUND_MS, SCORES_MS, TWIST_PTS, TWIST_S, VOTE_S,
   postMs, revealBeats, type CommentPrivate, type CommentPublic, type Kind, type Phase, type Post, type Reply, type Verdict,
 } from './types';
 
@@ -21,6 +23,8 @@ export type CommentState = {
   entries: Entry[]; pairs: string[]; kinds: Kind[];
   houseAnswers: string[]; houseTwists: Record<string, string[]>; replies: Reply[];
   feedAt: number[]; votes: Record<string, string[]>; verdicts: Verdict[]; reported: string[];
+  /** Big rooms: every post of the round once `entries` holds only the trending ones, each phone's ballot and its boosts. */
+  all: Entry[]; ballots: Record<string, string[]>; boosts: Record<string, string[]>;
   scores: Record<string, number>; prev: Record<string, number>; stats: Record<Stat, Record<string, number>>; reportedTotal: number;
   done: boolean;
 };
@@ -29,6 +33,8 @@ const own = <T>(rec: Record<string, T>, key: string): T | undefined => Object.ha
 const rotate = <T>(list: T[]) => { const item = list.shift()!; list.push(item); return item; };
 const authorOf = (s: CommentState, id: string) => s.entries.find(e => e.author === id);
 const twisterOf = (s: CommentState, id: string) => s.entries.find(e => e.twister === id);
+const boostsOn = (s: CommentState, e: Entry) => Object.values(s.boosts).filter(list => list.includes(e.id)).length;
+const boostPay = (s: CommentState, e: Entry) => Math.round(boostsOn(s, e) * BOOST_PTS * ROUNDS[s.round - 1]!.mult * (e.auto ? .5 : 1));
 
 /** Trims, collapses whitespace and drops control/bidi characters; 1–max characters. */
 function clean(raw: unknown, max: number, empty: string): string {
@@ -61,7 +67,8 @@ function startRound(s: CommentState, api: MiniApi) {
     .reduce<string[] | null>((a, b) => !a || repeats(b) < repeats(a) ? b : a, null) ?? s.ids.map((_, i) => s.ids[(i + 1) % n]!);
   // Rounds 1–2: a different app per answer, preferring apps not seen yet this game. The Final Feed: profile status updates.
   const fresh = KINDS.filter(k => !s.kinds.includes(k)), kinds = [...api.shuffle(fresh), ...api.shuffle(KINDS.filter(k => s.kinds.includes(k)))].slice(0, n);
-  const formats = final ? dealFresh(api, formatPool(family, 'status'), n, f => f.id) : kinds.map(kind => dealFresh(api, formatPool(family, kind), 1, f => f.id)[0]!);
+  // More posts than apps (a big room): the apps go round again, each time with a fresh variant.
+  const formats = final ? dealFresh(api, formatPool(family, 'status'), n, f => f.id) : s.ids.map((_, i) => dealFresh(api, formatPool(family, kinds[i % kinds.length]!), 1, f => f.id)[0]!);
   s.kinds.push(...kinds);
   const raw = s.ids.map((author, i) => {
     const twister = twisters[i]!;
@@ -69,7 +76,7 @@ function startRound(s: CommentState, api: MiniApi) {
     return { author, twister, question: questions[i % questions.length]!, format: formats[i % formats.length]! };
   });
   s.entries = api.shuffle(raw).map((e, i) => ({ ...e, id: `f${i}`, answer: null, house: false, twist: null, auto: false, likes: 0, replies: [] }));
-  s.votes = {}; s.verdicts = []; s.reported = [];
+  s.votes = {}; s.verdicts = []; s.reported = []; s.all = []; s.ballots = {}; s.boosts = {};
   api.music('comment-section'); api.sfx('swoosh-in'); api.sfx('ding');
   go(s, api, 'round', ROUND_MS);
   if (final) hold(s, api, api.say('host.final-round') + api.say('comment-section.final'));
@@ -82,15 +89,33 @@ function endAnswer(s: CommentState, api: MiniApi) {
   go(s, api, 'twist', api.seconds(TWIST_S));
 }
 
-/** Twists are in: the house fills gaps (half points), then the feed plays every post with its own server-timed beat. */
-function startFeed(s: CommentState, api: MiniApi) {
-  let at = api.now + FEED_LEAD;
-  s.feedAt = [];
+/** Twists are in: the house fills gaps (half points). A big room boosts posts on its phones first; otherwise the feed plays them all. */
+function endTwist(s: CommentState, api: MiniApi) {
   for (const e of s.entries) {
     if (e.twist === null) { e.twist = houseTwist(s, api, e.format); e.auto = true; }
     e.likes = Math.round(20 + api.random() ** 3 * 98_000); e.replies = [rotate(s.replies), rotate(s.replies)];
-    s.feedAt.push(at); at += postMs({ twist: e.twist, answer: e.answer! });
   }
+  if (!isCrowd(s.ids.length) || s.entries.length <= FEED_SIZE + 2) return startFeed(s, api);
+  const hands = dealBallots(api, s.ids, s.entries, TREND_BALLOT, (e, id) => e.twister === id);
+  s.ballots = Object.fromEntries(s.ids.map(id => [id, hands[id]!.map(e => e.id)]));
+  api.music('vote'); api.sfx('whoosh');
+  go(s, api, 'trend', api.seconds(TREND_S));
+}
+
+/** The boosts are in: every boost pays its twister now, and the eight most-boosted posts (ties by lot) make the TV feed. */
+function endTrend(s: CommentState, api: MiniApi) {
+  for (const e of s.entries) s.scores[e.twister]! += boostPay(s, e);
+  s.all = s.entries;
+  const trending = new Set(api.shuffle(s.entries).sort((a, b) => boostsOn(s, b) - boostsOn(s, a)).slice(0, FEED_SIZE));
+  s.entries = s.all.filter(e => trending.has(e));
+  startFeed(s, api);
+}
+
+/** The feed plays every post (in a big room, the trending ones) with its own server-timed beat. */
+function startFeed(s: CommentState, api: MiniApi) {
+  let at = api.now + FEED_LEAD;
+  s.feedAt = [];
+  for (const e of s.entries) { s.feedAt.push(at); at += postMs({ twist: e.twist!, answer: e.answer! }); }
   api.music('comment-section'); api.sfx('whoosh');
   go(s, api, 'feed', at - api.now);
 }
@@ -132,7 +157,7 @@ export const server: MiniServer<CommentState, CommentPublic, CommentPrivate> = {
       ids, online: Object.fromEntries(players.map(p => [p.id, p.connected])),
       phase: 'round', round: 0, turn: '', seq: 0, at: api.now, deadline: api.now, hurried: false, stage: 0, sub: 0,
       entries: [], pairs: [], kinds: [], houseAnswers: api.shuffle(HOUSE_ANSWERS), houseTwists: {}, replies: api.shuffle(REPLIES),
-      feedAt: [], votes: {}, verdicts: [], reported: [],
+      feedAt: [], votes: {}, verdicts: [], reported: [], all: [], ballots: {}, boosts: {},
       scores: zero(), prev: zero(), stats: { ruinous: zero(), ruined: zero(), autos: zero() }, reportedTotal: 0, done: false,
     };
     startRound(s, api);
@@ -161,6 +186,16 @@ export const server: MiniServer<CommentState, CommentPublic, CommentPrivate> = {
         else { e.twist = houseTwist(s, api, e.format); e.auto = true; s.stats.autos[id]!++; api.sfx('boing'); }
         return;
       }
+      case 'boost': {
+        record(a, ['turn', 'k', 'posts']);
+        if (s.phase !== 'trend') throw new Error('Boosting is closed.');
+        if (Object.hasOwn(s.boosts, id)) throw new Error('Your boosts are already in.');
+        const mine = s.ballots[id] ?? [], picks = a.posts;
+        if (!Array.isArray(picks) || !picks.length || picks.length > TREND_PICKS || new Set(picks).size !== picks.length) throw new Error(`Boost one or ${TREND_PICKS} different posts.`);
+        if (picks.some(pick => !mine.includes(pick as string))) throw new Error('That post isn’t on your feed.');
+        s.boosts[id] = [...picks as string[]]; api.sfx('vote');
+        return;
+      }
       case 'vote': {
         record(a, ['turn', 'k', 'posts']);
         if (s.phase !== 'vote') throw new Error('Voting opens after the feed.');
@@ -187,7 +222,12 @@ export const server: MiniServer<CommentState, CommentPublic, CommentPrivate> = {
         if (now >= s.deadline) { api.sfx('pop'); go(s, api, 'answer', api.seconds(ANSWER_S)); }
         return;
       case 'answer': return writingTick(s, api, id => authorOf(s, id)!.answer !== null, () => endAnswer(s, api));
-      case 'twist': return writingTick(s, api, id => twisterOf(s, id)!.twist !== null, () => startFeed(s, api));
+      case 'twist': return writingTick(s, api, id => twisterOf(s, id)!.twist !== null, () => endTwist(s, api));
+      case 'trend': {
+        const online = s.ids.filter(id => s.online[id]);
+        if ((online.length > 0 && online.every(id => Object.hasOwn(s.boosts, id)) && t >= MIN_READ_MS) || now >= s.deadline) endTrend(s, api);
+        return;
+      }
       case 'feed': {
         if (s.stage < s.entries.length && now >= s.feedAt[s.stage]!) {
           const e = s.entries[s.stage++]!;
@@ -234,6 +274,8 @@ export const server: MiniServer<CommentState, CommentPublic, CommentPrivate> = {
     if (s.phase === 'answer') pub.done = s.ids.filter(id => authorOf(s, id)!.answer !== null);
     if (s.phase === 'twist') pub.done = s.ids.filter(id => twisterOf(s, id)!.twist !== null);
     if (s.phase === 'vote') pub.done = s.ids.filter(id => Object.hasOwn(s.votes, id));
+    if (s.phase === 'trend') pub.done = s.ids.filter(id => Object.hasOwn(s.boosts, id));
+    if (Object.keys(s.ballots).length && s.phase !== 'scores') pub.field = { posts: (s.all.length ? s.all : s.entries).length, ballot: TREND_BALLOT, picks: TREND_PICKS, slots: FEED_SIZE };
     if (s.phase === 'feed') Object.assign(pub, { stage: s.stage, posts: s.entries.slice(0, s.stage).map(post), beats: s.feedAt.slice(0, s.stage) });
     if (s.phase === 'vote' || s.phase === 'results') pub.posts = s.entries.map(post);
     if (s.phase === 'results') pub.result = { verdicts: structuredClone(s.verdicts), reported: [...s.reported] };
@@ -241,21 +283,29 @@ export const server: MiniServer<CommentState, CommentPublic, CommentPrivate> = {
   },
 
   playerView(s, id) {
+    // In a big room a player's own posts may have missed the feed, so `entries` (the feed) can lack them from the feed phase on.
     const me: CommentPrivate = { turn: s.turn }, mine = authorOf(s, id), twisting = twisterOf(s, id);
-    if (!mine || !twisting || s.phase === 'round' || s.phase === 'scores') return me;
-    if (s.phase === 'answer' || s.phase === 'twist') {
+    if (s.phase === 'round' || s.phase === 'scores') return me;
+    if (mine && (s.phase === 'answer' || s.phase === 'twist')) {
       if (s.phase === 'answer') me.question = mine.question;
       if (mine.answer !== null) Object.assign(me, { answer: mine.answer }, mine.house ? { house: true } : {});
     }
-    if (s.phase === 'twist') {
+    if (twisting && s.phase === 'twist') {
       const { kind, ask, label, meta } = twisting.format;
       me.target = { author: twisting.author, answer: twisting.answer!, format: { kind, ask, label, meta } };
       if (twisting.twist !== null) Object.assign(me, { twist: twisting.twist }, twisting.auto ? { auto: true } : {});
     }
+    if (s.phase === 'trend') {
+      const boosts = own(s.boosts, id);
+      me.ballot = (s.ballots[id] ?? []).map(x => { const e = s.entries.find(k => k.id === x)!; return { id: e.id, author: e.author, question: e.question, kind: e.format.kind, label: e.format.label, meta: e.format.meta, twist: e.twist!, answer: e.answer!, likes: e.likes, replies: [] }; });
+      if (boosts) me.boosts = [...boosts];
+    }
     if (s.phase === 'feed' || s.phase === 'vote' || s.phase === 'results') {
-      Object.assign(me, { mine: twisting.id, about: mine.id });
-      const votes = own(s.votes, id);
+      if (twisting) me.mine = twisting.id;
+      if (mine) me.about = mine.id;
+      const votes = own(s.votes, id), made = s.all.find(e => e.twister === id);
       if (votes) me.votes = [...votes];
+      if (made) { me.boosted = { count: boostsOn(s, made), points: boostPay(s, made) }; if (!twisting) me.cut = true; }
     }
     return me;
   },

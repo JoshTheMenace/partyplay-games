@@ -6,7 +6,7 @@ import { LINES } from '../src/minis/quiz-panic/narration';
 import { CATEGORIES, TRIVIA, WORDS } from '../src/minis/quiz-panic/content.server';
 import type { QuizState } from '../src/minis/quiz-panic/server';
 import { PACE } from '../src/server';
-import { EXIT, FINAL_TURNS, LONE_PRIZE, PRIZE, QUESTIONS, QUESTION_S, ROOMS, SEQUENCE, type Kind, type QuizPrivate, type QuizPublic } from '../src/minis/quiz-panic/types';
+import { EXIT, FINAL_TURNS, LONE_PRIZE, MAX_CUPS, PANIC_BEATS, PRIZE, QUESTIONS, QUESTION_S, ROOMS, SEQUENCE, beatOf, panicBeats, type Kind, type QuizPrivate, type QuizPublic } from '../src/minis/quiz-panic/types';
 
 const pub = (n: Night) => n.mini<QuizPublic>();
 const me = (n: Night, id: string) => n.miniMe<QuizPrivate>(id);
@@ -60,7 +60,7 @@ test('content banks, narration budget and catalog entry', () => {
   assert.ok(total <= 250, `narration is ${total} characters`);
   for (const id of Object.keys(LINES)) assert.match(id, /^quiz-panic\.[a-z0-9.-]+$/);
   const info = miniInfo('quiz-panic')!;
-  assert.deepEqual(info.players, { min: 2, max: 10 });
+  assert.deepEqual(info.players, { min: 2, max: 64 });
   for (const line of info.intro) assert.ok(Object.hasOwn(LINES, line), line);
 });
 
@@ -78,6 +78,39 @@ test('full games with bots: 2, 5 and 10 players reach a sane result', async () =
     assert.ok(n.now - begin < 20 * 60_000, `${players}p fits the time budget`);
     n.toMenu(); assert.equal(n.state.phase, 'menu');
   }
+});
+
+test('big rooms: 32 and 64 players play in the time ten take; reveals stay within eleven beats', async () => {
+  const spans: Record<number, number> = {};
+  for (const players of [10, 32, 64]) {
+    const n = start(players, { seed: players * 3 }), begin = n.now, original = n.advance.bind(n);
+    let longest = 0, cups = 0;
+    n.advance = (ms: number) => { original(ms); const v = pub(n); if (v?.phase === 'panic-reveal') longest = Math.max(longest, v.deadline - v.at); cups = Math.max(cups, v?.panic?.cups ?? 0); };
+    const { result, rejected } = await n.playMini();
+    spans[players] = n.now - begin;
+    assert.deepEqual(rejected, [], `${players}p bots were never rejected`);
+    assert.equal(Object.keys(result.scores).length, players); assert.ok(result.winners.length >= 1);
+    assert.ok(longest <= panicBeats('hide', PANIC_BEATS).end + 4000, `${players}p: the longest Panic Room reveal ran ${longest} ms`);
+    if (players > 10) assert.ok(cups <= MAX_CUPS, `${cups} cups`);
+    if (players > 10) assert.ok(result.headline!.split(' & ').length <= 3, `${players}p headline names at most three: ${result.headline}`);
+  }
+  for (const players of [32, 64]) assert.ok(spans[players]! <= spans[10]! * 1.25, `${players} players took ${spans[players]} ms, ten took ${spans[10]} ms`);
+  assert.deepEqual([0, 5, 10].map(i => beatOf(i, 11)), [0, 5, 10]); assert.deepEqual([0, 21, 43].map(i => beatOf(i, 44)), [0, 5, 10]);
+});
+
+test('Poison Punch in a big room: nine cups at most, and only the most-spiked half is deadly', () => {
+  const n = start(32, { seed: 9 }), wrong = n.ids.slice(0, 14);
+  doom(n, wrong, 'poison');
+  const p = pub(n).panic!;
+  assert.equal(p.cups, MAX_CUPS); assert.equal(p.poisoners!.length, 18);
+  // Eighteen survivors spike every cup; cups 0–3 get the most spikes.
+  p.poisoners!.forEach((id, i) => n.send(id, { turn: pub(n).turn, k: 'cup', cup: i < 12 ? i % 4 : 4 + (i - 12) % 5 }));
+  stage(n, 'drink');
+  wrong.forEach((id, i) => n.send(id, { turn: pub(n).turn, k: 'cup', cup: i % MAX_CUPS }));
+  at(n, 'panic-reveal');
+  const r = pub(n).panic!.reveal!;
+  assert.deepEqual(r.poisoned, [0, 1, 2, 3]);
+  assert.deepEqual(r.dead.sort(), wrong.filter((_, i) => i % MAX_CUPS < 4).sort());
 });
 
 test('many seeds: every game finishes and every challenge gets played', async () => {

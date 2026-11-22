@@ -2,13 +2,14 @@
 import { Fragment, useState, type CSSProperties, type ReactNode } from 'react';
 import { ArcadeButton, StatusNotice } from '../../../../../party-ui/src/index';
 import type { MiniClient, MiniViewProps, PackPlayer } from '../../core/contract';
+import { COSY } from '../../core/crowd';
 import {
   Avatar, AvatarBadge, BigTitle, Confetti, PhoneDone, PhoneShell, PhoneTextEntry, PhoneWaiting, PlayerStrip, Scoreboard, Timer,
   fitText, ordinal, rankOf, useNow, useSend, useTimeline,
 } from '../../core/ui';
 import {
   MAX_FILL, RESULT, ROUND_NAMES, carousel, finalBeats, sentence, showBeats,
-  type Card, type Final, type FinalOutcome, type Outcome, type Side, type SplitPrivate, type SplitPublic, type Verdict,
+  type Card, type Final, type FinalOutcome, type Outcome, type Sample, type Side, type SplitPrivate, type SplitPublic, type Verdict,
 } from './types';
 import './styles.css';
 
@@ -140,7 +141,7 @@ function CardTV({ view, card, players, now }: P & { card: Card }) {
   const big = !!o && o.sides[0].length + o.sides[1].length <= 4;
   const counts = o && step >= 1 ? [o.sides[0].length, o.sides[1].length] : undefined, total = counts ? counts[0]! + counts[1]! : 0;
   return <section className="sd-card" data-phase={phase} key={card.index}>
-    <Head view={view}>{phase === 'vote' ? <Timer deadline={view.deadline} now={now} total={view.deadline - view.at} size={116} /> : <span className="sd-count">{rather ? 'Choice' : 'Dilemma'} <b className="kp-numeral">{card.index + 1}</b> of {card.count}</span>}</Head>
+    <Head view={view}>{phase === 'vote' ? <Timer deadline={view.deadline} now={now} total={view.deadline - view.at} size={116} /> : <span className="sd-count">{card.replay ? 'Highlight' : rather ? 'Choice' : 'Dilemma'} <b className="kp-numeral">{card.index + 1}</b> of {card.count}</span>}</Head>
     <div className="sd-screen sd-screen-card">
       <span className="sd-screen-tab">{rather ? 'Incoming choice' : 'Incoming dilemma'}{o && step >= 2 && author && <> · by <b>{author.name}</b></>}</span>
       {rather
@@ -163,7 +164,7 @@ function CardTV({ view, card, players, now }: P & { card: Card }) {
       </div>}
     </div>
     <div className="sd-foot" role="status">
-      {phase === 'show' ? <p>{rather ? 'Option A… or option B?' : 'Read it… then decide.'} <b>Voting opens in a moment.</b></p>
+      {phase === 'show' ? <p>{card.replay ? <>Your phones already split this one. <b>Here’s how the room went…</b></> : <>{rather ? 'Option A… or option B?' : 'Read it… then decide.'} <b>Voting opens in a moment.</b></>}</p>
         : phase === 'vote' ? <p><b>Vote on your phone!</b> {rather ? 'A or B?' : 'Yes or no?'} The author can’t vote.</p>
         : !o || step < 1 ? <p>The room is splitting…</p>
         : <div className="sd-meter-row">
@@ -174,6 +175,23 @@ function CardTV({ view, card, players, now }: P & { card: Card }) {
         </div>}
     </div>
     {o && step >= 3 && o.verdict === 'perfect' && <Confetti burst={view.turn} count={120} />}
+  </section>;
+}
+
+/** Big rooms: every phone is judging its own handful of scenarios at once; the TV counts the room in. */
+function SiftTV({ view, players, vip, now }: P) {
+  const sift = view.sift!, rather = view.round === 2;
+  return <section className="sd-sift">
+    <Head view={view}><Timer deadline={view.deadline} now={now} total={view.deadline - view.at} size={116} /></Head>
+    <div className="sd-sift-main">
+      <Portal className="sd-portal-big"><b className="kp-numeral">{view.done.length}</b><span>of {players.length} done</span></Portal>
+      <div className="sd-sift-copy">
+        <BigTitle kicker={`${sift.cards} ${rather ? 'choices' : 'dilemmas'} · ${sift.ballot} on every phone`} size={104}>Split them!</BigTitle>
+        <p className="sd-lead">{rather ? <>Pick <b className="sd-a">A</b> or <b className="sd-b">B</b> on each one. Be honest.</> : <>Say <b className="sd-a">yes</b> or <b className="sd-b">no</b> to each one. Be honest.</>} The closest splits hit the big screen next.</p>
+        <p className="sd-tip">Your own {rather ? 'choice' : 'dilemma'} is on other phones right now.</p>
+      </div>
+    </div>
+    <PlayerStrip players={players} done={view.done} vip={vip} />
   </section>;
 }
 
@@ -215,8 +233,10 @@ function FinalTV({ view, final, players, vip, now }: P & { final: Final }) {
   const rebels = result ? players.filter(p => result.bold[p.id]).sort((a, c) => result.bold[c.id]! - result.bold[a.id]!) : [];
   return <section className="sd-final" data-phase={view.phase}>
     <Head view={view}>{view.phase === 'final-vote' ? <Timer deadline={view.deadline} now={now} total={view.deadline - view.at} size={116} /> : null}</Head>
-    <div className="sd-screen sd-screen-final-card"><span className="sd-screen-tab">One dilemma · {plural(n, 'take')}</span>
+    <div className="sd-screen sd-screen-final-card"><span className="sd-screen-tab">One dilemma · {plural(final.field?.takes ?? n, 'take')}{final.field && result ? ` · the ${n} closest splits` : ''}</span>
       <Sentence parts={final.parts} fills={[]} style={{ fontSize: sentencePx(final.parts.join('').length + 8, 50) }} /></div>
+    {final.field && !result && <div className="sd-sift-main"><Portal className="sd-portal-big"><b className="kp-numeral">{view.done.length}</b><span>of {players.length} done</span></Portal>
+      <div className="sd-sift-copy"><p className="sd-lead">{final.field.takes} takes are out there. Every phone judges <b>{final.field.ballot}</b> of them: <b className="sd-a">yes</b> or <b className="sd-b">no</b>?</p><p className="sd-tip">The closest splits get the big reveal.</p></div></div>}
     <ol className="sd-takes" style={{ '--cols': cols } as CSSProperties} data-dense={n > 6 || undefined} data-roomy={n <= 4 || undefined}>
       {final.entries.map((e, i) => { const at = order.get(e.id) ?? -1, r = result?.entries[at];
         return <Take key={e.id} i={i} fill={e.fill} r={r} n={n} shown={!!r && step > at} crowned={crowned} best={!!r && result!.best.includes(r.author)} players={players} />; })}
@@ -224,8 +244,8 @@ function FinalTV({ view, final, players, vip, now }: P & { final: Final }) {
     {view.phase === 'final-vote'
       ? <><p className="sd-final-hint"><b>Judge every take on your phone:</b> <span className="sd-a">yes</span> or <span className="sd-b">no</span>? The evenest split wins big.</p><PlayerStrip players={players} done={view.done} vip={vip} size={64} /></>
       : <div className="sd-final-foot" role="status">{!crowned ? <p>Splitting the takes…</p>
-        : !bolded ? <p>{champs.length ? <><b>{champs.map(p => p.name).join(' & ')}</b> split the room best!</> : 'Nobody split the room. Unanimous all round!'}</p>
-        : rebels.length ? <div className="sd-rebels"><span className="kp-title">Bold bonus</span>{rebels.map((p, i) => <span key={p.id} className="sd-rebel" style={{ animationDelay: `${i * 80}ms` }}><Avatar avatar={p.avatar} color={p.color} size={rebels.length > 6 ? 42 : 52} mood="happy" /><b className="hj-name">{p.name}</b><em className="kp-numeral">+{result!.bold[p.id]}</em></span>)}</div>
+        : !bolded ? <p>{final.field && champs.length > 3 ? <><b>{champs.length} takes</b> split the room right down the middle!</> : champs.length ? <><b>{champs.map(p => p.name).join(' & ')}</b> split the room best!</> : 'Nobody split the room. Unanimous all round!'}</p>
+        : rebels.length ? <div className="sd-rebels"><span className="kp-title">Bold bonus</span>{rebels.slice(0, COSY).map((p, i) => <span key={p.id} className="sd-rebel" style={{ animationDelay: `${i * 80}ms` }}><Avatar avatar={p.avatar} color={p.color} size={rebels.length > 6 ? 42 : 52} mood="happy" /><b className="hj-name">{p.name}</b><em className="kp-numeral">+{result!.bold[p.id]}</em></span>)}{rebels.length > COSY && <span className="sd-rebel sd-rebel-more">+{rebels.length - COSY} more</span>}</div>
         : <p>No Bold bonuses: nobody was a lone rebel this time.</p>}</div>}
     {crowned && champs.length > 0 && <Confetti burst="big-split" count={130} />}
   </section>;
@@ -236,6 +256,7 @@ function Display(props: P) {
   return <div className="hj-split-decision sd-tv" data-phase={view.phase}>
     <Cosmos />
     {view.phase === 'write' || view.phase === 'final-write' ? <WriteTV {...props} />
+      : view.phase === 'sift' && view.sift ? <SiftTV {...props} />
       : view.card ? <CardTV {...props} card={view.card} />
       : view.phase === 'scores' ? <ScoresTV {...props} />
       : view.final ? <FinalTV {...props} final={view.final} /> : null}
@@ -289,7 +310,7 @@ function CardPhone(props: Phone) {
   const mine = me.role === 'author', shell = { ...shellOf(props), eyebrow };
   if (view.phase === 'result' && o) {
     const scored = step >= 3, side = me.side, rebel = side !== undefined && o.bold > 0 && o.sides[side].length < o.sides[1 - side]!.length;
-    const title = !scored ? 'The room is splitting…' : mine ? VERDICT[o.verdict] : side === undefined ? 'You sat that one out' : rebel ? 'Bold move!' : o.verdict === 'perfect' ? 'Perfectly split!' : 'With the crowd';
+    const title = !scored ? 'The room is splitting…' : mine ? VERDICT[o.verdict] : side === undefined ? (card.replay ? 'Split on other phones' : 'You sat that one out') : rebel ? 'Bold move!' : o.verdict === 'perfect' ? 'Perfectly split!' : 'With the crowd';
     const gain = mine ? o.points : rebel ? o.bold : 0;
     return <PhoneShell {...shell} title={title}>
       {!scored && <div className="sd-phone-card"><Sentence parts={card.parts} fills={card.fills} /></div>}
@@ -298,17 +319,17 @@ function CardPhone(props: Phone) {
         {scored ? <>
           <b className="sd-phone-points kp-numeral" data-zero={!gain || undefined}>+{gain}</b>
           <p>{mine ? <>The room went <b className="sd-a">{o.sides[0].length}</b> {SIDE_NAMES[rather ? 1 : 0][0].toLowerCase()} · <b className="sd-b">{o.sides[1].length}</b> {SIDE_NAMES[rather ? 1 : 0][1].toLowerCase()}{o.house ? ' (machine-filled: half points)' : ''}</>
-            : side === undefined ? 'Vote next time: the losing side earns a Bold bonus!' : <>You said <b className={side ? 'sd-b' : 'sd-a'}>{SIDE_NAMES[rather ? 1 : 0][side]}</b>{o.sides[side].length > 1 ? ` with ${plural(o.sides[side].length - 1, 'other')}` : ', all on your own'}.</>}</p>
+            : side === undefined ? (card.replay ? 'This one wasn’t on your phone. Enjoy the replay!' : 'Vote next time: the losing side earns a Bold bonus!') : <>You said <b className={side ? 'sd-b' : 'sd-a'}>{SIDE_NAMES[rather ? 1 : 0][side]}</b>{o.sides[side].length > 1 ? ` with ${plural(o.sides[side].length - 1, 'other')}` : ', all on your own'}.</>}</p>
           <Standing view={view} players={players} player={player} />
         </> : <p className="sd-tv-cue">Eyes on the TV!</p>}
       </div>
     </PhoneShell>;
   }
-  if (mine) return <PhoneShell {...shell} title={rather ? 'Your choice is up!' : 'Your dilemma is up!'} timer={view.phase === 'vote' ? { ...span(view), now } : null}>
+  if (mine) return <PhoneShell {...shell} title={card.replay ? 'Yours made the big screen!' : rather ? 'Your choice is up!' : 'Your dilemma is up!'} timer={view.phase === 'vote' ? { ...span(view), now } : null}>
     <div className="sd-phone-card"><Sentence parts={card.parts} fills={card.fills} /></div>
-    <PhoneWaiting title="No voting on your own" detail={view.phase === 'vote' ? `${plural(card.votes, 'vote')} in. Fingers crossed for 50/50!` : 'Act natural. Nobody knows it’s yours… yet.'} lines={WAIT_LINES} />
+    <PhoneWaiting title={card.replay ? 'Here comes the split' : 'No voting on your own'} detail={view.phase === 'vote' ? `${plural(card.votes, 'vote')} in. Fingers crossed for 50/50!` : 'Act natural. Nobody knows it’s yours… yet.'} lines={WAIT_LINES} />
   </PhoneShell>;
-  if (view.phase === 'show') return <PhoneShell {...shell} title="Get ready to decide!">
+  if (view.phase === 'show') return <PhoneShell {...shell} title={card.replay ? 'Replay time!' : 'Get ready to decide!'}>
     <div className="sd-phone-card"><Sentence parts={card.parts} fills={card.fills} shown={0} /></div>
     <p className="sd-tv-cue">Eyes on the TV!</p>
   </PhoneShell>;
@@ -324,6 +345,7 @@ function ScoresPhone(props: Phone) {
   const { view, player, players } = props;
   return <PhoneShell {...shellOf(props)} eyebrow={`After round ${view.round}`} title="Scores!">
     <div className="sd-phone-result"><Avatar avatar={player.avatar} color={player.color} size={124} mood={rankOf(view.scores, player.id, players.map(p => p.id)) === 1 ? 'happy' : 'idle'} />
+      {props.me.own && <p>Yours went <b className="sd-a">{props.me.own.yes}</b> · <b className="sd-b">{props.me.own.no}</b>: {VERDICT[props.me.own.verdict]} <b className="kp-numeral">+{props.me.own.points}</b></p>}
       <Standing view={view} players={players} player={player} />
       <p className="hj-note">{view.round === 1 ? 'Next: would you rather. You write both sides, double points!' : 'Next: The Big Split. Triple points!'}</p></div>
   </PhoneShell>;
@@ -331,22 +353,24 @@ function ScoresPhone(props: Phone) {
 
 /** The Big Split carousel: one take at a time, yes or no, straight to the next. */
 function JudgePhone(props: Phone) {
-  const { view, me, players, now, send } = props, final = view.final!, [state, run] = useSend(), [sent, setSent] = useState<string[]>([]);
-  const queue = carousel(final.entries, me.mine), judged = me.judged ?? {}, next = queue.find(e => !Object.hasOwn(judged, e.id) && !sent.includes(e.id));
-  const left = queue.filter(e => !Object.hasOwn(judged, e.id)).length, shell = { ...shellOf(props), eyebrow: 'The Big Split · judge every take', timer: { ...span(view), now } };
+  const { view, me, players, now, send } = props, final = view.final, sift = view.phase === 'sift', [state, run] = useSend(), [sent, setSent] = useState<string[]>([]);
+  // A big room deals each phone its own handful (`queue`); otherwise the carousel is every take but yours.
+  const queue: Sample[] = me.queue ?? carousel(final?.entries ?? [], me.mine).map(e => ({ id: e.id, kind: 'dilemma', parts: final!.parts, fills: [e.fill] })), judged = me.judged ?? {}, next = queue.find(e => !Object.hasOwn(judged, e.id) && !sent.includes(e.id));
+  const left = queue.filter(e => !Object.hasOwn(judged, e.id)).length, shell = { ...shellOf(props), eyebrow: sift ? `${ROUND_NAMES[view.round - 1]} · split ${queue.length}` : me.queue ? `The Big Split · judge ${queue.length} takes` : 'The Big Split · judge every take', timer: { ...span(view), now } };
   if (!queue.length) return <PhoneShell {...shell} title="Sit back"><PhoneWaiting title="Nothing to judge" detail="Enjoy the show!" lines={WAIT_LINES} /></PhoneShell>;
   if (!next) {
     const waiting = players.filter(p => p.connected && !view.done.includes(p.id));
     return <PhoneShell {...shell} title={left ? 'Sending…' : 'All judged!'}>
-      <PhoneDone title={`${plural(queue.length, 'take')} judged`} detail="Watch the TV for The Big Split reveal." />
+      <PhoneDone title={sift ? `${queue.length} split` : `${plural(queue.length, 'take')} judged`} detail={sift ? 'The closest splits are heading for the TV.' : 'Watch the TV for The Big Split reveal.'} />
       {waiting.length > 0 && <PhoneWaiting title="Waiting on the others" waitingFor={waiting} lines={WAIT_LINES} />}
     </PhoneShell>;
   }
   const n = queue.length - left + 1, pick = (side: Side) => { setSent(s => [...s, next.id]); void run(() => send({ turn: view.turn, k: 'judge', entry: next.id, side })).then(ok => { if (!ok) setSent(s => s.filter(id => id !== next.id)); }); };
-  return <PhoneShell {...shell} title={`Take ${Math.min(n, queue.length)} of ${queue.length}`}>
+  const rather = next.kind === 'rather';
+  return <PhoneShell {...shell} title={`${sift ? (rather ? 'Choice' : 'Dilemma') : 'Take'} ${Math.min(n, queue.length)} of ${queue.length}`}>
     <p className="sd-pips" aria-hidden="true">{queue.map(e => <i key={e.id} data-on={(Object.hasOwn(judged, e.id) || sent.includes(e.id)) || undefined} data-now={e.id === next.id || undefined} />)}</p>
-    <div className="sd-phone-card sd-carousel-card" key={next.id}><Sentence parts={final.parts} fills={[next.fill]} /></div>
-    <Choice rather={false} disabled={state.status === 'pending'} onPick={pick} />
+    <div className="sd-phone-card sd-carousel-card" key={next.id}>{rather ? <p className="sd-sentence">{next.parts[0]!.trim()}…</p> : <Sentence parts={next.parts} fills={next.fills} />}</div>
+    <Choice rather={rather} options={rather ? next.fills : undefined} disabled={state.status === 'pending'} onPick={pick} />
     {state.status === 'rejected' && <StatusNotice tone="error">{state.reason}</StatusNotice>}
   </PhoneShell>;
 }
@@ -354,7 +378,9 @@ function JudgePhone(props: Phone) {
 function FinalResultPhone(props: Phone) {
   const { view, me, player, players, now } = props, result = view.final?.result, b = finalBeats(result?.entries.length ?? 0);
   const step = useTimeline(view.at, [...b.reveals, b.best, b.bold], now), at = result?.entries.findIndex(r => r.id === me.mine) ?? -1;
-  const mine = at >= 0 ? result!.entries[at] : undefined, shown = !!mine && step > at, n = result?.entries.length ?? 0, crowned = step > n, bolded = step > n + 1;
+  const n = result?.entries.length ?? 0, crowned = step > n, bolded = step > n + 1;
+  // A big room's TV reveals only the closest takes: an unshown take appears on its author's phone with the crowning beat.
+  const mine = at >= 0 ? result!.entries[at] : me.own && view.final?.field ? { ...me.own, fill: 'Your take' } : undefined, shown = !!mine && (at >= 0 ? step > at : crowned);
   const won = crowned && !!result?.best.includes(player.id), bold = result?.bold[player.id] ?? 0;
   return <PhoneShell {...shellOf(props)} eyebrow="The Big Split" title={won ? 'You split the room best!' : crowned ? 'That’s the show!' : 'Splitting the takes…'}>
     <div className="sd-phone-result" data-won={won || undefined}>
@@ -376,7 +402,7 @@ function Controller(props: P) {
       : view.phase === 'write' || view.phase === 'final-write' ? <PhoneShell {...shellOf(phone)} title="Sit this one out"><PhoneWaiting title="The portal is busy" detail="You’ll judge the takes in a moment." lines={WAIT_LINES} /></PhoneShell>
       : view.card ? <CardPhone {...phone} />
       : view.phase === 'scores' ? <ScoresPhone {...phone} />
-      : view.phase === 'final-vote' ? <JudgePhone {...phone} />
+      : view.phase === 'final-vote' || view.phase === 'sift' ? <JudgePhone {...phone} />
       : <FinalResultPhone {...phone} />}
   </div>;
 }

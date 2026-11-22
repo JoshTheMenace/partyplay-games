@@ -8,7 +8,7 @@
  *   night.assertHidden('secret answer');      // string must not appear in the public view
  *
  * createNight(options) → Night
- *   options: players (2–10, default 4; ids 'p0'…'p9', 16-char names), settings (partial PackSettings), seed (default 1),
+ *   options: players (2–64, default 4; ids 'p0'…'p63', 16-char names), settings (partial PackSettings), seed (default 1),
  *            now (start ms, default 1000), avatars (per-seat lobby avatar; omitted → index defaults), rules (default: real pack).
  * Night:
  *   rules, state, ids          the rules under test, live pack State, seat ids in roster order
@@ -35,7 +35,7 @@ import { assertSerializable } from '../../../party-contract/src/serializable'; /
 import type { ActionResult } from '../../../party-contract/src/index';
 import type { MiniBot, MiniResult, PackPrivateView, PackPublicView, PackSettings } from '../src/core/contract';
 import { random } from '../src/core/server/rng';
-import { rules as packRules } from '../src/server';
+import { CRASH_HEADLINE, rules as packRules } from '../src/server';
 import type { PackRules, State } from '../src/server';
 
 export type NightOptions = { players?: number; settings?: Partial<PackSettings>; seed?: number; now?: number; avatars?: (number | undefined)[]; rules?: PackRules };
@@ -119,6 +119,7 @@ export function createNight(options: NightOptions = {}) {
         night.advance(100);
       }
       assert.equal(state.phase, 'podium', `Minigame ended in phase ${state.phase}`);
+      assert.notEqual(state.podium!.result.headline, CRASH_HEADLINE, `Minigame ${state.current?.id} threw and was ended by the pack`);
       return { result: state.podium!.result, ...run };
     },
     async playMini(opts?: { maxMs?: number; skip?: string[] }) { return night.runMini(await loadBot(state.current!.id), opts); },

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { manifest } from '../src/manifest';
-import { CUE_LIMIT, PACE, createRules, miniApi, rules as realRules } from '../src/server';
+import { CROWD_LOCK_MS, CUE_LIMIT, CUE_TTL_MS, LOCK_MS, PACE, createRules, miniApi, rules as realRules } from '../src/server';
 import { MINIS, eligible, miniInfo } from '../src/minis/catalog';
-import { validateSnapshotCache } from '../../../party-contract/src/snapshot-cache';
+import { SnapshotEncoder, validateSnapshotCache } from '../../../party-contract/src/snapshot-cache';
 import { dealFresh, freshDeck } from '../src/core/server/deck';
 import { createNight, type NightOptions } from './harness';
 import { fixtureCatalog, fixtureServers, tapBot } from './fixtures/tap';
@@ -14,7 +14,7 @@ const rejects = (result: { accepted: boolean; reason?: string }, pattern: RegExp
 
 test('manifest, catalog helpers and the real registry wiring', () => {
   assert.equal(manifest.id, 'hijinks');
-  assert.deepEqual(manifest.players, { min: 2, max: 10 });
+  assert.deepEqual(manifest.players, { min: 2, max: 64 });
   validateSnapshotCache(manifest.snapshotCache);
   assert.equal(miniInfo('quip-clash')?.title, 'Quip Clash');
   assert.ok(eligible(miniInfo('quip-clash')!, 3) && !eligible(miniInfo('quip-clash')!, 2));
@@ -40,6 +40,33 @@ test('lobby choice and avatar assignment', () => {
   assert.throws(() => parse(undefined, true), /avatar/); assert.throws(() => parse({}, true), /avatar/);
   assert.deepEqual(night().state.players.map(p => p.avatar), [0, 1, 2, 3], 'index defaults when absent');
   assert.deepEqual(night({ avatars: [5, 5, undefined, 0] }).state.players.map(p => p.avatar), [5, 1, 2, 0], 'duplicates take the first free avatar');
+});
+
+test('big rooms: 64 seats, shared characters, a two-thirds vote starts the lock and a full night still ends', () => {
+  assert.throws(() => night({ players: 65 }), /2–64/); assert.throws(() => night({ players: 1 }), /2–64/);
+  assert.deepEqual(new Set(night({ players: 16 }).state.players.map(p => p.avatar)).size, 16, 'sixteen players never share');
+  const picks = Array.from({ length: 64 }, (_, i) => i < 40 ? 3 : undefined), n = night({ players: 64, avatars: picks });
+  const worn = Array.from({ length: 16 }, (_, a) => n.state.players.filter(p => p.avatar === a).length);
+  assert.equal(n.state.players.slice(0, 40).every(p => p.avatar === 3), true, 'a big room keeps every pick, shared or not');
+  assert.equal(worn[3], 40); assert.deepEqual([...new Set(worn.filter((_, a) => a !== 3))].sort(), [1, 2], 'unpicked seats spread over the least-worn characters');
+  rejects(n.tryAct('p1', { k: 'vote', game: 'tap' }), /2–10 players/);
+  for (let i = 0; i < 42; i++) n.act(`p${i}`, { k: 'vote', game: 'crowd' });
+  n.advance(100); assert.equal(n.view().menu!.lockAt, null, '42 of 64 is short of two thirds');
+  n.act('p42', { k: 'vote', game: 'crowd' }); n.advance(100);
+  assert.equal(n.view().menu!.lockAt, n.now + CROWD_LOCK_MS);
+  for (let i = 43; i < 64; i++) n.act(`p${i}`, { k: 'vote', game: 'crowd' });
+  n.advance(100); assert.equal(n.view().menu!.lockAt, n.now + LOCK_MS, 'everyone in: the long countdown shortens');
+  n.advance(LOCK_MS); assert.equal(n.state.current?.id, 'crowd');
+  n.act('p0', { k: 'skip', session: n.state.current!.session });
+  const { result } = n.runMini(tapBot);
+  assert.deepEqual(result.winners, ['p63']); assert.equal(Object.keys(result.scores).length, 64);
+  n.endNight();
+  const outcome = n.rules.outcome(n.state);
+  assert.equal(outcome.rows.length, 64); assert.deepEqual(outcome.winners, ['p63']); assert.equal(outcome.rows[0]!.playerId, 'p63');
+  // Ten players or fewer keep the old rule: no countdown until everyone has voted.
+  const small = night({ players: 9 });
+  for (let i = 0; i < 8; i++) small.act(`p${i}`, { k: 'vote', game: 'tap' });
+  small.advance(30_000); assert.equal(small.view().menu!.lockAt, null);
 });
 
 test('parseAction is strict', () => {
@@ -208,6 +235,8 @@ test('cues: monotonic seq, bounded log, read-aloud only when enabled', () => {
   assert.ok(seqs.every((seq, i) => i === 0 || seq === seqs[i - 1]! + 1));
   n.toMenu();
   assert.ok(n.view().cues.at(-1)!.seq > last);
+  n.advance(CUE_TTL_MS + 100); assert.deepEqual(n.view().cues, [], 'old cues stop travelling with every snapshot');
+  n.act('p1', { k: 'vote', game: 'tap' }); assert.equal(n.view().cues.length, 1); assert.ok(n.view().cues[0]!.seq > last);
   const quiet = night(), loud = night({ settings: { readAloud: true } });
   miniApi(quiet.state).speak('  hello  '); miniApi(loud.state).speak('  hello  ');
   assert.equal(quiet.view().cues.some(c => c.kind === 'speak'), false);
@@ -244,6 +273,19 @@ for (const players of [2, 10]) test(`${players} players: full night join → min
   assert.deepEqual(outcome.winners, players === 10 ? ['p8', 'p9'] : ['p1']);
   assert.deepEqual(outcome.rows.filter(r => r.rank === 1).map(r => r.playerId).sort(), outcome.winners, 'only trophy leaders share 1st');
   assert.equal(outcome.rows[outcome.winners.length]!.rank, outcome.winners.length + 1, 'points break ties below the leaders');
+});
+
+test('the roster rides in the snapshot cache: it is resent when presence changes and omitted otherwise', () => {
+  assert.deepEqual(manifest.snapshotCache.fields, ['media', 'players']);
+  const n = night({ players: 64 }), encoder = new SnapshotEncoder(), wire = () => encoder.encode('night', n.view(), manifest.snapshotCache), size = (x: unknown) => JSON.stringify(x).length;
+  const first = wire(); assert.equal(first.publicCache!.reused, false); assert.ok('players' in (first.publicView as object));
+  n.act('p3', { k: 'vote', game: 'crowd' });
+  const second = wire(); assert.equal(second.publicCache!.reused, true); assert.ok(!('players' in (second.publicView as object)) && !('media' in (second.publicView as object)));
+  assert.ok(size(second.publicView) < size(first.publicView) / 4, `${size(second.publicView)} of ${size(first.publicView)} bytes without the roster`);
+  const rev = n.view().mediaRev;
+  n.connect('p5', false); assert.equal(n.view().mediaRev, rev + 1); n.connect('p5', false); assert.equal(n.view().mediaRev, rev + 1, 'only a change counts');
+  const third = wire(); assert.equal(third.publicCache!.reused, false);
+  assert.equal((third.publicView as { players: { id: string; connected: boolean }[] }).players.find(p => p.id === 'p5')!.connected, false);
 });
 
 test('real pack: quip-clash ineligible without its server, never crashes the menu', () => {

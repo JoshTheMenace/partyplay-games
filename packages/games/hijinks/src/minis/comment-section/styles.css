@@ -243,3 +243,8 @@
 @keyframes cs-thunk { from { opacity: 0; scale: 2.4; rotate: -4deg; } }
 @keyframes cs-deal { 0%, 30%, 100% { background: #f3f4fa; translate: 0 0; } 10% { background: color-mix(in srgb, var(--brand) 26%, #fff); translate: 0 -8px; } }
 @media (prefers-reduced-motion: reduce) { .cs-logo i, .cs-wall::before, .cs-ticker-track, .cs-caret, .cs-mystery, .cs-machine-apps li, .cs-refresh i, .cs-reacts { animation: none; } .cs-reacts { display: none; } }
+/* Big rooms: the activity panel becomes a wall of faces. */
+.hj-comment-section .cs-activity[data-crowd] { display: grid; grid-template-columns: repeat(var(--per), auto); justify-content: center; gap: 8px; }
+.hj-comment-section .cs-activity[data-crowd] li { display: block; padding: 3px; line-height: 0; border-radius: 16px; border: 2px solid transparent; background: #1a1d2e0d; opacity: .55; transition: opacity .3s, border-color .3s, background .3s; }
+.hj-comment-section .cs-activity[data-crowd] li[data-done] { opacity: 1; border-color: var(--c); background: color-mix(in srgb, var(--c) 22%, #fff); }
+.hj-comment-section .cs-activity[data-crowd] li[data-offline] { opacity: .3; filter: grayscale(.8); }

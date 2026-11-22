@@ -1,7 +1,7 @@
 /* Menu phase: the TV game wall and the phone ballot. */
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { ArcadeButton, StatusNotice } from '../../../../../party-ui/src/index';
-import type { MiniInfo } from '../contract';
+import { LOCK_MS, type MiniInfo } from '../contract';
 import { MINIS } from '../../minis/catalog';
 import { AvatarStack, BigTitle, PhoneChoices, PhoneShell, PlayerStrip, Trophy, useNow, useSend, type PhoneChoice } from '../ui';
 import { Logo, TileArt } from './brand';
@@ -44,12 +44,14 @@ function useBox() {
 export function MenuDisplay(props: ScreenProps) {
   const { view } = props, { games, voters, top, lockIn, voted } = useMenu(props), vip = view.players.find(p => p.id === view.vip);
   const many = games.length > 8, [box, size] = useBox(), fit = wallFit(games.length, size.w, size.h - 20), [stack, stackMax] = STACKS[fit.density];
-  return <div className="hj-menu" data-many={many || undefined} data-locking={lockIn !== null || undefined}>
+  // A big room's 15 s countdown is a last call for votes; only its final seconds dim the wall around the leader.
+  const final = lockIn !== null && lockIn <= LOCK_MS / 1000;
+  return <div className="hj-menu" data-many={many || undefined} data-locking={final || undefined}>
     <header className="hj-menu-head">
       <Logo size={many ? .68 : .85} />
       <BigTitle kicker={view.played.length ? `Game ${view.played.length + 1} of the night` : 'Welcome to the show!'} size={many ? 76 : 92}>Pick the next game!</BigTitle>
       {lockIn !== null
-        ? <div className="hj-lock" role="status"><span>Locking in</span><b className="kp-title" key={lockIn}>{lockIn}</b></div>
+        ? <div className="hj-lock" role="status" data-last-call={!final || undefined}><span>{final ? 'Locking in' : 'Last votes!'}</span><b className="kp-title" key={lockIn}>{lockIn}</b></div>
         : <div className="hj-menu-count"><b className="kp-numeral">{voted.length}<small>/{view.players.length}</small></b><span>voted</span></div>}
     </header>
     <div className="hj-wall-box" ref={box}>
@@ -103,7 +105,7 @@ export function MenuController(props: PhoneProps & { vote: string | null }) {
     onSubmit={([game]) => send({ k: 'vote', game: game! })} options={list.map(option)} />;
   const open = games.filter(info => !blocked(info, count)), off = games.filter(info => blocked(info, count));
   const hot = open.filter(info => voters(info.id).length).sort((a, b) => voters(b.id).length - voters(a.id).length);
-  return <PhoneShell player={me} vip={isVip} eyebrow={lockIn !== null ? `Locking in ${lockIn}…` : `${voted.length}/${view.players.length} voted`} title={vote ? 'Vote locked. Change it?' : 'Vote for the next game'} action={action || undefined}>
+  return <PhoneShell player={me} vip={isVip} eyebrow={lockIn !== null ? lockIn > LOCK_MS / 1000 ? `Last votes! Locking in ${lockIn}…` : `Locking in ${lockIn}…` : `${voted.length}/${view.players.length} voted`} title={vote ? 'Vote locked. Change it?' : 'Vote for the next game'} action={action || undefined}>
     {!compact ? choices(games, 'Games') : <div className="hj-ballot">
       {hot.length > 0 && <section><h3 className="hj-ballot-head">Room favourites</h3>{choices(hot, 'Room favourites')}</section>}
       {byTag(open).map(([tag, list]) => <section key={tag}><h3 className="hj-ballot-head">{tag}<small>{list.length}</small></h3>{choices(list, tag)}</section>)}

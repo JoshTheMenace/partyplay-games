@@ -1,11 +1,12 @@
 /* Bracket Brawl rules: three answer tournaments (Standard, Blind, Smackdown) with champion predictions. Server only. */
 import type { MiniApi, MiniResult, MiniServer } from '../../core/contract';
 import { variant } from '../../core/narration';
+import { dealBallots } from '../../core/server/ballots';
 import { dealFresh, freshDeck } from '../../core/server/deck';
 import { integer, record } from '../../core/server/validate';
 import { CATEGORIES, GENERIC, blindPool, smackPool, standardPool } from './content.server';
 import {
-  BRACKETS, CHAMP, JUDGE_MS, MAX_ANSWER, MIN_READ_MS, PREDICT_S, PTS, SCORES_MS, STAGE_MS, TWIST, TWIST_MS, WRITE_S,
+  BRACKETS, CHAMP, HEATS_S, HEAT_BALLOT, HEAT_PICKS, JUDGE_MS, MAX_ANSWER, MIN_READ_MS, PREDICT_S, PTS, SCORES_MS, STAGE_MS, TWIST, TWIST_MS, WRITE_S,
   answersFor, resultBeats, roundsOf, showBeats, sizeFor, voteSeconds, weight, type BrawlPrivate, type BrawlPublic, type Kind, type Phase,
 } from './types';
 
@@ -19,6 +20,8 @@ export type BrawlState = {
   phase: Phase; bracket: number; turn: string; seq: number; at: number; deadline: number; stage: number; hurried: boolean;
   round: number; index: number;
   answers: Record<string, (string | null)[]>; entries: Entry[]; bouts: Bout[][]; picks: Record<string, string>; earned: Record<string, number>;
+  /** Qualifying heats (more answers than slots): every answer, each phone's ballot and picks, and the players whose answer missed the cut. */
+  field: { id: string; text: string; by: string }[]; ballots: Record<string, string[]>; heats: Record<string, string[]>; cut: string[];
   champ: { entry: string; bonus: number; oracles: string[]; oracle: number } | null;
   scores: Record<string, number>; prev: Record<string, number>; stats: Record<Stat, Record<string, number>>;
   coined: boolean; houseWins: number; done: boolean;
@@ -55,7 +58,7 @@ function hold(s: BrawlState, api: MiniApi, spoken: number) { if (spoken) s.deadl
 function startBracket(s: BrawlState, api: MiniApi) {
   s.bracket++;
   const c = card(s), zero = () => Object.fromEntries(s.ids.map(id => [id, 0]));
-  Object.assign(s, { round: 0, index: 0, entries: [], bouts: [], picks: {}, earned: zero(), champ: null, coined: false, prev: { ...s.scores } });
+  Object.assign(s, { round: 0, index: 0, entries: [], bouts: [], picks: {}, earned: zero(), champ: null, coined: false, prev: { ...s.scores }, field: [], ballots: {}, heats: {}, cut: [] });
   s.answers = Object.fromEntries(s.ids.map(id => [id, Array.from({ length: s.per }, () => null)]));
   api.music(s.bracket === 2 ? 'think-2' : 'think');
   if (s.bracket > 1) api.sfx('gong');
@@ -80,11 +83,11 @@ function house(s: BrawlState, api: MiniApi, count: number, taken: string[]) {
  * Seeds the bracket. A player's two answers land in opposite halves (they can only meet in the final), player answers face
  * house answers before each other in round one, and nobody faces themselves.
  */
-function seed(s: BrawlState, api: MiniApi) {
+function seed(s: BrawlState, api: MiniApi, answers = s.answers) {
   const halves: { text: string; by: string | null }[][] = [[], []], halfOf: Record<string, number> = {}, order = api.shuffle(s.ids);
   let flip = 0;
   for (let k = 0; k < s.per; k++) for (const id of order) {
-    const text = s.answers[id]![k];
+    const text = answers[id]![k];
     if (!text) continue;
     const h = k && id in halfOf ? 1 - halfOf[id]! : flip++ % 2;
     halfOf[id] = h; halves[h]!.push({ text, by: id });
@@ -108,7 +111,29 @@ function seed(s: BrawlState, api: MiniApi) {
 }
 
 function endWrite(s: BrawlState, api: MiniApi) {
-  seed(s, api);
+  // More answers than bracket slots: the phones hold qualifying heats first.
+  const all = s.ids.flatMap(id => s.answers[id]!.flatMap(text => text ? [{ text, by: id }] : []));
+  if (all.length > s.size) {
+    s.field = api.shuffle(all).map((a, i) => ({ id: `a${i}`, ...a }));
+    const hands = dealBallots(api, s.ids, s.field, HEAT_BALLOT, (a, id) => a.by === id);
+    s.ballots = Object.fromEntries(s.ids.map(id => [id, hands[id]!.map(a => a.id)])); s.heats = {};
+    api.music('vote'); api.sfx('whoosh');
+    return go(s, api, 'heats', api.seconds(HEATS_S));
+  }
+  seeded(s, api);
+}
+
+/** The most-picked answers take the bracket's slots (ties by lot); everyone else's answer is cut, and they still call the champion and vote. */
+function qualify(s: BrawlState, api: MiniApi) {
+  const cast = Object.values(s.heats).flat(), votes = (id: string) => cast.filter(x => x === id).length;
+  const through = new Set(api.shuffle(s.field).sort((a, b) => votes(b.id) - votes(a.id)).slice(0, s.size).map(a => a.id));
+  s.cut = s.ids.filter(id => s.field.some(a => a.by === id) && !s.field.some(a => a.by === id && through.has(a.id)));
+  const kept = Object.fromEntries(s.ids.map(id => [id, s.answers[id]!.map(text => text && s.field.some(a => a.by === id && a.text === text && through.has(a.id)) ? text : null)]));
+  seeded(s, api, kept);
+}
+
+function seeded(s: BrawlState, api: MiniApi, answers = s.answers) {
+  seed(s, api, answers);
   api.sfx('whoosh');
   if (card(s).kind !== 'blind') return startPredict(s, api);
   api.music('reveal'); api.sfx('record-scratch');
@@ -194,7 +219,7 @@ export const server: MiniServer<BrawlState, BrawlPublic, BrawlPrivate> = {
         { kind: 'smackdown', prompt: smack!.ask, judges: [...smack!.judges], house: CATEGORIES[smack!.cat]!.house },
       ],
       phase: 'write', bracket: 0, turn: '', seq: 0, at: api.now, deadline: api.now, stage: 0, hurried: false, round: 0, index: 0,
-      answers: {}, entries: [], bouts: [], picks: {}, earned: zero(), champ: null,
+      answers: {}, entries: [], bouts: [], picks: {}, earned: zero(), champ: null, field: [], ballots: {}, heats: {}, cut: [],
       scores: zero(), prev: zero(), stats: { wins: zero(), crowns: zero(), oracle: zero(), votes: zero() }, coined: false, houseWins: 0, done: false,
     };
     startBracket(s, api);
@@ -214,6 +239,16 @@ export const server: MiniServer<BrawlState, BrawlPublic, BrawlPrivate> = {
         const text = clean(a.text);
         if (slots.some(other => other !== null && norm(other) === norm(text))) throw new Error('You already sent that one. Try another!');
         slots[slot] = text; api.sfx('submit');
+        return;
+      }
+      case 'heat': {
+        record(a, ['turn', 'k', 'picks']);
+        if (s.phase !== 'heats') throw new Error('Qualifying is over.');
+        if (Object.hasOwn(s.heats, id)) throw new Error('Your picks are already in.');
+        const mine = s.ballots[id] ?? [];
+        if (!Array.isArray(a.picks) || a.picks.length !== Math.min(HEAT_PICKS, mine.length) || new Set(a.picks).size !== a.picks.length) throw new Error(`Send ${HEAT_PICKS} different answers through.`);
+        if (a.picks.some(pick => !mine.includes(pick as string))) throw new Error('That answer is not on your list.');
+        s.heats[id] = [...a.picks as string[]]; api.sfx('vote');
         return;
       }
       case 'predict': {
@@ -246,6 +281,9 @@ export const server: MiniServer<BrawlState, BrawlPublic, BrawlPrivate> = {
         if (!s.hurried && s.deadline - now <= 10_000 && s.deadline - s.at > 20_000) { s.hurried = true; api.sfx('tick-fast'); api.say(variant('host.hurry', api.random)); }
         return;
       }
+      case 'heats':
+        if ((online.length > 0 && online.every(id => Object.hasOwn(s.heats, id)) && t >= MIN_READ_MS) || now >= s.deadline) qualify(s, api);
+        return;
       case 'twist':
         if (s.stage === 0 && t >= TWIST.reveal) { s.stage++; api.sfx('stamp'); api.speak(card(s).prompt); }
         if (now >= s.deadline) startPredict(s, api);
@@ -299,7 +337,8 @@ export const server: MiniServer<BrawlState, BrawlPublic, BrawlPrivate> = {
       entries: s.entries.map(e => ({ id: e.id, text: e.text, ...(crowned || out.has(e.id) ? e.by ? { by: e.by } : { house: true as const } : {}) })),
       bouts: s.bouts.map(round => round.map(b => ({ sides: [...b.sides], ...(b.winner === null ? {} : { winner: b.winner, votes: [...b.counts], ...(b.flip ? { flip: true as const } : {}) }) }))),
     };
-    if (c.kind !== 'blind' || s.phase !== 'write') pub.prompt = c.prompt;
+    if (c.kind !== 'blind' || (s.phase !== 'write' && s.phase !== 'heats')) pub.prompt = c.prompt;
+    if (s.phase === 'heats') { pub.done = s.ids.filter(id => Object.hasOwn(s.heats, id)); pub.field = { answers: s.field.length, slots: s.size, ballot: HEAT_BALLOT, picks: HEAT_PICKS }; }
     if (c.hint) pub.hint = c.hint;
     if (question) pub.judge = question;
     if (s.phase === 'write') pub.done = s.ids.filter(id => written(s, id));
@@ -318,8 +357,10 @@ export const server: MiniServer<BrawlState, BrawlPublic, BrawlPrivate> = {
       turn: s.turn, earned: s.earned[id] ?? 0, mine: s.entries.filter(e => e.by === id).map(e => e.id),
       answers: (s.answers[id] ?? []).map((text, slot) => ({ slot, ...(text !== null ? { text } : s.phase !== 'write' ? { house: true as const } : {}) })),
     };
-    const pick = own(s.picks, id);
+    const pick = own(s.picks, id), heat = own(s.heats, id);
     if (pick) me.pick = pick;
+    if (s.phase === 'heats') { me.ballot = (s.ballots[id] ?? []).map(x => { const a = s.field.find(f => f.id === x)!; return { id: a.id, text: a.text }; }); if (heat) me.heat = [...heat]; }
+    else if (s.cut.includes(id)) me.cut = true;
     if (s.phase === 'vote' || s.phase === 'result') {
       const b = bout(s), vote = own(b.votes, id);
       me.role = authors(s, b).includes(id) ? 'author' : 'voter';

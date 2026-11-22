@@ -21,6 +21,8 @@ export type PackSettings = {
   startWith: string;
 };
 export type LobbyChoice = { avatar: number };
+/** The menu's final lock countdown once everyone has voted (a big room's longer last call ends in it too). */
+export const LOCK_MS = 4000;
 
 // ---------- audio cues ----------
 /** Every SFX id has a file at /games/hijinks/sfx/<id>.mp3 (see core/audio). */
@@ -97,6 +99,8 @@ export type PackPublicView = {
   trophies: Record<string, number>;
   /** Minigame ids played this night, in order. */
   played: string[];
+  /** Who took each of those games' trophies (same order as `played`; empty when nobody won). */
+  champions: string[][];
   menu: { votes: Record<string, string>; lockAt: number | null } | null;
   /** Active or most recent minigame. `session` increments each time a minigame starts; actions must echo it. */
   current: { id: string; session: number; startedAt: number } | null;
@@ -106,6 +110,7 @@ export type PackPublicView = {
   podium: { result: MiniResult; endsAt: number } | null;
   music: string | null;
   cues: Cue[];
+  /** Revision of the cached fields (`media` and `players`): the platform resends them only when this changes. */
   mediaRev: number;
   media: Record<string, unknown>;
 };

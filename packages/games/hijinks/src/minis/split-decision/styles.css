@@ -52,6 +52,12 @@
 .sd-portal-in span { font-family: var(--font-display); text-transform: uppercase; letter-spacing: .06em; color: var(--kp-cream); }
 .sd-portal-big { width: 480px; } .sd-portal-big b { font-size: 150px; } .sd-portal-big b small { font-size: 70px; } .sd-portal-big span { margin-top: 8px; font-size: 32px; }
 .sd-portal-small { width: 250px; }
+/* Big rooms: the room judges on phones while the portal counts everyone in. */
+.sd-sift { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 24px; }
+.sd-sift-main { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; gap: 80px; }
+.sd-sift-copy { max-width: 900px; display: flex; flex-direction: column; gap: 22px; } .sd-sift-copy .hj-bigtitle { text-align: left; }
+.sd-sift-main .sd-portal-big { width: 420px; flex: none; }
+.sd-rebel-more { padding-inline: 16px; font-size: 22px; font-weight: 900; color: var(--muted-foreground); border-style: dashed; }
 
 /* ---------- writing ---------- */
 .sd-write-main { flex: 1; min-height: 0; display: grid; grid-template-columns: 500px minmax(0, 1fr); align-items: center; gap: 56px; padding: 0 30px 0 50px; }
@@ -126,7 +132,7 @@
 .sd-voter[data-placed] .hj-name { opacity: 1; } .sd-voter[data-big] .hj-name { max-width: 188px; font-size: 24px; }
 .sd-author { position: absolute; left: 50%; top: 40px; z-index: 4; display: flex; flex-direction: column; align-items: center; translate: -50% 0; padding: 18px 18px 14px; border-radius: 30px;
   background: radial-gradient(circle at 50% 40%, #2a0f5e, #0c0322 75%); border: 5px solid var(--kp-ink); box-shadow: 0 0 0 4px #ffffff40, 0 0 60px #fff6; animation: hj-drop .55s cubic-bezier(.2, 1.4, .4, 1) backwards; }
-.sd-author .hj-badge { font-size: 28px; max-width: 220px; text-align: center; }
+.sd-author .hj-badge { font-size: 28px; max-width: 220px; text-align: center; } .sd-author .hj-badge small { margin-top: 8px; }
 .sd-author[data-verdict=perfect] { box-shadow: 0 0 0 6px var(--sd-yes), 0 0 0 12px var(--sd-no), 0 0 90px #fff; }
 .sd-points { position: absolute; top: -30px; right: -46px; z-index: 5; rotate: 8deg; padding: 2px 20px; border-radius: 20px; background: var(--kp-lime); color: var(--kp-ink); border: 5px solid var(--kp-ink); font-size: 50px; font-weight: 400; box-shadow: 0 6px 0 var(--kp-ink); white-space: nowrap; animation: hj-stamp .5s cubic-bezier(.2, 1.6, .4, 1) backwards; }
 .sd-author .sd-points { top: auto; right: auto; bottom: -74px; left: 50%; translate: -50% 0; rotate: -4deg; font-size: 46px; }

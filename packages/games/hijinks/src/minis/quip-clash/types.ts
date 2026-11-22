@@ -5,6 +5,14 @@ export const MAX_ANSWER = 80, FINAL_VOTES = 3, LAST_ROUND = 3;
 export const WRITE_S = 75, VOTE_S = 15, FINAL_VOTE_S = 30;
 /** Readable minimum before an all-submitted phase advances. */
 export const MIN_READ_MS = 1500;
+/**
+ * Big rooms (above ten players): rounds 1–2 are up to `HEATS` heats, each one prompt answered by up to `HEAT_SIZE` players
+ * and voted by the whole room (above 32 players half the room writes in each round). A Last Laugh with more answers than
+ * fit the TV deals every phone `BALLOT` of them and reveals the top `FINAL_SHOWN`.
+ */
+export const HEATS = 4, HEAT_SIZE = 8, BALLOT = 8, FINAL_SHOWN = 8;
+/** Votes each player places on a heat: one among up to four answers, two among more. The Last Laugh always gives three. */
+export const heatVotes = (entries: number) => entries <= 4 ? 1 : 2;
 export const ROUND_NAMES = ['Round 1', 'Round 2 · Double points', 'Last Laugh · Triple points'] as const;
 export const letter = (i: number) => String.fromCharCode(65 + i);
 
@@ -23,6 +31,12 @@ export type Match = {
 export type FinalReveal = { id: string; text: string; author: string; votes: number; voters: string[]; points: number; safety?: true };
 export type Final = {
   prompt: string;
+  /** Votes each player places on this board. */
+  votes: number;
+  /** Big rooms, rounds 1–2: this board is one heat of the round. */
+  heat?: { index: number; count: number };
+  /** Big-room Last Laugh: `answers` were written, each phone votes on `ballot` of them, and `entries` lists only what the TV reveals. */
+  field?: { answers: number; ballot: number };
   /** Anonymous answers in grid order (empty while writing). Ids are opaque, never player ids. */
   entries: { id: string; text: string }[];
   /** Entries in reveal order (fewest votes first); `winners` are the top authors. */
@@ -53,6 +67,9 @@ export type QuipPrivate = {
   /** Final: your entry id, and your confirmed votes once cast. */
   mine?: string;
   picks?: string[];
+  /** Big-room Last Laugh: the answers dealt to your phone, and how your own answer did if the TV does not reveal it. */
+  ballot?: { id: string; text: string }[];
+  own?: FinalReveal;
 };
 export type QuipAction =
   | { turn: string; k: 'answer'; slot: number; text: string }
@@ -70,7 +87,9 @@ export function showBeats(answers: readonly Answer[]): [number, number, number, 
 /** Result phase: voters fly in, authors revealed, points + winner; a quipwipe or jinx holds a little longer. */
 export const RESULT = { voters: 600, authors: 2100, points: 3600, end: 7000, bonus: 2200 } as const;
 /** Final result: one entry every `step` ms after `first`, then the winner beat, then a hold. */
-export function finalBeats(count: number) {
+export function finalBeats(count: number, hold = 6500) {
   const first = 1600, step = count > 6 ? 900 : 1200, winner = first + count * step + 700;
-  return { reveals: Array.from({ length: count }, (_, i) => first + i * step), winner, end: winner + 6500 };
+  return { reveals: Array.from({ length: count }, (_, i) => first + i * step), winner, end: winner + hold };
 }
+/** A heat's winner holds for less than the Last Laugh's. */
+export const HEAT_HOLD_MS = 4200;

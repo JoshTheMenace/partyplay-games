@@ -1,9 +1,9 @@
 /**
  * Hijinks live QA driver: one real TV page, one real phone page and N-1 socket bots play a night on a running server.
  *
- *   node --import tsx packages/games/hijinks/tools/qa-driver.ts --port 4421 --players 4 [--game quip-clash]
+ *   node --import tsx packages/games/hijinks/tools/qa-driver.ts --port 4421 --players 4 [--game quip-clash[,tall-tales…]]
  *     [--shots output/playwright/hijinks/<run>] [--host localhost] [--keep-open] [--phone-viewports] [--tv-viewports] [--settled]
- *     [--stress-podium] [--audio <file.wav>] [--video <dir>] [--read-aloud] [--max-minutes 30]
+ *     [--stress-podium] [--audio <file.wav>] [--video <dir>] [--read-aloud] [--replay] [--max-minutes 30]
  *
  * - TV (headless Chromium, 1920×1080) opens /?game=hijinks, adds it to the library, taps Play on this screen and reads the code.
  * - Phone (390×844, touch) joins through the real form, keeps its auto-picked avatar and taps I’m ready!. It joins first, so it
@@ -14,7 +14,11 @@
  *   action is injected into the phone page's own socket (Playwright routeWebSocket, ids renumbered so the page and the driver
  *   share one action window); the page still renders every accepted result. A minigame may opt into real UI driving with
  *   src/minis/<id>/qa.ts exporting `ui(page, action): Promise<boolean>` (true = handled through the UI).
- * - Without --game the night goes menu → End the night → results. With --game it plays through the podium, back to the menu, then ends.
+ * - --replay: after the results the host taps Play again, every seat readies again, and a second night starts from an empty
+ *   menu (no trophies, nothing played) and plays the first listed game once more to its own results.
+ * - Without --game the night goes menu → End the night → results. With --game it plays each listed minigame through its podium
+ *   and back to the menu, then ends the night. Up to 64 seats: one phone page, the rest socket bots (names up to 16 characters;
+ *   above sixteen seats they share characters). log.json `games` records how long each minigame took and its accepted actions.
  * - Screenshots never queue. Each page has a camera that watches the snapshots its own socket delivered and shoots the state it
  *   is showing now: every phase key once it has been on screen 0.9 s (a key that is replaced sooner is logged as `missed`),
  *   viewport sweeps (phone 320×568 + 667×375 with --phone-viewports, TV 1280×720 with --tv-viewports) once per phase kind,
@@ -39,53 +43,71 @@ import { createWriteStream, existsSync, mkdirSync, rmSync, writeFileSync } from 
 import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { WebSocket } from 'ws';
+import { SnapshotDecoder } from '../../../party-contract/src/snapshot-cache';
 import type { MiniBot, PackAction, PackPrivateView, PackPublicView } from '../src/core/contract';
 import { MINIS, eligible } from '../src/minis/catalog';
+import { manifest } from '../src/manifest';
 
 const { values: args } = parseArgs({ options: {
   port: { type: 'string' }, host: { type: 'string', default: 'localhost' }, players: { type: 'string', default: '4' }, game: { type: 'string' },
   shots: { type: 'string' }, 'keep-open': { type: 'boolean', default: false }, 'phone-viewports': { type: 'boolean', default: false }, 'tv-viewports': { type: 'boolean', default: false }, settled: { type: 'boolean', default: false }, 'stress-podium': { type: 'boolean', default: false }, 'max-minutes': { type: 'string', default: '30' },
-  audio: { type: 'string' }, video: { type: 'string' }, 'read-aloud': { type: 'boolean', default: false },
+  audio: { type: 'string' }, video: { type: 'string' }, 'read-aloud': { type: 'boolean', default: false }, replay: { type: 'boolean', default: false },
 } });
-const count = Number(args.players), game = args.game, base = `http://${args.host}:${args.port}`, t0 = Date.now();
-if (!args.port || !Number.isInteger(count) || count < 2 || count > 10) throw new Error('Usage: qa-driver.ts --port <port> --players <2-10> [--game <miniId>] [--shots <dir>] [--keep-open] [--phone-viewports] [--tv-viewports] [--settled] [--stress-podium] [--audio <file.wav>] [--read-aloud]');
-const info = game ? MINIS.find(m => m.id === game) : undefined;
-if (game && !info) throw new Error(`Unknown minigame ${game}. Catalog: ${MINIS.map(m => m.id).join(', ')}`);
-if (info && !eligible(info, count)) throw new Error(`${info.title} needs ${info.players.min}–${info.players.max} players.`);
+const count = Number(args.players), games = (args.game ?? '').split(',').filter(Boolean), base = `http://${args.host}:${args.port}`, t0 = Date.now();
+if (!args.port || !Number.isInteger(count) || count < 2 || count > 64) throw new Error('Usage: qa-driver.ts --port <port> --players <2-64> [--game <miniId>[,<miniId>…]] [--shots <dir>] [--keep-open] [--phone-viewports] [--tv-viewports] [--settled] [--stress-podium] [--audio <file.wav>] [--read-aloud]');
+for (const id of games) {
+  const item = MINIS.find(m => m.id === id);
+  if (!item) throw new Error(`Unknown minigame ${id}. Catalog: ${MINIS.map(m => m.id).join(', ')}`);
+  if (!eligible(item, count)) throw new Error(`${item.title} needs ${item.players.min}–${item.players.max} players.`);
+}
+/** The minigame being played now (each --game in turn): its catalog entry, bot policy and optional phone UI driver. */
+let game: string | undefined, info: typeof MINIS[number] | undefined;
 const shots = args.shots ?? `output/playwright/hijinks/qa-${new Date().toISOString().replace(/[:.]/g, '-')}`;
 mkdirSync(shots, { recursive: true });
 
 // Playwright is not a project dependency; HIJINKS_PLAYWRIGHT can point at another node_modules directory that contains it.
-const { chromium } = createRequire(`${process.env.HIJINKS_PLAYWRIGHT ?? `${process.env.HOME}/.npm/_npx/e41f203b7505f1fb/node_modules`}/`)('playwright');
+const pwRequire = createRequire(`${process.env.HIJINKS_PLAYWRIGHT ?? `${process.env.HOME}/.local/opt/pw/node_modules`}/`);
+const { chromium } = (() => { try { return pwRequire('playwright'); } catch { return pwRequire('playwright-core'); } })();
 type Page = any; // Playwright is loaded untyped from outside the project.
 type Snap = { roundId: string; serverTime: number; publicView: PackPublicView; privateView: PackPrivateView | null };
 type Ack = { accepted: boolean; reason?: string };
-type Agent = { label: string; playerId: string; snap: Snap | null; at: number; busy: boolean; fresh: boolean; nextAt: number; staleAt: number; send(action: PackAction): Promise<Ack> };
+type Agent = { label: string; playerId: string; snap: Snap | null; decoder: SnapshotDecoder; at: number; busy: boolean; fresh: boolean; nextAt: number; staleAt: number; send(action: PackAction): Promise<Ack> };
 type Room = { phase: string; roundId: string | null; lobbyId?: string; players: { id: string; ready: boolean; lobbyChoice?: { avatar?: number } }[] };
 /** One page's camera: the phase key its own socket last delivered, and what has been shot of it. */
 type Lens = { name: 'tv' | 'phone'; page: Page; cdp: Page; size: [number, number]; sweeps: number[]; room: string; snap: PackPublicView | null; key: string; since: number; shot: string; settled: string; extras: { suffix: string; done(): void }[]; hold: Promise<unknown> };
 
 const sleep = (ms: number) => new Promise(done => setTimeout(done, ms));
 const log = (...parts: unknown[]) => console.log(`[${((Date.now() - t0) / 1000).toFixed(1)}s]`, ...parts);
-const report = { base, players: count, game: game ?? null, code: '', phoneDriving: 'socket', phases: [] as { t: number; key: string }[], actions: {} as Record<string, { accepted: number; rejected: Record<string, number> }>, errors: [] as string[],
+const report = { base, players: count, game: games.join(',') || null, code: '', phoneDriving: 'socket', phoneMoves: { ui: 0, socket: 0 }, games: [] as { id: string; seconds: number; accepted: number; rejected: number }[], phases: [] as { t: number; key: string }[], actions: {} as Record<string, { accepted: number; rejected: Record<string, number> }>, errors: [] as string[],
   shots: [] as { t: number; file: string; page: string; key: string; role: string; onScreenMs: number; captureMs: number }[], missed: [] as { page: string; key: string; onScreenMs: number }[], discarded: [] as { file: string; nowShowing: string }[], unswept: [] as { page: string; kind: string; medianPhaseMs: number; medianSweepMs: number }[],
-  lag: {} as Record<string, { shots: number; p50: number; p95: number; max: number; missed: number }>, resizeMs: [] as number[], overflow: [] as { shot: string; width: number; scrollWidth: number; zoom: number; offenders: string[] }[], audio: null as unknown };
-const sockets: WebSocket[] = [];
+  replay: null as { seats: number; sameSeats: boolean } | null, lag: {} as Record<string, { shots: number; p50: number; p95: number; max: number; missed: number }>, resizeMs: [] as number[], overflow: [] as { shot: string; width: number; scrollWidth: number; zoom: number; offenders: string[] }[], audio: null as unknown,
+  /** Who was slow: server round trips measured on bot 1's socket, this process's own timer lag, and sockets the server dropped. */
+  health: { pingMs: { count: 0, p50: 0, p95: 0, max: 0 }, loopLagMaxMs: 0, drops: [] as { t: number; seat: string }[] } };
+const sockets: WebSocket[] = [], pings: number[] = [];
+let closing = false, beat = Date.now();
+setInterval(() => { const lag = Date.now() - beat - 1000; beat = Date.now(); if (lag > report.health.loopLagMaxMs) report.health.loopLagMaxMs = lag; }, 1000).unref();
 let browser: { close(): Promise<void>; newContext(o: object): Promise<{ newPage(): Promise<Page> }> } | null = null, room: Room | null = null;
 
-const bot: MiniBot | null = game ? await import(`../src/minis/${game}/bot.ts`).then(m => m.default ?? m.bot) : null;
-const uiPath = game && new URL(`../src/minis/${game}/qa.ts`, import.meta.url);
-const ui: ((page: Page, action: Record<string, unknown>) => Promise<boolean>) | null = uiPath && existsSync(uiPath) ? (await import(uiPath.href)).ui ?? null : null;
-if (game && typeof bot !== 'function') throw new Error(`src/minis/${game}/bot.ts must export a MiniBot as default or \`bot\`.`);
-if (ui) report.phoneDriving = 'ui (qa.ts) with socket fallback';
+let bot: MiniBot | null = null, ui: ((page: Page, action: Record<string, unknown>) => Promise<boolean>) | null = null;
+async function cast(id: string) {
+  const next: MiniBot | undefined = await import(`../src/minis/${id}/bot.ts`).then(m => m.default ?? m.bot), uiPath = new URL(`../src/minis/${id}/qa.ts`, import.meta.url);
+  if (typeof next !== 'function') throw new Error(`src/minis/${id}/bot.ts must export a MiniBot as default or \`bot\`.`);
+  ui = existsSync(uiPath) ? (await import(uiPath.href)).ui ?? null : null;
+  if (ui) report.phoneDriving = 'ui (qa.ts) with socket fallback';
+  bot = next; info = MINIS.find(m => m.id === id); game = id;
+}
 
 function record(agent: Agent, action: PackAction, ack: Ack) {
   const stats = report.actions[agent.label] ??= { accepted: 0, rejected: {} };
   const kind = action.k === 'mini' ? `mini:${String(action.a.type ?? action.a.k ?? action.a.kind ?? '?')}` : action.k;
   if (ack.accepted) stats.accepted++; else { const why = `${kind}: ${ack.reason}`; stats.rejected[why] = (stats.rejected[why] ?? 0) + 1; log(`${agent.label} rejected ${why}`); }
 }
-const agent = (label: string): Agent => ({ label, playerId: '', snap: null, at: 0, busy: false, fresh: false, nextAt: 0, staleAt: 0, send: async () => ({ accepted: false, reason: 'not connected' }) });
-function observe(a: Agent, m: Snap) { a.snap = m; a.at = Date.now(); a.fresh = true; }
+const agent = (label: string): Agent => ({ label, playerId: '', snap: null, decoder: new SnapshotDecoder(), at: 0, busy: false, fresh: false, nextAt: 0, staleAt: 0, send: async () => ({ accepted: false, reason: 'not connected' }) });
+/** The roster and media travel once per revision (manifest.snapshotCache), so every socket restores them like the client does. */
+function observe(a: Agent, m: Snap) {
+  const whole = a.decoder.decode(m as never, manifest.snapshotCache) as Snap | null;
+  if (whole) { a.snap = whole; a.at = Date.now(); a.fresh = true; }
+}
 
 function plan(a: Agent, phone: Page | null): PackAction | null {
   const s = a.snap!, v = s.publicView, me = s.privateView;
@@ -102,9 +124,11 @@ async function step(a: Agent, phone: Page | null) {
   if (!action) return;
   a.busy = true; a.fresh = false; a.staleAt = Date.now() + 2500;
   try {
-    if (phone && ui && action.k === 'mini') {
-      const move = action.a;
-      if (await hold(phoneLens, () => ui(phone, move))) { record(a, action, { accepted: true }); return; }
+    const drive = ui;
+    if (phone && drive && action.k === 'mini') {
+      const move = action.a, began = Date.now();
+      if (await hold(phoneLens, () => drive(phone, move))) { report.phoneMoves.ui++; record(a, action, { accepted: true }); return; }
+      report.phoneMoves.socket++; log(`phone ui: ${String(move.k ?? move.type ?? '?')} not made by tapping after ${Date.now() - began} ms; trying the socket`);
       // The tap may have landed before the UI moved on: only fall back to the socket if the move is still wanted.
       await sleep(400);
       const again = plan(a, phone);
@@ -119,38 +143,46 @@ async function step(a: Agent, phone: Page | null) {
   } finally { a.busy = false; }
 }
 
+/** One socket seat. A socket the server drops (a missed heartbeat when this machine stalls) rejoins with its token, as a phone does. */
 async function joinBot(index: number, name: string, code: string): Promise<Agent> {
-  const a = agent(`bot${index}`), ws = new WebSocket(`ws://${args.host}:${args.port}/ws`);
-  sockets.push(ws);
-  const acks = new Map<string, (ack: Ack) => void>(), wire = (type: string, payload: object = {}) => ws.send(JSON.stringify({ v: '1.0', type, ...payload }));
-  let seq = 0, round: string | null = null, readied = '';
+  const a = agent(`bot${index}`), acks = new Map<string, (ack: Ack) => void>();
+  let ws: WebSocket, token = '', seq = 0, round: string | null = null, readied = '';
+  const wire = (type: string, payload: object = {}) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ v: '1.0', type, ...payload })); };
   const onRoom = (r: Room) => {
     if (r.roundId !== round) { round = r.roundId; seq = 0; }
     const mine = r.players.find(p => p.id === a.playerId);
     if (r.phase === 'lobby' && r.lobbyId && mine && !mine.ready && readied !== r.lobbyId) {
       const taken = new Set(r.players.filter(p => p !== mine).map(p => p.lobbyChoice?.avatar));
       readied = r.lobbyId;
-      wire('lobby.choice', { lobbyId: r.lobbyId, payload: { avatar: Array.from({ length: 16 }, (_, k) => k).find(k => !taken.has(k)) ?? 0 } });
+      wire('lobby.choice', { lobbyId: r.lobbyId, payload: { avatar: Array.from({ length: 16 }, (_, k) => k).find(k => !taken.has(k)) ?? index % 16 } });
       wire('room.ready', { ready: true, lobbyId: r.lobbyId });
     }
     if (index === 1) room = r;
   };
-  const welcomed = new Promise<void>((done, fail) => {
+  const connect = () => new Promise<void>((done, fail) => {
+    ws = new WebSocket(`ws://${args.host}:${args.port}/ws`); sockets.push(ws);
     ws.on('message', data => {
       const m = JSON.parse(String(data));
-      if (m.type === 'room.welcome') { a.playerId = m.playerId; onRoom(m.room); done(); }
+      if (m.type === 'room.welcome') { a.playerId = m.playerId; token = m.token; onRoom(m.room); seq = Math.max(seq, (m.nextActionSequence ?? 1) - 1); done(); }
       else if (m.type === 'room.state') onRoom(m.room);
       else if (m.type === 'round.prepare') wire('round.ready', { roundId: m.roundId });
       else if (m.type === 'game.snapshot') observe(a, m);
       else if (m.type === 'action.ack') { acks.get(m.actionId)?.(m); acks.delete(m.actionId); }
+      else if (m.type === 'clock.pong') { const ms = Date.now() - m.clientTime; pings.push(ms); if (ms > 2000) log(`slow server round trip: ${ms} ms (driver timer lag so far ${report.health.loopLagMaxMs} ms)`); }
       else if (m.type === 'error') { report.errors.push(`${a.label}: ${m.reason}`); log(`${a.label} error: ${m.reason}`); fail(new Error(m.reason)); }
     });
     ws.once('error', fail);
+    ws.once('open', () => { a.decoder.reset(); wire(token ? 'room.rejoin' : 'room.join', token ? { code, token } : { code, role: 'controller', name }); });
+    ws.once('close', () => {
+      if (closing) return;
+      report.health.drops.push({ t: Date.now() - t0, seat: a.label }); log(`${a.label} socket dropped; rejoining`);
+      for (const settle of acks.values()) settle({ accepted: false, reason: 'socket dropped' });
+      acks.clear(); setTimeout(() => void connect().catch(error => { failure ??= error; }), 500);
+    });
   });
   a.send = action => new Promise(done => { const actionId = String(++seq); acks.set(actionId, done); wire('game.action', { roundId: a.snap!.roundId, actionId, retireThrough: seq - 1, payload: action }); });
-  await new Promise((done, fail) => { ws.once('open', done); ws.once('error', fail); });
-  wire('room.join', { code, role: 'controller', name });
-  await welcomed;
+  await connect();
+  if (index === 1) setInterval(() => wire('clock.ping', { clientTime: Date.now() }), 2000).unref();
   return a;
 }
 
@@ -193,11 +225,13 @@ async function tapPhone(page: Page, a: Agent, l: Lens) {
 /** Proxies the TV page's socket: the camera watches its snapshots; --stress-podium rewrites podium snapshots with `edit`. */
 async function tapTv(page: Page, l: Lens, edit: ((view: PackPublicView) => void) | null) {
   await page.routeWebSocket(/\/ws(\?|$)/, (route: Page) => {
-    const upstream = route.connectToServer();
+    const upstream = route.connectToServer(), decoder = new SnapshotDecoder();
     route.onMessage((raw: string) => upstream.send(raw));
     upstream.onMessage((raw: string) => {
-      const m = JSON.parse(String(raw));
-      if (edit && m.type === 'game.snapshot' && m.publicView?.podium) { edit(m.publicView); raw = JSON.stringify(m); }
+      let m = JSON.parse(String(raw));
+      // A stressed TV gets every snapshot whole (the roster is otherwise cached), so only its podium shows the rewritten names.
+      const whole = edit && m.type === 'game.snapshot' && m.publicCache ? decoder.decode(m, manifest.snapshotCache) : null;
+      if (edit && whole) { m = { ...whole, publicView: structuredClone(whole.publicView), publicCache: { revision: m.publicCache.revision, reused: false } }; edit(m.publicView); raw = JSON.stringify(m); }
       see(l, m); route.send(raw);
     });
   });
@@ -315,6 +349,8 @@ const extra = (suffix: string, ms = 10000) => Promise.all(lenses.map(l => new Pr
 /** Waits (at most `ms`) until every camera has shot the key its page shows. */
 async function caughtUp(ms = 5000) { for (const end = Date.now() + ms; Date.now() < end && lenses.some(l => l.shot !== l.key);) await sleep(100); }
 function lagSummary() {
+  const rtt = [...pings].sort((a, b) => a - b), ping = (q: number) => rtt[Math.min(rtt.length - 1, Math.floor(q * rtt.length))] ?? 0;
+  report.health.pingMs = { count: rtt.length, p50: ping(.5), p95: ping(.95), max: rtt.at(-1) ?? 0 };
   for (const name of ['tv', 'phone']) {
     const lags = report.shots.filter(s => s.page === name && s.role === 'phase').map(s => s.onScreenMs).sort((a, b) => a - b);
     const at = (q: number) => lags[Math.min(lags.length - 1, Math.floor(q * lags.length))] ?? 0;
@@ -486,6 +522,7 @@ async function until(test: () => boolean, ms: number, what: string) {
 }
 
 async function cleanup() {
+  closing = true;
   for (const ws of sockets) ws.terminate();
   await browser?.close().catch(() => undefined); browser = null;
 }
@@ -530,37 +567,63 @@ try {
   await phone.getByRole('button', { name: 'Join the room', exact: true }).click();
   await phone.getByRole('button', { name: 'I’m ready!', exact: true }).click({ timeout: 20000 });
   lenses.push(tvLens, phoneLens); cameras.push(film(tvLens), film(phoneLens));
+  // Nine hand-picked names, then generated ones; every fourth is a full sixteen characters.
   const names = ['Captain Pickles', 'Bartholomew Fizz', 'Ms. Wobbleton', 'Zed', 'Agent Sprinkles', 'Gertrude Q. Hoot', 'Noodle', 'Mo', 'Dot'];
+  const first = ['Wilhelmina', 'Maximilian', 'Ottoline', 'Barnaby', 'Clementine', 'Percival', 'Henrietta', 'Montgomery', 'Ignatius', 'Philippa', 'Thaddeus'], last = ['Wobb', 'Moss', 'Pepper', 'Quibble', 'Zest', 'Plonk', 'Huff', 'Mop', 'Snood', 'Fig', 'Bramble'];
+  for (let i = 0; names.length < count - 1; i++) names.push(i % 4 === 3 ? `${first[i % 11]} ${last[(i * 3) % 11]}xxxxxxxx`.slice(0, 16 - String(i).length) + i : i % 4 === 1 ? `${last[i % 11]}${i}` : `${first[(i * 5) % 11]} ${i}`);
   for (let i = 1; i < count; i++) agents.push(await joinBot(i, names[i - 1]!, code));
-  await until(() => !!room && room.players.length === count && room.players.every(p => p.ready), 20000, 'every seat to be ready');
+  await until(() => !!room && room.players.length === count && room.players.every(p => p.ready), 20000 + count * 1000, 'every seat to be ready');
   await extra('ready');
   await hold(tvLens, () => tv.getByRole('button', { name: 'Start game', exact: true }).click({ timeout: 20000 }));
 
   const view = () => you.snap?.publicView;
+  /** One night: every listed game (the replay plays only the first again), then the VIP ends it for the results. */
+  const playNight = async (list: readonly string[], label: string) => {
   await until(() => view()?.phase === 'menu', 30000, 'the game menu');
-  if (info) {
+  for (const id of list) {
+    await cast(id);
+    const title = info!.title, before = Object.values(report.actions).reduce((sum, a) => sum + a.accepted, 0), refused = () => Object.values(report.actions).reduce((sum, a) => sum + Object.values(a.rejected).reduce((x, y) => x + y, 0), 0), rejectedBefore = refused();
     await caughtUp();
-    await tap(() => phone.getByRole('radio', { name: new RegExp(`^${info.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.`) }).first().click()); // 7+ games: it can also sit under Room favourites
-    await until(() => view()?.phase !== 'menu' || Object.keys(view()?.menu?.votes ?? {}).length === count, 15000, 'everyone to vote');
-    if (view()?.phase === 'menu') await tap(() => phone.getByRole('button', { name: 'Lock it in', exact: true }).click()).catch(() => log('lock: the countdown won'));
-    await until(() => view()?.phase === 'intro', 15000, 'the intro');
+    await tap(() => phone.getByRole('radio', { name: new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.`) }).first().click()); // 7+ games: it can also sit under Room favourites
+    await until(() => view()?.phase !== 'menu' || Object.keys(view()?.menu?.votes ?? {}).length === count, 15000 + count * 500, 'everyone to vote');
+    if (view()?.phase === 'menu') await tap(() => phone.getByRole('button', { name: 'Lock it in', exact: true }).click({ timeout: 4000 })).catch(() => log('lock: the countdown won'));
+    await until(() => view()?.phase === 'intro' || view()?.phase === 'mini', 15000, 'the intro'); // a slow tap can outlast a short intro
     if (!recorder) { // A recording keeps the whole narrated intro.
       await sleep(3000); await caughtUp();
-      if (view()?.phase === 'intro') await tap(() => phone.getByRole('button', { name: 'Skip intro for everyone', exact: true }).click()).catch(() => log('skip: intro already over'));
+      if (view()?.phase === 'intro') await tap(() => phone.getByRole('button', { name: 'Skip intro for everyone', exact: true }).click({ timeout: 4000 })).catch(() => log('skip: intro already over'));
     }
     await until(() => view()?.phase === 'mini', 60000, 'the minigame');
+    const started = Date.now();
     await until(() => !!failure || view()?.phase === 'podium', Number(args['max-minutes']) * 60000, 'the podium');
     if (failure) throw failure;
+    report.games.push({ id, seconds: Math.round((Date.now() - started) / 100) / 10, accepted: Object.values(report.actions).reduce((sum, a) => sum + a.accepted, 0) - before, rejected: refused() - rejectedBefore });
+    log(`${id}: ${report.games.at(-1)!.seconds} s, ${report.games.at(-1)!.accepted} accepted actions`);
+    game = undefined; // bots stop voting for the game that just ended, before a lagging screenshot can outlast the podium's 12 s
     await sleep(5000); await extra('settled'); // after the last award row lands (~4.8 s)
-    if (!recorder && view()?.phase === 'podium') await tap(() => phone.getByRole('button', { name: 'Continue to the menu', exact: true }).click()).catch(() => log('continue: podium already over'));
+    if (!recorder && view()?.phase === 'podium') await tap(() => phone.getByRole('button', { name: 'Continue to the menu', exact: true }).click({ timeout: 4000 })).catch(() => log('continue: podium already over'));
     await until(() => view()?.phase === 'menu', 30000, 'the menu after the podium');
   }
   await sleep(1500); await caughtUp();
   await tap(() => phone.getByRole('button', { name: 'End the night', exact: true }).click());
   await tap(() => phone.getByRole('button', { name: 'Tap again to end the night', exact: true }).click());
   await until(() => room?.phase === 'results', 20000, 'results');
-  log('night over: results');
-  await sleep(2500); await extra('results');
+  log(`${label} over: results`);
+  await sleep(2500); await extra(label === 'night' ? 'results' : `${label}-results`);
+  };
+  await playNight(games, 'night');
+  if (args.replay) {
+    // Play again: the host returns the same seats to the lobby, every seat readies again and a new night starts from the menu.
+    const first = you.snap!.roundId;
+    await hold(tvLens, () => tv.getByRole('button', { name: 'Play again', exact: true }).click({ timeout: 20000 }));
+    await until(() => room?.phase === 'lobby', 20000, 'the lobby after Play again');
+    await tap(() => phone.getByRole('button', { name: 'I’m ready!', exact: true }).click({ timeout: 20000 }));
+    await until(() => !!room && room.players.length === count && room.players.every(p => p.ready), 20000 + count * 1000, 'every seat to be ready again');
+    await hold(tvLens, () => tv.getByRole('button', { name: 'Start game', exact: true }).click({ timeout: 20000 }));
+    await until(() => !!you.snap && you.snap.roundId !== first && view()?.phase === 'menu', 30000, 'the replay menu');
+    if (view()!.played.length || Object.values(view()!.trophies).some(Boolean)) throw new Error('The replay did not start a fresh night.');
+    report.replay = { seats: view()!.players.length, sameSeats: view()!.players.length === count };
+    await playNight(games.slice(0, 1), 'replay');
+  }
   if (recorder) await sleep(5000); // the finale theme
   if (args['keep-open']) { log(`keeping room ${code} open on ${base}; press Ctrl+C to close everything`); await new Promise(() => undefined); }
 } catch (error) {
@@ -573,6 +636,7 @@ try {
   lagSummary();
   writeFileSync(`${shots}/log.json`, JSON.stringify({ ...report, failure: failure?.message ?? null }, null, 2));
   log(`actions ${JSON.stringify(report.actions)}`);
+  log(`health ${JSON.stringify(report.health)}`);
   log(`${report.shots.length} screenshots and log.json in ${shots}${report.errors.length ? `; ${report.errors.length} page/socket errors` : ''}`);
   await cleanup();
 }

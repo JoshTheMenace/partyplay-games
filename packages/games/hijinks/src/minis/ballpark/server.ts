@@ -1,12 +1,13 @@
 /* Ballpark rules: everyone answers a secret yes/no survey, one rotating agent estimates the % of the room who said yes,
    everyone else bets higher or lower; two rounds, then the Most Wanted final. Server only. */
 import type { MiniApi, MiniResult, MiniServer } from '../../core/contract';
+import { isCrowd } from '../../core/crowd';
 import { variant } from '../../core/narration';
 import { freshDeck } from '../../core/server/deck';
 import { bool, integer, record } from '../../core/server/validate';
 import { questionPool, wantedPool, type Question, type WantedSet } from './content.server';
 import {
-  AIM_MS, BETS, BET_POINTS, BET_S, GUESS_S, LOCK_MS, MIN_READ_MS, PICK_S, REVEAL, SCORES_MS, TICK_S, TIERS, WANTED_PICKS, WANTED_POINTS,
+  AIM_MS, BETS, BET_POINTS, BET_S, CROWD_AGENTS, GUESS_S, LOCK_MS, MIN_READ_MS, PICK_S, REVEAL, SCORES_MS, TICK_S, TIERS, WANTED_PICKS, WANTED_POINTS,
   WANTED_SIZE, possible, surveySeconds, tierOf, wantedBeats, wins,
   type BallparkPrivate, type BallparkPublic, type Bet, type Phase, type Reveal, type WantedResult,
 } from './types';
@@ -47,12 +48,14 @@ function beats(s: BallparkState, api: MiniApi, at: readonly number[], play: (sta
   while (s.stage < at.length && api.now - s.at >= at[s.stage]!) play(s.stage++);
 }
 
-/** Round 1: everyone in random order. Round 2: everyone again (≤ 6 players) or the three lowest scorers (lowest first, unless
+/** Round 1: everyone in random order (six agents in a room above ten). Round 2: everyone again (≤ 6 players) or the three lowest scorers (lowest first, unless
     they just had the dial). Round 3: Most Wanted. */
 function startRound(s: BallparkState, api: MiniApi) {
   s.round++; s.prev = { ...s.scores }; s.asked = 0;
   if (s.round === 3) return startWanted(s, api);
   let queue = api.shuffle(s.ids);
+  // A big room can't hand everyone the dial: six agents at random, and every question still has the whole room answering and betting.
+  if (s.round === 1 && isCrowd(s.ids.length)) queue = queue.filter(id => s.online[id]).slice(0, CROWD_AGENTS);
   if (s.round === 2) {
     api.sfx('gong');
     if (s.ids.length >= 7) queue = queue.filter(id => s.online[id]).sort((a, b) => s.scores[a]! - s.scores[b]!).slice(0, 3);

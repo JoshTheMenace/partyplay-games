@@ -22,6 +22,7 @@ function DisplayView(ctx: PackProps) {
     <Enter k={`${view.phase}:${view.current?.session ?? 0}`} variant={view.phase === 'mini' ? 'zoom' : 'rise'} className="hj-fill">
       {view.phase === 'menu' ? <MenuDisplay {...props} /> : view.phase === 'intro' ? <IntroDisplay {...props} /> : view.phase === 'podium' ? <PodiumDisplay {...props} /> : <MiniHost ctx={ctx} role="display" />}
     </Enter>
+    <span key={`wipe:${view.phase}:${view.current?.session ?? 0}`} className="hj-wipe" aria-hidden="true"><i /><i /><i /></span>
   </Stage>;
 }
 

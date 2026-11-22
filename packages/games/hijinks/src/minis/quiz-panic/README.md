@@ -1,6 +1,6 @@
 # Quiz Panic
 
-Spooky survival trivia for 2–10 players in the **Hotel Hijinks**, a cartoon haunted hotel run by Mr Grimsby, a skeletal
+Spooky survival trivia for 2–64 players in the **Hotel Hijinks**, a cartoon haunted hotel run by Mr Grimsby, a skeletal
 concierge. The art uses damask wallpaper, candle sconces, cobwebs, green ghost glow and a lumpy green ghoul. Every name,
 question, category, character, SVG and line of narration is original.
 
@@ -46,6 +46,21 @@ question, category, character, SVG and line of narration is original.
      always heads the podium.
    - **Awards:** Survivor (the only player who never died), Big spender, Panic Room regular (most challenges survived,
      at least 2), Body snatcher, First to fall.
+
+## Big rooms (11–64 players)
+
+Everyone already answers at once, so the rules barely change; the reveals and the screens do.
+
+- **Panic Room reveals** take at most eleven beats (`PANIC_BEATS`, a ten-player room's worst case). A bigger doomed crowd
+  is revealed a group per beat (`beatOf`), on a wall of faces that flip to Lives! or Dead; each phone keeps its own detail.
+- **Poison Punch** has at most nine cups (`MAX_CUPS`), shared by the drinkers. With more survivors than cups, only the
+  most-spiked half of the table is deadly (ties by lot); otherwise twenty survivors would poison every cup.
+- **TV:** the guest book becomes one or two rows of faces (ghosts, done lights and marks still show; names and cash stay
+  on phones), doomed line-ups show eighteen faces and a count, and the Escape track packs smaller tokens three to five
+  abreast so 64 guests fit the Lobby.
+- The podium headline names up to three escapees; a bigger group is counted ("6 guests escaped the hotel!").
+- A 32- or 64-player bot game runs in the time a ten-player one does (tested within 25 %). Live nights took 417–525 s at
+  32 and 64 players against 422 s at ten; the spread comes from which Panic Rooms are dealt.
 
 ## Pacing
 

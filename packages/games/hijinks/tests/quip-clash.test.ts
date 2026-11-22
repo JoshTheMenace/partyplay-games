@@ -6,7 +6,7 @@ import { LINES } from '../src/minis/quip-clash/narration';
 import { ADULT, FAMILY, FINAL_ADULT, FINAL_FAMILY, SAFETY } from '../src/minis/quip-clash/content.server';
 import type { QuipState } from '../src/minis/quip-clash/server';
 import { PACE } from '../src/server';
-import { MAX_ANSWER, RESULT, WRITE_S, type QuipPrivate, type QuipPublic } from '../src/minis/quip-clash/types';
+import { BALLOT, FINAL_SHOWN, HEATS, HEAT_SIZE, MAX_ANSWER, RESULT, WRITE_S, heatVotes, type QuipPrivate, type QuipPublic } from '../src/minis/quip-clash/types';
 
 const pub = (n: Night) => n.mini<QuipPublic>();
 const me = (n: Night, id: string) => n.miniMe<QuipPrivate>(id);
@@ -58,6 +58,65 @@ test('full games with bots: 3, 4, 7 and 10 players reach a sane result', async (
     assert.ok(n.now - begin < 15 * 60_000, 'fits the time budget even with bots');
     n.toMenu(); assert.equal(n.state.phase, 'menu');
   }
+});
+
+test('big rooms: up to four heats a round voted by the whole room, a dealt Last Laugh, and no longer than ten players', async () => {
+  const spans: Record<number, number> = {};
+  for (const players of [10, 11, 16, 32, 64]) {
+    const n = start(players, { seed: players }), begin = n.now, original = n.advance.bind(n);
+    const seen = { heats: [0, 0], duels: 0, sizes: [] as number[], writers: [new Set<string>(), new Set<string>()], dealt: 0, shown: 0, key: '' };
+    n.advance = (ms: number) => {
+      original(ms);
+      const v = pub(n);
+      if (!v || v.turn === seen.key) return;
+      const s = inner(n);
+      seen.key = v.turn;
+      if (v.match && v.phase === 'show') seen.duels++;
+      if (v.phase === 'write') for (const id of n.ids) if (me(n, id).prompts.length) { seen.writers[v.round - 1]!.add(id); assert.equal(me(n, id).prompts.length, players > 10 ? 1 : 2); }
+      if (v.phase === 'final-vote' && v.final?.heat) {
+        seen.heats[v.round - 1] = v.final.heat.count; seen.sizes.push(v.final.entries.length);
+        assert.equal(v.final.votes, heatVotes(v.final.entries.length));
+        assert.equal(n.ids.filter(id => me(n, id).mine).length, v.final.entries.length, 'only the heat’s writers own an entry');
+      }
+      if (v.phase === 'final-vote' && v.final?.field) {
+        seen.dealt++;
+        assert.deepEqual(v.final.entries, []);
+        const counts = new Map<string, number>();
+        for (const id of n.ids) { const ballot = me(n, id).ballot!; assert.equal(ballot.length, BALLOT); assert.ok(!ballot.some(e => e.id === me(n, id).mine)); for (const e of ballot) counts.set(e.id, (counts.get(e.id) ?? 0) + 1); }
+        assert.equal(counts.size, s.entries.length); assert.ok(Math.max(...counts.values()) - Math.min(...counts.values()) <= 2);
+        const off = s.entries.find(e => e.quip.author !== 'p0' && !me(n, 'p0').ballot!.some(b => b.id === e.id))!;
+        rejects(n.trySend('p0', { turn: v.turn, k: 'picks', picks: [off.id, off.id, off.id] }), /not on the board/);
+      }
+      if (v.phase === 'final-result' && !v.final?.heat) seen.shown = v.final!.result!.entries.length;
+    };
+    const { result, rejected } = await n.playMini();
+    spans[players] = n.now - begin;
+    assert.deepEqual(rejected, [], `${players}p bots were never rejected`);
+    assert.equal(Object.keys(result.scores).length, players);
+    if (players <= 10) { assert.equal(seen.duels, players * 2); assert.deepEqual(seen.heats, [0, 0]); continue; }
+    assert.equal(seen.duels, 0, 'no duels in a big room');
+    assert.deepEqual(seen.heats, [Math.min(HEATS, Math.ceil(Math.min(players, 32) / 2)), Math.min(HEATS, Math.ceil(Math.min(players, 32) / 2))]);
+    assert.ok(Math.max(...seen.sizes) <= HEAT_SIZE && Math.min(...seen.sizes) >= 2, `heat sizes ${seen.sizes}`);
+    // Up to 32 players everyone writes in both rounds; above that the two halves of the room take a round each.
+    if (players <= 32) for (const w of seen.writers) assert.equal(w.size, players);
+    else { assert.equal(seen.writers[0]!.size + seen.writers[1]!.size, players); assert.ok(![...seen.writers[0]!].some(id => seen.writers[1]!.has(id))); }
+    assert.equal(seen.dealt, 1, 'the Last Laugh dealt ballots'); assert.equal(seen.shown, Math.min(FINAL_SHOWN, players));
+  }
+  for (const players of [11, 16, 32, 64]) assert.ok(spans[players]! <= spans[10]!, `${players} players took ${spans[players]} ms, ten took ${spans[10]} ms`);
+});
+
+test('big rooms: a heat pays 100 × round per vote plus the winner bonus, and an unshown Last Laugh answer reports to its author', () => {
+  const n = start(12, { seed: 4 });
+  writeAll(n); at(n, 'final-vote');
+  const v = pub(n), s = inner(n), entries = v.final!.entries, target = entries[0]!, author = s.entries.find(e => e.id === target.id)!.quip.author;
+  assert.equal(v.final!.heat!.count, 4); assert.equal(entries.length, 3); assert.equal(v.final!.votes, 1);
+  rejects(n.trySend(author, { turn: v.turn, k: 'picks', picks: [target.id] }), /yourself/);
+  rejects(n.trySend('p0', { turn: v.turn, k: 'picks', picks: [target.id, target.id] }), /Place your vote/);
+  for (const id of n.ids) if (id !== author) n.send(id, { turn: v.turn, k: 'picks', picks: [target.id] });
+  n.send(author, { turn: v.turn, k: 'picks', picks: [entries[1]!.id] });
+  at(n, 'final-result');
+  assert.equal(inner(n).scores[author], 11 * 100 + 100, 'eleven votes and the heat');
+  assert.deepEqual(pub(n).final!.result!.winners, [author]);
 });
 
 test('pairing: every player gets two prompts with two rivals; every prompt is shared by exactly two (odd and even rosters)', () => {

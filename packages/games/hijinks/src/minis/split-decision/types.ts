@@ -11,9 +11,14 @@ export const MIN_READ_MS = 1500, SCORES_MS = 7500;
 /** Author points for the evenest split possible; the floor when anyone dissented; each minority voter's Bold bonus. All × round. */
 export const PERFECT = 1000, FLOOR = 100, BOLD = 50;
 
+/**
+ * Big rooms (above ten players): rounds 1–2 are judged on phones, `SIFT` scenarios each, and the TV replays the `SPOTLIGHT`
+ * splits worth seeing; The Big Split deals `SIFT` takes to every judge and the TV reveals the best `FINAL_SHOWN`.
+ */
+export const SIFT = 8, SPOTLIGHT = 5, FINAL_SHOWN = 8;
 export type Side = 0 | 1;
 export type Kind = 'dilemma' | 'rather';
-export type Phase = 'write' | 'show' | 'vote' | 'result' | 'scores' | 'final-write' | 'final-vote' | 'final-result';
+export type Phase = 'write' | 'sift' | 'show' | 'vote' | 'result' | 'scores' | 'final-write' | 'final-vote' | 'final-result';
 export type Verdict = 'perfect' | 'close' | 'lopsided' | 'unanimous' | 'silent';
 
 /** Template text around its blanks: 'You can fly, but ____. Deal?' → ['You can fly, but ', '. Deal?']. */
@@ -56,7 +61,13 @@ export type Card = {
   /** How many votes are in (never who: the one missing voter would give the author away). */
   votes: number;
   outcome?: Outcome;
+  /** Big rooms: this card was voted on phones already; the TV replays it (show, then result, no live vote). */
+  replay?: true;
 };
+/** A scenario on a phone's carousel: a round card with its own template, or a take on The Big Split. */
+export type Sample = { id: string; kind: Kind; parts: string[]; fills: string[] };
+/** How your own scenario split, for phones in a big room (the TV only replays a few). */
+export type Mine = { yes: number; no: number; points: number; verdict: Verdict; house?: true };
 export type FinalOutcome = { id: string; fill: string; author: string; yes: number; no: number; points: number; verdict: Verdict; house?: true };
 export type Final = {
   parts: string[];
@@ -64,6 +75,8 @@ export type Final = {
   entries: { id: string; fill: string }[];
   /** Entries in reveal order (fewest points first); `best` are the top authors; `bold` is each judge's total Bold bonus. */
   result?: { entries: FinalOutcome[]; best: string[]; bold: Record<string, number> };
+  /** Big rooms: `takes` were written, every phone judges `ballot` of them, and `entries` holds only the takes the TV reveals. */
+  field?: { takes: number; ballot: number };
 };
 
 export type SplitPublic = {
@@ -77,6 +90,8 @@ export type SplitPublic = {
   done: string[];
   card?: Card;
   final?: Final;
+  /** Big rooms, sift phase: how many scenarios are being judged on phones and how many each phone gets. */
+  sift?: { cards: number; ballot: number };
 };
 export type Slot = { text?: string; house?: true };
 export type SplitPrivate = {
@@ -89,6 +104,9 @@ export type SplitPrivate = {
   /** The Big Split: your take's id and your verdicts so far (entry id → side). */
   mine?: string;
   judged?: Record<string, Side>;
+  /** Big rooms: the scenarios dealt to your carousel (sift and The Big Split), and how your own one split once it is settled. */
+  queue?: Sample[];
+  own?: Mine;
 };
 export type SplitAction =
   | { turn: string; k: 'fill'; slot: number; text: string }

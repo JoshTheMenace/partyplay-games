@@ -13,7 +13,7 @@ function Eye({ cx, mood, one }: { cx: number; mood: Mood; one: boolean }) {
   if (mood === 'happy') return line(`M${cx - 6 * r} 2Q${cx} ${-7 * r} ${cx + 6 * r} 2`);
   if (mood === 'done') return line(`M${cx - 6 * r} -1Q${cx} ${5 * r} ${cx + 6 * r} -1`);
   const look = mood === 'thinking' ? [2.5, -2.5] : mood === 'sad' ? [0, 2] : [0, 0];
-  return <g>
+  return <g className="hj-av-eye">
     {one && <circle className="hj-av-white" cx={cx} cy={0} r={12} />}
     <ellipse className="hj-av-ink" cx={cx + look[0]! * r} cy={look[1]! * r} rx={5 * (one ? 1.15 : 1)} ry={(mood === 'sad' ? 5.4 : 6.5) * (one ? 1.15 : 1)} />
     <circle className="hj-av-glint" cx={cx + look[0]! * r - 1.6} cy={look[1]! * r - 2.4} r={1.8} />
@@ -70,7 +70,8 @@ const Check = () => <svg className="hj-av-check" viewBox="0 0 24 24" aria-hidden
 /** One character. `avatar` is PackPlayer.avatar (0–15), `color` the player colour. Decorative unless `label` is given. */
 export function Avatar({ avatar, color, mood = 'idle', size = 'md', crown, label, className = '' }: { avatar: number; color: string; mood?: Mood; size?: AvatarSize; crown?: boolean; label?: string; className?: string }) {
   const art = CHARACTERS[((avatar % CHARACTERS.length) + CHARACTERS.length) % CHARACTERS.length]!, px = avatarPx(size);
-  return <span className={`hj-avatar ${className}`} data-mood={mood} style={{ '--c': color, width: px, height: px } as CSSProperties} role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
+  // Characters blink out of step with each other (a negative delay starts each one somewhere else in the cycle).
+  return <span className={`hj-avatar ${className}`} data-mood={mood} style={{ '--c': color, '--blink': `-${(avatar * 1.37 % 5).toFixed(2)}s`, width: px, height: px } as CSSProperties} role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
     <svg className="hj-av-art" viewBox="0 0 120 120"><ellipse className="hj-av-shadow" cx={60} cy={113} rx={36} ry={5} /><g className="hj-av-rig">{art.body}<Face mood={mood} {...art.face} /></g></svg>
     {crown && <Crown />}{mood === 'done' && <Check />}
   </span>;

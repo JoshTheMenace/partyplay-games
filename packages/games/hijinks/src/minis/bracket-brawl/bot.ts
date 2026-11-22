@@ -1,6 +1,6 @@
 /* Bracket Brawl bot (tests and QA only): writes silly answers (some at the 50-character limit), picks a champion, votes at random. */
 import type { MiniBot } from '../../core/contract';
-import { MAX_ANSWER, showBeats, type BrawlPrivate, type BrawlPublic } from './types';
+import { HEAT_PICKS, MAX_ANSWER, showBeats, type BrawlPrivate, type BrawlPublic } from './types';
 
 const THINGS = ['A goose', 'My nan', 'Soup', 'A haunted kettle', 'Three llamas', 'A tiny wizard', 'Cold beans', 'Uncle Derek', 'A wet sock', 'Bagpipes', 'Glitter', 'A sad trombone'];
 const TAILS = [' with a grudge', ' in a tuxedo', ' on rollerskates', ' at 3 a.m.', ', but louder', ' from the future', ' that knows too much', ' in a hot tub'];
@@ -25,6 +25,7 @@ export const bot: MiniBot<BrawlPublic, BrawlPrivate> = ({ view, me, playerId, no
     const text = random() < .33 ? pick(LONG) : `${pick(THINGS)}${pick(TAILS)}`;
     return { turn, k: 'answer', slot: open.slot, text: me.answers.some(a => a.text === text) ? `${text.slice(0, MAX_ANSWER - 6)} redux` : text };
   }
+  if (view.phase === 'heats' && !me.heat && me.ballot?.length && t >= THINK.predict + wait(6000)) return { turn, k: 'heat', picks: me.ballot.slice(seat % me.ballot.length).concat(me.ballot).slice(0, Math.min(HEAT_PICKS, me.ballot.length)).map(a => a.id) };
   if (view.phase === 'predict' && !me.pick && view.entries.length && t >= THINK.predict + wait(6000)) return { turn, k: 'predict', entry: pick(view.entries).id };
   if (view.phase === 'vote' && me.role === 'voter' && me.vote === undefined && view.match) {
     const [a, b] = view.bouts[view.round - 1]![view.match.index]!.sides.map(id => view.entries.find(e => e.id === id)?.text ?? '');

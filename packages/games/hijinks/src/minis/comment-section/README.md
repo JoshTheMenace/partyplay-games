@@ -1,6 +1,6 @@
 # Comment Section
 
-Hijinks minigame `comment-section`: context-twisting internet comedy for 3–10 players. Everyone answers an innocent question
+Hijinks minigame `comment-section`: context-twisting internet comedy for 3–64 players. Everyone answers an innocent question
 about themselves; a friend then gets that answer plus a fake app and writes the missing context that ruins it. The feed plays
 every post, and the room votes for the most ruinous.
 
@@ -36,6 +36,14 @@ Three rounds. Each round:
 
 **The Final Feed** (round 3): every answer becomes a status update on its author's Scrollhole profile (“Checked in at…”,
 “In a relationship with…”), triple points, and everyone may vote for one or two different posts.
+
+## Big rooms (11–64 players)
+
+A feed cannot play 32 posts. After the twists, a **trend** phase (30 s, paced): every phone gets five posts it did not
+twist (`TREND_BALLOT`, dealt evenly) and boosts one or two. Each boost pays its twister 50 × round (half for a house
+twist), and the eight most-boosted posts (`FEED_SIZE`, ties by lot) play on the TV feed for the whole room's vote, exactly
+as in a small room. A twister whose post missed the feed sees its boosts on their phone. With more posts than apps, the
+apps go round again with fresh variants, and the Final Feed reuses its thirteen status formats.
 
 ## Scoring
 

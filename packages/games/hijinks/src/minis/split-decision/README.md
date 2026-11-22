@@ -1,6 +1,6 @@
 # Split Decision
 
-Hijinks minigame `split-decision`: dilemma splitting for 3–10 players. Everyone finishes their own dilemma ("You can fly,
+Hijinks minigame `split-decision`: dilemma splitting for 3–64 players. Everyone finishes their own dilemma ("You can fly,
 but ____. Would you take the wings?") with the catch that should split the room exactly in half. Then the room votes yes
 or no on each one. A perfect 50/50 split pays big. A catch so tempting (or so awful) that everyone agrees pays nothing.
 
@@ -49,6 +49,17 @@ Each round 1–2 card plays as:
   drops out of the portal, then points and the verdict land.
 
 A scoreboard follows rounds 1 and 2.
+
+## Big rooms (11–64 players)
+
+Thirty-two cards voted one by one would take a quarter of an hour a round, so above ten players:
+
+- **Rounds 1–2:** after writing, every phone judges eight scenarios at once in the carousel (`SIFT`), dealt so each card
+  gets about eight votes. All cards are scored from those votes, then the TV **replays** up to five (`SPOTLIGHT`): one
+  room-uniter if there was one, then the closest splits, best last. Each author's phone shows how their own card split.
+- **The Big Split:** every phone judges eight takes; the TV reveals the best eight (`FINAL_SHOWN`).
+- A perfect split needs an even vote among the eight or so judges of a card, so it is as hard as in an eight-player room.
+- The 63 family would-you-rathers are shared out again when 64 players need one each.
 
 ## Scoring
 

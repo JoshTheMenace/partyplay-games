@@ -2,6 +2,7 @@
 import { useId, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import { ArcadeButton, StatusNotice } from '../../../../../party-ui/src/index';
 import type { MiniClient, MiniViewProps, PackPlayer } from '../../core/contract';
+import { isCrowd } from '../../core/crowd';
 import {
   Avatar, AvatarBadge, AvatarStack, BigTitle, Confetti, PhoneChoices, PhoneDone, PhoneShell, PhoneTextEntry, PhoneWaiting, PlayerStrip,
   Scoreboard, Timer, ordinal, rankOf, useCountUp, useDraft, useSend, useTimeline,
@@ -103,6 +104,11 @@ function RoundTV({ view }: P) {
 }
 
 function Activity({ players, done, verb }: { players: readonly PackPlayer[]; done: readonly string[]; verb: string }) {
+  // A big room's activity list is a wall of faces that light up; thirty-two named rows would not fit the panel.
+  if (isCrowd(players.length)) return <ol className="cs-activity" data-crowd style={{ '--per': players.length > 36 ? 8 : 6 } as CSSProperties} aria-label={`${done.length} of ${players.length} posted`}>
+    {players.map(p => { const ok = done.includes(p.id); return <li key={p.id} data-done={ok || undefined} data-offline={!p.connected || undefined} style={{ '--c': p.color } as CSSProperties}>
+      <Avatar avatar={p.avatar} color={p.color} size={players.length > 36 ? 44 : 58} mood={!p.connected ? 'sad' : ok ? 'done' : 'thinking'} /></li>; })}
+  </ol>;
   return <ol className="cs-activity" data-dense={players.length > 7 || undefined} aria-label={`${done.length} of ${players.length} posted`}>
     {players.map(p => { const ok = done.includes(p.id); return <li key={p.id} data-done={ok || undefined} data-offline={!p.connected || undefined} style={{ '--c': p.color } as CSSProperties}>
       <Avatar avatar={p.avatar} color={p.color} size={players.length > 7 ? 46 : 58} mood={!p.connected ? 'sad' : ok ? 'done' : 'thinking'} />
@@ -113,11 +119,17 @@ function Activity({ players, done, verb }: { players: readonly PackPlayer[]; don
 }
 
 function WriteTV({ view, players, now }: P) {
-  const twist = view.phase === 'twist', final = view.round === ROUNDS.length;
+  const twist = view.phase === 'twist', trend = view.phase === 'trend', final = view.round === ROUNDS.length;
   return <section className="cs-write" data-phase={view.phase}>
     <AppBar view={view} badge={view.done.length}><Timer deadline={view.deadline} now={now} total={view.deadline - view.at} size={120} /></AppBar>
     <div className="cs-write-main">
-      {twist
+      {trend && view.field
+        ? <div className="cs-machine">
+          <h2 className="kp-title">What’s trending?</h2>
+          <p>{view.field.posts} posts just went up. Your phone has <b>{view.field.ballot}</b> of them: boost the most ruinous <b>{view.field.picks}</b>.</p>
+          <p>The top <b>{view.field.slots}</b> hit the big feed, and every boost scores.</p>
+        </div>
+        : twist
         ? <div className="cs-machine">
           <h2 className="kp-title">Now, ruin somebody.</h2>
           <p>{final ? <>Everyone got a friend’s answer. Turn it into a <b>status update</b> on their profile.</> : <>Everyone got a friend’s answer and a random app. Write the <b>missing context</b>.</>}</p>
@@ -129,7 +141,7 @@ function WriteTV({ view, players, now }: P) {
           <p className="cs-composer-note">Everyone got their own <b>innocent question</b>. Answer honestly.</p>
           <p className="cs-composer-small">What could possibly go wrong?</p>
         </div>}
-      <aside className="cs-side-panel"><h3>Activity <b className="kp-numeral">{view.done.length}/{players.length}</b></h3><Activity players={players} done={view.done} verb={twist ? 'adding context…' : 'typing…'} /></aside>
+      <aside className="cs-side-panel"><h3>Activity <b className="kp-numeral">{view.done.length}/{players.length}</b></h3><Activity players={players} done={view.done} verb={trend ? 'scrolling…' : twist ? 'adding context…' : 'typing…'} /></aside>
     </div>
     <Ticker items={trending(view, players)} />
   </section>;
@@ -224,7 +236,7 @@ function Display(props: P) {
   return <div className="hj-comment-section cs-tv" data-phase={view.phase}>
     <div className="cs-wall" aria-hidden="true" />
     {view.phase === 'round' ? <RoundTV {...props} />
-      : view.phase === 'answer' || view.phase === 'twist' ? <WriteTV {...props} />
+      : view.phase === 'answer' || view.phase === 'twist' || view.phase === 'trend' ? <WriteTV {...props} />
       : view.phase === 'feed' ? <FeedTV {...props} />
       : view.phase === 'scores' ? <ScoresTV {...props} />
       : <BoardTV {...props} />}
@@ -303,7 +315,8 @@ function FeedPhone(props: Phone) {
   return <PhoneShell {...shellOf(props)} title={!cur ? 'Refreshing the feed…' : mine ? 'That’s your twist!' : about ? 'You’ve been ruined!' : 'Eyes on the TV'}>
     <div className="cs-phone-card" data-hot={mine || about || undefined}>
       <Avatar avatar={player.avatar} color={player.color} size={124} mood={about ? 'sad' : mine ? 'happy' : 'idle'} />
-      <p>{mine ? 'Keep a straight face. Nobody knows it was you… yet.' : about ? 'That’s your answer, with brand-new context. Smile through it.' : cur ? `Post ${posts.length} of ${players.length}. Spot the most ruinous one.` : 'Every twisted post is coming up on the big screen.'}</p>
+      <p>{mine ? 'Keep a straight face. Nobody knows it was you… yet.' : about ? 'That’s your answer, with brand-new context. Smile through it.' : cur ? `Post ${posts.length} of ${view.field?.slots ?? players.length}. Spot the most ruinous one.` : view.field ? 'The trending posts are coming up on the big screen.' : 'Every twisted post is coming up on the big screen.'}</p>
+      {me.boosted && <p className="cs-gain"><b className="kp-numeral">+{me.boosted.points}</b> {plural(me.boosted.count, 'boost')} for your twist{me.cut ? '. It just missed the feed.' : ': it’s trending!'}</p>}
       <p className="cs-tv-cue">Voting opens after the feed.</p>
     </div>
   </PhoneShell>;
@@ -311,6 +324,21 @@ function FeedPhone(props: Phone) {
 
 function PostOption({ post, author }: { post: Post; author?: PackPlayer }) {
   return <span className="cs-option" style={brand(post.kind)}><App kind={post.kind} /><span className="cs-who"><small>{APPS[post.kind].name} · {post.label}</small><b>{post.twist}</b><q>{post.answer}</q>{author && <small>{handle(author.name)}</small>}</span></span>;
+}
+
+/** Big rooms: five posts land on each phone; boost one or two, and the most-boosted reach the TV feed. */
+function TrendPhone(props: Phone) {
+  const { view, me, players, send } = props, posts = me.ballot ?? [], picks = Math.min(view.field?.picks ?? 2, posts.length);
+  if (me.boosts || !posts.length) return <PhoneShell {...shellOf(props, true)} title={me.boosts ? 'Boosted!' : 'Refreshing…'}>
+    <PhoneDone title={me.boosts ? 'Boosts sent.' : 'Nothing to boost'} detail={`The top ${view.field?.slots ?? 8} posts hit the big feed next.`}>
+      <ul className="cs-voted">{(me.boosts ?? []).map(id => { const p = posts.find(x => x.id === id); return p && <li key={id} style={brand(p.kind)}><App kind={p.kind} /><b>{p.twist}</b></li>; })}</ul>
+    </PhoneDone>
+  </PhoneShell>;
+  return <PhoneShell {...shellOf(props, true)} title={`Boost up to ${picks}`}>
+    <p className="cs-ballot-note">Which posts deserve the big feed? Boost the most <b>ruinous</b>.</p>
+    <PhoneChoices className="cs-ballot" label="Boost the most ruinous posts" multi min={1} max={picks} submitLabel="Boost" onSubmit={ids => send({ turn: view.turn, k: 'boost', posts: ids })}
+      options={posts.map((p, i) => ({ id: p.id, label: <><span className="cs-letter kp-title">{letter(i)}</span><PostOption post={p} author={find(players, p.author)} /></>, ariaLabel: `Post ${letter(i)}: ${p.label}: ${p.twist}. ${p.answer}` }))} />
+  </PhoneShell>;
 }
 
 function VotePhone(props: Phone) {
@@ -339,6 +367,7 @@ function ResultsPhone(props: Phone) {
       <Avatar avatar={player.avatar} color={player.color} size={124} mood={hot ? 'happy' : mine || about ? 'idle' : 'thinking'} />
       {mine && <p className="cs-gain"><b className="kp-numeral">+{mine.points}</b> {plural(mine.votes, 'vote')} for your twist{mine.auto ? ' (house twist, half)' : ''}</p>}
       {about && about.authorPoints > 0 && <p className="cs-gain cs-gain-ruined"><b className="kp-numeral">+{about.authorPoints}</b> for getting ruined</p>}
+      {me.cut && me.boosted && <p className="cs-gain"><b className="kp-numeral">+{me.boosted.points}</b> {plural(me.boosted.count, 'boost')} for your twist. It missed the big feed this time.</p>}
       {crowned ? <Standing view={view} players={players} player={player} /> : !mine && <p className="cs-tv-cue">Eyes on the TV!</p>}
       <ul className="cs-voted">{stakes.map(([label, text]) => text && <li key={label}><span className="cs-who"><small>{label}</small><b>{text}</b></span></li>)}</ul>
     </div>
@@ -362,6 +391,7 @@ function Controller(props: P) {
     {view.phase === 'round' ? <RoundPhone {...phone} />
       : view.phase === 'answer' ? <AnswerPhone {...phone} />
       : view.phase === 'twist' && me.target ? <TwistPhone {...phone} />
+      : view.phase === 'trend' ? <TrendPhone {...phone} />
       : view.phase === 'feed' ? <FeedPhone {...phone} />
       : view.phase === 'vote' ? <VotePhone {...phone} />
       : view.phase === 'results' ? <ResultsPhone {...phone} />
