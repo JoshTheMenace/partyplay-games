@@ -2,13 +2,15 @@
  * soft edge and eased over time; every world material samples it (onBeforeCompile) and shows the lit room where
  * it is seen and a navy blueprint where it is not. The same patch applies the baked map-space light pools. */
 import {
-  BufferAttribute, BufferGeometry, CanvasTexture, Color, DoubleSide, LinearFilter, Mesh, MeshBasicMaterial, OrthographicCamera, PlaneGeometry, Scene, ShaderMaterial,
+  BufferAttribute, BufferGeometry, CanvasTexture, Color, CustomBlending, DoubleSide, LinearFilter, MaxEquation, Mesh, MeshBasicMaterial, OneFactor, OrthographicCamera, PlaneGeometry, Scene, ShaderMaterial,
   Vector2, Vector4, WebGLRenderTarget, type Material, type WebGLRenderer, type IUniform, type Texture,
 } from 'three';
 import type { ResourceScope } from '../../../../party-runtime/src/index';
 import type { HeistMap, Point } from '../model';
 
 const PX = 16, MAX_POINTS = 2400;
+/** Sight is brightest around a thief and dims toward its edge: the fan's rim carries this much of the centre's light. */
+const RIM_LIGHT = .42;
 export type FogOptions = {
   /** Tiles to step along the surface normal before sampling (walls borrow the room they face). */
   reach?: number; keep?: number; grid?: number; line?: number; fog?: number; floor?: number;
@@ -50,9 +52,12 @@ if (njTop > .5) {
   njV = max(max(texture2D(njVis, njUv + o.xy).r, texture2D(njVis, njUv - o.xy).r), max(texture2D(njVis, njUv + o.yx).r, texture2D(njVis, njUv - o.yx).r));
 }
 njV = mix(1.0, njV, njB.x);
+// The fans carry brightness: anything above a sliver is seen; how far above says how close a thief stands.
+float njNear = smoothstep(.4, .95, njV);
+njV = smoothstep(.02, .3, njV);
 // Tops skip the baked light (dark inside walls) so they read as cut-away plaster rather than holes.
 vec3 njL = mix(vec3(1.0), texture2D(njLight, (vNjW.xz + vNjN.xz * max(njA.x, .35)) / njMap).rgb * 2.0, njC.x * (1.0 - njTop));
-vec3 njLit = outgoingLight * njL;
+vec3 njLit = outgoingLight * njL * mix(.58, 1.12, mix(1.0, njNear, njB.x)) * mix(vec3(.82, .88, 1.08), vec3(1.04, 1.0, .94), mix(1.0, njNear, njB.x));
 float njLum = dot(diffuseColor.rgb, vec3(.299, .587, .114));
 vec3 njBp = vec3(.006, .016, .05) + vec3(.03, .075, .2) * (njLum * .8 + .12) * (.7 + .45 * max(vNjN.y, 0.0));
 vec2 njF = abs(fract(vNjW.xz) - .5);
@@ -77,9 +82,10 @@ export function createFog(map: HeistMap, scope: ResourceScope, light: Texture) {
   const shared = { njVis: { value: eased[0].texture as Texture }, njLight: { value: light }, njMap: { value: new Vector2(map.width, map.height) }, njAlarm: { value: 0 }, njSpin: { value: 0 } };
 
   // Sight polygons as triangle fans in map units; the camera maps (0..w, 0..h) to the target.
-  const sightScene = new Scene(), sightCamera = new OrthographicCamera(0, map.width, map.height, 0, -1, 1), white = scope.own(new MeshBasicMaterial({ color: '#ffffff', side: DoubleSide }));
+  // Overlapping fans keep the brighter value (max blending), so two thieves never dim each other.
+  const sightScene = new Scene(), sightCamera = new OrthographicCamera(0, map.width, map.height, 0, -1, 1), white = scope.own(new MeshBasicMaterial({ vertexColors: true, side: DoubleSide, blending: CustomBlending, blendEquation: MaxEquation, blendSrc: OneFactor, blendDst: OneFactor }));
   const fans = Array.from({ length: 4 }, () => {
-    const g = scope.own(new BufferGeometry()); g.setAttribute('position', new BufferAttribute(new Float32Array(MAX_POINTS * 9), 3)); g.setDrawRange(0, 0);
+    const g = scope.own(new BufferGeometry()); g.setAttribute('position', new BufferAttribute(new Float32Array(MAX_POINTS * 9), 3)); g.setAttribute('color', new BufferAttribute(new Float32Array(MAX_POINTS * 9), 3)); g.setDrawRange(0, 0);
     const mesh = new Mesh(g, white); mesh.frustumCulled = false; sightScene.add(mesh); return mesh;
   });
   const quadScene = new Scene(), quadCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1), quad = new Mesh(scope.own(new PlaneGeometry(2, 2)));
@@ -93,23 +99,28 @@ export function createFog(map: HeistMap, scope: ResourceScope, light: Texture) {
   const ease = pass(`uniform sampler2D from; uniform sampler2D to; uniform float k;
     void main() { float a = texture2D(from, vUv).r, b = texture2D(to, vUv).r; gl_FragColor = vec4(vec3(a + (b - a) * (b > a ? k : k * .6)), 1.0); }`, { from: { value: null }, to: { value: sharp.texture }, k: { value: 1 } });
 
-  let dirty = true, easing = 0, easeK = 1, current = 0, cleared = false;
+  let dirty = true, easing = 0, easeK = 1, current = 0, cleared = false, snapped = false;
   const run = (renderer: WebGLRenderer, material: Material, to: WebGLRenderTarget) => { quad.material = material; renderer.setRenderTarget(to); renderer.render(quadScene, quadCamera); };
   return {
     shared,
-    /** Replace the crew's sight polygons (one per viewer; star-shaped around its origin). */
-    setSight(polygons: readonly { origin: Point; points: readonly Point[] }[]) {
+    /** Replace the crew's sight polygons (one per viewer; star-shaped around its origin, `radius` its full reach). */
+    setSight(polygons: readonly { origin: Point; points: readonly Point[] }[], radius: number) {
       fans.forEach((mesh, i) => {
-        const poly = polygons[i], attr = mesh.geometry.attributes.position as BufferAttribute, a = attr.array as Float32Array;
+        const poly = polygons[i], attr = mesh.geometry.attributes.position as BufferAttribute, a = attr.array as Float32Array, tone = mesh.geometry.attributes.color as BufferAttribute, c = tone.array as Float32Array;
+        const light = (p: Point) => { const d = Math.min(1, Math.hypot(p.x - poly.origin.x, p.y - poly.origin.y) / radius); return 1 - (1 - RIM_LIGHT) * d * d; };
         let n = 0;
         if (poly) for (let j = 0, m = Math.min(poly.points.length, MAX_POINTS - 1); j < m; j++) {
-          const p = poly.points[j], q = poly.points[(j + 1) % poly.points.length];
-          a[n++] = poly.origin.x; a[n++] = poly.origin.y; a[n++] = 0; a[n++] = q.x; a[n++] = q.y; a[n++] = 0; a[n++] = p.x; a[n++] = p.y; a[n++] = 0;
+          const p = poly.points[j], q = poly.points[(j + 1) % poly.points.length], lq = light(q), lp = light(p);
+          c[n] = c[n + 1] = c[n + 2] = 1; a[n++] = poly.origin.x; a[n++] = poly.origin.y; a[n++] = 0;
+          c[n] = c[n + 1] = c[n + 2] = lq; a[n++] = q.x; a[n++] = q.y; a[n++] = 0;
+          c[n] = c[n + 1] = c[n + 2] = lp; a[n++] = p.x; a[n++] = p.y; a[n++] = 0;
         }
-        mesh.geometry.setDrawRange(0, n / 3); attr.needsUpdate = true;
+        mesh.geometry.setDrawRange(0, n / 3); attr.needsUpdate = true; tone.needsUpdate = true;
       });
       dirty = true;
     },
+    /** Show the next sight at once instead of easing from the last one (a cut to another crew). */
+    snap() { snapped = true; },
     /** Called from scene.onBeforeRender: re-rasterise when sight changed, then ease the shown visibility. */
     render(renderer: WebGLRenderer, dt: number, instant: boolean) {
       const previous = renderer.getRenderTarget();
@@ -121,7 +132,7 @@ export function createFog(map: HeistMap, scope: ResourceScope, light: Texture) {
         blur.uniforms.map.value = mid.texture; blur.uniforms.step.value.set(0, 1 / h); run(renderer, blur, sharp);
       }
       if (easing > 0) {
-        easing -= dt; easeK = instant ? 1 : 1 - Math.exp(-dt * 14);
+        easing -= dt; easeK = instant || snapped ? 1 : 1 - Math.exp(-dt * 14); snapped = false;
         ease.uniforms.from.value = eased[current].texture; ease.uniforms.k.value = easeK; current ^= 1; run(renderer, ease, eased[current]);
         shared.njVis.value = eased[current].texture;
       }
@@ -167,17 +178,21 @@ export function paintLight(map: HeistMap, scope: ResourceScope) {
     g.fillStyle = '#58525e'; g.fillRect(room.x * S, room.y * S, room.w * S, room.h * S);
     g.globalCompositeOperation = 'lighter';
     const nx = Math.max(1, Math.round(room.w / 4.5)), ny = Math.max(1, Math.round(room.h / 4.5));
-    for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) pool(room.x + room.w * (i + .5) / nx, room.y + room.h * (j + .5) / ny, Math.max(room.w / nx, room.h / ny) * .85 + .8, room.light, .34);
+    for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) pool(room.x + room.w * (i + .5) / nx, room.y + room.h * (j + .5) / ny, Math.max(room.w / nx, room.h / ny) * .8 + .6, room.light, .46);
     g.restore();
   }
   g.globalCompositeOperation = 'lighter';
-  for (const p of map.props) if (p.kind === 'lamp') pool(p.x + .5, p.y + .5, 3.6, '#ffcf8a', .55);
+  for (const p of map.props) if (p.kind === 'lamp') pool(p.x + .5, p.y + .5, 3.8, '#ffcf8a', .75);
   for (const o of map.objects) if (o.kind === 'exit') pool(o.x, o.y, 3, '#5cffb0', .35);
   // Contact shade: blurred walls multiplied in so floors darken where they meet walls.
   const shade = document.createElement('canvas'), s = shade.getContext('2d')!;
   shade.width = canvas.width; shade.height = canvas.height; s.fillStyle = '#ffffff'; s.fillRect(0, 0, shade.width, shade.height); s.fillStyle = '#48445a';
   map.tiles.forEach((row, y) => [...row].forEach((c, x) => { if ('#% '.includes(c)) s.fillRect(x * S, y * S, S, S); }));
-  g.globalCompositeOperation = 'multiply'; g.filter = `blur(${S * .35}px)`; g.drawImage(shade, 0, 0); g.filter = 'none';
+  g.globalCompositeOperation = 'multiply'; g.filter = `blur(${S * .35}px)`; g.drawImage(shade, 0, 0);
+  // Furniture grounds itself: a soft shadow under every solid prop, thrown a little away from the sun.
+  s.fillStyle = '#ffffff'; s.fillRect(0, 0, shade.width, shade.height); s.fillStyle = '#6a6478';
+  for (const p of map.props) if (p.solid && p.kind !== 'lamp') s.fillRect((p.x + .12) * S, (p.y + .02) * S, (p.w + .16) * S, (p.h + .22) * S);
+  g.filter = `blur(${S * .22}px)`; g.drawImage(shade, 0, 0); g.filter = 'none';
   const texture = scope.own(new CanvasTexture(canvas)); texture.flipY = false;
   return texture;
 }

@@ -47,7 +47,7 @@ export function createOverlay(canvas: HTMLCanvasElement) {
 
   return {
     resize(width: number, height: number, dpr: number) { w = width; h = height; canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr); g.setTransform(dpr, 0, 0, dpr, 0, 0); },
-    draw(view: View | null, map: HeistMap, camera: Camera, poses: ReadonlyMap<string, Pose>, now: number, t: number, reduced: boolean, tilePx: number, scale: number) {
+    draw(view: View | null, map: HeistMap, camera: Camera, poses: ReadonlyMap<string, Pose>, now: number, t: number, reduced: boolean, tilePx: number, scale: number, ride = false) {
       g.clearRect(0, 0, w, h);
       if (!view) return;
       g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
@@ -57,6 +57,11 @@ export function createOverlay(canvas: HTMLCanvasElement) {
         const beat = reduced ? .6 : .5 + .5 * Math.sin(t * 7), grad = g.createRadialGradient(0, 0, h * .38, 0, 0, h * .72);
         grad.addColorStop(0, 'rgba(255,40,40,0)'); grad.addColorStop(1, `rgba(255,40,40,${.18 + beat * .14})`);
         g.save(); g.translate(w / 2, h / 2); g.scale(w / h, 1); g.fillStyle = grad; g.fillRect(-h / 2, -h / 2, h, h); g.restore();
+      }
+      // A bust: the patrol cars have arrived. Red and blue wash in from opposite sides of the screen.
+      if (view.phase === 'failed') {
+        const flip = reduced ? 0 : Math.floor(t * 2.6) % 2, wash = (x: number, colour: string) => { const grad = g.createRadialGradient(x, h / 2, 0, x, h / 2, w * .62); grad.addColorStop(0, `rgba(${colour},.34)`); grad.addColorStop(1, `rgba(${colour},0)`); g.fillStyle = grad; g.fillRect(0, 0, w, h); };
+        wash(flip ? 0 : w, '255,45,60'); wash(flip ? w : 0, '60,110,255');
       }
       // Half-finished work other thieves can pick up; a camera's progress is its detection meter instead.
       for (const o of view.objects) {
@@ -82,7 +87,7 @@ export function createOverlay(canvas: HTMLCanvasElement) {
       // Seat badges float above each thief's head on a short tail; overlapping badges are nudged apart.
       badges.length = 0;
       for (const p of view.players) {
-        const pose = poses.get(p.id); if (p.suspended || !pose) continue;
+        const pose = poses.get(p.id); if (p.suspended || !pose || (ride && view.phase === 'clear')) continue;
         if (p.work && !p.down) { const at = workPoint(view, map, poses, p.work.target) ?? { x: pose.x, y: pose.y, lift: .9 }; if (project(camera, at.x, at.lift, at.y)) ring(sx, sy, 17 * u, p.work.progress, p.color, 5 * u); }
         if (project(camera, pose.x, (p.down ? .45 : 1.05) * scale, pose.y)) badges.push({ x: sx, y: sy - r - 12 * u, ax: sx, ay: sy, named: view.elapsed < NAME_SECONDS || p.down || !p.connected, p });
       }

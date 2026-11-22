@@ -2,9 +2,10 @@
 import { useEffect, useRef } from 'react';
 import { ResourceScope } from '../../../party-runtime/src/index';
 import type { SceneViewProps } from '../../../party-ui/src/index';
-import type { Settings, View } from './model';
+import type { Settings } from './model';
+import type { Own, Wire } from './wire';
 
-export function NightJobScene(props: SceneViewProps<Settings, View, null>) {
+export function NightJobScene(props: SceneViewProps<Settings, Wire, Own>) {
   const canvas = useRef<HTMLCanvasElement>(null), overlay = useRef<HTMLCanvasElement>(null), live = useRef(props); live.current = props;
   useEffect(() => {
     const scope = new ResourceScope(props.signal);

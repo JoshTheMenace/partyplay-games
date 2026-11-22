@@ -1,5 +1,6 @@
 import type { GameClientModule } from '../../../party-ui/src/index';
-import type { Action, Input, Settings, View } from './model';
+import type { Action, Input, Settings } from './model';
+import type { Own, Wire } from './wire';
 import { NightJobScene } from './scene';
 import { setAssetBase } from './render/assets';
 import { AudioView } from './audio';
@@ -9,7 +10,7 @@ import { InstructionsView, LobbyView, SettingsView } from './lobby';
 import { ResultsView } from './results';
 import './style.css';
 
-export const client: GameClientModule<Input, Action, Settings, View, null> = {
+export const client: GameClientModule<Input, Action, Settings, Wire, Own> = {
   AudioView, immersivePhone: true, SceneView: NightJobScene, LobbyView, DisplayView, ControllerView,
   settingsWide: true, SettingsView, InstructionsView, ResultsView,
   prepare({ assetBase }) { setAssetBase(assetBase); }, dispose() {},

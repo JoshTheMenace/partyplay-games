@@ -6,8 +6,9 @@ const C = 24, INK = '#081330', FLOOR = '#0f2350', YARD = '#0c1d45', LINE = '#dce
 const ROUND: readonly Prop['kind'][] = ['plant', 'tree', 'barrel', 'fountain', 'roulette', 'lamp', 'statue', 'table'];
 const WALLS = '#% ';
 
-/** Paints `map` onto `canvas` at 24 px per tile; the element can be scaled freely with CSS. */
-export function paintPreview(canvas: HTMLCanvasElement, map: HeistMap) {
+/** Paints `map` onto `canvas` at 24 px per tile; the element can be scaled freely with CSS. `bare` leaves out loot and
+ * spawn marks (the phone map draws the coins that are still there itself). */
+export function paintPreview(canvas: HTMLCanvasElement, map: HeistMap, bare = false) {
   const { width: W, height: H, tiles } = map, g = canvas.getContext('2d');
   canvas.width = W * C; canvas.height = H * C;
   if (!g) return;
@@ -39,8 +40,8 @@ export function paintPreview(canvas: HTMLCanvasElement, map: HeistMap) {
   for (const p of map.props) prop(g, p);
   const grid = buildGrid(map, '');
   for (const o of map.objects) object(g, o, map, grid);
-  for (const coin of map.coins) { g.fillStyle = '#ffd24a'; g.beginPath(); g.arc(coin.x * C, coin.y * C, 3, 0, Math.PI * 2); g.fill(); }
-  map.spawns.slice(0, 4).forEach((s, i) => { ring(g, s.x * C, s.y * C, 7, '#fff6e5', 2); g.fillStyle = '#fff6e5'; text(g, String(i + 1), s.x * C, s.y * C + .5, 10, 900); });
+  if (!bare) for (const coin of map.coins) { g.fillStyle = '#ffd24a'; g.beginPath(); g.arc(coin.x * C, coin.y * C, 3, 0, Math.PI * 2); g.fill(); }
+  if (!bare) map.spawns.slice(0, 4).forEach((s, i) => { ring(g, s.x * C, s.y * C, 7, '#fff6e5', 2); g.fillStyle = '#fff6e5'; text(g, String(i + 1), s.x * C, s.y * C + .5, 10, 900); });
   g.textBaseline = 'middle';
   for (const r of map.rooms) {
     const size = Math.min(13, (r.w * C) / Math.max(6, r.name.length) * 1.1);

@@ -1,12 +1,14 @@
 /* Landscape phone controller: stick left, Sneak and Tool right, only your thief's immediate status between. */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { ArcadeButton, HoldButton, SteerPad, type GameViewProps, type StickValue } from '../../../party-ui/src/index';
 import type { ActionResult } from '../../../party-contract/src/index';
-import { COINS_PER_CHARGE, ROLES, SNEAK_STICK, TOOLS, type Action, type EffectKind, type Input, type View } from './model';
+import { COINS_PER_CHARGE, CREWS, ROLES, SNEAK_STICK, TOOLS, type Action, type EffectKind, type Input, type View } from './model';
 import { getMap } from './maps';
-import { CoinMeter, Health, Pips, alarmSeconds, tone } from './hud';
+import { Board, CoinMeter, Health, Pips, alarmSeconds, lineStatus, sunrise, tone } from './hud';
+import { mountTactical, type TacticalSource } from './tactical';
+import { crewOf, decode, ownView, type Own, type Wire } from './wire';
 
-type Props = GameViewProps<Input, Action, View, null>;
+type Props = GameViewProps<Input, Action, Wire, Own>;
 type Mode = 'idle' | 'sneak' | 'run';
 const ZERO: StickValue = { x: 0, y: 0 };
 
@@ -63,15 +65,60 @@ function useHaptics(view: View, playerId: string | null) {
   }, [view, playerId]);
 }
 
-export function ControllerView({ publicView: view, playerId, setInput, releaseInput, sendAction, connected = true }: Props) {
-  const me = view.players.find(p => p.id === playerId), idle = !connected || !me || me.down || me.suspended || view.phase === 'clear' || view.phase === 'failed';
+/** The crew's floor plan, following this seat's thief (crew nights only: with one crew the TV is the map). */
+function Plan({ source }: { source: TacticalSource }) {
+  const canvas = useRef<HTMLCanvasElement>(null), latest = useRef(source); latest.current = source;
+  useEffect(() => mountTactical(canvas.current!, () => latest.current), []);
+  return <canvas ref={canvas} className="nj-plan" aria-label="Floor plan around your thief: lit where your crew can see, blueprint elsewhere"/>;
+}
+const ordinal = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'}`;
+
+export function ControllerView({ publicView, privateView, playerId, setInput, releaseInput, sendAction, serverNowMs, connected = true }: Props) {
+  const night = decode(publicView), view = ownView(publicView, privateView, playerId) ?? night.cast, rival = night.rival;
+  const me = view.players.find(p => p.id === playerId), over = view.phase === 'clear' || view.phase === 'failed', idle = !connected || !me || me.down || me.suspended || over;
   const composer = useComposer(setInput, releaseInput, !idle), tool = useTool(sendAction, view.heistId), map = getMap(view.mission);
   useHaptics(view, playerId);
-  if (!me) return <div className="night-job nj-controller nj-watching"><section className="nj-me"><small className="nj-kicker">{map.title}</small><strong className="nj-big">You’re watching this job</strong><p className="nj-hint">Follow the crew on the TV. You join the next heist.</p></section></div>;
+  if (!me) return <div className="night-job nj-controller nj-watching"><section className="nj-me"><small className="nj-kicker">{map.title}</small><strong className="nj-big">You’re watching this job</strong><p className="nj-hint">Follow the {rival ? 'crews' : 'crew'} on the TV. You join the next heist.</p></section></div>;
   const role = ROLES[me.role], kit = TOOLS[me.tool], toNext = COINS_PER_CHARGE - me.coins % COINS_PER_CHARGE, alarm = alarmSeconds(view);
   const line = tool.feedback ?? (me.hint || (view.phase === 'escape' ? 'Bring everyone to the getaway.' : 'Push into doors, safes and terminals to work on them.'));
-  return <div className={`night-job nj-controller${me.down ? ' nj-is-down' : ''}${view.alarm ? ' nj-alarm-on' : ''}`} style={tone(me.color, { '--nj-role': role.color })} data-player-id={me.id} data-seat={me.seat + 1} data-phase={view.phase} data-down={me.down} data-mode={composer.mode} data-heist-id={view.heistId}>
-    <div className="nj-stick" data-mode={composer.mode}><SteerPad label="Move" onChange={composer.stick} disabled={idle}/></div>
+  const stick = <div className="nj-stick" data-mode={composer.mode}><SteerPad label="Move" onChange={composer.stick} disabled={idle}/></div>;
+  const actions = <div className="nj-actions">
+    <HoldButton label="Sneak" onChange={composer.sneak} disabled={idle}>Sneak</HoldButton>
+    <ArcadeButton type="button" tone={me.charges > 0 && !tool.pending ? 'coral' : 'ghost'} className="nj-tool" disabled={idle} aria-busy={tool.pending} aria-label={`Use ${kit.name}, ${me.charges} ${me.charges === 1 ? 'charge' : 'charges'}`} data-tool={me.tool} data-charges={me.charges}
+      onPointerDown={event => { if (event.button) return; event.preventDefault(); void tool.use(); }} onClick={event => { if (event.detail === 0) void tool.use(); }}>
+      <i aria-hidden="true">{kit.icon}</i><b>{tool.pending ? '…' : kit.name}</b><Pips charges={me.charges}/>
+    </ArcadeButton>
+  </div>;
+  const data = { 'data-player-id': me.id, 'data-seat': me.seat + 1, 'data-phase': view.phase, 'data-down': me.down, 'data-mode': composer.mode, 'data-heist-id': view.heistId };
+  if (rival) {
+    // Crew night: the TV is a broadcast, so the phone carries the map and the controls float over it.
+    const crew = crewOf(night, playerId), mine = night.lines[crew], name = CREWS[crew].name;
+    return <div className={`night-job nj-controller nj-rival${me.down ? ' nj-is-down' : ''}${view.alarm ? ' nj-alarm-on' : ''}`} style={tone(me.color, { '--nj-role': role.color, '--nj-crew': CREWS[crew].color })} {...data} data-crew={crew} data-place={mine.place} data-x={me.x} data-y={me.y}>
+      <Plan source={{ view, time: publicView.now, me: playerId, now: serverNowMs() }}/>
+      <header className="nj-bar">
+        <span className="nj-bar-crew"><b className="nj-seat kp-numeral">{me.seat + 1}</b><span><strong>{name}</strong><small><i aria-hidden="true">{role.icon}</i>{role.name}</small></span></span>
+        <span className="nj-bar-vitals"><Health value={me.health}/><span><i aria-hidden="true">{kit.icon}</i><Pips charges={me.charges}/><CoinMeter coins={me.coins}/></span></span>
+        <span className="nj-bar-night"><b className="kp-numeral">{ordinal(mine.place)}</b><small className={night.lastCall ? 'nj-last-call' : undefined}>{sunrise(night)}</small></span>
+      </header>
+      {over || me.suspended ? <section className={`nj-finish nj-finish-${view.phase}`} role="status">
+        <small className="nj-kicker">The {name}</small>
+        <strong className="nj-big">{me.suspended ? 'You left the job' : view.phase === 'clear' ? 'You’re away!' : 'Out of the night'}</strong>
+        <p className="nj-hint">{view.phase === 'clear' ? `${ordinal(mine.place)} so far. Watch the other crews on the TV.` : view.message || 'Watch the other crews on the TV.'}</p>
+        <Board night={night} mine={crew}/>
+      </section> : <p className={`nj-say${tool.feedback ? ' nj-hint-error' : ''}${me.down ? ' nj-say-down' : ''}`} role="status"><span key={line}>{me.work ? <b style={{ '--p': Math.min(1, me.work.progress) } as CSSProperties}>{me.work.label}</b> : me.down ? me.hint || 'You’re down. A teammate can push into you to revive you.' : line}</span></p>}
+      <div className="nj-flags">
+        {me.carrying && <span className="nj-badge nj-badge-carry">◆ You have the {map.objectiveKind}</span>}
+        {view.phase === 'escape' && !me.carrying && <span className="nj-badge nj-badge-escape">Everyone to the getaway</span>}
+        {view.alarm && <span className="nj-badge nj-badge-alarm">Alarm {alarm}s</span>}
+        {me.hidden && <span className="nj-badge nj-badge-hidden">Hidden</span>}
+        {me.disguised && <span className="nj-badge nj-badge-hidden">Disguised</span>}
+        {mine.phase !== 'clear' && mine.phase !== 'failed' && <span className="nj-badge nj-badge-line">{lineStatus(mine, map.objectiveKind)}{mine.bails ? ` · ${mine.bails} bail${mine.bails > 1 ? 's' : ''}` : ''}</span>}
+      </div>
+      {stick}{actions}
+    </div>;
+  }
+  return <div className={`night-job nj-controller${me.down ? ' nj-is-down' : ''}${view.alarm ? ' nj-alarm-on' : ''}`} style={tone(me.color, { '--nj-role': role.color })} {...data}>
+    {stick}
     {me.down || me.suspended ? <section className="nj-me nj-me-down">
       <small className="nj-kicker">Seat {me.seat + 1} · {role.name}</small>
       <strong className="nj-big">{me.suspended ? 'You left the job' : 'You’re down'}</strong>
@@ -91,12 +138,6 @@ export function ControllerView({ publicView: view, playerId, setInput, releaseIn
       </div>
       <footer className="nj-me-kit"><span><i aria-hidden="true">{kit.icon}</i>{kit.name}<Pips charges={me.charges}/></span><span className="nj-me-coins"><CoinMeter coins={me.coins}/>{toNext} to a charge</span></footer>
     </section>}
-    <div className="nj-actions">
-      <HoldButton label="Sneak" onChange={composer.sneak} disabled={idle}>Sneak</HoldButton>
-      <ArcadeButton type="button" tone={me.charges > 0 && !tool.pending ? 'coral' : 'ghost'} className="nj-tool" disabled={idle} aria-busy={tool.pending} aria-label={`Use ${kit.name}, ${me.charges} ${me.charges === 1 ? 'charge' : 'charges'}`} data-tool={me.tool} data-charges={me.charges}
-        onPointerDown={event => { if (event.button) return; event.preventDefault(); void tool.use(); }} onClick={event => { if (event.detail === 0) void tool.use(); }}>
-        <i aria-hidden="true">{kit.icon}</i><b>{tool.pending ? '…' : kit.name}</b><Pips charges={me.charges}/>
-      </ArcadeButton>
-    </div>
+    {actions}
   </div>;
 }

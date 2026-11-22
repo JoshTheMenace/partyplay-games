@@ -6,6 +6,7 @@ import {
 } from 'three';
 import type { ResourceScope } from '../../../../party-runtime/src/index';
 import { castRay, doorObjects, type Grid } from '../geometry';
+import { floorAt, roomAt as roomOf } from '../level';
 import { RADIUS, WALL_HEIGHT, cameraAngle, SIGHT, type Floor, type HeistMap, type MapObject, type PropKind, type View } from '../model';
 import type { Kit } from './kit';
 import { coneMaterial, coneMesh, fillCone } from './cones';
@@ -14,7 +15,6 @@ import type { Fog } from './fog';
 const WALLISH = '#%', H = WALL_HEIGHT;
 const TILEABLE: readonly PropKind[] = ['bar', 'counter', 'shelf', 'bookcase', 'slot', 'locker', 'flowerbed'];
 const CANON: Partial<Record<PropKind, [number, number]>> = { car: [2, 1], van: [2, 2], boat: [3, 2], bed: [1, 2], sofa: [2, 1], bench: [2, 1], piano: [2, 1], roulette: [2, 2], cards: [2, 1], fountain: [2, 2], container: [3, 1], desk: [2, 1], table: [1, 1] };
-const FLOOR_COLOUR: Record<Floor, string> = { carpet: '#8e3a52', tile: '#c9d2d6', marble: '#d8ccb6', wood: '#b27b47', grass: '#5b9a45', concrete: '#8d9299', asphalt: '#4a4f5a', deck: '#a8784c', checker: '#efece6' };
 const FLOOR_SCALE: Record<Floor, number> = { carpet: 1, tile: 1, marble: .5, wood: 1, grass: .5, concrete: .5, asphalt: .5, deck: 1, checker: 1 };
 const dummy = new Object3D(), child = new Object3D(); dummy.add(child);
 const CAMERA_IDLE = new Color('#7fe3ff'), CAMERA_SEEING = new Color('#ff3b4e');
@@ -85,7 +85,7 @@ export type World = ReturnType<typeof createWorld>;
 export function createWorld(map: HeistMap, kit: Kit, fog: Fog, scope: ResourceScope) {
   const root = new Group(), at = (x: number, y: number) => map.tiles[y]?.[x] ?? ' ';
   const broken = new Set<number>(), tile = (x: number, y: number) => broken.has(y * map.width + x) ? '.' : at(x, y);
-  const roomAt = (x: number, y: number) => { for (let i = map.rooms.length - 1; i >= 0; i--) { const r = map.rooms[i]; if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) return r; } };
+  const roomAt = (x: number, y: number) => roomOf(map, x, y);
   const openSide = (x: number, y: number) => ([[0, 1], [1, 0], [-1, 0], [0, -1]] as const).find(([dx, dy]) => '.,'.includes(at(x + dx, y + dy))) ?? [0, 1];
   /** Front faces away from the nearest wall (safes, terminals, closets stand with their back to it). */
   const faceAway = (x: number, y: number) => { const back = ([[0, -1], [-1, 0], [1, 0], [0, 1]] as const).find(([dx, dy]) => WALLISH.includes(at(x + dx, y + dy))); const [dx, dy] = back ? [-back[0], -back[1]] : openSide(x, y); return yawOf(dx, dy); };
@@ -93,13 +93,6 @@ export function createWorld(map: HeistMap, kit: Kit, fog: Fog, scope: ResourceSc
   const own = <T extends { dispose(): void }>(v: T) => scope.own(v);
 
   /* floors: one merged mesh per floor type, room tint in vertex colours */
-  const floorOf = (x: number, y: number): [Floor, string] => {
-    const room = roomAt(x, y) ?? [[0, 1], [0, -1], [1, 0], [-1, 0]].map(([dx, dy]) => roomAt(x + dx, y + dy)).find(Boolean);
-    if (at(x, y) === ',' && !room) return [map.outdoor, FLOOR_COLOUR[map.outdoor]];
-    if (room) return [room.floor, room.tint ?? FLOOR_COLOUR[room.floor]];
-    const floor = [[0, 1], [0, -1], [1, 0], [-1, 0]].some(([dx, dy]) => at(x + dx, y + dy) === ',') ? map.outdoor : 'tile';
-    return [floor, FLOOR_COLOUR[floor]];
-  };
   /** Water cells plus cells under a moored boat, so the boat floats even though the map stands it on the pier. */
   const afloat = new Set<number>();
   map.tiles.forEach((row, y) => [...row].forEach((c, x) => { if (c === '~') afloat.add(y * map.width + x); }));
@@ -108,7 +101,7 @@ export function createWorld(map: HeistMap, kit: Kit, fog: Fog, scope: ResourceSc
   const floors = new Map<Floor, Quads>();
   for (let y = 0; y < map.height; y++) for (let x = 0; x < map.width; x++) {
     const c = at(x, y); if (c === ' ' || c === '#' || wet(x, y)) continue;
-    const [kind, colour] = floorOf(x, y), q = floors.get(kind) ?? new Quads(), s = FLOOR_SCALE[kind]; floors.set(kind, q);
+    const [kind, colour] = floorAt(map, x, y), q = floors.get(kind) ?? new Quads(), s = FLOOR_SCALE[kind]; floors.set(kind, q);
     q.quad([x, 0, y + 1], [x + 1, 0, y + 1], [x + 1, 0, y], [x, 0, y], [0, 1, 0], new Color(colour), [x * s, (y + 1) * s, (x + 1) * s, (y + 1) * s, (x + 1) * s, y * s, x * s, y * s]);
   }
   for (const [kind, q] of floors) root.add(new Mesh(own(q.geometry()), fog.patch(own(new MeshLambertMaterial({ vertexColors: true, map: texture(scope, 128, PAINT[kind], kind.length * 31) })), { reach: 0, grid: 1 })));
@@ -188,9 +181,12 @@ export function createWorld(map: HeistMap, kit: Kit, fog: Fog, scope: ResourceSc
   const glow = (colour: string) => own(new MeshBasicMaterial({ color: colour, transparent: true, depthWrite: false, blending: AdditiveBlending }));
   const flat = own(new PlaneGeometry(1, 1).rotateX(-Math.PI / 2));
 
-  /* props */
+  /* props; the vehicle parked by the getaway is its own mesh, because it drives off with the crew */
+  const exitAt = map.objects.find(o => o.kind === 'exit')!, parked = map.props.filter(p => ['van', 'boat', 'car'].includes(p.kind)).sort((a, b) => Math.hypot(a.x + a.w / 2 - exitAt.x, a.y + a.h / 2 - exitAt.y) - Math.hypot(b.x + b.w / 2 - exitAt.x, b.y + b.h / 2 - exitAt.y))[0];
+  const ride = parked && Math.hypot(parked.x + parked.w / 2 - exitAt.x, parked.y + parked.h / 2 - exitAt.y) < 5 ? parked : null;
   const placements = new Map<string, [number, number, number, number, number, number][]>();
   for (const p of map.props) {
+    if (p === ride) continue;
     const name = `prop_${p.kind}`, list = placements.get(name) ?? []; placements.set(name, list);
     const yaw = -p.rot * Math.PI / 2, odd = p.rot % 2 !== 0;
     if (TILEABLE.includes(p.kind)) { for (let dy = 0; dy < p.h; dy++) for (let dx = 0; dx < p.w; dx++) list.push([p.x + dx + .5, 0, p.y + dy + .5, yaw, 1, 1]); continue; }
@@ -199,6 +195,15 @@ export function createWorld(map: HeistMap, kit: Kit, fog: Fog, scope: ResourceSc
     list.push([cx, 0, cz, yaw, (odd ? p.h : p.w) / cw, (odd ? p.w : p.h) / ch]);
   }
   for (const [name, list] of placements) { const b = batch(root, kit.geometry(name), solid, list.length); list.forEach(([x, y, z, yaw, sx, sz], i) => b.set(i, x, y, z, yaw, sx, 1, sz)); }
+  const rideHome = ride && { x: ride.x + ride.w / 2, z: ride.y + ride.h / 2, yaw: -ride.rot * Math.PI / 2 }, rideMesh = ride && new Mesh(kit.geometry(`prop_${ride.kind}`), solid);
+  if (ride && rideMesh && rideHome) { const [cw, ch] = CANON[ride.kind] ?? [1, 1], odd = ride.rot % 2 !== 0; rideMesh.scale.set((odd ? ride.h : ride.w) / cw, 1, (odd ? ride.w : ride.h) / ch); rideMesh.position.set(rideHome.x, 0, rideHome.z); rideMesh.rotation.y = rideHome.yaw; root.add(rideMesh); }
+  /** The getaway heads for the far side of the map along the street (or out to sea). */
+  const rideWay = rideHome ? (rideHome.x < map.width / 2 ? 1 : -1) * (ride!.kind === 'boat' ? -1 : 1) : 1;
+  let goneAt = NaN;
+  /* lamps glow where the crew can see them */
+  const haloTex = texture(scope, 64, (g, _r, s) => { const grad = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2); grad.addColorStop(0, 'rgba(255,255,255,1)'); grad.addColorStop(.35, 'rgba(255,255,255,.45)'); grad.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = grad; g.fillRect(0, 0, s, s); });
+  const lamps = map.props.filter(p => p.kind === 'lamp'), lampGlow = batch(root, flat, fog.patch(own(new MeshBasicMaterial({ map: haloTex, color: '#ffcf8a', transparent: true, depthWrite: false, blending: AdditiveBlending })), { fade: 1, convert: 0, light: 0, reach: 0 }), lamps.length);
+  (lampGlow.mesh.material as MeshBasicMaterial).opacity = .5; lampGlow.mesh.renderOrder = 2; lamps.forEach((p, i) => lampGlow.set(i, p.x + .5, .05, p.y + .5, 0, 2.6, 1, 2.6));
 
   /* objects */
   const byKind = (kind: MapObject['kind']) => map.objects.filter(o => o.kind === kind);
@@ -270,12 +275,25 @@ export function createWorld(map: HeistMap, kit: Kit, fog: Fog, scope: ResourceSc
   labelPlane.renderOrder = 5; root.add(labelPlane);
 
   let doorKey: string | null = null, brokenCount = -1, coinKey = '-', objectKey = '-', objectView: View | null | undefined;
+  /** Coins on their way into a pocket (index → wall time taken), and when each safe sprang open. */
+  const leaving = new Map<number, number>(), sprung = safes.list.map(() => NaN);
   const stateOf = (view: View, id: string) => { for (const s of view.objects) if (s.id === id) return s; };
   const pulse = new Color();
   return {
     root, objective,
+    /** A cut to another crew: its taken coins and open safes are simply shown as they are, with no pickup or spring-open animation. */
+    reset() { coinKey = objectKey = '-'; leaving.clear(); sprung.fill(NaN); },
+    /** Where the crew piles in once the heist is clear, or null on a map without a vehicle by the getaway. */
+    ride: rideHome && { x: rideHome.x, y: rideHome.z },
     sync(view: View | null, grid: Grid, now: number, dt: number, reduced: boolean, intelCameras: ReadonlySet<string>) {
       const t = performance.now() / 1000;
+      // Getaway: the engine shudders for a beat, then the vehicle is off down the street.
+      if (rideMesh && rideHome) {
+        if (view?.phase !== 'clear') goneAt = NaN; else if (Number.isNaN(goneAt)) goneAt = t;
+        const age = Number.isNaN(goneAt) ? 0 : t - goneAt, go = Math.max(0, age - .7), shudder = age > 0 && age < .7 && !reduced ? Math.sin(age * 60) * .04 : 0;
+        rideMesh.position.set(rideHome.x + rideWay * go * go * 7, shudder, rideHome.z); rideMesh.rotation.set(0, rideHome.yaw, age > .7 && !reduced ? -rideWay * Math.min(.12, go * .3) * (ride!.kind === 'boat' ? .5 : 1) : shudder);
+        rideMesh.visible = go * go * 7 < map.width + 10;
+      }
       if (view && view.broken.length !== brokenCount) { brokenCount = view.broken.length; broken.clear(); view.broken.forEach(i => broken.add(i)); buildArchitecture(); }
       const doorString = view?.doors ?? '';
       if (doorString !== doorKey) {
@@ -293,20 +311,31 @@ export function createWorld(map: HeistMap, kit: Kit, fog: Fog, scope: ResourceSc
         doors.set(i, st.hx + Math.cos(a) * .5, 0, st.hz - Math.sin(a) * .5, a);
         if (st.locked) locks.child(i, st.o.x, st.o.y, st.base, .3, .75, 0, 0); else locks.hide(i);
       });
+      // A coin that was just taken hops up and shrinks instead of blinking out.
       const coinString = view?.coins ?? '';
-      if (coinString !== coinKey) { coinKey = coinString; map.coins.forEach((c, i) => coinString[i] === '0' ? coins.hide(i) : coins.set(i, c.x, 0, c.y)); }
+      if (coinString !== coinKey) { const fresh = coinKey.length === coinString.length; map.coins.forEach((c, i) => { if (coinString[i] !== '0') coins.set(i, c.x, 0, c.y); else if (fresh && coinKey[i] === '1' && !reduced) leaving.set(i, t); else coins.hide(i); }); coinKey = coinString; }
+      for (const [i, since] of leaving) { const k = (t - since) / .28, c = map.coins[i]; if (k >= 1) { coins.hide(i); leaving.delete(i); } else coins.set(i, c.x, k * .7, c.y, 0, 1 - k * k, 1 - k * k, 1 - k * k); }
       if (!reduced) { fog.shared.njSpin.value += dt * 2.4; waterTex.offset.set(t * .02, Math.sin(t * .4) * .06); }
 
       // Stateful objects: only touch instances when their state string changes.
       const key = view === objectView ? objectKey : view ? view.objects.map(s => s.state).join('') : '';
       objectView = view;
       if (key !== objectKey) {
+        const opening = objectKey !== '-';   // a safe already open in the first view (a cut to another crew) does not spring again
         objectKey = key;
-        safes.list.forEach((o, i) => { const s = view && stateOf(view, o.id)?.state, yaw = faceAway(Math.floor(o.x), Math.floor(o.y)); if (!s || s === 'ready') { safeDoors.hide(i); gold.hide(i); return; } safeDoors.child(i, o.x, o.y, yaw, -.32, 0, .37, -1.9); if (s === 'open') gold.child(i, o.x, o.y, yaw, 0, .02, .05, 0); else gold.hide(i); });
+        safes.list.forEach((o, i) => { const s = view && stateOf(view, o.id)?.state; if (!s || s === 'ready') { sprung[i] = NaN; safeDoors.hide(i); gold.hide(i); } else if (Number.isNaN(sprung[i])) { sprung[i] = opening && !reduced ? t : -Infinity; if (!opening || reduced) safeDoors.child(i, o.x, o.y, faceAway(Math.floor(o.x), Math.floor(o.y)), -.32, 0, .37, -1.9); } });
         terminals.list.forEach((o, i) => screens.mesh.setColorAt(i, pulse.set(view && stateOf(view, o.id)?.state !== 'ready' && stateOf(view, o.id) ? '#1b2533' : '#7df3ff')));
         if (screens.mesh.instanceColor) screens.mesh.instanceColor.needsUpdate = true;
         medkits.list.forEach((o, i) => { const s = view && stateOf(view, o.id)?.state; if (s === 'used' || s === 'empty') medkits.b.hide(i); else medkits.b.set(i, o.x, 0, o.y, faceAway(Math.floor(o.x), Math.floor(o.y))); });
       }
+      // A cracked safe: the door swings out with a little overshoot and the gold shows for a moment before it is pocketed.
+      safes.list.forEach((o, i) => {
+        const age = t - sprung[i]; if (!(age <= 2.4)) return;
+        if (age > 2.2) { safeDoors.child(i, o.x, o.y, faceAway(Math.floor(o.x), Math.floor(o.y)), -.32, 0, .37, -1.9); gold.hide(i); return; }
+        const yaw = faceAway(Math.floor(o.x), Math.floor(o.y)), k = Math.min(1, age / .45), swing = 1 - (1 - k) ** 3 + Math.sin(k * Math.PI) * .12;
+        safeDoors.child(i, o.x, o.y, yaw, -.32, 0, .37, -1.9 * swing);
+        if (age < 1.7) gold.child(i, o.x, o.y, yaw, 0, .02 + Math.max(0, age - 1.3) * .8, .05 + Math.min(.25, age * .5), 0); else gold.hide(i);
+      });
       const smoke = view?.smoke ?? [], beamKey = `${doorKey}${brokenCount}`;
       cameras.list.forEach((o, i) => {
         const s = view && stateOf(view, o.id), off = !!s && s.state !== 'ready', a = cameraAngle(o, now), f = o.facing ?? 0, meter = Math.min(1, (s?.progress ?? 0) * 4);

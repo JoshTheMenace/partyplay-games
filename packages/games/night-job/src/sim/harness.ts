@@ -3,21 +3,23 @@ import { SIGHT, neutralInput, type Choice, type Input, type Point, type Settings
 import { cellIndex, doorObjects, findPath, lineOfSight } from '../geometry';
 import type { ServerLevel } from '../server-levels';
 import { rules } from '../server';
-import { angleDiff, create, dist, grids, mapOf, type Crew, type State } from './state';
+import { angleDiff, dist, grids, mapOf, type Crew, type State } from './state';
+import { createNight, type Night } from './night';
 import { beamEnd, deviceOn } from './security';
 
 export const STEP = 1 / 30;
-export type Heist = { s: State; wall: number; step(inputs?: Record<string, Input>, ticks?: number): void; tool(id: string): void };
-/** A heist with `players` thieves (ids p0…), stepped at the real 30 Hz. */
+/** `s` is the first crew's heist; with more than four players `night.heists` holds the rival crews. */
+export type Heist = { night: Night; s: State; wall: number; step(inputs?: Record<string, Input>, ticks?: number): void; tool(id: string): void };
+/** A night with `players` thieves (ids p0…), stepped at the real 30 Hz. */
 export function heist(players = 1, o: { level?: ServerLevel; settings?: Partial<Settings>; choices?: Partial<Choice>[]; seed?: number } = {}): Heist {
   const settings = rules.validateSettings({ mission: 'velvet', difficulty: 'normal', ...o.settings });
   const ctx = { roomId: 'r', roundId: 'h1', seed: o.seed ?? 7, nowMs: 1000, players: Array.from({ length: players }, (_, i) => ({ id: `p${i}`, name: `Thief ${i}`, color: '#ff5748', lobbyChoice: o.choices?.[i] })) };
-  const h: Heist = {
-    s: create(ctx, settings, o.level), wall: 1000,
+  const night = createNight(ctx, settings, o.level), h: Heist = {
+    night, s: night.heists[0], wall: 1000,
     step(inputs = {}, ticks = 1) {
-      for (let i = 0; i < ticks; i++) { h.wall += 1000 * STEP; rules.tick(h.s, new Map(Object.entries(inputs)), STEP, h.wall); }
+      for (let i = 0; i < ticks; i++) { h.wall += 1000 * STEP; rules.tick(night, new Map(Object.entries(inputs)), STEP, h.wall); }
     },
-    tool(id) { rules.applyAction(h.s, id, { type: 'tool', heistId: h.s.heistId }, h.wall); },
+    tool(id) { rules.applyAction(night, id, { type: 'tool', heistId: night.heists[night.crewOf.get(id) ?? 0].heistId }, h.wall); },
   };
   return h;
 }

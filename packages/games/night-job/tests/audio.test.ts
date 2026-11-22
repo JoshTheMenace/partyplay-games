@@ -30,7 +30,7 @@ const map = getMap('velvet'), doors = doorObjects(map).map(o => o.locked ? 'l' :
 const player = (over: Partial<PlayerView> = {}): PlayerView => ({ id: 'p', name: 'Thief', color: '#fff', seat: 0, role: 'cracker', tool: 'smoke', x: 5, y: 25, health: 100, coins: 0, charges: 2, facing: 0, moving: false, running: false, down: false, connected: true, suspended: false, hidden: false, disguised: false, carrying: false, work: null, hint: '', ...over });
 const guard = (over: Partial<NpcView> = {}): NpcView => ({ id: 'g', kind: 'guard', x: 20, y: 10, facing: 0, state: 'patrol', suspicion: 0, aiming: null, moving: true, ...over });
 const view = (over: Partial<View> = {}): View => ({
-  heistId: 'h', mission: 'velvet', phase: 'infiltrate', now: 1000, elapsed: 0, message: '', players: [player()], npcs: [], intel: [], doors, broken: [], coins: '', objects: [],
+  heistId: 'h', mission: 'velvet', phase: 'infiltrate', now: 1000, elapsed: 0, message: '', crew: 0, bails: 0, players: [player()], npcs: [], intel: [], doors, broken: [], coins: '', objects: [],
   objective: { x: 40, y: 2, carrier: null, taken: false }, objectiveTaken: false, smoke: [], noises: [], shots: [], effects: [], alarm: null, collected: 0, totalLoot: 100, stats: {}, ...over,
 });
 const fetched: string[] = [];

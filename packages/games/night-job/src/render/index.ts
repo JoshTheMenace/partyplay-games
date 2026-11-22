@@ -7,6 +7,7 @@ import type { SceneViewProps } from '../../../../party-ui/src/index';
 import { buildGrid, sightPolygon, type Grid } from '../geometry';
 import { getMap } from '../maps';
 import { RADIUS, type Point, type Settings, type View } from '../model';
+import { decode, type Own, type Wire } from '../wire';
 import { ACTOR_SCALE, createActors } from './actors';
 import { createEffects } from './effects';
 import { createFog, paintLight } from './fog';
@@ -16,13 +17,13 @@ import { createOverlay } from './overlay';
 import { createWorld } from './world';
 
 const FOV = 30, TILT = 15 * Math.PI / 180, MIN_TILES = 14, MARGIN = 1;
-type Props = SceneViewProps<Settings, View, null>;
+type Props = SceneViewProps<Settings, Wire, Own>;
 
 export async function mountNightJob(canvas: HTMLCanvasElement, overlayCanvas: HTMLCanvasElement, live: () => Props, scope: ResourceScope) {
   const fonts = Promise.all(["32px 'Lilita One'", '800 16px Nunito'].map(f => document.fonts.load(f)));
   const [kit] = await Promise.all([loadKit(scope), Promise.race([fonts, new Promise(r => setTimeout(r, 1500))]).catch(() => undefined)]);
   scope.signal.throwIfAborted();
-  const first = live(), map = getMap(first.publicView?.mission ?? first.settings?.mission ?? 'velvet');
+  const first = live(), map = getMap(first.publicView?.base.mission ?? first.settings?.mission ?? 'velvet');
   const scene = new Scene(), camera = new PerspectiveCamera(FOV, 16 / 9, 1, 300), fog = createFog(map, scope, paintLight(map, scope));
   scene.background = new Color('#040816');
   const hemi = new HemisphereLight('#dfe6ff', '#3a2c26', 1.5), sun = new DirectionalLight('#fff0d8', 1.6); sun.position.set(-5, 14, 8);
@@ -35,18 +36,19 @@ export async function mountNightJob(canvas: HTMLCanvasElement, overlayCanvas: HT
 
   let grid: Grid = buildGrid(map, '', []), gridDoors = '', gridBroken = 0, gridVersion = 0;
   let heist: string | null = null, lastTime: number | null = null, lastDt = 0, reduced = reducedQuery.matches, frameNo = 0;
-  let cssW = 1, cssH = 1, hudTop = 0, hudBottom = 0, establish = 0, framed = false;
+  let cssW = 1, cssH = 1, hudTop = 0, hudBottom = 0, hudRight = 0, establish = 0, framed = false;
   const cam = { x: map.width / 2, z: map.height / 2, h: map.height }, goal = { ...cam }, sight = { key: NaN, origins: [] as Point[] };
   scene.onBeforeRender = (renderer: WebGLRenderer) => fog.render(renderer, lastDt, reduced);
 
   /* Exact band framing for a tilted perspective camera. A ground point Δ tiles toward the camera from the look
    * target projects at tan = −Δ·cosθ / (d − Δ·sinθ); solving for the band's top and bottom edges gives the camera
    * distance per tile of visible depth and where the look target sits relative to the framed region. */
-  const lens = { dPerH: 1, near: 1, widthPerH: 1 };
+  /* widthPerH is the uncovered width (a crew night's board covers the right edge); fullPerH the whole canvas. */
+  const lens = { dPerH: 1, near: 1, widthPerH: 1, fullPerH: 1 };
   function measureLens() {
     const tan = Math.tan(FOV * Math.PI / 360), s = Math.sin(TILT), c = Math.cos(TILT), top = (1 - 2 * hudTop / cssH) * tan, bottom = (-1 + 2 * hudBottom / cssH) * tan;
     const far = top / (top * s - c), near = bottom / (bottom * s - c);
-    lens.dPerH = 1 / Math.max(.05, near - far); lens.near = near; lens.widthPerH = 2 * lens.dPerH * (1 - near * s) * (cssW / cssH) * tan;
+    lens.dPerH = 1 / Math.max(.05, near - far); lens.near = near; lens.fullPerH = 2 * lens.dPerH * (1 - near * s) * (cssW / cssH) * tan; lens.widthPerH = lens.fullPerH * (1 - hudRight / cssW);
   }
   /** Centre and visible depth (tiles) that frame every active thief, clamped to the map. */
   function target(view: View | null) {
@@ -65,13 +67,13 @@ export async function mountNightJob(canvas: HTMLCanvasElement, overlayCanvas: HT
     for (const p of view.players) { if (p.suspended) continue; const q = poses.poses.get(p.id) ?? p, o = sight.origins[n++]; if (!o || Math.abs(o.x - q.x) + Math.abs(o.y - q.y) > .02) moved = true; }
     if (!moved && key === sight.key && n === sight.origins.length) return;
     sight.key = key; sight.origins = view.players.filter(p => !p.suspended).map(p => { const q = poses.poses.get(p.id) ?? p; return { x: q.x, y: q.y }; });
-    fog.setSight(sight.origins.map(origin => ({ origin, points: sightPolygon(grid, origin, RADIUS.crewSight, view.smoke, now) })));
+    fog.setSight(sight.origins.map(origin => ({ origin, points: sightPolygon(grid, origin, RADIUS.crewSight, view.smoke, now) })), RADIUS.crewSight);
   }
 
   const hud = () => {
     const stage = canvas.closest<HTMLElement>('.kp-scene-stage'); if (!stage) return;
     const read = (name: string) => parseFloat(stage.style.getPropertyValue(name) || getComputedStyle(stage).getPropertyValue(name)) || 0;
-    hudTop = read('--nj-hud-top'); hudBottom = read('--nj-hud-bottom'); canvas.dataset.band = `${hudTop} ${hudBottom} ${cssH} ${cam.h.toFixed(1)}`;
+    hudTop = read('--nj-hud-top'); hudBottom = read('--nj-hud-bottom'); hudRight = read('--nj-hud-right'); canvas.dataset.band = `${hudTop} ${hudBottom} ${cssH} ${cam.h.toFixed(1)}`;
   };
 
   mountThreeScene(canvas, {
@@ -81,10 +83,11 @@ export async function mountNightJob(canvas: HTMLCanvasElement, overlayCanvas: HT
       camera.aspect = aspect; camera.updateProjectionMatrix(); overlay.resize(cssW, cssH, Math.min(devicePixelRatio || 1, 2)); hud(); measureLens();
     },
     frame(nowMs, dt) {
-      const p = live(), raw = p.publicView, t = nowMs / 1000;
+      const p = live(), raw = p.publicView ? decode(p.publicView).cast : null, t = nowMs / 1000;
       reduced = reducedQuery.matches; lastDt = dt; if (++frameNo % 20 === 0) { hud(); measureLens(); }
       if (raw) {
-        if (raw.heistId !== heist) { heist = raw.heistId; buffer.clear(); poses.clear(); framed = false; }
+        // A new heist opens with the establishing shot; a crew night's cut to another crew is a hard cut.
+        if (raw.heistId !== heist) { const cut = heist !== null && heist.split(':')[0] === raw.heistId.split(':')[0]; heist = raw.heistId; buffer.clear(); poses.clear(); actors.reset(); world.reset(); fog.snap(); framed = cut; if (cut) { poses.sample(() => raw, raw); Object.assign(cam, target(raw)); } }
         if (p.snapshotTime !== null && p.snapshotTime !== lastTime) { lastTime = p.snapshotTime; buffer.push(p.snapshotTime, raw, nowMs); }
       }
       const view = raw ? poses.sample(blend => buffer.sample(p.serverNowMs(), blend), raw) : null, now = view ? poses.now : p.serverNowMs();
@@ -95,7 +98,7 @@ export async function mountNightJob(canvas: HTMLCanvasElement, overlayCanvas: HT
       world.sync(view, grid, now, dt, reduced, intel ?? EMPTY);
       // Actors grow as the camera pulls back so a thief stays findable when the crew splits up.
       const scale = ACTOR_SCALE * Math.min(1.4, Math.max(1, Math.sqrt(cam.h / MIN_TILES)));
-      actors.sync(view, poses.poses, grid, gridVersion, now, t, dt, reduced, scale);
+      actors.sync(view, poses.poses, grid, gridVersion, now, t, dt, reduced, scale, world.ride);
       const shake = effects.sync(view, now, t, dt, reduced, camera.quaternion);
       const alarm = !!view?.alarm && view.alarm.until > now;
       fog.shared.njAlarm.value += ((alarm ? (reduced ? .12 : .09 + .04 * Math.sin(t * 7)) : 0) - fog.shared.njAlarm.value) * Math.min(1, dt * 8);
@@ -105,10 +108,11 @@ export async function mountNightJob(canvas: HTMLCanvasElement, overlayCanvas: HT
       target(view); establish = Math.max(0, establish - dt);
       const k = 1 - Math.exp(-dt * (establish > 0 ? .9 : reduced ? 6 : 2.4));
       cam.x += (goal.x - cam.x) * k; cam.z += (goal.z - cam.z) * k; cam.h += (goal.h - cam.h) * k;
-      const d = cam.h * lens.dPerH, tz = cam.z + cam.h / 2 - lens.near * d, sx = shake * Math.sin(t * 47), sz = shake * Math.cos(t * 39);
+      // The framed centre sits in the middle of the uncovered width, so the lens looks a little to its right.
+      const d = cam.h * lens.dPerH, tz = cam.z + cam.h / 2 - lens.near * d, sx = shake * Math.sin(t * 47) + cam.h * (lens.fullPerH - lens.widthPerH) / 2, sz = shake * Math.cos(t * 39);
       camera.position.set(cam.x + sx, Math.cos(TILT) * d, tz + Math.sin(TILT) * d + sz);
       camera.near = d * .3; camera.far = d * 3; camera.updateProjectionMatrix(); camera.lookAt(cam.x + sx, 0, tz + sz);
-      overlay.draw(view, map, camera, poses.poses, now, t, reduced, (cssH - hudTop - hudBottom) / cam.h, scale);
+      overlay.draw(view, map, camera, poses.poses, now, t, reduced, (cssH - hudTop - hudBottom) / cam.h, scale, !!world.ride);
     },
     onReady: () => { canvas.dataset.kit = kit.source.glb.length ? `glb:${kit.source.glb.length} procedural:${kit.source.procedural.length}` : 'procedural'; live().onReady(); },
     onError: error => live().onError(error),

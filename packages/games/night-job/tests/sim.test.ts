@@ -11,6 +11,7 @@ import { credit, doorAt, hurt, setDoor, type Crew } from '../src/sim/state';
 import { perceive } from '../src/sim/npc';
 import { beamEnd, raiseAlarm } from '../src/sim/security';
 import { project } from '../src/sim/view';
+import { decode } from '../src/wire';
 
 const map = getMap('velvet'), obj = (id: string) => map.objects.find(o => o.id === id)!;
 const E = 0, S = Math.PI / 2, W = Math.PI, N = -Math.PI / 2;
@@ -18,7 +19,11 @@ const E = 0, S = Math.PI / 2, W = Math.PI, N = -Math.PI / 2;
 const post = (x: number, y: number, facing: number, kind: NpcKind = 'guard'): NpcSpawn => ({ kind, route: [[x, y, 9999, facing]] });
 const setup = (npcs: NpcSpawn[] = [], choices: { role?: Role; tool?: Tool }[] = [{}], o: Parameters<typeof heist>[1] = {}) => heist(choices.length, { level: { npcs, ...o.level }, choices, ...o });
 const at = (p: Crew, x: number, y: number) => Object.assign(p, { x, y });
-const view = (h: Heist) => rules.publicView(h.s, { nowMs: h.wall, phase: 'playing' });
+/** Tests poke state between ticks; a new stamp makes the next snapshot project it again (ticks and actions do this themselves). */
+const fresh = (h: Heist) => { h.night.stamp++; return h.night; };
+const hint = (h: Heist, id = 'p0') => rules.playerView(fresh(h), id, { nowMs: h.wall, phase: 'playing' })!.hint;
+/** What the shared screen shows: the public snapshot, packed and unpacked exactly as a browser would. */
+const view = (h: Heist) => decode(rules.publicView(fresh(h), { nowMs: h.wall, phase: 'playing' })).cast;
 const secs = (h: Heist, seconds: number, inputs: Parameters<Heist['step']>[0] = {}) => h.step(inputs, Math.round(seconds / STEP));
 const doorState = (h: Heist, id: string) => h.s.doors[map.objects.filter(o => o.kind === 'door' || o.kind === 'window').findIndex(o => o.id === id)];
 
@@ -35,8 +40,8 @@ test('validates settings, inputs, actions and lobby choices', () => {
   assert.deepEqual(rules.parseLobbyChoice!({ role: 'wire' }, true), { role: 'wire', tool: 'smoke' });
   for (const bad of [{ role: 'wizard' }, { tool: 'laser' }, { role: 'wire', hat: 1 }]) assert.throws(() => rules.parseLobbyChoice!(bad, true));
   const h = setup();
-  assert.throws(() => rules.applyAction(h.s, 'p0', { type: 'tool', heistId: 'stale' }, h.wall), /over/);
-  assert.throws(() => rules.applyAction(h.s, 'ghost', { type: 'tool', heistId: h.s.heistId }, h.wall));
+  assert.throws(() => rules.applyAction(h.night, 'p0', { type: 'tool', heistId: 'stale' }, h.wall), /over/);
+  assert.throws(() => rules.applyAction(h.night, 'ghost', { type: 'tool', heistId: h.s.heistId }, h.wall));
 });
 
 test('sneaking is slow and silent; running is fast and leaves noise rings every 0.4 s', () => {
@@ -203,7 +208,7 @@ test('hiding: unwitnessed hides are safe, witnessed ones get pulled out, dogs sm
   assert.ok(p.hidden, 'holding the push keeps you hidden');
   g.facing = W; secs(safe, 3);
   assert.equal(perceive(safe.s, g, p), 0); assert.equal(g.state, 'patrol');
-  assert.equal(view(safe).players[0].hint, 'Hidden. Hold still until they pass; push to slip out.');
+  assert.equal(hint(safe), 'Hidden. Hold still until they pass; push to slip out.');
   secs(safe, .2, { p0: { x: 1, y: 0, sneak: true } });
   assert.ok(!p.hidden, 'a fresh push leaves the spot');
   at(p, 2.6, 12.5); secs(safe, .5, { p0: { x: -1, y: 0, sneak: false } });
@@ -247,7 +252,7 @@ test('downed thieves drop the objective and can be revived; everyone down fails 
   at(a, 20.5, 20.5); at(b, 21.3, 20.5); h.s.objective = { x: a.x, y: a.y, carrier: 'p0', taken: true };
   hurt(h.s, a, 150);
   assert.ok(a.down && a.health === 0 && h.s.objective.carrier === null && h.s.stats.p0.downs === 1);
-  assert.equal(view(h).players[0].hint, 'Downed. A teammate can revive you.');
+  assert.equal(hint(h), 'Downed. A teammate can revive you.');
   secs(h, 2.4, { p1: { x: -1, y: 0, sneak: false } });
   assert.ok(a.down);
   secs(h, .2, { p1: { x: -1, y: 0, sneak: false } });
@@ -259,8 +264,8 @@ test('downed thieves drop the objective and can be revived; everyone down fails 
   secs(face, 1.05, { p1: { x: -1, y: 0, sneak: false } });
   assert.ok(!face.s.crew[0].down, 'Face revives in 1 s');
   hurt(h.s, a, 150); hurt(h.s, b, 150); h.step();
-  assert.equal(h.s.phase, 'failed'); assert.equal(rules.outcome(h.s).complete, false);
-  secs(h, 2.6); assert.equal(rules.outcome(h.s).complete, true); assert.deepEqual(rules.outcome(h.s).winners, []);
+  assert.equal(h.s.phase, 'failed'); assert.equal(rules.outcome(h.night).complete, false);
+  secs(h, 3.6); assert.equal(rules.outcome(h.night).complete, true); assert.deepEqual(rules.outcome(h.night).winners, []);
 });
 
 test('the carrier is slower and escape needs every non-suspended thief alive in the zone', () => {
@@ -272,23 +277,23 @@ test('the carrier is slower and escape needs every non-suspended thief alive in 
   assert.equal(h.s.phase, 'escape');
   at(b, exit.x + 1, exit.y); h.step();
   assert.equal(h.s.phase, 'clear');
-  const out = rules.outcome(h.s);
+  const out = rules.outcome(h.night);
   assert.deepEqual(out.winners, ['p0', 'p1']); assert.equal(out.rows[0].score, Math.round(h.s.elapsed + 3 * (h.s.totalLoot - h.s.collected)));
-  assert.equal(view(h).players[0].hint, 'Clean getaway! Nice work.');
+  assert.equal(hint(h), 'Clean getaway! Nice work.');
 });
 
 test('disconnects suspend after 15 s (dropping the objective) and an empty room pauses the clock', () => {
   const exit = obj('exit'), h = setup([], [{}, {}]), [a, b] = h.s.crew;
   h.s.objective = { x: b.x, y: b.y, carrier: 'p1', taken: true }; h.s.phase = 'escape';
-  rules.onPresenceChange(h.s, 'p1', false, h.wall); secs(h, 14);
+  rules.onPresenceChange(h.night, 'p1', false, h.wall); secs(h, 14);
   assert.ok(!b.suspended && h.s.objective.carrier === 'p1');
   secs(h, 1.2);
   assert.ok(b.suspended && h.s.objective.carrier === null);
-  rules.onPresenceChange(h.s, 'p0', false, h.wall); h.s.objective = { x: a.x, y: a.y, carrier: 'p0', taken: true };
+  rules.onPresenceChange(h.night, 'p0', false, h.wall); h.s.objective = { x: a.x, y: a.y, carrier: 'p0', taken: true };
   const frozen = h.s.elapsed; secs(h, 40);
   assert.equal(h.s.elapsed, frozen, 'nobody connected: the clock stops');
   assert.ok(!a.suspended && h.s.objective.carrier === 'p0', 'a paused room suspends nobody');
-  rules.onPresenceChange(h.s, 'p0', true, h.wall); secs(h, 1);
+  rules.onPresenceChange(h.night, 'p0', true, h.wall); secs(h, 1);
   assert.ok(Math.abs(h.s.elapsed - frozen - 1) < .1);
   at(a, exit.x, exit.y); h.s.objective = { x: a.x, y: a.y, carrier: 'p0', taken: true }; h.step();
   assert.equal(h.s.phase, 'clear', 'suspended thieves do not block the getaway');
@@ -427,8 +432,8 @@ test('the projection holds only crew knowledge and passes the live JSON contract
   const w = project(h.s);
   assert.equal(w.noises.length, 0); assert.equal(w.shots.length, 0); assert.ok(!w.effects.some(e => e.id === 999));
   assert.equal(w.objectiveTaken, false); assert.equal(w.objectiveTaken, w.objective.taken);
-  assertSerializable(w); assertSerializable(rules.outcome(h.s));
-  assert.equal(rules.playerView(h.s, 'p0', { nowMs: h.wall, phase: 'playing' }), null);
+  assertSerializable(w); assertSerializable(rules.outcome(h.night));
+  assert.deepEqual(rules.playerView(h.night, 'p0', { nowMs: h.wall, phase: 'playing' }), { hint: w.players[0].hint, live: null }, 'a seat privately gets its hint; its crew is already on the shared screen');
   assert.equal(v.doors.length, map.objects.filter(o => o.kind === 'door' || o.kind === 'window').length);
   assert.equal(v.coins.length, map.coins.length);
 });
@@ -501,7 +506,7 @@ test('a lone thief gets one second wind 6 s after going down, once nobody is wat
   const h = setup(), p = h.s.crew[0];
   hurt(h.s, p, 200); secs(h, 5.9);
   assert.ok(p.down && h.s.phase === 'infiltrate', 'not over yet');
-  assert.equal(view(h).players[0].hint, 'Downed. Once no guard is watching, you will get back up.');
+  assert.equal(hint(h), 'Downed. Once no guard is watching, you will get back up.');
   secs(h, .2);
   assert.ok(!p.down && p.health === 30 && !p.wind);
   hurt(h.s, p, 200); h.step();

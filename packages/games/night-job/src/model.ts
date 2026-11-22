@@ -50,12 +50,15 @@ export type ObjectState = { id: string; state: 'ready' | 'open' | 'empty' | 'dis
 export type Smoke = Point & { radius: number; until: number; born: number };
 export type Noise = Point & { radius: number; at: number; kind: 'step' | 'loud' | 'decoy' | 'scream' | 'alarm' };
 export type Shot = { from: Point; to: Point; at: number; hit: boolean; kind: 'guard' | 'tranq' | 'shotgun' };
-export type EffectKind = 'coin' | 'safe' | 'unlock' | 'hack' | 'rescue' | 'heal' | 'hurt' | 'down' | 'spotted' | 'takedown' | 'break' | 'smoke' | 'emp' | 'decoy' | 'objective' | 'charge' | 'alarm' | 'escape' | 'charm' | 'disguise';
+export type EffectKind = 'coin' | 'safe' | 'unlock' | 'hack' | 'rescue' | 'heal' | 'hurt' | 'down' | 'spotted' | 'takedown' | 'break' | 'smoke' | 'emp' | 'decoy' | 'objective' | 'charge' | 'alarm' | 'escape' | 'charm' | 'disguise' | 'bail';
 /** player: the thief the effect concerns (phones use it for vibration). */
 export type Effect = Point & { id: number; kind: EffectKind; at: number; label: string; player?: string };
 export type CrewStats = { coins: number; spotted: number; takedowns: number; revives: number; downs: number; tools: number };
+/** One crew's knowledge of its own heist. Every screen works on this; `wire.ts` carries it. */
 export type View = {
   heistId: string; mission: MissionId; phase: Phase; now: number; elapsed: number; message: string;
+  /** Which crew this is (index into CREWS), and how often the van has bailed it out on a crew night. */
+  crew: number; bails: number;
   players: PlayerView[]; npcs: NpcView[]; intel: Intel[];
   /** One char per map door/window object in HeistMap.objects order: c closed, o open, l locked, b broken. */
   doors: string;
@@ -93,6 +96,28 @@ export const MISSIONS: Record<MissionId, { title: string; subtitle: string }> = 
   glasshouse: { title: 'Glasshouse Exchange', subtitle: 'Lift the prism jewel from the conservatory.' },
   ferry: { title: 'Last Ferry', subtitle: 'Steal the manifest. Make the last boat.' },
 };
+/* ── crews ────────────────────────────────────────────────────────────────── */
+/** A building is balanced for four thieves. More players split into rival crews, each in its own copy of the job. */
+export const CREW_SIZE = 4;
+/** Thieves per crew for a roster, in seat order: as few crews as fit four each, sizes within one of each other. */
+export const crewSizes = (players: number) => { const n = Math.max(1, Math.ceil(players / CREW_SIZE)); return Array.from({ length: n }, (_, i) => Math.floor(players / n) + +(i < players % n)); };
+/** First seat of each crew, then the total: crew c holds seats [starts[c], starts[c + 1]). */
+export const crewStarts = (players: number) => crewSizes(players).reduce((at, n) => [...at, at[at.length - 1] + n], [0]);
+export const crewOfSeat = (players: number, seat: number) => Math.max(0, crewStarts(players).findIndex(start => start > seat) - 1);
+/** Sixteen crews fill the largest room. A crew is always shown with its name or letter, never by colour alone. */
+export const CREWS: readonly { name: string; color: string }[] = [
+  { name: 'Foxes', color: '#ff8a4c' }, { name: 'Moths', color: '#c9b8ff' }, { name: 'Otters', color: '#4fd6c8' }, { name: 'Badgers', color: '#f2f0e6' },
+  { name: 'Geckos', color: '#9be04e' }, { name: 'Crows', color: '#8fa8ff' }, { name: 'Weasels', color: '#ffd24a' }, { name: 'Bats', color: '#e07bd8' },
+  { name: 'Stoats', color: '#ffb3a1' }, { name: 'Owls', color: '#d9a35c' }, { name: 'Newts', color: '#ff5d6c' }, { name: 'Ferrets', color: '#7fe0ff' },
+  { name: 'Lynxes', color: '#b9f2a0' }, { name: 'Voles', color: '#c79bff' }, { name: 'Herons', color: '#a8c4d9' }, { name: 'Shrews', color: '#ffc46b' },
+];
+/** Crew night (two or more crews). lastCall: seconds the others get once the first crew is away. cap: the night never runs longer.
+ * bailAfter: ms a wiped crew lies there before the van brings it back to the start. bailPenalty: seconds each bail-out adds to its time. */
+export const NIGHT = { lastCall: 120, cap: 600, bailAfter: 4000, bailPenalty: 30, bailHealth: 60 } as const;
+/** How a crew stands on the board, best first: away by adjusted time, then holding the goods, then by loot. */
+export type CrewLine = { crew: number; size: number; phase: Phase; collected: number; seconds: number; bails: number; alarm: boolean; chased: boolean; taken: boolean; down: number; place: number };
+export type News = { at: number; crew: number; text: string };
+
 export const DEFAULT_CHOICE: Choice = { role: 'cracker', tool: 'smoke' };
 export const neutralInput = (): Input => ({ x: 0, y: 0, sneak: false });
 
@@ -114,3 +139,5 @@ export const WINDOW = { sill: .58, head: 1.56 } as const;
 export const cameraAngle = (o: Point & { facing?: number }, now: number) => (o.facing ?? 0) + SIGHT.cameraSweep * Math.sin(2 * Math.PI * now / SIGHT.cameraPeriod + o.x * 1.7 + o.y * .9);
 /** Stars earned by a clear: one per parTimes entry the adjusted time beats (parTimes are loosest first). */
 export const starsFor = (parTimes: readonly number[], adjustedSeconds: number, cleared: boolean) => cleared ? parTimes.filter(par => adjustedSeconds <= par).length : 0;
+/** The time a crew is scored on: its clock, plus missed loot, plus bail-outs. */
+export const scoreSeconds = (seconds: number, missed: number, bails: number) => Math.round(seconds + COIN_PENALTY * missed + NIGHT.bailPenalty * bails);

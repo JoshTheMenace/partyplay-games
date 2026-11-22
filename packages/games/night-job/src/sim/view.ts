@@ -14,6 +14,7 @@ function hint(s: State, p: Crew): string {
   if (s.phase === 'clear') return 'Clean getaway! Nice work.';
   if (s.phase === 'failed') return 'Busted. Regroup and try another route.';
   if (p.suspended) return 'Reconnect to rejoin the crew.';
+  if (s.wipedAt !== null) return 'Whole crew down. The van is coming to haul you out.';
   if (p.down) return p.wind && !s.crew.some(q => q !== p && !q.suspended) ? 'Downed. Once no guard is watching, you will get back up.' : 'Downed. A teammate can revive you.';
   if (p.work) return `${p.work.label}… keep pushing.`;
   if (s.npcs.some(n => n.aimAt && n.target === p.id)) return 'A guard is taking aim! Break line of sight.';
@@ -57,7 +58,7 @@ export function project(s: State): View {
   }));
   const seen = (e: Point & { crew: boolean }) => e.crew || visible(e);
   return {
-    heistId: s.heistId, mission: s.mission, phase: s.phase, now: s.now, elapsed: r2(s.elapsed), message: s.message,
+    heistId: s.heistId, mission: s.mission, phase: s.phase, now: s.now, elapsed: r2(s.elapsed), message: s.message, crew: s.slot, bails: s.bails,
     players, npcs, intel, doors: s.seenDoors, broken: [...s.broken], coins: s.coins, objects,
     objective: { ...pt(s.objective), carrier: s.objective.carrier, taken: s.objective.taken }, objectiveTaken: s.objective.taken,
     smoke: s.smoke.map(c => ({ ...pt(c), radius: c.radius, until: c.until, born: c.born })),

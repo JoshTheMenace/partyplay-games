@@ -1,10 +1,10 @@
 /* Thieves, guards, dogs, civilians and intel silhouettes. Rigs are small groups (yaw → pose → parts) built from
  * kit meshes; NPC rigs are pooled because guards appear and vanish with crew sight. */
-import { AdditiveBlending, BufferGeometry, CanvasTexture, Color, Group, Mesh, MeshBasicMaterial, MeshLambertMaterial, PlaneGeometry, SRGBColorSpace, type Material } from 'three';
+import { AdditiveBlending, BackSide, BufferGeometry, CanvasTexture, Color, Group, Mesh, MeshBasicMaterial, MeshLambertMaterial, PlaneGeometry, SRGBColorSpace, type Material } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { ResourceScope } from '../../../../party-runtime/src/index';
 import type { Grid } from '../geometry';
-import { ROLES, SIGHT, TIMING, type NpcKind, type NpcView, type PlayerView, type Role, type View } from '../model';
+import { ROLES, SIGHT, TIMING, type NpcKind, type NpcView, type PlayerView, type Point, type Role, type View } from '../model';
 import type { Kit } from './kit';
 import { coneMaterial, coneMesh, fillCone } from './cones';
 import type { Fog } from './fog';
@@ -12,19 +12,19 @@ import type { Pose } from './interp';
 import { HIP } from './shapes';
 
 /** Base actor scale at the closest framing; index.ts grows it as the camera pulls back. */
-export const ACTOR_SCALE = 1.5;
+export const ACTOR_SCALE = 1.65;
 /** Drawn cones match npc.ts perceive(): dogs see like guards (plus a short all-round smell). */
 const CONE: Record<NpcKind, { range: number; half: number }> = { guard: { range: SIGHT.guardRange, half: SIGHT.guardHalfAngle }, dog: { range: SIGHT.guardRange, half: SIGHT.guardHalfAngle }, civilian: { range: SIGHT.civilianRange, half: SIGHT.guardHalfAngle } };
 const CONE_COLOUR = { calm: new Color('#ffd98a'), alert: new Color('#ff9a2e'), chase: new Color('#ff2e2a'), charmed: new Color('#ff7ad0'), civilian: new Color('#cfe6ff'), stunned: new Color('#6f7f9f') };
 /** Cone [fill, edge] alpha per look: calm cones stay subtle, alert and chase escalate. */
-const CONE_ALPHA = { calm: [.2, .34], alert: [.24, .5], chase: [.32, .75], charmed: [.12, .3], civilian: [.08, .22] } as const;
+const CONE_ALPHA = { calm: [.3, .5], alert: [.32, .64], chase: [.3, .9], charmed: [.14, .32], civilian: [.07, .2] } as const;
 const CIVILIAN_TINTS = ['#e0b44c', '#5fa8d8', '#c65b7c', '#7fbf6a', '#b98ae0', '#e08a4c'];
 const ease = (from: number, to: number, dt: number, rate: number, reduced: boolean) => reduced ? to : from + (to - from) * (1 - Math.exp(-dt * rate));
 const hash = (s: string) => { let h = 7; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
 
-type Rig = { root: Group; yaw: Group; pose: Group; body: Mesh; legs: Group[]; ground: Mesh; phase: number; x: number; y: number; amp: number; down: number; crouch: number };
-type Thief = Rig & { ring: Mesh; gold: Mesh; item: Mesh; bird: Mesh | null; mat: MeshLambertMaterial; role: Role; disguised: boolean | null };
-type Npc = Rig & { kind: NpcKind; cone: Mesh; aim: Mesh[]; aimAt: number; mat: MeshLambertMaterial; seen: number; drawn: [x: number, y: number, facing: number, grid: number, smoke: number]; drawnState: string };
+type Rig = { root: Group; yaw: Group; pose: Group; body: Mesh; ink: Mesh; legs: Group[]; ground: Mesh; phase: number; x: number; y: number; amp: number; down: number; crouch: number; hop: number; seed: number };
+type Thief = Rig & { ring: Mesh; gold: Mesh; item: Mesh; bird: Mesh | null; mat: MeshLambertMaterial; role: Role; disguised: boolean | null; wasDown: boolean };
+type Npc = Rig & { kind: NpcKind; cone: Mesh; aim: Mesh[]; aimAt: number; mat: MeshLambertMaterial; seen: number; drawn: [x: number, y: number, facing: number, grid: number, smoke: number]; drawnState: string; mood: string };
 
 function disc(scope: ResourceScope, ring = 0) {
   const canvas = document.createElement('canvas'), s = 128; canvas.width = canvas.height = s;
@@ -38,32 +38,41 @@ export type Actors = ReturnType<typeof createActors>;
 export function createActors(kit: Kit, fog: Fog, scope: ResourceScope, coneRoot: Group, objectiveKind: string) {
   const root = new Group(), figures = new Map<string, BufferGeometry>();
   const figure = (...names: string[]) => { const key = names.join('+'); let g = figures.get(key); if (!g) { g = scope.own(mergeGeometries(names.map(n => kit.geometry(n)))!); figures.set(key, g); } return g; };
-  const actorMat = (tint?: string) => fog.patch(scope.own(new MeshLambertMaterial({ vertexColors: true, flatShading: true, transparent: true })), { fog: 0, light: .55, tint });
+  // Actors take less of the room's baked light than the room does and carry a little of their own, so they never sink into a dark floor.
+  const actorMat = (tint?: string) => fog.patch(scope.own(new MeshLambertMaterial({ vertexColors: true, flatShading: true, transparent: true, emissive: '#1c1a26' })), { fog: 0, light: .4, tint });
+  /** Ink outline: the body again, a little larger, back faces only. It fades with the body. */
+  const inkMat = () => scope.own(new MeshBasicMaterial({ color: '#05071a', side: BackSide, transparent: true }));
   const plane = scope.own(new PlaneGeometry(1, 1).rotateX(-Math.PI / 2)), ringTex = disc(scope, 7), seatTex = disc(scope, 12), blobTex = disc(scope);
   const blobMat = scope.own(new MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false }));
-  const aimGeo = scope.own(new PlaneGeometry(1, .14).rotateX(-Math.PI / 2).translate(.5, 0, 0));
+  const aimGeo = scope.own(new PlaneGeometry(1, .22).rotateX(-Math.PI / 2).translate(.5, 0, 0));
   const aimMat = (colour: string, opacity: number, map?: typeof ringTex) => scope.own(new MeshBasicMaterial({ color: colour, opacity, transparent: true, depthWrite: false, depthTest: !map, ...(map && { map }) }));
 
   function rig(body: BufferGeometry, material: Material, legs: [number, number, number][], legName: string): Rig {
-    const r = new Group(), yaw = new Group(), pose = new Group(), mesh = new Mesh(body, material);
-    r.scale.setScalar(ACTOR_SCALE); r.add(yaw); yaw.add(pose); pose.add(mesh);
+    const r = new Group(), yaw = new Group(), pose = new Group(), mesh = new Mesh(body, material), ink = new Mesh(body, inkMat());
+    ink.scale.set(1.13, 1.07, 1.13); ink.position.y = -.025;
+    r.scale.setScalar(ACTOR_SCALE); r.add(yaw); yaw.add(pose); pose.add(ink, mesh);
     const legGroups = legs.map(([x, y, z]) => { const g = new Group(); g.position.set(x, y, z); g.add(new Mesh(kit.geometry(legName), material)); pose.add(g); return g; });
     const shadow = new Mesh(plane, blobMat); shadow.position.y = .015; shadow.renderOrder = 1; r.add(shadow);
     root.add(r);
-    return { root: r, yaw, pose, body: mesh, legs: legGroups, ground: shadow, phase: 0, x: NaN, y: NaN, amp: 0, down: 0, crouch: 0 };
+    return { root: r, yaw, pose, body: mesh, ink, legs: legGroups, ground: shadow, phase: 0, x: NaN, y: NaN, amp: 0, down: 0, crouch: 0, hop: 0, seed: Math.random() * 6 };
   }
   const HUMAN_LEGS: [number, number, number][] = [[-HIP.x, HIP.y, 0], [HIP.x, HIP.y, 0]], DOG_LEGS: [number, number, number][] = [[-.075, .22, .16], [.075, .22, .16], [-.075, .22, -.16], [.075, .22, -.16]];
 
-  /** Shared walk/crouch/down animation. Returns distance moved this frame. */
-  function animate(r: Rig, pose: Pose, moving: boolean, crouch: number, down: number, dt: number, reduced: boolean, stride = 9) {
-    const moved = Number.isNaN(r.x) ? 0 : Math.hypot(pose.x - r.x, pose.y - r.y);
+  /** Shared walk/crouch/down animation: a stride that leans into speed, breathing at rest, a hop when startled (`r.hop`),
+   * a flop with a bounce when knocked down. Returns distance moved this frame. */
+  function animate(r: Rig, pose: Pose, moving: boolean, crouch: number, down: number, dt: number, t: number, reduced: boolean, stride = 9) {
+    const moved = Number.isNaN(r.x) ? 0 : Math.hypot(pose.x - r.x, pose.y - r.y), speed = dt > 0 ? moved / dt : 0;
     r.x = pose.x; r.y = pose.y; r.root.position.set(pose.x, 0, pose.y); r.yaw.rotation.y = Math.PI / 2 - pose.facing;
     r.phase += moved * stride; r.amp = ease(r.amp, moving && moved > 1e-4 ? 1 : 0, dt, 12, reduced);
-    r.crouch = ease(r.crouch, crouch, dt, 10, reduced); r.down = ease(r.down, down, dt, 8, reduced);
-    const swing = reduced ? 0 : Math.sin(r.phase) * .8 * r.amp * (1 - r.down);
+    const falling = down > r.down + .02; r.crouch = ease(r.crouch, crouch, dt, 10, reduced); r.down = ease(r.down, down, dt, falling ? 11 : 6, reduced); r.hop = Math.max(0, r.hop - dt * 2.6);
+    const swing = reduced ? 0 : Math.sin(r.phase) * .8 * r.amp * (1 - r.down), rest = (1 - r.amp) * (1 - r.down), breath = reduced ? 0 : Math.sin(t * 2.3 + r.seed) * .018 * rest;
     r.legs.forEach((leg, i) => { leg.rotation.x = (i % 2 === (i >> 1) % 2 ? swing : -swing); });
-    r.pose.position.y = (reduced ? 0 : Math.abs(Math.cos(r.phase)) * .05 * r.amp) + r.down * .15;
-    r.pose.rotation.set(r.crouch * .3 - r.down * Math.PI / 2, 0, 0); r.pose.scale.y = 1 - r.crouch * .16;
+    const hop = reduced ? 0 : Math.sin(Math.min(1, 1 - r.hop) * Math.PI) * .32 * +(r.hop > 0), thud = reduced ? 0 : Math.sin(r.down * Math.PI) * .12;
+    r.pose.position.y = (reduced ? 0 : Math.abs(Math.cos(r.phase)) * .06 * r.amp) + r.down * .15 + hop + thud;
+    // Lean into a run; sway a touch with each step.
+    const lean = reduced ? 0 : Math.min(.24, speed * .055) * r.amp * (1 - r.crouch);
+    r.pose.rotation.set(r.crouch * .3 + lean - r.down * Math.PI / 2, 0, reduced ? 0 : Math.sin(r.phase) * .05 * r.amp * (1 - r.down));
+    r.pose.scale.set(1 - breath * .6, 1 - r.crouch * .16 + breath + hop * .25, 1 - breath * .6);
     return moved;
   }
 
@@ -79,14 +88,14 @@ export function createActors(kit: Kit, fog: Fog, scope: ResourceScope, coneRoot:
     r.root.renderOrder = 4; // thieves draw after smoke puffs, so a thief in a cloud stays visible
     const item = new Mesh(itemGeo, itemMat); item.position.set(0, .42, -.05); item.visible = false; r.pose.add(item);
     const bird = p.role === 'magpie' ? new Mesh(kit.geometry('bird'), birdMat) : null; if (bird) r.root.add(bird);
-    const t: Thief = { ...r, ring, gold, item, bird, mat, role: p.role, disguised: null }; thieves.set(p.id, t); return t;
+    const t: Thief = { ...r, ring, gold, item, bird, mat, role: p.role, disguised: null, wasDown: false }; thieves.set(p.id, t); return t;
   }
 
   /* NPCs */
   const npcs = new Map<string, Npc>(), free: Record<NpcKind, Npc[]> = { guard: [], dog: [], civilian: [] };
   function npc(n: NpcView): Npc {
     const pooled = free[n.kind].pop();
-    if (pooled) { pooled.root.visible = true; pooled.mat.opacity = 0; Object.assign(pooled, { x: NaN, phase: 0, amp: 0, crouch: 0, down: 0, aimAt: NaN, drawnState: '' }); return pooled; }
+    if (pooled) { pooled.root.visible = true; pooled.mat.opacity = 0; Object.assign(pooled, { x: NaN, phase: 0, amp: 0, crouch: 0, down: 0, hop: 0, aimAt: NaN, drawnState: '', mood: '' }); return pooled; }
     // Own material per rig so each NPC fades in and out with the fog edge instead of popping.
     const civ = n.kind === 'civilian', mat = actorMat(civ ? CIVILIAN_TINTS[hash(n.id) % CIVILIAN_TINTS.length] : undefined); mat.opacity = 0;
     const body = n.kind === 'dog' ? figure('dog_body') : civ ? figure('civilian_torso', 'civilian_head') : figure('guard_torso', 'guard_head');
@@ -94,9 +103,9 @@ export function createActors(kit: Kit, fog: Fog, scope: ResourceScope, coneRoot:
     r.ground.material = scope.own(new MeshBasicMaterial({ map: ringTex, transparent: true, depthWrite: false })); r.ground.scale.setScalar(.9);
     const cone = coneMesh(scope.own(coneMaterial())); scope.own(cone.geometry); coneRoot.add(cone);
     // Aim telegraph: a dim track to the target, a bright bar filling it over TIMING.aim, a reticle closing in.
-    const aim = [new Mesh(aimGeo, aimMat('#ff4a3a', .3)), new Mesh(aimGeo, aimMat('#ffe2d8', .95)), new Mesh(plane, aimMat('#ff4a3a', 1, ringTex))];
+    const aim = [new Mesh(aimGeo, aimMat('#ff4a3a', .42)), new Mesh(aimGeo, aimMat('#fff0e8', 1)), new Mesh(plane, aimMat('#ff4a3a', 1, ringTex))];
     aim.forEach((m, i) => { m.renderOrder = 3 + i * 3; m.visible = false; coneRoot.add(m); });
-    return { ...r, kind: n.kind, cone, aim, aimAt: NaN, mat, seen: 0, drawn: [0, 0, 0, 0, 0], drawnState: '' };
+    return { ...r, kind: n.kind, cone, aim, aimAt: NaN, mat, seen: 0, drawn: [0, 0, 0, 0, 0], drawnState: '', mood: '' };
   }
 
   /* intel ghosts */
@@ -104,20 +113,29 @@ export function createActors(kit: Kit, fog: Fog, scope: ResourceScope, coneRoot:
   const ghostRing = scope.own(new MeshBasicMaterial({ map: ringTex, color: '#6fd8ff', transparent: true, depthTest: false, depthWrite: false, blending: AdditiveBlending }));
   const ghosts: Mesh[] = [];
 
-  let frame = 0;
+  let frame = 0, boardedAt = NaN;
   return {
     root, thieves,
-    sync(view: View | null, poses: ReadonlyMap<string, Pose>, grid: Grid, gridVersion: number, now: number, t: number, dt: number, reduced: boolean, scale: number) {
+    /** A cut to another crew: its guards share ids with the last crew's, so every NPC rig goes back to the pool at once. */
+    reset() { for (const [id, v] of npcs) { v.root.visible = v.cone.visible = false; for (const m of v.aim) m.visible = false; npcs.delete(id); free[v.kind].push(v); } },
+    sync(view: View | null, poses: ReadonlyMap<string, Pose>, grid: Grid, gridVersion: number, now: number, t: number, dt: number, reduced: boolean, scale: number, ride: Point | null) {
       frame++;
+      // Clean getaway: the crew piles into the vehicle (each thief hops toward it and is gone) before it pulls away.
+      if (view?.phase !== 'clear') boardedAt = NaN; else if (Number.isNaN(boardedAt)) boardedAt = t;
+      const boarding = Number.isNaN(boardedAt) || !ride ? 0 : Math.min(1, (t - boardedAt) / .55);
+      for (const [id, v] of thieves) if (!view?.players.some(p => p.id === id)) v.root.visible = false;
       for (const p of view?.players ?? []) {
         const v = thieves.get(p.id) ?? thief(p), pose = poses.get(p.id);
         v.root.visible = !p.suspended && !!pose;
         if (!v.root.visible || !pose) continue;
-        if (v.disguised !== p.disguised) { v.disguised = p.disguised; v.body.geometry = p.disguised ? figure('guard_torso', 'guard_head', 'hat_impostor') : figure('thief_torso', 'thief_head', `hat_${p.role}`); v.mat.userData.nj.njTint.value.set(p.disguised ? '#ffffff' : ROLES[p.role].color); }
-        const working = !!p.work && !p.down; v.root.scale.setScalar(scale);
-        animate(v, pose, p.moving, p.moving && !p.running ? 1 : working ? .6 : 0, p.down ? 1 : 0, dt, reduced);
-        if (working && !reduced) { v.pose.position.y += Math.abs(Math.sin(t * 14)) * .03; v.pose.rotation.z = Math.sin(t * 9) * .06; } else v.pose.rotation.z = 0;
-        v.mat.opacity = p.hidden ? .38 : !p.connected ? .6 : 1; v.mat.depthWrite = !p.hidden;
+        if (v.disguised !== p.disguised) { v.disguised = p.disguised; v.body.geometry = v.ink.geometry = p.disguised ? figure('guard_torso', 'guard_head', 'hat_impostor') : figure('thief_torso', 'thief_head', `hat_${p.role}`); v.mat.userData.nj.njTint.value.set(p.disguised ? '#ffffff' : ROLES[p.role].color); }
+        const working = !!p.work && !p.down; v.root.scale.setScalar(scale * (1 - boarding * boarding));
+        if (v.wasDown && !p.down) v.hop = 1;   // back on their feet with a jump
+        v.wasDown = p.down;
+        animate(v, pose, p.moving, p.moving && !p.running ? 1 : working ? .6 : 0, p.down ? 1 : 0, dt, t, reduced);
+        if (working && !reduced) { v.pose.position.y += Math.abs(Math.sin(t * 14)) * .03; v.pose.rotation.z = Math.sin(t * 9) * .06; }
+        if (boarding && ride) { v.root.position.set(pose.x + (ride.x - pose.x) * boarding, reduced ? 0 : Math.sin(boarding * Math.PI) * .9, pose.y + (ride.y - pose.y) * boarding); v.ring.visible = false; } else v.ring.visible = true;
+        v.mat.opacity = p.hidden ? .38 : !p.connected ? .6 : 1; v.mat.depthWrite = !p.hidden; (v.ink.material as MeshBasicMaterial).opacity = p.hidden ? .15 : v.mat.opacity;
         (v.ring.material as MeshBasicMaterial).opacity = p.down ? .55 + .45 * Math.sin(t * 8) : p.hidden ? .5 : 1;
         v.item.visible = v.gold.visible = p.carrying; if (p.carrying && !reduced) v.item.rotation.y = t * 1.5;
         if (p.carrying) v.gold.scale.setScalar(1.55 + (reduced ? 0 : .12 * Math.sin(t * 4)));
@@ -130,11 +148,13 @@ export function createActors(kit: Kit, fog: Fog, scope: ResourceScope, coneRoot:
       for (const n of view?.npcs ?? []) {
         let v = npcs.get(n.id); if (!v) { v = npc(n); v.down = +(n.state === 'stunned'); npcs.set(n.id, v); }
         const pose = poses.get(n.id); if (!pose) continue;
-        v.seen = frame; v.root.scale.setScalar(scale); v.mat.opacity = reduced ? 1 : Math.min(1, v.mat.opacity + dt * 6);
+        v.seen = frame; v.root.scale.setScalar(scale); v.mat.opacity = reduced ? 1 : Math.min(1, v.mat.opacity + dt * 6); (v.ink.material as MeshBasicMaterial).opacity = v.mat.opacity;
         const stunned = n.state === 'stunned', panic = n.state === 'panic';
-        animate(v, pose, n.moving, 0, stunned ? 1 : 0, dt, reduced, n.kind === 'dog' ? 14 : panic ? 13 : 9);
-        v.pose.rotation.z = stunned ? Math.PI / 2 * v.down : panic && !reduced ? Math.sin(t * 30) * .08 : 0;
-        if (stunned) v.pose.rotation.x = 0;
+        // Startled: a guard jumps when a chase starts, a bystander when the panic does.
+        if ((n.state === 'chase' || panic) && v.drawnState && v.drawnState !== n.state && v.mood !== n.state) v.hop = 1;
+        v.mood = n.state;
+        animate(v, pose, n.moving, n.state === 'suspicious' ? .25 : 0, stunned ? 1 : 0, dt, t, reduced, n.kind === 'dog' ? 14 : panic ? 13 : 9);
+        if (stunned) { v.pose.rotation.x = 0; v.pose.rotation.z = Math.PI / 2 * v.down; } else if (panic && !reduced) v.pose.rotation.z = Math.sin(t * 30) * .08;
         // Cone: recomputed only when the NPC, its state, doors or smoke changed.
         const cfg = CONE[n.kind], d = v.drawn, smokeCount = view!.smoke.length;
         const look = n.state === 'chase' ? 'chase' : n.state === 'charmed' || panic ? 'charmed' : n.kind === 'civilian' ? 'civilian' : n.state === 'patrol' ? 'calm' : 'alert', colour = CONE_COLOUR[look];
@@ -150,8 +170,8 @@ export function createActors(kit: Kit, fog: Fog, scope: ResourceScope, coneRoot:
           if (Number.isNaN(v.aimAt)) v.aimAt = now;
           const dx = n.aiming.x - pose.x, dz = n.aiming.y - pose.y, len = Math.hypot(dx, dz), k = Math.min(1, (now - v.aimAt) / TIMING.aim), [track, bar, reticle] = v.aim;
           for (const m of [track, bar]) { m.position.set(pose.x, .07, pose.y); m.rotation.y = -Math.atan2(dz, dx); }
-          track.scale.set(len, 1, 1); bar.scale.set(Math.max(.01, len * k), 1, 1);
-          reticle.position.set(n.aiming.x, .08, n.aiming.y); reticle.scale.setScalar(2.2 - 1.2 * k); reticle.rotation.y = reduced ? 0 : t * 3;
+          track.scale.set(len, 1, 1); bar.scale.set(Math.max(.01, len * k), 1, .5);
+          reticle.position.set(n.aiming.x, .08, n.aiming.y); reticle.scale.setScalar(2.6 - 1.5 * k); reticle.rotation.y = reduced ? 0 : t * 3;
           (reticle.material as MeshBasicMaterial).opacity = reduced ? 1 : .7 + .3 * Math.sin(t * 24);
         }
       }

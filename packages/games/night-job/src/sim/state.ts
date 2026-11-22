@@ -31,6 +31,8 @@ export type Npc = Point & {
 type Tagged<T> = T & { crew: boolean };
 export type State = {
   heistId: string; mission: MissionId; settings: Settings; phase: Phase; message: string; messageAt: number;
+  /** Which crew this is, and whether it has rivals (then: no pausing, and the van bails a wiped crew out instead of a bust). */
+  slot: number; rival: boolean; bails: number; wipedAt: number | null;
   now: number; startedAt: number; wallAt: number; paused: number; pauseAt: number | null; elapsed: number; rng: number; endedAt: number | null;
   crew: Crew[]; npcs: Npc[];
   /** View.doors as a string (c o l b), one char per door/window object. */
@@ -160,17 +162,19 @@ export function spawnNpc(spawn: NpcSpawn, id: string, now: number): Npc {
   };
 }
 
-/** Fresh heist. `level` overrides the server NPC layout (tests use this to prove routes). */
-export function create(ctx: RoundContext, settings: Settings, level: ServerLevel = getServerLevel(settings.mission)): State {
+/** Fresh heist for one crew. `level` overrides the server NPC layout (tests use this to prove routes).
+ * `slot` places the crew in a crew night: its index, its first seat in the room, and that it has rivals. */
+export function create(ctx: RoundContext, settings: Settings, level: ServerLevel = getServerLevel(settings.mission), slot = { crew: 0, seat: 0, rival: false }): State {
   const map = getMap(settings.mission), now = ctx.nowMs, doors = doorObjects(map);
   const safes = map.objects.filter(o => o.kind === 'safe').length, objective = map.objects.find(o => o.kind === 'objective')!;
   const s: State = {
-    heistId: ctx.roundId, mission: settings.mission, settings: { ...settings }, phase: 'infiltrate', message: map.briefing, messageAt: now,
+    heistId: slot.rival ? `${ctx.roundId}:${slot.crew}` : ctx.roundId, mission: settings.mission, settings: { ...settings }, phase: 'infiltrate', message: map.briefing, messageAt: now,
+    slot: slot.crew, rival: slot.rival, bails: 0, wipedAt: null,
     now, startedAt: now, wallAt: now, paused: 0, pauseAt: null, elapsed: 0, rng: ctx.seed >>> 0, endedAt: null,
-    crew: ctx.players.map((p, seat) => {
-      const { role, tool } = parseChoice(p.lobbyChoice), spawn = map.spawns[seat % map.spawns.length];
+    crew: ctx.players.map((p, i) => {
+      const { role, tool } = parseChoice(p.lobbyChoice), spawn = map.spawns[i % map.spawns.length];
       return {
-        id: p.id, name: p.name, color: p.color, seat, role, tool, x: spawn.x, y: spawn.y, facing: -Math.PI / 2,
+        id: p.id, name: p.name, color: p.color, seat: slot.seat + i, role, tool, x: spawn.x, y: spawn.y, facing: -Math.PI / 2,
         health: 100, coins: 0, charges: 2, moving: false, running: false, down: false, connected: true, suspended: false, hidden: false, disguised: role === 'impostor',
         work: null, input: neutralInput(), absentAt: null, toolAt: 0, stepAt: 0, birdAt: 0, charmReady: 0, shotAt: 0, seenAt: now, hideSpot: null, hideLatch: false, witnesses: [], wind: true, downAt: 0,
       };
@@ -183,6 +187,7 @@ export function create(ctx: RoundContext, settings: Settings, level: ServerLevel
     collected: 0, totalLoot: map.coins.length + safes * SAFE_COINS, stats: Object.fromEntries(ctx.players.map(p => [p.id, { coins: 0, spotted: 0, takedowns: 0, revives: 0, downs: 0, tools: 0 }])),
     squad: level.reinforcements?.npcs ?? [], squadDelay: (level.reinforcements?.delay ?? 0) * 1000, squadAt: null,
   };
-  for (const n of s.npcs) n.pauseUntil = now + random(s) * 1500;
+  // Rival crews get their own seed and a wider first pause, so one building's patrols never tell another's.
+  for (const n of s.npcs) n.pauseUntil = now + random(s) * (slot.rival ? 6000 : 1500);
   return s;
 }

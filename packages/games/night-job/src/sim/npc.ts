@@ -56,7 +56,7 @@ export function stun(s: State, n: Npc, ms: number) {
   if (charmer) charmer.charmReady = s.now + TIMING.charmCooldown;
   Object.assign(n, { state: 'stunned', stunUntil: s.now + ms, suspicion: 0, target: null, aimAt: 0, aim: null, charmedBy: null, flee: null, moving: false, path: [], goal: null });
 }
-function toPatrol(n: Npc) {
+export function toPatrol(n: Npc) {
   Object.assign(n, { state: 'patrol', suspicion: 0, target: null, lastKnown: null, goal: null, path: [], pauseUntil: 0, aimAt: 0, aim: null, charmedBy: null, flee: null });
 }
 function toSearch(s: State, n: Npc, at: Point) {

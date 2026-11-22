@@ -7,9 +7,10 @@ import { getServerLevel } from '../src/server-levels';
 import { rules } from '../src/server';
 import { heist, push, steer, stealthBot, STEP, type Heist } from '../src/sim/harness';
 import { dist, type Crew } from '../src/sim/state';
+import { decode } from '../src/wire';
 
 const map = getMap('velvet'), ledger = map.objects.find(o => o.kind === 'objective')!, exit = map.objects.find(o => o.kind === 'exit')!, stand = { x: ledger.x - 1, y: ledger.y };
-const view = (h: Heist) => rules.publicView(h.s, { nowMs: h.wall, phase: 'playing' });
+const wire = (h: Heist) => rules.publicView(h.night, { nowMs: h.wall, phase: 'playing' }), view = (h: Heist) => decode(wire(h)).cast;
 /** Runner bot: path to the ledger, push into it, path to the getaway. */
 const runner = (h: Heist, p: Crew, sneak = false) => h.s.objective.carrier === null && h.s.objective.taken ? steer(h.s, p, h.s.objective, sneak, 0) ?? push(p, h.s.objective)
   : !h.s.objective.taken ? steer(h.s, p, stand, sneak) ?? push(p, ledger, sneak) : steer(h.s, p, exit, sneak) ?? { x: 0, y: 0, sneak };
@@ -19,9 +20,9 @@ for (const role of Object.keys(ROLES) as Role[]) test(`velvet is completable sol
   for (let t = 0; t < 30 * 180 && h.s.phase !== 'clear'; t++) h.step({ p0: runner(h, p) });
   assert.equal(h.s.phase, 'clear', `stuck at ${p.x.toFixed(1)},${p.y.toFixed(1)}`);
   const ended = h.s.elapsed;
-  assert.equal(rules.outcome(h.s).complete, false, 'the getaway plays out on the TV before results');
-  for (let t = 0; t < 30 * 3; t++) h.step();
-  const out = rules.outcome(h.s);
+  assert.equal(rules.outcome(h.night).complete, false, 'the getaway plays out on the TV before results');
+  for (let t = 0; t < 30 * 4; t++) h.step();
+  const out = rules.outcome(h.night);
   assert.ok(out.complete && out.winners[0] === 'p0' && h.s.elapsed === ended && h.s.elapsed < 90, `${role} took ${h.s.elapsed.toFixed(0)} s`);
 });
 
@@ -65,7 +66,7 @@ test('equal seeds replay identically', () => {
   assert.equal(run(), run());
 });
 
-test('four-player snapshots stay under 12 KiB and ticks average under 2 ms with every NPC active', () => {
+test('four-player snapshots stay under 3 KiB on the wire and ticks average under 2 ms with every NPC active', () => {
   const level = getServerLevel('velvet');
   level.npcs.push(...level.reinforcements!.npcs);
   const h = heist(4, { level, choices: [{ role: 'scout' }, { role: 'wire' }, { role: 'magpie' }, { role: 'breacher' }] });
@@ -74,12 +75,12 @@ test('four-player snapshots stay under 12 KiB and ticks average under 2 ms with 
     for (const p of h.s.crew) p.health = 100; // keep everyone up so guards chase and shoot for the whole run
     const inputs = Object.fromEntries(h.s.crew.map(p => [p.id, runner(h, p)]));
     const active = h.s.phase === 'infiltrate' || h.s.phase === 'escape', start = performance.now();
-    h.wall += 1000 * STEP; rules.tick(h.s, new Map(Object.entries(inputs)), STEP, h.wall);
+    h.wall += 1000 * STEP; rules.tick(h.night, new Map(Object.entries(inputs)), STEP, h.wall);
     if (active) { spent += performance.now() - start; ticks++; }
-    if (t % 10 === 0) { const v = view(h); assertSerializable(v); biggest = Math.max(biggest, JSON.stringify(v).length); }
+    if (t % 10 === 0) { const w = wire(h); assertSerializable(w); biggest = Math.max(biggest, Buffer.byteLength(JSON.stringify({ ...w, base: undefined }))); }
   }
   assert.ok(ticks > 30 * 20 && h.s.stats.p0.spotted + h.s.stats.p1.spotted > 0, `${ticks} live ticks`);
-  assert.ok(biggest < 12 * 1024, `largest snapshot ${biggest} bytes`);
+  assert.ok(biggest < 3 * 1024, `largest snapshot ${biggest} bytes`);
   assert.ok(spent / ticks < 2, `average tick ${(spent / ticks).toFixed(3)} ms`);
   console.log(`# snapshot max ${biggest} B, tick avg ${(spent / ticks).toFixed(3)} ms, NPCs ${h.s.npcs.length}, phase ${h.s.phase}`);
 });

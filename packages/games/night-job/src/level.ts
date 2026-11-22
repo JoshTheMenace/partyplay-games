@@ -1,11 +1,24 @@
 /* Shared ASCII level parser. Browser-safe: public layout only (see DESIGN.md "Tile legend"). */
-import type { HeistMap, LegendEntry, LevelSource, MapObject, Point, Prop, PropKind } from './model';
+import type { Floor, HeistMap, LegendEntry, LevelSource, MapObject, Point, Prop, PropKind } from './model';
 
 const STRUCTURE = '#%=~ .,dw';
 const NON_SOLID_PROPS: readonly PropKind[] = ['rug', 'painting'];
 const FACING = { E: 0, S: Math.PI / 2, W: Math.PI, N: -Math.PI / 2 } as const;
 const centre = (x: number, y: number): Point => ({ x: x + .5, y: y + .5 });
 const blocksDoorSide = (c: string | undefined) => !!c && '#%=~ wd'.includes(c);
+
+export const FLOOR_COLOUR: Record<Floor, string> = { carpet: '#8e3a52', tile: '#c9d2d6', marble: '#d8ccb6', wood: '#b27b47', grass: '#5b9a45', concrete: '#8d9299', asphalt: '#4a4f5a', deck: '#a8784c', checker: '#efece6' };
+/** The room a cell belongs to: the last listed room containing it (nested rooms are listed after the room around them). */
+export function roomAt(map: HeistMap, x: number, y: number) { for (let i = map.rooms.length - 1; i >= 0; i--) { const r = map.rooms[i]; if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) return r; } }
+/** Floor kind and colour under a cell. Doorways and wall feet borrow the room beside them; open ground is the map's outdoor floor. */
+export function floorAt(map: HeistMap, x: number, y: number): [Floor, string] {
+  const at = (cx: number, cy: number) => map.tiles[cy]?.[cx] ?? ' ', sides = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+  const room = roomAt(map, x, y) ?? sides.map(([dx, dy]) => roomAt(map, x + dx, y + dy)).find(Boolean);
+  if (at(x, y) === ',' && !room) return [map.outdoor, FLOOR_COLOUR[map.outdoor]];
+  if (room) return [room.floor, room.tint ?? FLOOR_COLOUR[room.floor]];
+  const floor = sides.some(([dx, dy]) => at(x + dx, y + dy) === ',') ? map.outdoor : 'tile';
+  return [floor, FLOOR_COLOUR[floor]];
+}
 
 /** Parses and validates a level. Throws with the cell position on authoring mistakes. */
 export function parseLevel(src: LevelSource): HeistMap {

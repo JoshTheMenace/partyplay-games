@@ -5,6 +5,7 @@ import type { Effect, MissionId, NpcState, View } from './model';
 import { getMap } from './maps';
 import { doorObjects } from './geometry';
 import { assetUrl } from './render/assets';
+import { decode, type Wire } from './wire';
 
 const MAX_VOICES = 24, STALE = 900, MUSIC_LEVEL = .3;
 /** Mission loops from music/export.ts, in seconds (bars × beats × 60 / bpm). Files carry one wrapped extra second, so looping from 0.5 s is gapless. */
@@ -139,7 +140,11 @@ export class HeistAudio {
     this.wanted = connected && view && phase === 'playing' && view.phase !== 'failed' ? view.mission : null; this.alarm = !!view?.alarm;
     if (this.context) this.syncMusic();
     if (!connected || !view) { this.stop(); this.previous = null; return; }
-    if (this.round !== view.heistId) { this.stop(false); this.round = view.heistId; this.previous = null; this.event = -1; this.shotAt = this.noiseAt = -Infinity; this.lastCue.clear(); this.coinRun = 0; this.coinAt = -Infinity; }
+    // A new heist starts from silence. A cut to another crew (same night, another heist) also skips what that crew did before it came on screen.
+    if (this.round !== view.heistId) {
+      const cut = this.round.split(':')[0] === view.heistId.split(':')[0];
+      this.stop(false); this.round = view.heistId; this.previous = null; this.event = cut ? Math.max(-1, ...view.effects.map(e => e.id)) : -1; this.shotAt = this.noiseAt = cut ? view.now : -Infinity; this.lastCue.clear(); this.coinRun = 0; this.coinAt = -Infinity;
+    }
     const map = getMap(view.mission), now = view.now, pan = (x: number) => (x / map.width - .5) * 1.4, fresh = (at: number) => now - at < STALE;
     for (const effect of view.effects) if (effect.id > this.event) { if (fresh(effect.at)) this.cue(effect, now, pan(effect.x)); this.event = Math.max(this.event, effect.id); }
     for (const shot of view.shots) if (shot.at > this.shotAt) {
@@ -200,9 +205,10 @@ export class HeistAudio {
   }
 }
 
-export function AudioView({ isHost, viewRole, publicView, connected, phase }: GameAudioProps<View>) {
+/** The host display plays the crew on its screen; when a crew night cuts to another crew, the cues follow (music never restarts). */
+export function AudioView({ isHost, viewRole, publicView, connected, phase }: GameAudioProps<Wire>) {
   const mixer = useRef<HeistAudio | null>(null), owner = isHost && viewRole === 'display';
   useEffect(() => { if (!owner) return; const audio = new HeistAudio(); mixer.current = audio; return () => { mixer.current = null; audio.dispose(); }; }, [owner]);
-  useEffect(() => { mixer.current?.update(publicView, connected, phase); }, [publicView, connected, phase]);
+  useEffect(() => { mixer.current?.update(publicView ? decode(publicView).cast : null, connected, phase); }, [publicView, connected, phase]);
   return null;
 }
