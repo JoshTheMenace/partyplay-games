@@ -1,10 +1,10 @@
 // Shared-screen HUD pieces: icons with graceful fallbacks, order tickets, timer, score, banners and the chef strip.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Coins, CookingPot, Flame, Heater, Slice, Star, Timer, TriangleAlert } from 'lucide-react';
-import { RECIPES, itemLabel, type Item, type Order, type View } from './model';
+import { Coins, CookingPot, Flame, Heater, Slice, Star, Timer, TriangleAlert, Zap } from 'lucide-react';
+import { LINES, RECIPES, RUSH_SECONDS, itemLabel, rushHour, type Item, type Order, type Restaurant, type View } from './model';
 import { LEVELS } from './levels';
 import { assetUrl } from './asset-url';
-import { clock, foodIcon, iconFallback, itemIcons, nextTip, patience, patienceTone, recipeSteps, type Process } from './presentation';
+import { clock, foodIcon, iconFallback, itemIcons, nextTip, patience, patienceTone, place, recipeSteps, type Process } from './presentation';
 
 // ── Icons ───────────────────────────────────────────────────────────────────
 const missing = new Set<string>();
@@ -55,10 +55,10 @@ export function useOrderRail(view: View) {
   useEffect(() => { if (!leaving.length) return; const timer = setTimeout(() => setLeaving([]), 750); return () => clearTimeout(timer); }, [leaving]);
   return [...view.orders.map(order => ({ order, kind: undefined as Leaving | undefined })), ...leaving].sort((a, b) => a.order.id - b.order.id);
 }
-export function OrderRail({ view }: { view: View }) {
+export function OrderRail({ view, compact = false }: { view: View; compact?: boolean }) {
   const cards = useOrderRail(view);
-  return <section className="kr-rail" aria-label="Orders">
-    {cards.map(({ order, kind }) => <OrderCard key={order.id} order={order} now={view.now} relaxed={view.settings.relaxed} leaving={kind}/>)}
+  return <section className={`kr-rail ${compact ? 'kr-rail-compact' : ''}`} aria-label="Orders">
+    {cards.map(({ order, kind }) => <OrderCard key={order.id} order={order} now={view.now} relaxed={view.settings.relaxed} leaving={kind} compact={compact}/>)}
     {!cards.length && <p className="kr-rail-empty">Orders incoming…</p>}
   </section>;
 }
@@ -70,18 +70,25 @@ export function TimerBox({ view }: { view: View }) {
     <Timer aria-hidden="true"/><output className="kp-numeral">{clock(left)}</output>
   </div>;
 }
-export function ScoreBox({ view }: { view: View }) {
+/** Coins, stars and the next tip. With `shared` it is the whole restaurant's score, which has no tip of its own. */
+export function ScoreBox({ view, shared = false, rush = false }: { view: Pick<View, 'score' | 'stars' | 'thresholds' | 'combo'>; shared?: boolean; rush?: boolean }) {
   const top = Math.max(view.thresholds[2] * 1.15, view.score, 1), at = (score: number) => `${Math.min(100, score / top * 100)}%`;
   const combo = Math.max(1, Math.min(4, view.combo));
-  return <div className="kr-score" aria-label={`${view.score} coins, ${view.stars} of 3 stars, ${nextTip(combo)}`}>
+  // Coins just earned float up off the total.
+  const before = useRef(view.score), [gain, setGain] = useState(0);
+  useEffect(() => { const earned = view.score - before.current; before.current = view.score; if (earned > 0) setGain(earned); }, [view.score]);
+  return <div className="kr-score" aria-label={`${shared ? 'Restaurant: ' : ''}${view.score} coins, ${view.stars} of 3 stars${shared ? '' : `, ${nextTip(combo, rush)}`}`}>
     <span className="kr-coin" aria-hidden="true"><Coins/></span>
     <output key={view.score} className="kp-numeral kr-score-value">{view.score}</output>
-    <b key={`c${combo}`} className={`kr-combo kr-combo-${combo}`}><small>Next tip</small>×{combo}</b>
+    {gain > 0 && <i key={`gain${view.score}`} className="kr-gain kp-numeral" aria-hidden="true">+{gain}</i>}
+    {shared ? <b className="kr-combo kr-shared"><small>All kitchens</small>Restaurant</b> : <b key={`c${combo}${rush}`} className={`kr-combo kr-combo-${combo} ${rush ? 'kr-rush' : ''}`}><small>{rush ? 'Rush tip' : 'Next tip'}</small>×{combo * (rush ? 2 : 1)}</b>}
     <span className="kr-star-bar" aria-hidden="true"><i style={{ width: at(view.score) }}/>
       {view.thresholds.map((score, i) => <span key={i} className={view.score >= score ? 'kr-got' : ''} style={{ left: at(score) }}><Star/></span>)}
     </span>
   </div>;
 }
+/** Rush hour announces itself for its first five seconds. */
+const rushOpening = (view: View) => rushHour(view) && view.endsAt - view.now > (RUSH_SECONDS - 5) * 1000;
 /** Banners for hazards and celebrations. Stars announce themselves for a moment after the `star` event. */
 function Banners({ view }: { view: View }) {
   const [star, setStar] = useState(0), seen = useRef<number | null>(null);
@@ -94,6 +101,7 @@ function Banners({ view }: { view: View }) {
   const fire = view.tiles.some(tile => tile.fire), gated = !!LEVELS[view.settings.level]?.gates;
   const banners: { tone: string; text: ReactNode }[] = [];
   if (star) banners.push({ tone: 'star', text: <><Star aria-hidden="true"/>{star === 3 ? 'Three stars!' : `Star ${star} earned!`}</> });
+  if (rushOpening(view)) banners.push({ tone: 'rush', text: <><Zap aria-hidden="true"/>Rush hour! Double tips</> });
   if (fire) banners.push({ tone: 'fire', text: <><Flame aria-hidden="true"/>Fire! Grab an extinguisher</> });
   if (gated && view.gateWarning) banners.push({ tone: 'warn', text: <><TriangleAlert aria-hidden="true"/>{view.gatesOpen ? 'Drawbridge closing!' : 'Drawbridge opening!'}</> });
   return <div className="kr-banners" role="status">{banners.map(banner => <p key={banner.tone} className={`kr-banner kr-banner-${banner.tone}`}>{banner.text}</p>)}</div>;
@@ -108,18 +116,63 @@ function Callout({ view }: { view: View }) {
 // ── Chefs ───────────────────────────────────────────────────────────────────
 export function ChefStrip({ view }: { view: View }) {
   return <ol className="kr-chefs" aria-label="Chefs">{view.players.map((chef, i) => <li key={chef.id} className={chef.connected ? '' : 'kr-away'} style={{ '--chef': chef.color } as CSSProperties}>
-    <b>{i + 1}</b><span>{chef.name}</span><ItemIcon item={chef.held}/>
+    <b>{view.first + i + 1}</b><span>{chef.name}</span><ItemIcon item={chef.held}/>
   </li>)}</ol>;
 }
 
-/** Full HUD overlay for the shared display; `solo` rearranges it around on-screen controls (children). */
-export function Hud({ view, solo = false, children }: { view: View; solo?: boolean; children?: ReactNode }) {
-  return <div className={`kr-stage ${solo ? 'kr-stage-solo' : ''}`}>
-    <OrderRail view={view}/>
-    <div className="kr-corner"><TimerBox view={view}/>{solo && <ScoreBox view={view}/>}</div>
+// ── Kitchen lines ───────────────────────────────────────────────────────────
+export const lineStyle = (line: number) => ({ '--line': LINES[line % LINES.length].color }) as CSSProperties;
+/** A kitchen's letter and name in its colour, with its place in the race when given. */
+export function LineBadge({ line, rank, short = false }: { line: number; rank?: number; short?: boolean }) {
+  const info = LINES[line % LINES.length];
+  return <span className="kr-line" style={lineStyle(line)} aria-label={`Kitchen ${info.letter}, ${info.name}${rank ? `, ${place(rank)} place` : ''}`}><b>{info.letter}</b>{!short && <span>{info.name}</span>}{rank !== undefined && <em>{place(rank)}</em>}</span>;
+}
+/** One kitchen on the broadcast board: place, coins, its own star rating and its open tickets coloured by patience. */
+function LineCard({ view, rank }: { view: View; rank: number }) {
+  const burning = view.tiles.some(tile => tile.fire);
+  return <li className={`kr-board-line ${rank === 1 && view.score > 0 ? 'kr-lead' : ''} ${burning ? 'kr-burning' : ''}`} style={lineStyle(view.line)}>
+    <LineBadge line={view.line}/>
+    <output key={view.score} className="kp-numeral">{view.score}</output>
+    <span className="kr-stars" aria-label={`${view.stars} of 3 stars`}>{[0, 1, 2].map(i => <Star key={i} className={i < view.stars ? 'kr-got' : ''} aria-hidden="true"/>)}</span>
+    <span className="kr-board-orders" aria-label={`${view.orders.length} open orders`}>{burning && <Flame className="kr-board-fire" aria-hidden="true"/>}
+      {view.orders.slice(0, 5).map(order => <i key={order.id} className={`kr-wait-${view.settings.relaxed ? 'ok' : patienceTone(patience(order, view.now))}`}><Icon name={`dish_${order.recipe}`}/></i>)}{view.orders.length > 5 && <b>+{view.orders.length - 5}</b>}</span>
+    <em>{place(rank)}</em>
+  </li>;
+}
+/**
+ * Shared screen for a restaurant of several kitchens. Every kitchen is on screen at once, so the HUD keeps to the clock,
+ * the shared score and stars, and one card per kitchen; each phone shows its own kitchen's tickets.
+ */
+export function Broadcast({ restaurant }: { restaurant: Restaurant }) {
+  const first = restaurant.lines[0], burning = restaurant.lines.filter(view => view.tiles.some(tile => tile.fire)).map(view => LINES[view.line % LINES.length].letter);
+  const [star, setStar] = useState(0), best = useRef<number | null>(null);
+  useEffect(() => { if (best.current !== null && restaurant.stars > best.current) setStar(restaurant.stars); best.current = Math.max(best.current ?? 0, restaurant.stars); }, [restaurant.stars]);
+  useEffect(() => { if (!star) return; const timer = setTimeout(() => setStar(0), 2600); return () => clearTimeout(timer); }, [star]);
+  return <div className="kr-stage kr-stage-broadcast" data-lines={restaurant.lines.length} data-fire={burning.length > 0 || undefined}>
+    <div className="kr-broadcast-top"><ScoreBox view={{ ...restaurant, combo: 1 }} shared/><TimerBox view={first}/></div>
+    <div className="kr-banners" role="status">
+      {star > 0 && <p className="kr-banner kr-banner-star"><Star aria-hidden="true"/>{star === 3 ? 'Three stars for the restaurant!' : `Restaurant star ${star}!`}</p>}
+      {rushOpening(first) && <p className="kr-banner kr-banner-rush"><Zap aria-hidden="true"/>Rush hour! Double tips in every kitchen</p>}
+      {burning.length > 0 && <p className="kr-banner kr-banner-fire"><Flame aria-hidden="true"/>Fire in kitchen {burning.join(', ')}!</p>}
+    </div>
+    <Callout view={first}/>
+    <ol className="kr-board" aria-label="Kitchens">{restaurant.lines.map(view => <LineCard key={view.line} view={view} rank={restaurant.ranks[view.line]}/>)}</ol>
+    {first.settings.relaxed && <span className="kr-relaxed">Relaxed</span>}
+  </div>;
+}
+
+/**
+ * Full HUD overlay for one kitchen; `solo` rearranges it around on-screen controls (children) and `handheld` tightens it
+ * for a phone. In a restaurant of several kitchens it also names this kitchen and its place.
+ */
+export function Hud({ view, restaurant, solo = false, handheld = false, children }: { view: View; restaurant?: Restaurant; solo?: boolean; handheld?: boolean; children?: ReactNode }) {
+  const many = restaurant && restaurant.lines.length > 1;
+  return <div className={`kr-stage ${solo ? 'kr-stage-solo' : ''} ${handheld ? 'kr-stage-handheld' : ''}`} data-fire={view.tiles.some(tile => tile.fire) || undefined}>
+    <OrderRail view={view} compact={handheld}/>
+    <div className="kr-corner"><TimerBox view={view}/>{solo && <ScoreBox view={view} rush={rushHour(view)}/>}{many && <LineBadge line={view.line} rank={restaurant.ranks[view.line]}/>}</div>
     <Banners view={view}/>
     <Callout view={view}/>
-    {!solo && <footer className="kr-footer"><ScoreBox view={view}/><ChefStrip view={view}/></footer>}
+    {!solo && <footer className="kr-footer"><ScoreBox view={view} rush={rushHour(view)}/><ChefStrip view={view}/></footer>}
     {view.settings.relaxed && <span className="kr-relaxed">Relaxed</span>}
     {children}
   </div>;

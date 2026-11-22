@@ -155,14 +155,50 @@ export type Order = { id: number; recipe: RecipeId; createdAt: number; expiresAt
 export type EventType = 'serve' | 'wrong' | 'expire' | 'chop' | 'wash' | 'done' | 'warn' | 'burn' | 'fire' | 'extinguish' | 'throw' | 'catch' | 'land' | 'splash' | 'dash' | 'fall' | 'respawn' | 'portal' | 'gate' | 'pickup' | 'place' | 'star' | 'order';
 /** Recent happenings for effects and sound. Ids increase; clients react to ids they have not seen. */
 export type GameEvent = { id: number; at: number; type: EventType; x?: number; z?: number; player?: string; value?: number; recipe?: RecipeId };
+/** One kitchen. `line` is its place in the service (0 when the whole crew shares one kitchen) and `first` the seat of its first chef. */
 export type View = {
   settings: Settings; players: Chef[]; tiles: TileState[]; loose: Loose[]; orders: Order[]; events: GameEvent[];
   startedAt: number; endsAt: number; now: number; complete: boolean;
   score: number; combo: number; served: number; failed: number; stars: number; thresholds: [number, number, number];
   recipeCounts: Partial<Record<RecipeId, number>>;
-  gatesOpen: boolean; gateWarning: boolean;
+  gatesOpen: boolean; gateWarning: boolean; line: number; first: number;
 };
 export const EVENT_LIMIT = 32;
+/** Rush hour: in the last seconds of a service every tip is doubled (and the music speeds up). */
+export const RUSH_SECONDS = 30;
+export const rushHour = (view: Pick<View, 'endsAt' | 'now' | 'complete'>) => !view.complete && view.endsAt - view.now <= RUSH_SECONDS * 1000;
+
+// ── Kitchen lines ───────────────────────────────────────────────────────────
+/**
+ * Up to ten chefs share one kitchen. A bigger crew becomes a restaurant of parallel kitchens ("lines") of five to eight
+ * chefs, in seat order, all cooking the same level: every line has its own tickets and score, the restaurant's stars come
+ * from the sum, and the lines race for Kitchen of the Night.
+ */
+export const KITCHEN_MAX = 10, LINE_MAX = 8;
+export function lineSizes(players: number): number[] {
+  if (players <= KITCHEN_MAX) return [players];
+  const lines = Math.ceil(players / LINE_MAX), base = Math.floor(players / lines);
+  return Array.from({ length: lines }, (_, i) => base + (i < players % lines ? 1 : 0));
+}
+/** Which line a seat cooks in, and its place there. */
+export function lineOf(seat: number, players: number): { line: number; index: number } {
+  const sizes = lineSizes(players);
+  for (let line = 0, first = 0; line < sizes.length; first += sizes[line++]) if (seat < first + sizes[line]) return { line, index: seat - first };
+  return { line: 0, index: seat };
+}
+/** A line's letter, name and colour: always shown together, because seat colours repeat hues above ten players. */
+export const LINES = [
+  { letter: 'A', name: 'Apple', color: '#ff5748' }, { letter: 'B', name: 'Blueberry', color: '#4f8dff' }, { letter: 'C', name: 'Citrus', color: '#ffd24a' }, { letter: 'D', name: 'Dill', color: '#78d955' },
+  { letter: 'E', name: 'Eggplant', color: '#b58aff' }, { letter: 'F', name: 'Fig', color: '#ff7eb6' }, { letter: 'G', name: 'Ginger', color: '#ff9a3c' }, { letter: 'H', name: 'Honeydew', color: '#5fe0c0' },
+] as const;
+/** What a seat alone is told: its command acknowledgement and the server's latest note for it. */
+export type Own = { seq: number; note: string; noteAt: number };
+/** Every kitchen of a service with the restaurant's shared score. `ranks[line]` is 1 for the leading kitchen; ties share a rank. */
+export type Restaurant = { lines: View[]; score: number; stars: number; thresholds: [number, number, number]; served: number; failed: number; ranks: number[] };
+export const zeroStats = (): ChefStats => ({ served: 0, chopped: 0, washed: 0, cooked: 0, thrown: 0, caught: 0, extinguished: 0, burnt: 0, dashes: 0, falls: 0 });
+export const STAT_KEYS = Object.keys(zeroStats()) as (keyof ChefStats)[];
+/** Places by score, highest first; equal scores share a place. */
+export const rankScores = (scores: readonly number[]) => scores.map(score => 1 + scores.filter(other => other > score).length);
 
 // ── Labels shared by phone, display and tests ───────────────────────────────
 export const partLabel = (part: Part) => `${part.state === 'raw' ? '' : part.state[0].toUpperCase() + part.state.slice(1) + ' '}${part.state === 'raw' ? INGREDIENTS[part.food].name : INGREDIENTS[part.food].name.toLowerCase()}`;

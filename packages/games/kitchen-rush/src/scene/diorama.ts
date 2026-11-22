@@ -7,7 +7,7 @@ import { Instances, type Kit } from './kit';
 import { gateHinges, itemAnchor } from './layout';
 import { shade } from './procedural';
 import { Shape, type Template } from './shapes';
-import { radialTexture, sheenTexture, signTexture, swirlTexture } from './textures';
+import { groundTexture, radialTexture, rampTexture, sheenTexture, signTexture, swirlTexture } from './textures';
 import type { Palette } from './themes';
 
 const SLAB = .6, place = new Matrix4(), q = new Quaternion(), e = new Euler(), v = new Vector3(), s = new Vector3();
@@ -24,10 +24,19 @@ export type Diorama = {
   group: Group; anchors: TileAnchor[]; gates: Gate[]; gateLamps: MeshStandardMaterial; portals: Mesh[]; sheen?: Texture; belts: Texture[]; water?: Mesh;
   /** Burner flames, drawn per frame only under stoves that are heating something. */
   flames: Instances; flameY: number;
+  /** What a clone needs to rebuild its own moving parts. */
+  flameTemplate: Template; stoves: number; map: KitchenMap; level: Level;
 };
 
-/** `lite` (low graphics quality) trims scenery and crate stock. */
-export function buildDiorama(map: KitchenMap, level: Level, kit: Kit, palette: Palette, options: { shadows: boolean; lite: boolean }) {
+export type Sign = { text: string; color: string };
+function signBoard(kit: Kit, palette: Palette, level: Level, map: KitchenMap, sign?: Sign) {
+  const width = Math.min(5, map.cols * .4), height = width * 192 / 1024;
+  const mesh = new Mesh(kit.own(new PlaneGeometry(width, height)), kit.own(new MeshBasicMaterial({ map: kit.own(signTexture(sign?.text ?? level.location, sign?.color ?? palette.trim, sign ? '#141824' : '#fff8e6')), transparent: true })));
+  mesh.name = 'sign'; mesh.position.set(0, 1.22 + height / 2, -map.rows / 2 - .4); mesh.rotation.x = -.25;
+  return mesh;
+}
+/** `lite` (low graphics quality) trims scenery and crate stock. `sign` replaces the location name on the wall (a kitchen's own name in a restaurant). */
+export function buildDiorama(map: KitchenMap, level: Level, kit: Kit, palette: Palette, options: { shadows: boolean; lite: boolean; sign?: Sign }) {
   const group = new Group(), statics: { template: Template; matrix: Matrix4; color?: Color; all?: boolean }[] = [], rand = random(level.id);
   const stat = (template: Template, matrix: Matrix4, color?: Color, all = false) => statics.push({ template, matrix, color, all });
   const own = <T extends { dispose(): void }>(resource: T) => kit.own(resource);
@@ -35,8 +44,9 @@ export function buildDiorama(map: KitchenMap, level: Level, kit: Kit, palette: P
   const tileAt = (col: number, row: number) => col < 0 || row < 0 || col >= map.cols || row >= map.rows ? undefined : map.tiles[row * map.cols + col];
 
   // ── Exterior ground, slab and pits ──
-  const ground = new Mesh(own(new PlaneGeometry(160, 160).rotateX(-Math.PI / 2)), own(new MeshStandardMaterial({ color: palette.ground, roughness: palette.pit === 'water' && palette.ground === palette.pitColor ? .25 : .95 })));
-  ground.position.y = -SLAB; ground.receiveShadow = options.shadows; group.add(ground);
+  const terrain = own(groundTexture(palette.terrain, palette.ground)); terrain.repeat.set(60, 60);
+  const ground = new Mesh(own(new PlaneGeometry(240, 240).rotateX(-Math.PI / 2)), own(new MeshStandardMaterial({ map: terrain, roughness: palette.terrain === 'water' ? .3 : .95 })));
+  ground.name = 'ground'; ground.position.y = -SLAB; ground.receiveShadow = options.shadows; group.add(ground);
   const blob = own(radialTexture(.2, 1)), halo = new Mesh(own(new PlaneGeometry(map.cols + 9, map.rows + 9).rotateX(-Math.PI / 2)), own(new MeshBasicMaterial({ map: blob, color: '#000000', transparent: true, opacity: .28, depthWrite: false })));
   halo.position.y = -SLAB + .012; group.add(halo);
   const apron = new Mesh(own(new PlaneGeometry(map.cols + 6, map.rows + 5).rotateX(-Math.PI / 2)), own(new MeshStandardMaterial({ color: palette.apron, roughness: .9 })));
@@ -53,7 +63,7 @@ export function buildDiorama(map: KitchenMap, level: Level, kit: Kit, palette: P
   if (pits.length) {
     const pit = own(new InstancedMesh(own(new PlaneGeometry(1, 1).rotateX(-Math.PI / 2)), pitFloor, pits.length));
     pits.forEach((tile, i) => pit.setMatrixAt(i, at(tile.x, palette.pit === 'water' ? -.42 : -SLAB + .02, tile.z)));
-    group.add(pit); if (palette.pit === 'water') water = pit;
+    group.add(pit); if (palette.pit === 'water') { water = pit; pit.name = 'water'; }
     // Pit walls get a darker band so gaps read as dangerous from the camera angle.
     const band = new Shape().box([1, .56, .04], { at: [0, -.3, 0], color: shade(palette.pitColor, .8) }).box([1, .05, .06], { at: [0, -.03, .01], color: palette.rim }).build(kit.materials, 'pit_wall');
     band.parts.forEach(part => own(part.geometry));
@@ -74,6 +84,18 @@ export function buildDiorama(map: KitchenMap, level: Level, kit: Kit, palette: P
     if (tile.kind === 'ice') { stat(ice, at(tile.x, 0, tile.z)); iceTiles.push(tile); }
     else if (!COVERED.has(tile.kind) && tile.kind !== 'void' && tile.kind !== 'gate') stat(floor, at(tile.x, 0, tile.z), (tile.col + tile.row) % 2 ? floorB : floorA, options.lite || !kit.authored('floor_tile'));
     if (tile.kind === 'portal') stat(kit.template('portal_pad'), at(tile.x, .002, tile.z));
+  }
+
+  // ── Contact shadows: a soft dark edge on the floor wherever it meets a counter, so stations sit on the floor instead of floating ──
+  if (!options.lite) {
+    const tall = (tile: Tile | undefined) => !!tile && !WALKABLE.has(tile.kind) && tile.kind !== 'void', edges: Matrix4[] = [];
+    for (const tile of map.tiles) if (WALKABLE.has(tile.kind) && tile.kind !== 'gate') [[0, -1, 0], [1, 0, -Math.PI / 2], [0, 1, Math.PI], [-1, 0, Math.PI / 2]].forEach(([dc, dr, yaw]) => {
+      if (tall(tileAt(tile.col + dc, tile.row + dr))) edges.push(place.compose(v.set(tile.x + dc * .25, .022, tile.z + dr * .25), q.setFromEuler(e.set(0, yaw, 0)), s.set(1, 1, 1)).clone());
+    });
+    if (edges.length) {
+      const contact = own(new InstancedMesh(own(new PlaneGeometry(1, .5).rotateX(-Math.PI / 2)), own(new MeshBasicMaterial({ map: own(rampTexture()), color: '#1a1320', transparent: true, opacity: .46, depthWrite: false })), edges.length));
+      edges.forEach((edge, i) => contact.setMatrixAt(i, edge)); contact.renderOrder = 1; group.add(contact);
+    }
   }
 
   // ── Stations ──
@@ -115,10 +137,9 @@ export function buildDiorama(map: KitchenMap, level: Level, kit: Kit, palette: P
     for (let i = 0; i < 5; i++) window.box([.18, .04, .3], { at: [-.36 + i * .18, 1.22, .62], rot: [.45, 0, 0], color: i % 2 ? '#fff6e6' : palette.accent });
     windowTemplate = window.build(kit.materials, 'window'); windowTemplate.parts.forEach(part => own(part.geometry));
   }
-  const signWidth = Math.min(5, map.cols * .4), signHeight = signWidth * 192 / 1024;
+  const signWidth = Math.min(5, map.cols * .4);
   for (let x = -map.cols / 2 + 1.5; x < map.cols / 2 - 1; x += map.cols > 16 ? 3 : 2.5) if (Math.abs(x) > signWidth / 2 + .6) stat(windowTemplate, at(x, 0, wallZ));
-  const sign = new Mesh(own(new PlaneGeometry(signWidth, signHeight)), own(new MeshBasicMaterial({ map: own(signTexture(level.location, palette.trim, '#fff8e6')), transparent: true })));
-  sign.position.set(0, 1.22 + signHeight / 2, wallZ + .1); sign.rotation.x = -.25; group.add(sign);
+  group.add(signBoard(kit, palette, level, map, options.sign));
 
   // ── Theme props in tidy rows beside and behind the kitchen, turned toward it ──
   const halfX = map.cols / 2, halfZ = map.rows / 2, prop = (n: number) => palette.props[n % palette.props.length];
@@ -138,7 +159,7 @@ export function buildDiorama(map: KitchenMap, level: Level, kit: Kit, palette: P
   lampShape.parts.forEach(part => own(part.geometry));
   const bulb = own(new BoxGeometry(.14, .14, .14));
   for (const gate of gateHinges(map)) {
-    const pivot = new Group(); pivot.position.set(gate.hinge.x, 0, gate.hinge.z);
+    const pivot = new Group(); pivot.name = 'gate'; pivot.position.set(gate.hinge.x, 0, gate.hinge.z);
     const leaf = kit.spawn(plank); leaf.position.set(gate.tile.x - gate.hinge.x, 0, gate.tile.z - gate.hinge.z); pivot.add(leaf); group.add(pivot);
     gates.push({ pivot, alongX: gate.alongX, sign: gate.sign });
     if (gate.reach === .5) for (const side of [-.55, .55]) {
@@ -156,7 +177,7 @@ export function buildDiorama(map: KitchenMap, level: Level, kit: Kit, palette: P
     // Normal blending keeps each pair's colour distinct over the pad's own glow, so players can see which portals link.
     const color = PORTAL_COLORS[pair % PORTAL_COLORS.length], mesh = new Mesh(disc, own(new MeshBasicMaterial({ map: swirl, color, transparent: true, depthWrite: false })));
     mesh.add(new Mesh(band, own(new MeshBasicMaterial({ color, toneMapped: false }))));
-    mesh.position.set(tile.x, .07, tile.z); group.add(mesh); portals.push(mesh);
+    mesh.name = 'portal'; mesh.position.set(tile.x, .07, tile.z); group.add(mesh); portals.push(mesh);
   });
   let sheen: Texture | undefined;
   if (iceTiles.length) {
@@ -166,6 +187,19 @@ export function buildDiorama(map: KitchenMap, level: Level, kit: Kit, palette: P
     group.add(overlay);
   }
   const flames = new Instances(flameTemplate, Math.max(1, stoves), own, false);
-  group.add(flames.group);
-  return { group, anchors, gates, gateLamps, portals, sheen, belts: [kit.beltMaterial.map!], water, flames, flameY: flameTemplate.box.min.y } satisfies Diorama;
+  flames.group.name = 'flames'; group.add(flames.group);
+  return { group, anchors, gates, gateLamps, portals, sheen, belts: [kit.beltMaterial.map!], water, flames, flameY: flameTemplate.box.min.y, flameTemplate, stoves, map, level } satisfies Diorama;
+}
+/**
+ * Another kitchen of the same restaurant: a clone that shares the first one's geometry and materials (they play the same
+ * level), with its own moving parts (bridge leaves, portals, burner flames, water) and its own name on the wall. The
+ * ground is not repeated, and the shared belt and ice textures stay with the first kitchen, which scrolls them once.
+ */
+export function cloneDiorama(source: Diorama, kit: Kit, palette: Palette, own: <T extends { dispose(): void }>(resource: T) => T, sign?: Sign): Diorama {
+  const group = source.group.clone(true), named = (name: string) => group.children.filter(child => child.name === name);
+  for (const name of ['ground', 'flames', 'sign']) for (const child of named(name)) group.remove(child);
+  group.add(signBoard(kit, palette, source.level, source.map, sign));
+  const flames = new Instances(source.flameTemplate, Math.max(1, source.stoves), own, false);
+  flames.group.name = 'flames'; group.add(flames.group);
+  return { ...source, group, gates: named('gate').map((pivot, i) => ({ ...source.gates[i], pivot: pivot as Group })), portals: named('portal') as Mesh[], water: named('water')[0] as Mesh | undefined, sheen: undefined, belts: [], flames };
 }

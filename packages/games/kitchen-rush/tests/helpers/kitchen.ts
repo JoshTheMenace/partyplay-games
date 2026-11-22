@@ -1,23 +1,23 @@
-// Test harness: builds rounds on custom maps and drives them only through rules.tick with real inputs.
-import { createState, rules, type State } from '../../src/server';
+// Test harness: builds one kitchen on a custom map and drives it only through tickLine with real inputs.
+import { createState, lineView, rules, tickLine, type Service, type State } from '../../src/server';
 import { DEFAULT_SETTINGS, WALKABLE, neutral, parseMap, type Command, type Input, type Level, type Settings } from '../../src/model';
 import { LEVELS } from '../../src/levels';
-import { travel } from './bot';
+import { botInput, travel } from './bot';
 
 export const DT = 1 / 60;
 export type Setup = { players?: number; settings?: Partial<Settings>; level?: Partial<Level>; seed?: number };
 export const roster = (count: number) => Array.from({ length: count }, (_, i) => ({ id: `p${i}`, name: `Chef number ${i}`, color: '#ff5748' }));
 
-/** A round on a custom map (rows) or, with rows = null, the real level map via rules.create. */
+/** A kitchen on a custom map (rows) or, with rows = null, the first kitchen of a real round from rules.create. */
 export function setup(rows: readonly string[] | null, options: Setup = {}): State {
   const settings = { ...DEFAULT_SETTINGS, ...options.settings }, ctx = { roomId: 'room', roundId: 'round', seed: options.seed ?? 7, nowMs: 1000, players: roster(options.players ?? 1) };
-  return rows ? createState(ctx, settings, parseMap(rows), { ...LEVELS[0], ...options.level }) : rules.create(ctx, settings);
+  return rows ? createState(ctx, settings, parseMap(rows), { ...LEVELS[0], ...options.level }) : rules.create(ctx, settings).lines[0];
 }
 
 /** Advance whole 60 Hz steps with the given held inputs (missing fields are neutral). */
 export function step(s: State, inputs: Record<string, Partial<Input>> = {}, seconds = DT) {
   const map = new Map(Object.entries(inputs).map(([id, input]) => [id, { ...neutral(), ...input }]));
-  for (let i = 0, n = Math.max(1, Math.round(seconds / DT)); i < n; i++) rules.tick(s, map, DT, s.now + DT * 1000);
+  for (let i = 0, n = Math.max(1, Math.round(seconds / DT)); i < n; i++) tickLine(s, map, DT, s.now + DT * 1000);
 }
 /** One tick carrying a fresh command, like a phone tap. */
 export function press(s: State, player: number, cmd: Command, input: Partial<Input> = {}) {
@@ -58,4 +58,18 @@ export function walkTo(s: State, player: number, tile: number, limit = 12) {
     step(s, { [chef.id]: { x: way.x, y: way.y } });
   }
   throw new Error(`Chef ${player} did not reach tile ${tile}`);
+}
+
+/** A whole service from rules.create: one kitchen up to ten chefs, parallel kitchens above that. */
+export function crew(players: number, settings: Partial<Settings> = {}, seed = 7): Service {
+  return rules.create({ roomId: 'room', roundId: 'round', seed, nowMs: 1000, players: roster(players) }, { ...DEFAULT_SETTINGS, ...settings });
+}
+/** Bots cook for `seconds` through rules.tick, re-planning 20 times a second as phones do. `watch` sees every snapshot tick. */
+export function cook(service: Service, seconds: number, watch?: (service: Service) => void) {
+  const inputs = new Map<string, Input>();
+  for (let i = 0, n = Math.round(seconds / DT); i < n && !service.lines[0].complete; i++) {
+    if (i % 3 === 0) { for (const s of service.lines) { const view = lineView(s); for (const c of s.players) inputs.set(c.id, botInput(view, s.map, c.id)); } watch?.(service); }
+    rules.tick(service, inputs, DT, service.lines[0].now + DT * 1000);
+  }
+  return service;
 }

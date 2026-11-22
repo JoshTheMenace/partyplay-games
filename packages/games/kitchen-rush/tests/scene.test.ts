@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { COUNTER_HEIGHT, INGREDIENTS, RECIPES, parseMap, type GameEvent, type Item, type Part } from '../src/model';
 import { LEVELS, kitchenMap } from '../src/levels';
 import { SnapshotBuffer } from '../../../party-runtime/src/index';
-import { EventCursor, FOV, TILT, cookReadout, fitCamera, framingPoints, gateHinges, initialRackCounts, itemAnchor, itemLook, kitchenCorners, landingIn, metresPerPixel, pairSampler, plateOffsets, popWobble, project, soupOf, stackHeights } from '../src/scene/layout';
+import { EventCursor, FOV, TILT, cookReadout, fitCamera, framingPoints, gateHinges, gridColumns, initialRackCounts, itemAnchor, itemLook, kitchenCorners, landingIn, metresPerPixel, pairSampler, plateOffsets, popWobble, project, soupOf, stackHeights } from '../src/scene/layout';
 import { proceduralShape } from '../src/scene/procedural';
 import { THEMES } from '../src/scene/themes';
 
@@ -141,5 +141,18 @@ test('fallback art exists for every station, item, food state, dish and theme pr
     const map = kitchenMap(level, players);
     assert.ok(map.spawns.length >= players, `${LEVELS[level].id} seats ${players}`);
     assert.ok(THEMES[LEVELS[level].theme], `${LEVELS[level].id} has a theme palette`);
+  }
+});
+
+test('a restaurant of kitchens stands in the grid that shows each kitchen largest on a wide screen', () => {
+  // A large kitchen with its scenery is about 29 m wide and 16 m deep.
+  assert.deepEqual([1, 2, 3, 4, 5, 6, 7, 8].map(count => gridColumns(count, 29, 16)), [1, 1, 2, 2, 2, 2, 3, 3]);
+  for (let count = 1; count <= 8; count++) { const columns = gridColumns(count, 29, 16); assert.ok(columns >= 1 && columns <= count && Math.ceil(count / columns) <= 3, `${count} kitchens`); }
+  assert.equal(gridColumns(4, 29, 16, 9 / 16), 1, 'an upright screen stacks them');
+  // The camera that fits the whole block also keeps every kitchen's corners inside the HUD-free band.
+  const cell = { x: 29, z: 16 }, half = { x: 11 + cell.x, z: 5 + cell.z }, fit = fitCamera(half.x, half.z, 16 / 9, { hudTop: .09, hudBottom: .14 });
+  for (const [x, z] of [[-half.x, -half.z], [half.x, -half.z], [-half.x, half.z], [half.x, half.z]]) {
+    const p = project([x, 0, z], fit.distance, fit.targetZ, 16 / 9);
+    assert.ok(Math.abs(p.x) <= 1 && p.y <= 1 - 2 * .09 + 1e-6 && p.y >= -1 + 2 * .14 - 1e-6, `corner ${x},${z} at ${p.x.toFixed(2)},${p.y.toFixed(2)}`);
   }
 });

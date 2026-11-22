@@ -1,5 +1,6 @@
 // Canvas-drawn textures: nameplates, coin popups, signs and small repeating patterns. Created once per round.
-import { CanvasTexture, RepeatWrapping, SRGBColorSpace } from 'three';
+import { CanvasTexture, Color, RepeatWrapping, SRGBColorSpace } from 'three';
+import type { Terrain } from './themes';
 
 const FONT = '"Nunito", "Arial Rounded MT Bold", "Trebuchet MS", system-ui, sans-serif';
 function canvas(width: number, height: number) {
@@ -12,15 +13,14 @@ function texture(element: HTMLCanvasElement, repeat = false) {
   return result;
 }
 
-/** Number badge + name in the chef's colour on a dark pill. Returns the texture and its width/height ratio. */
+/** Number badge + name in the chef's colour on a dark pill (the badge alone without a name). Returns the texture and its width/height ratio. */
 export function nameplateTexture(index: number, name: string, color: string) {
   const height = 88, pad = 14, font = `900 46px ${FONT}`;
   const probe = canvas(8, 8).context; probe.font = font;
   const label = name.length > 14 ? `${name.slice(0, 13)}…` : name;
-  const width = Math.ceil(height + probe.measureText(label).width + pad * 2 + 6);
+  const width = label ? Math.ceil(height + probe.measureText(label).width + pad * 2 + 6) : height;
   const { element, context: c } = canvas(width, height);
-  c.fillStyle = 'rgba(20, 24, 36, .86)'; c.beginPath(); c.roundRect(3, 6, width - 6, height - 12, (height - 12) / 2); c.fill();
-  c.lineWidth = 4; c.strokeStyle = color; c.stroke();
+  if (label) { c.fillStyle = 'rgba(20, 24, 36, .86)'; c.beginPath(); c.roundRect(3, 6, width - 6, height - 12, (height - 12) / 2); c.fill(); c.lineWidth = 4; c.strokeStyle = color; c.stroke(); }
   c.fillStyle = color; c.beginPath(); c.arc(height / 2, height / 2, height / 2 - 4, 0, Math.PI * 2); c.fill();
   c.lineWidth = 4; c.strokeStyle = 'rgba(20, 24, 36, .9)'; c.stroke();
   c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#141824'; c.font = `1000 50px ${FONT}`;
@@ -125,5 +125,45 @@ export function ringTexture() {
   const glow = c.createRadialGradient(64, 64, 40, 64, 64, 64); glow.addColorStop(0, 'rgba(255,255,255,0)'); glow.addColorStop(.55, 'rgba(255,255,255,.55)'); glow.addColorStop(1, 'rgba(255,255,255,0)');
   c.fillStyle = glow; c.fillRect(0, 0, 128, 128);
   c.strokeStyle = '#ffffff'; c.lineWidth = 7; c.beginPath(); c.arc(64, 64, 50, 0, Math.PI * 2); c.stroke();
+  return texture(element);
+}
+
+/** Shade of a colour: k < 1 darkens, k > 1 lightens toward white. */
+const tone = (hex: string, k: number) => { const c = new Color(hex); if (k <= 1) c.multiplyScalar(k); else c.lerp(new Color('#ffffff'), k - 1); return `#${c.getHexString()}`; };
+/**
+ * A 4 m repeating ground tile in the theme's ground colour: mown stripes, wavelets, snow drifts, wind ripples, cobbles
+ * or a carpet lattice. Drawn from a fixed seed so every screen and every round gets the same ground.
+ */
+export function groundTexture(terrain: Terrain, ground: string) {
+  const size = 256, { element, context: c } = canvas(size, size);
+  let seed = 7; const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  c.fillStyle = ground; c.fillRect(0, 0, size, size);
+  // Each mark is drawn nine times around the tile so nothing is cut at the seams.
+  const tiled = (draw: (ox: number, oy: number) => void) => { for (const ox of [-size, 0, size]) for (const oy of [-size, 0, size]) draw(ox, oy); };
+  if (terrain === 'lawn') {
+    c.fillStyle = tone(ground, 1.07); for (let x = 0; x < size; x += 128) c.fillRect(x, 0, 64, size);
+    for (let i = 0; i < 260; i++) { const x = random() * size, y = random() * size, h = 4 + random() * 6; c.strokeStyle = tone(ground, random() < .5 ? .88 : 1.16); c.lineWidth = 1.6; tiled((ox, oy) => { c.beginPath(); c.moveTo(x + ox, y + oy); c.lineTo(x + ox + 1.5, y + oy - h); c.stroke(); }); }
+  } else if (terrain === 'water') {
+    for (let i = 0; i < 46; i++) { const x = random() * size, y = random() * size, w = 14 + random() * 22; c.strokeStyle = tone(ground, i % 3 ? 1.18 : .88); c.lineWidth = 2.4; c.lineCap = 'round'; tiled((ox, oy) => { c.beginPath(); c.moveTo(x + ox - w, y + oy); c.quadraticCurveTo(x + ox, y + oy - 7, x + ox + w, y + oy); c.stroke(); }); }
+  } else if (terrain === 'snow') {
+    for (let i = 0; i < 26; i++) { const x = random() * size, y = random() * size, r = 16 + random() * 30; c.fillStyle = tone(ground, i % 2 ? .955 : 1.3); tiled((ox, oy) => { c.beginPath(); c.ellipse(x + ox, y + oy, r, r * .45, 0, 0, Math.PI * 2); c.fill(); }); }
+    for (let i = 0; i < 90; i++) { c.fillStyle = tone(ground, .93); c.fillRect(random() * size, random() * size, 2, 2); }
+  } else if (terrain === 'sand') {
+    for (let i = 0; i < 9; i++) { const y = (i + .5) * size / 9; c.strokeStyle = tone(ground, i % 2 ? .9 : 1.12); c.lineWidth = 3; c.beginPath(); for (let x = 0; x <= size; x += 8) c.lineTo(x, y + Math.sin(x / size * Math.PI * 4 + i) * 5); c.stroke(); }
+    for (let i = 0; i < 160; i++) { c.fillStyle = tone(ground, random() < .5 ? .84 : 1.15); c.fillRect(random() * size, random() * size, 2, 2); }
+  } else if (terrain === 'cobbles') {
+    for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++) { c.fillStyle = tone(ground, .86 + random() * .3); c.beginPath(); c.roundRect(col * 32 + (row % 2 ? 16 : 0) - 32 + 2, row * 32 + 2, 28, 28, 9); c.fill(); c.beginPath(); c.roundRect(col * 32 + (row % 2 ? 16 : 0) + 224 + 2, row * 32 + 2, 28, 28, 9); c.fill(); }
+  } else {
+    c.strokeStyle = tone(ground, 1.22); c.lineWidth = 5;
+    for (let i = -size; i <= size * 2; i += 64) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i + size, size); c.moveTo(i, size); c.lineTo(i + size, 0); c.stroke(); }
+    c.fillStyle = tone(ground, .8); for (let x = 0; x <= size; x += 64) for (let y = 0; y <= size; y += 64) { c.beginPath(); c.arc(x, y, 7, 0, Math.PI * 2); c.fill(); c.beginPath(); c.arc(x + 32, y + 32, 4, 0, Math.PI * 2); c.fill(); }
+  }
+  return texture(element, true);
+}
+/** Dark-to-clear ramp for the contact shadow where a counter meets the floor. */
+export function rampTexture() {
+  const { element, context: c } = canvas(4, 64), ramp = c.createLinearGradient(0, 0, 0, 64);
+  ramp.addColorStop(0, 'rgba(255,255,255,1)'); ramp.addColorStop(.35, 'rgba(255,255,255,.45)'); ramp.addColorStop(1, 'rgba(255,255,255,0)');
+  c.fillStyle = ramp; c.fillRect(0, 0, 4, 64);
   return texture(element);
 }

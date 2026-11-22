@@ -52,6 +52,15 @@ export function fitCamera(halfX: number, halfZ: number, aspect: number, options:
   return { distance: hi, targetZ, shift: hudLeft - hudRight, position: [0, Math.sin(tilt) * hi, targetZ + Math.cos(tilt) * hi] };
 }
 
+/**
+ * Columns of the grid that shows `count` kitchens largest on a screen of this shape: each cell is `cellX` wide and `cellZ`
+ * deep, and the tilted camera squeezes depth a little.
+ */
+export function gridColumns(count: number, cellX: number, cellZ: number, aspect = 16 / 9) {
+  let best = 1, least = Infinity;
+  for (let columns = 1; columns <= count; columns++) { const need = Math.max(columns * cellX / aspect, Math.ceil(count / columns) * cellZ * .95); if (need < least - 1e-9) { least = need; best = columns; } }
+  return best;
+}
 /** World metres covered by one screen pixel at the camera target, for constant-size labels. */
 export const metresPerPixel = (distance: number, heightPx: number, fov = FOV) => 2 * distance * Math.tan(fov * Math.PI / 360) / Math.max(1, heightPx);
 

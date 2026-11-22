@@ -4,7 +4,8 @@ import type { GameAudioProps } from '../../../party-ui/src/index';
 import type { RoomPhase } from '../../../party-contract/src/protocol';
 import { assetUrl } from './asset-url';
 import { kitchenMap } from './levels';
-import type { EventType, KitchenMap, View } from './model';
+import { RUSH_SECONDS, type EventType, type KitchenMap, type View } from './model';
+import { decodeWire, type Wire } from './wire';
 
 export const SOUND_LEVELS = { chop: .3, 'chop-alt': .3, simmer: .14, ignite: .32, fire: .24, dish: .18, wash: .24, deliver: .55, ready: .3, warning: .4, end: .6, ticket: .16, tick: .22 } as const;
 export type Sound = keyof typeof SOUND_LEVELS;
@@ -28,26 +29,31 @@ export const MUSIC_LEVELS: Record<Track | Sting, number> = { lobby: .3, service:
 /** Loops are whole bars; the files carry an extra second copied from the start, so looping from 0.5 s is gapless. */
 export const LOOPS: Record<Track, { bpm: number; bars: number }> = { lobby: { bpm: 100, bars: 16 }, service: { bpm: 132, bars: 32 }, rush: { bpm: 152, bars: 32 } };
 export const barSeconds = (track: Track) => 240 / LOOPS[track].bpm;
-export const RUSH_SECONDS = 30;
+export { RUSH_SECONDS };
 export function musicFor(phase: RoomPhase, view: View | null): Track | null {
   if (phase === 'lobby') return 'lobby';
   if (phase !== 'playing' || !view || view.complete) return null;
   return view.endsAt - view.now <= RUSH_SECONDS * 1000 ? 'rush' : 'service';
 }
 
-/** Pure mapping from two consecutive snapshots to one-shot cues and the loops that should be running. */
-export function soundFrame(previous: View | null, view: View, map: KitchenMap): SoundFrame {
+/** In a restaurant of several kitchens only these carry: serve bells, done chimes, ignitions and warnings. The clatter of eight kitchens at once is noise. */
+export const HEADLINE: ReadonlySet<Sound> = new Set(['deliver', 'ready', 'ignite', 'warning', 'end', 'tick']);
+/**
+ * Pure mapping from two consecutive snapshots of one kitchen to one-shot cues and the loops that should be running.
+ * `clock` is false for every kitchen after the first, so the opening bells, the countdown and the closing gong ring once.
+ */
+export function soundFrame(previous: View | null, view: View, map: KitchenMap, clock = true): SoundFrame {
   const cues: Sound[] = [], loops = new Set<Loop>();
   if (previous?.complete) return { cues, loops, chopping: false };
-  if (!previous) { if (!view.complete && view.now - view.startedAt < FRESH_MS) cues.push('deliver', 'deliver'); }
+  if (!previous) { if (clock && !view.complete && view.now - view.startedAt < FRESH_MS) cues.push('deliver', 'deliver'); }
   else {
     const seen = previous.events.reduce((max, event) => Math.max(max, event.id), -1);
     // Opening tickets arrive with the start bells, so only mid-service orders chime.
     for (const event of view.events) if (event.id > seen && view.now - event.at < FRESH_MS && EVENT_SOUNDS[event.type] && !(event.type === 'order' && event.at <= view.startedAt)) cues.push(EVENT_SOUNDS[event.type]!);
     // Final countdown: a warning bell at 10 s, then a tick for each of the last five seconds.
     const left = secondsLeft(view);
-    if (!view.complete && left < secondsLeft(previous) && (left === 10 || left >= 1 && left <= 5)) cues.push(left === 10 ? 'warning' : 'tick');
-    if (view.complete) cues.push('end');
+    if (clock && !view.complete && left < secondsLeft(previous) && (left === 10 || left >= 1 && left <= 5)) cues.push(left === 10 ? 'warning' : 'tick');
+    if (clock && view.complete) cues.push('end');
   }
   if (view.complete) return { cues, loops, chopping: false };
   for (const state of view.tiles) {
@@ -66,7 +72,7 @@ export class KitchenAudio {
   private sources = new Map<AudioBufferSourceNode, GainNode>();
   private loops = new Map<Loop, AudioBufferSourceNode>();
   private lastPlayed = new Map<Sound, number>();
-  private previous: View | null = null;
+  private previous: View[] = [];
   private pending: { cues: Sound[]; at: number } = { cues: [], at: 0 };
   private updatedAt = 0;
   private lastChop = 0;
@@ -139,14 +145,21 @@ export class KitchenAudio {
       if (n < 2) this.play(name, n * .22);
     }
   }
-  update(view: View | null) {
+  /** Every kitchen of the service; one kitchen sounds in full, several play only the headline cues (HEADLINE). */
+  update(views: readonly View[] | null) {
     if (this.disposed) return;
-    if (!view) { this.previous = null; this.stopLoops(); return; }
-    if (this.previous && (view.now < this.previous.now || view.startedAt !== this.previous.startedAt)) this.previous = null;
+    if (!views?.length) { this.previous = []; this.stopLoops(); return; }
+    const before = this.previous[0], view = views[0];
+    if (before && (view.now < before.now || view.startedAt !== before.startedAt || views.length !== this.previous.length)) this.previous = [];
     let map: KitchenMap;
     try { map = kitchenMap(view.settings.level, view.players.length); } catch { return; }
-    const frame = soundFrame(this.previous, view, map), now = performance.now();
-    this.previous = view; this.updatedAt = now;
+    const frame: SoundFrame = { cues: [], loops: new Set(), chopping: false }, now = performance.now();
+    views.forEach((line, i) => {
+      const each = soundFrame(this.previous[i] ?? null, line, map, i === 0);
+      frame.cues.push(...views.length > 1 ? each.cues.filter(cue => HEADLINE.has(cue)) : each.cues);
+      each.loops.forEach(loop => frame.loops.add(loop)); frame.chopping ||= views.length === 1 && each.chopping;
+    });
+    this.previous = views.slice(); this.updatedAt = now;
     if (!this.buffers.size) { if (frame.cues.length) this.pending = { cues: frame.cues, at: now }; return; }
     if (!this.audible()) { this.stop(); return; }
     for (const [name, source] of this.loops) if (!frame.loops.has(name)) { source.stop(); this.loops.delete(name); }
@@ -212,9 +225,14 @@ export class KitchenAudio {
 }
 
 /** Retained by the shell from lobby through results, so music carries across rounds and the end cue plays as results appear. */
-export function AudioView({ isHost, publicView, phase }: GameAudioProps<View>) {
+export function AudioView({ isHost, publicView, phase }: GameAudioProps<Wire>) {
   const mixer = useRef<KitchenAudio | null>(null);
   useEffect(() => { if (!isHost) return; const audio = new KitchenAudio(); mixer.current = audio; return () => { mixer.current = null; audio.dispose(); }; }, [isHost]);
-  useEffect(() => { mixer.current?.update(publicView); mixer.current?.music(phase, publicView); }, [publicView, phase]);
+  useEffect(() => {
+    const restaurant = publicView && decodeWire(publicView);
+    mixer.current?.update(restaurant?.lines ?? null);
+    // The results sting follows the restaurant's shared stars.
+    mixer.current?.music(phase, restaurant ? { ...restaurant.lines[0], stars: restaurant.stars } : null);
+  }, [publicView, phase]);
   return null;
 }

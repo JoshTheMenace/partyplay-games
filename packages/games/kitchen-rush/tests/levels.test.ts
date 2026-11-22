@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { RECIPES, SURFACES, WALKABLE, parseMap, type KitchenMap, type Level, type Tile } from '../src/model';
 import { LEVELS, crewScale, kitchenMap, starThresholds } from '../src/levels';
-import { rules } from '../src/server';
+import { lineView, tickLine } from '../src/server';
 import { botInput } from './helpers/bot';
-import { DT, setup } from './helpers/kitchen';
+import { DT, cook, crew, setup } from './helpers/kitchen';
 
 const SIZES = [{ size: 'small', maxCols: 15, maxRows: 10, spawns: 4, floor: 24 }, { size: 'large', maxCols: 22, maxRows: 13, spawns: 10, floor: 60 }] as const;
 const STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -147,7 +147,19 @@ test('star thresholds are positive, ordered and grow with crew size and service 
 test('every kitchen is playable end to end: bot crews earn a star on both maps of every level', () => {
   for (let level = 0; level < LEVELS.length; level++) for (const players of [2, 6]) {
     const s = setup(null, { players, seed: 3 + level, settings: { level } });
-    while (!s.complete) { const v = rules.publicView(s, { nowMs: s.now, phase: 'playing' }); rules.tick(s, new Map(s.players.map(c => [c.id, botInput(v, s.map, c.id)])), DT, s.now + DT * 1000); }
+    while (!s.complete) { const v = lineView(s); tickLine(s, new Map(s.players.map(c => [c.id, botInput(v, s.map, c.id)])), DT, s.now + DT * 1000); }
     assert.ok(s.stars >= 1, `${LEVELS[level].name} with ${players} bots: ${s.served} served, ${s.failed} failed, score ${s.score} of ${s.thresholds}`);
+  }
+});
+
+// Above ten chefs the crew cooks in parallel kitchens of five to eight on the large map (model.ts `lineSizes`), so a room of
+// 64 is eight kitchens of eight. Kitchens do not interact, so one kitchen at each end of that range stands for all of them.
+test('a full room fits: on every level a kitchen of eight, and the smallest line of five, seats each chef on its own spawn and earns stars', () => {
+  for (let level = 0; level < LEVELS.length; level++) for (const players of [5, 8]) {
+    const service = crew(players, { level, seconds: 150 }, 3 + level), s = service.lines[0];
+    assert.equal(s.map, kitchenMap(level, 10));
+    assert.equal(new Set(s.players.map(c => `${c.x.toFixed(2)},${c.z.toFixed(2)}`)).size, players, `${LEVELS[level].name}: every chef starts on a spawn of their own`);
+    cook(service, 151);
+    assert.ok(s.complete && s.stars >= 1 && s.failed <= 2, `${LEVELS[level].name} with ${players} bots: ${s.stars} stars, ${s.served} served, ${s.failed} failed, score ${s.score} of ${s.thresholds}`);
   }
 });

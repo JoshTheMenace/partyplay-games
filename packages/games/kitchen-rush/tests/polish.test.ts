@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { BURN_AT, BURN_WARN, POT_SECONDS, RECIPES, itemLabel, type Chef, type ChefStats, type Item, type Part, type Tile } from '../src/model';
-import { rules, type State } from '../src/server';
+import { lineView, type State } from '../src/server';
 import { find, press, setup, slot, standAt, step } from './helpers/kitchen';
 import { LEVELS } from '../src/levels';
-import { actHint, assignAwards, clock, grabHint, headline, iconFallback, itemIcons, levelTags, nextTip, patienceTone, recipeSteps, shortLabel, starGoal, tileStatus } from '../src/presentation';
+import { actHint, assignAwards, clock, grabHint, headline, iconFallback, itemIcons, levelTags, nextTip, patienceTone, recipeSteps, shortLabel, place, starGoal, tileStatus } from '../src/presentation';
 
 const zero: ChefStats = { served: 0, chopped: 0, washed: 0, cooked: 0, thrown: 0, caught: 0, extinguished: 0, burnt: 0, dashes: 0, falls: 0 };
 const chef = (id: string, stats: Partial<ChefStats> = {}) => ({ id, stats: { ...zero, ...stats } });
@@ -114,7 +114,9 @@ test('Grab hint mirrors the server grab() result', () => {
 });
 
 test('score and results copy: next tip, star goal and headline', () => {
-  assert.deepEqual([1, 3, 9].map(nextTip), ['Next tip ×1', 'Next tip ×3', 'Next tip ×4']);
+  assert.deepEqual([1, 2, 3, 4, 11, 12, 13, 21, 22].map(place), ['1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '22nd']);
+  assert.deepEqual([1, 3, 9].map(combo => nextTip(combo)), ['Next tip ×1', 'Next tip ×3', 'Next tip ×4']);
+  assert.deepEqual([1, 4].map(combo => nextTip(combo, true)), ['Next tip ×2', 'Next tip ×8'], 'rush hour doubles the tip');
   assert.equal(starGoal(65, [100, 200, 320]), '35 more coins for the first star');
   assert.equal(starGoal(199, [100, 200, 320]), '1 more coin for the second star');
   assert.equal(starGoal(320, [100, 200, 320]), null);
@@ -164,7 +166,7 @@ test('hints agree with the real server for every held item × station × content
     s.orders = [{ id: 999, recipe: 'side_salad', createdAt: s.now, expiresAt: s.now + 60_000 }];
     const chef = standAt(s, 0, target), spot = slot(s, target);
     spot.item = clone(content, s); spot.count = count; chef.held = clone(held, s); step(s);
-    const v = rules.publicView(s, { nowMs: s.now, phase: 'playing' }), me = v.players[0], state = v.tiles.find(entry => entry.at === target);
+    const v = lineView(s), me = v.players[0], state = v.tiles.find(entry => entry.at === target);
     const snap = () => JSON.stringify([shape(chef.held), shape(spot.item), spot.count, s.score, s.loose.length]);
     const before = snap(), label = `${cmd} ${held ? itemLabel(held) : 'nothing'} → ${kind} ${content ? itemLabel(content) : ''} ×${count}`;
     press(s, 0, cmd);

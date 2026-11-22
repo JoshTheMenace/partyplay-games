@@ -127,6 +127,10 @@ void main() {
     float edge = mix(-h.x + 0.16, h.x - 0.16, vData.y);
     vec4 fill = p.x < edge ? vFill : vBack; fill.rgb *= 1.0 + 0.25 * step(0.06, p.y) * step(p.x, edge);
     col = mix(ink, fill, 1.0 - smoothstep(-aa, aa, inner)); col.a *= 1.0 - smoothstep(-aa, aa, outer);
+  } else if (kind == 5) {
+    // A pointer: an inked triangle with its tip down.
+    float d = max(p.y - 0.4, (abs(p.x) * 0.82 - (p.y + 0.42) * 0.4) / 0.912);
+    col = mix(ink, vFill, 1.0 - smoothstep(-aa, aa, d + 0.11)); col.a *= 1.0 - smoothstep(-aa, aa, d);
   } else {
     float r = length(p), disc = 1.0 - smoothstep(0.5 - aa, 0.5, r), face = 1.0 - smoothstep(0.4 - aa, 0.4, r);
     vec4 inside = vFill;
@@ -141,7 +145,7 @@ void main() {
   gl_FragColor = col;
   #include <colorspace_fragment>
 }`;
-export const WIDGET = { bar: 0, gauge: 1, check: 2, warn: 3, cross: 4 } as const;
+export const WIDGET = { bar: 0, gauge: 1, check: 2, warn: 3, cross: 4, pointer: 5 } as const;
 /** Progress bars, cooking gauges and status badges: rebuilt every frame from game state, drawn above everything. */
 export class Widgets {
   readonly mesh: Mesh; private count = 0;

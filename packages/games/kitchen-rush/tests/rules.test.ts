@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertSerializable } from '../../../party-contract/src/serializable';
-import { rules, type State } from '../src/server';
+import { lineView, rules, tickLine, type Service, type State } from '../src/server';
 import {
   BELT_SECONDS, BURN_AT, BURN_WARN, CHEF_RADIUS, DEFAULT_SETTINGS, EVENT_LIMIT, FIRE_SPREAD_SECONDS, OVEN_SECONDS, PAN_SECONDS, POT_SECONDS, RECIPES,
-  RESPAWN_SECONDS, RETURN_SECONDS, WALKABLE, WASH_SECONDS, matchRecipe, neutral,
+  RESPAWN_SECONDS, RETURN_SECONDS, RUSH_SECONDS, WALKABLE, WASH_SECONDS, matchRecipe, neutral,
   type EventType, type FoodState, type Ingredient, type Input, type Item, type Part, type RecipeId,
 } from '../src/model';
 import { LEVELS } from '../src/levels';
@@ -29,7 +29,9 @@ const food = (s: State, name: Ingredient, state: FoodState = 'raw') => make(s, '
 const plate = (s: State, recipe?: RecipeId) => make(s, 'plate', recipe ? RECIPES[recipe].parts.map(p => ({ ...p })) : []);
 const last = (s: State, type: EventType) => s.events.filter(event => event.type === type).at(-1);
 const count = (s: State, type: EventType) => s.events.filter(event => event.type === type).length;
-const view = (s: State) => rules.publicView(s, { nowMs: s.now, phase: 'playing' });
+const view = (s: State) => lineView(s);
+/** A one-kitchen service around a test kitchen, for the rules that work on the whole round. */
+const serviceOf = (s: State): Service => ({ lines: [s], seats: new Map(s.players.map(c => [c.id, c])) });
 const place = (s: State, player: number, x: number, z: number, fx = 0, fz = 1) => { Object.assign(s.players[player], { x, z, fx, fz, vx: 0, vz: 0 }); step(s); return s.players[player]; };
 /** Hand a chef an item (a function call, so TypeScript does not narrow `held` across ticks). */
 const hold = (chef: { held: Item | null }, item: Item | null) => { chef.held = item; };
@@ -351,6 +353,19 @@ test('serving pays value plus a combo-multiplied tip and fulfils the oldest matc
   assert.equal(s.score, 74 + 30 + 4 * 3); assert.equal(s.combo, 4);
 });
 
+test('rush hour: tips count double in the last 30 seconds of a service', () => {
+  const s = kitchen({ settings: { seconds: 150 }, level: { recipes: ['salad'] } }), c = s.players[0];
+  standAt(s, 0, HATCH);
+  step(s, {}, 150 - RUSH_SECONDS - 1);
+  s.orders = [order(s, 'salad', 100), order(s, 'salad', 101)]; s.score = 0; s.combo = 2;
+  hold(c, plate(s, 'salad')); press(s, 0, 'grab');
+  assert.equal(s.score, 30 + 8 * 2, 'a second before rush hour the tip is the plain combo');
+  step(s, {}, 1.5);
+  hold(c, plate(s, 'salad')); press(s, 0, 'grab');
+  assert.equal(last(s, 'serve')?.value, 30 + 8 * 3 * 2, 'in rush hour the same fresh ticket tips double');
+  assert.equal(s.combo, 4);
+});
+
 test('wrong dishes are refused at the hatch and stay in hand', () => {
   const s = kitchen(), c = s.players[0];
   s.orders = [order(s, 'salad', 100)];
@@ -626,12 +641,12 @@ test('disconnecting drops anything held, freezes the chef as a ghost others walk
   const s = kitchen({ players: 2 }), [a, b] = s.players;
   hold(a, food(s, 'tomato')); hold(b, make(s, 'extinguisher'));
   step(s, { p0: { x: 1 } }, .2);
-  rules.onPresenceChange(s, 'p0', false, s.now); rules.onPresenceChange(s, 'p1', false, s.now);
+  rules.onPresenceChange(serviceOf(s), 'p0', false, s.now); rules.onPresenceChange(serviceOf(s), 'p1', false, s.now);
   assert.deepEqual([H(a), H(b), a.connected, a.vx, s.loose.map(drop => drop.item.kind)], [null, null, false, 0, ['food', 'extinguisher']]);
   const { x, z } = a;
   press(s, 0, 'grab'); step(s, { p0: { x: 1 } }, .5);
   assert.deepEqual([a.x, a.z, H(a)], [x, z, null], 'disconnected chefs are frozen');
-  rules.onPresenceChange(s, 'p0', true, s.now);
+  rules.onPresenceChange(serviceOf(s), 'p0', true, s.now);
   assert.equal(s.players.length, 2); assert.ok(a.connected);
   step(s, { p0: { x: -1 } }, .2);
   assert.ok(a.x < x);
@@ -659,12 +674,12 @@ test('commands apply once per sequence number; resends are ignored and new seque
 });
 
 // ── Projection, outcome, determinism ────────────────────────────────────────
-test('public views are lean, sparse and pass the live transport check at 1 and 10 chefs', () => {
+test('kitchen views are lean, sparse and pass the live transport check at 1 and 10 chefs', () => {
   for (const players of [1, 10]) {
     const s = setup(null, { players });
     step(s, Object.fromEntries(s.players.map(c => [c.id, { x: .7, y: .3, cmd: 'dash' as const, seq: 1 }])), 1);
     const v = view(s);
-    assertSerializable(v); assertSerializable(rules.outcome(s)); assert.equal(rules.playerView(s, 'p0', { nowMs: s.now, phase: 'playing' }), null);
+    assertSerializable(v); assertSerializable(rules.outcome(serviceOf(s))); assert.deepEqual(rules.playerView(serviceOf(s), 'p0', { nowMs: s.now, phase: 'playing' }), { seq: 1, note: '', noteAt: 0 });
     assert.equal(v.players.length, players);
     assert.ok(v.tiles.every(t => t.item || t.progress || t.fire || t.count), 'only tiles with something to show');
     assert.ok(v.players.every(c => [c.x, c.z, c.vx, c.vz, c.fx, c.fz].every(n => Math.round(n * 1000) / 1000 === n)), 'positions are rounded');
@@ -693,12 +708,12 @@ test('public views are lean, sparse and pass the live transport check at 1 and 1
 
 test('outcome: everyone wins together once anything is served, each chef labelled with a highlight', () => {
   const s = kitchen({ players: 2 }), [a, b] = s.players;
-  assert.deepEqual(rules.outcome(s).winners, []);
+  assert.deepEqual(rules.outcome(serviceOf(s)).winners, []);
   s.orders = [order(s, 'salad', 100)];
   hold(a, plate(s, 'salad')); standAt(s, 0, HATCH); press(s, 0, 'grab');
   b.stats.chopped = 4;
   step(s, {}, s.settings.seconds);
-  const outcome = rules.outcome(s);
+  const outcome = rules.outcome(serviceOf(s));
   assert.equal(outcome.complete, true); assert.deepEqual(outcome.winners, ['p0', 'p1']);
   assert.deepEqual(outcome.rows.map(r => [r.score, r.rank, r.label]), [[s.score, 1, '1 served'], [s.score, 1, '4 chopped']]);
   const frozen = JSON.stringify(view(s));
@@ -765,7 +780,7 @@ test('end to end: a salad from crate to hatch on level 0, then a soup on a custo
 function service(s: State) {
   for (let guard = 0; !s.complete && guard < 300 * 60; guard++) {
     const v = view(s);
-    rules.tick(s, new Map(s.players.map(c => [c.id, botInput(v, s.map, c.id)])), DT, s.now + DT * 1000);
+    tickLine(s, new Map(s.players.map(c => [c.id, botInput(v, s.map, c.id)])), DT, s.now + DT * 1000);
   }
   return s;
 }

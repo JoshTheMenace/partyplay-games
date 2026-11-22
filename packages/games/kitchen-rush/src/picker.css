@@ -16,6 +16,20 @@
 .kr-crew small { display: flex; align-items: center; gap: 3px; font-weight: 900; color: var(--muted-foreground); }
 .kr-crew .kr-is-ready small { color: var(--kp-lime); }
 .kr-crew small svg { width: 16px; height: 16px; }
+/* More than ten chefs: one panel per kitchen, its crew as compact chips, so 64 seats fit where ten cards did. */
+.kr-lobby-lines { margin: 0; font-weight: 700; color: var(--kp-cream); } .kr-lobby-lines b { color: var(--kp-sun); }
+.kr-crew-lines { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.kr-crew-lines > li { --line: #ffd24a; min-width: 0; padding: 6px 8px 8px; border-radius: 16px; background: linear-gradient(180deg, color-mix(in srgb, var(--line) 24%, transparent), transparent 52px), #05071a99; border: 3px solid color-mix(in srgb, var(--line) 65%, #05071a); }
+.kr-crew-lines .kr-line { margin-bottom: 5px; font-size: .95rem; }
+.kr-crew.kr-crew-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 4px; }
+/* A chip is the chef's face with the seat number on its corner, then the name on up to two lines. Ready lights the border. */
+.kr-crew-compact li { grid-template-columns: auto minmax(0, 1fr); justify-items: start; align-items: center; gap: 5px; min-height: 32px; padding: 0 6px 0 1px; border-width: 2px; border-radius: 99px; text-align: left; opacity: .62; }
+.kr-crew-compact li.kr-is-ready { opacity: 1; }
+.kr-crew-compact .kr-face { font-size: 28px; }
+.kr-crew-compact b { top: auto; bottom: -2px; left: -2px; min-width: 16px; height: 16px; padding: 0 2px; border-radius: 99px; font-size: .62rem; box-shadow: 0 0 0 1.5px var(--kp-ink); }
+.kr-crew-compact strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: break-word; font-size: .72rem; line-height: 1.08; }
+.kr-crew-compact small { display: none; }
+.kr-my-line .kr-line { font-size: .9rem; }
 .kr-lobby-empty { margin: 0; color: var(--muted-foreground); }
 .kr-lobby-phone > header { display: flex; align-items: center; gap: 12px; }
 .kr-lobby-phone h2 { margin: 0; font-size: 1.7rem; }

@@ -2,12 +2,17 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Droplets, HandGrab, Maximize2, Minimize2, Redo2, Slice, SprayCan, WifiOff, Zap } from 'lucide-react';
 import { HoldButton, SteerPad, type GameViewProps, type StickValue } from '../../../party-ui/src/index';
-import { itemLabel, matchRecipe, type Chef, type Command, type Input, type View } from './model';
+import { itemLabel, matchRecipe, rushHour, type Chef, type Command, type Input, type Own, type View } from './model';
 import { kitchenMap } from './levels';
 import { actHint, clock, grabHint, nextTip, shortLabel, tileStatus } from './presentation';
-import { ItemIcon, OrderCard } from './hud';
+import { ItemIcon, LineBadge, OrderCard } from './hud';
+import { decodeWire, kitchenOf, type Wire } from './wire';
 
-type Props = GameViewProps<Input, never, View, null>;
+export type Props = GameViewProps<Input, never, Wire, Own>;
+/** A seat's kitchen controls: the kitchen it cooks in and its private acknowledgement. */
+export type Seat = Pick<Props, 'playerId' | 'setInput' | 'releaseInput' | 'connected'> & { view: View; own: Own | null };
+/** The whole restaurant and the kitchen this screen belongs to. */
+export function useKitchen({ publicView, playerId }: Pick<Props, 'publicView' | 'playerId'>) { const restaurant = decodeWire(publicView); return { restaurant, view: kitchenOf(restaurant, playerId) }; }
 const MOVE_KEYS = new Set(['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright']);
 const KEY_COMMAND: Record<string, 'grab' | 'act' | 'dash'> = { ' ': 'grab', j: 'grab', k: 'act', e: 'act', shift: 'dash', l: 'dash' };
 
@@ -91,16 +96,17 @@ export function useHaptics(view: View, playerId: string | null) {
 
 const ACT_ICON: Record<string, typeof Slice> = { Chop: Slice, Wash: Droplets, Spray: SprayCan, Throw: Redo2 };
 /** Everything the phone and solo overlay need to know about "me" this frame. */
-export function useChef(view: View, playerId: string | null) {
-  const chef = view.players.find(player => player.id === playerId) ?? view.players[0];
+export function useChef(view: View, playerId: string | null, own: Own | null = null) {
+  // Acknowledgements and notes are not public: a seat's own arrive privately and are laid over its chef.
+  const found = view.players.find(player => player.id === playerId) ?? view.players[0], chef = own ? { ...found, ...own } : found;
   const map = kitchenMap(view.settings.level, view.players.length), tile = chef.target >= 0 ? map.tiles[chef.target] : undefined;
   const state = tile && view.tiles.find(entry => entry.at === tile.index);
-  return { chef, number: view.players.indexOf(chef) + 1, tile, state, status: tileStatus(tile, state, view.settings.relaxed), act: actHint(chef, tile, state), grab: grabHint(chef, tile, state, view) };
+  return { chef, number: view.first + view.players.indexOf(found) + 1, tile, state, status: tileStatus(tile, state, view.settings.relaxed), act: actHint(chef, tile, state), grab: grabHint(chef, tile, state, view) };
 }
 
 /** Steer pad on the left, action cluster on the right: Grab under the resting thumb, Chop·Throw above-left, Dash below-left. */
-export function Controls({ publicView: view, playerId, setInput, releaseInput, connected = true }: Props) {
-  const me = useChef(view, playerId), input = useChefInput(me.chef, setInput, releaseInput, connected), { act, grab } = me, Glyph = ACT_ICON[act.label];
+export function Controls({ view, own, playerId, setInput, releaseInput, connected = true }: Seat) {
+  const me = useChef(view, playerId, own), input = useChefInput(me.chef, setInput, releaseInput, connected), { act, grab } = me, Glyph = ACT_ICON[act.label];
   const off = !connected || me.chef.respawnAt > view.now, working = me.chef.work !== 'none';
   return <>
     <div className="kr-steer"><SteerPad label="Move" onChange={input.move} disabled={off}/></div>
@@ -114,7 +120,7 @@ export function Controls({ publicView: view, playerId, setInput, releaseInput, c
 }
 
 /** The shell header is hidden during play, so the controller carries its own full-screen toggle (where the browser allows one). */
-function FullScreenToggle() {
+export function FullScreenToggle() {
   const [full, setFull] = useState(() => !!document.fullscreenElement);
   useEffect(() => {
     const update = () => setFull(!!document.fullscreenElement);
@@ -130,18 +136,19 @@ function FullScreenToggle() {
   return <button type="button" className="kr-fullscreen" aria-label={full ? 'Exit full screen' : 'Full screen'} onClick={toggle}><Icon aria-hidden="true"/>{!full && <span>Full screen</span>}</button>;
 }
 
+/** The classic phone: controls and a status strip, with the kitchen on the shared screen. */
 export function Controller(props: Props) {
-  const { publicView: view, playerId, connected = true } = props, me = useChef(view, playerId);
+  const { playerId, connected = true } = props, { restaurant, view } = useKitchen(props), me = useChef(view, playerId, props.privateView);
   useHaptics(view, playerId);
   const { chef, status } = me, note = view.now - chef.noteAt < 3500 && chef.note, fallen = chef.respawnAt > view.now;
   return <div className="kr-play kr-phone" style={{ '--chef': chef.color } as CSSProperties} data-command-seq={chef.seq} data-chef-x={chef.x.toFixed(2)} data-chef-z={chef.z.toFixed(2)}>
-    <Controls {...props}/>
+    <Controls view={view} own={props.privateView} playerId={playerId} setInput={props.setInput} releaseInput={props.releaseInput} connected={connected}/>
     <section className="kr-strip" aria-label="Your station">
       <header className="kr-strip-top">
-        <b className="kr-me">{me.number}</b>
+        <b className="kr-me">{me.number}</b>{restaurant.lines.length > 1 && <LineBadge line={view.line} rank={restaurant.ranks[view.line]} short/>}
         <FullScreenToggle/>
         <span className="kr-strip-time kp-numeral">{clock(view.endsAt - Math.max(view.now, view.startedAt))}</span>
-        <span className="kr-strip-score kp-numeral">{view.score}{view.combo > 1 && <small>{nextTip(view.combo)}</small>}</span>
+        <span className="kr-strip-score kp-numeral">{view.score}{(view.combo > 1 || rushHour(view)) && <small>{nextTip(view.combo, rushHour(view))}</small>}</span>
       </header>
       <div className={`kr-card kr-held ${matchRecipe(chef.held) ? 'kr-ready' : ''}`} aria-label={`Holding ${itemLabel(chef.held)}`}>
         <ItemIcon item={chef.held}/><span><small>Holding</small><strong>{shortLabel(chef.held)}</strong></span>

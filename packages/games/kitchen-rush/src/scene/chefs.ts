@@ -76,16 +76,24 @@ export function createRig(kit: Kit, models: KitchenModels | null, animals: Anima
 }
 
 const damp = (current: number, target: number, rate: number, dt: number) => current + (target - current) * (1 - Math.exp(-rate * dt));
-const clamp = (value: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, value));
+const clamp = (value: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, value)), lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 function angleTo(from: number, to: number) { let d = (to - from) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; }
 
-export type Pose = { chef: Chef; x: number; z: number; vx: number; vz: number; fx: number; fz: number; now: number; t: number; dt: number; still: boolean; held: Item | null };
+export type Pose = {
+  chef: Chef; x: number; z: number; vx: number; vz: number; fx: number; fz: number; now: number; t: number; dt: number; still: boolean; held: Item | null;
+  /** Seconds since this chef last served, caught or earned a star (a cheer), and since they threw; large when long ago. */ cheer: number; toss: number;
+  /** 0–1: how close a fire burns to a chef with free hands. */ alarm: number;
+};
+/** A cheer is one hop with both arms up; a toss is a quick overarm swing. */
+const CHEER_SECONDS = .62, TOSS_SECONDS = .28;
 /**
  * Animate one chef for this frame. `t` is local seconds; `still` (reduced motion) keeps essential state
  * (position, facing, carrying, falling) but drops bobbing, squash, leaning and flourish.
  */
 export function animateRig(rig: Rig, pose: Pose) {
   const { chef, dt, t, still } = pose, motion = still ? 0 : 1;
+  const cheer = !still && pose.cheer >= 0 && pose.cheer < CHEER_SECONDS ? Math.sin(pose.cheer / CHEER_SECONDS * Math.PI) : 0, toss = !still && pose.toss >= 0 && pose.toss < TOSS_SECONDS ? 1 - pose.toss / TOSS_SECONDS : 0;
+  const alarm = still ? 0 : clamp(pose.alarm, 0, 1);
   rig.root.position.set(pose.x, 0, pose.z);
   if (Math.hypot(pose.fx, pose.fz) > .01) { const target = Math.atan2(pose.fx, pose.fz); rig.yaw += angleTo(rig.yaw, target) * (1 - Math.exp(-(still ? 60 : 22) * dt)); }
   rig.root.rotation.y = rig.yaw;
@@ -98,7 +106,8 @@ export function animateRig(rig: Rig, pose: Pose) {
   rig.dash = damp(rig.dash, chef.dashing ? 1 : 0, chef.dashing ? 30 : 9, dt);
   const step = Math.sin(rig.phase), bounce = Math.abs(Math.cos(rig.phase)) * Math.min(1, move);
   // Squash and stretch: rise on each step, stretch along the dash.
-  const stretch = 1 + motion * (.07 * (bounce - .5) * Math.min(1, move) - .1 * rig.dash);
+  // A standing chef breathes; a cheer stretches up through the hop and squashes on landing.
+  const stretch = 1 + motion * (.07 * (bounce - .5) * Math.min(1, move) - .1 * rig.dash + (1 - Math.min(1, move)) * Math.sin(t * 2.3) * .014) + cheer * .12 - (pose.cheer >= CHEER_SECONDS && pose.cheer < CHEER_SECONDS + .12 && !still ? .08 : 0);
   const long = 1 + motion * .3 * rig.dash, wide = 1 / Math.sqrt(stretch * long);
   // Falling into a gap, then a springy respawn pop.
   const fallFor = chef.respawnAt > 0 ? (pose.now - (chef.respawnAt - RESPAWN_SECONDS * 1000)) / 1000 : -1;
@@ -112,12 +121,14 @@ export function animateRig(rig: Rig, pose: Pose) {
   rig.root.visible = drop < .8;
   const shrink = drop > 0 ? Math.max(0, 1 - drop) : 1;
   rig.body.scale.set(wide * pop * shrink, stretch * pop * shrink, long * wide * pop * shrink);
-  rig.body.position.y = motion * bounce * .07 - sink;
+  rig.body.position.y = motion * bounce * .07 + cheer * .42 + alarm * Math.abs(Math.sin(t * 13)) * .05 - sink;
   rig.body.rotation.set(motion * (move * .1 + forward * .22 + rig.dash * .3) + (chef.connected ? 0 : .25), drop > 0 && !still ? drop * 10 : 0, motion * -side * .18);
   // Head follows with a little lag and nods while working.
   const working = chef.work !== 'none';
-  rig.head.rotation.x = motion * (working ? .18 + Math.sin(t * 14) * .06 : -forward * .1) + (chef.connected ? 0 : .4);
+  rig.head.rotation.x = motion * (working ? .18 + Math.sin(t * 14) * .06 : -forward * .1 - cheer * .3) + (chef.connected ? 0 : .4);
   rig.head.rotation.z = motion * (working ? 0 : Math.sin(t * 1.3 + rig.phase * .1) * .04);
+  // Standing idle, a chef glances around (the whole animal turns, so it looks less far); near a fire the head whips side to side.
+  rig.head.rotation.y = motion * (alarm > 0 ? Math.sin(t * 11) * .5 * alarm : working || move > .15 ? 0 : Math.sin(t * .8 + rig.phase * .3) * (rig.mode === 'pivot' ? .32 : .12));
   // Feet and legs.
   for (let i = 0; i < 2; i++) {
     const swing = Math.sin(rig.phase + i * Math.PI) * Math.min(1, move);
@@ -132,6 +143,9 @@ export function animateRig(rig: Rig, pose: Pose) {
     if (rig.mode === 'pivot') {
       const arm = rig.hands[i];
       if (carry) arm.rotation.set(-1.35 + motion * Math.sin(t * 9) * .03, 0, -side * .12);
+      else if (cheer > 0) arm.rotation.set(-2.7 * cheer, 0, -side * .35 * cheer);
+      else if (toss > 0 && i) arm.rotation.set(-2.5 + (1 - toss) * 2.1, 0, 0);
+      else if (alarm > 0 && !working) arm.rotation.set(-2.6 + Math.sin(t * 16 + i * Math.PI) * .45, 0, -side * .4);
       else if (chop) arm.rotation.set(i ? -1.1 + Math.sin(t * 15) * .5 * (still ? .3 : 1) : -.9, 0, 0);
       else if (wash) arm.rotation.set(-1.05 + Math.sin(t * 9 + i * Math.PI) * .22, 0, -side * .1);
       else arm.rotation.set(swing * .55 * motion, 0, side * .06);
@@ -140,6 +154,9 @@ export function animateRig(rig: Rig, pose: Pose) {
     const rest = rig.handRest[i];
     let x = rest.x * rig.unit, y = rest.y * rig.unit, z = rest.z * rig.unit;
     if (carry || spray) { x = side * .21; y = .62 + motion * Math.sin(t * 9 + i) * .01; z = .34; if (spray && chef.work === 'spray') { y += motion * Math.sin(t * 40) * .012; } }
+    else if (cheer > 0) { x = side * (.3 + cheer * .08); y = lerp(y, 1.12, cheer); z = .04; }
+    else if (toss > 0 && i) { x = .26; y = .86 - (1 - toss) * .2; z = .1 + (1 - toss) * .5; }
+    else if (alarm > 0 && !working) { x = side * .33; y = 1.02 + Math.sin(t * 16 + i * Math.PI) * .12; z = .05; }
     else if (chop) { if (i) { x = .2; y = .74 + Math.abs(Math.sin(t * 7.5)) * .2 * (still ? .3 : 1); z = .42; } else { x = -.18; y = .66; z = .44; } }
     else if (wash) { x = side * .17 + Math.cos(t * 9 + i * Math.PI) * .06 * motion; y = .62 + Math.sin(t * 9 + i * Math.PI) * .04 * motion; z = .42; }
     else { z += swing * .14 * motion; y += motion * (Math.sin(t * 2.2 + i) * .012 + Math.abs(swing) * .03); }

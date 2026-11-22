@@ -1,5 +1,6 @@
 /* Kitchen Rush: warm diner tickets and chunky ink outlines over the shared party palette. */
 .kr-stage, .kr-phone, .kr-settings, .kr-results, .kr-lobby, .kr-instructions {
+  --line: var(--kp-sun);
   --kr-paper: #fff8e7; --kr-tray: #f3e5c4; --kr-brown: #2b1b12; --kr-ok: var(--kp-lime); --kr-warn: var(--kp-sun); --kr-bad: var(--kp-coral);
 }
 
@@ -33,6 +34,11 @@
 .kp-scene-stage:has(.kr-stage-solo) > .kp-scene-surface { --kr-hud-bottom: calc(var(--u) * 3); --kr-hud-left: calc(var(--p) + var(--u) * 3); --kr-hud-right: calc(var(--g) * 1.07 + var(--d) + var(--u) * 3.5); }
 @container (max-height: 420px) { .kp-scene-stage:has(.kr-stage-solo) > .kp-scene-surface { --kr-hud-top: 56px; --kr-hud-bottom: 0px; } }
 .kp-scene-overlay:has(> .kr-stage) { inset: 0; }
+/* A soft vignette draws the eye to the kitchen; while anything burns the edges of the screen glow with the fire. */
+.kp-scene-stage:has(.kr-stage) > .kp-scene-surface::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(125% 100% at 50% 46%, transparent 56%, #0d0a2466 100%); }
+.kr-stage[data-fire]::before { content: ''; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 calc(var(--u) * 15) calc(var(--u) * 3) #ff5a1eb3; animation: kr-heat .9s ease-in-out infinite alternate; }
+/* Phones mount the scene stage too. With one kitchen on the shared screen it stays empty under the classic controller. */
+.kp-scene-overlay:has(> .kr-phone) { inset: 0; pointer-events: auto; }
 /* --u resolves to pixels once at the stage (registered), so nested containers such as tickets inherit the same unit. */
 @property --kr-u { syntax: '<length>'; inherits: true; initial-value: 6px; }
 .kr-stage { position: absolute; inset: 0; container-type: size; pointer-events: none; color: var(--kp-cream); --kr-u: clamp(4px, min(1cqh, .56cqw), 12px); --u: var(--kr-u); }
@@ -70,10 +76,11 @@
 .kr-relaxed { position: absolute; top: calc(var(--u) * 9.6); right: calc(var(--u) * 1.6); padding: calc(var(--u) * .3) calc(var(--u) * 1.2); border-radius: 99px; background: var(--kp-sky); color: var(--kp-ink); font-weight: 900; font-size: calc(var(--u) * 1.6); text-transform: uppercase; letter-spacing: .08em; }
 .kr-stage-solo .kr-relaxed { top: auto; bottom: calc(var(--u) * 1.6); right: 50%; transform: translateX(50%); }
 .kr-footer { position: absolute; left: calc(var(--u) * 1.6); right: calc(var(--u) * 1.6); bottom: calc(var(--u) * 1.4); display: flex; align-items: flex-end; justify-content: space-between; gap: calc(var(--u) * 2); }
-.kr-score { display: grid; grid-template-columns: auto auto auto; align-items: center; justify-content: start; gap: calc(var(--u) * .4) calc(var(--u) * .9); padding: calc(var(--u) * .8) calc(var(--u) * 1.6) calc(var(--u) * 1.4) calc(var(--u) * 1); background: #05071ae6; border: calc(var(--u) * .4) solid #fff6e533; border-radius: calc(var(--u) * 2.2); box-shadow: 0 calc(var(--u) * .6) 0 #0009; }
+.kr-score { position: relative; display: grid; grid-template-columns: auto auto auto; align-items: center; justify-content: start; gap: calc(var(--u) * .4) calc(var(--u) * .9); padding: calc(var(--u) * .8) calc(var(--u) * 1.6) calc(var(--u) * 1.4) calc(var(--u) * 1); background: #05071ae6; border: calc(var(--u) * .4) solid #fff6e533; border-radius: calc(var(--u) * 2.2); box-shadow: 0 calc(var(--u) * .6) 0 #0009; }
 .kr-coin { display: grid; place-items: center; width: calc(var(--u) * 5); height: calc(var(--u) * 5); border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff1a8, var(--kp-sun) 45%, #d99a1e); color: #7a4d06; box-shadow: 0 0 0 calc(var(--u) * .35) var(--kp-ink); }
 .kr-coin svg { width: 62%; height: 62%; stroke-width: 2.4; }
 .kr-score-value { font-size: calc(var(--u) * 5); line-height: 1; min-width: 2.2em; color: var(--kp-cream); animation: kr-bump .35s; }
+.kr-gain { position: absolute; left: calc(var(--u) * 6.4); top: calc(var(--u) * -2.6); font-size: calc(var(--u) * 3.4); font-style: normal; color: var(--kp-lime); text-shadow: 0 calc(var(--u) * .3) 0 var(--kp-ink), 0 0 calc(var(--u) * .8) var(--kp-ink); pointer-events: none; animation: kr-gain 1.2s cubic-bezier(.2, .9, .3, 1) forwards; }
 .kr-combo { display: grid; justify-items: center; padding: calc(var(--u) * .3) calc(var(--u) * 1); border-radius: calc(var(--u) * 1.2); font: calc(var(--u) * 2.6)/1 var(--font-display); background: #fff6e51f; color: #fff6e599; animation: kr-bump .35s; }
 .kr-combo small { font: 900 calc(var(--u) * 1.1)/1.2 var(--font-body); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
 .kr-combo-2 { background: var(--kp-sky); color: var(--kp-ink); } .kr-combo-3 { background: var(--kp-lime); color: var(--kp-ink); }
@@ -94,7 +101,42 @@
 .kr-banner-fire { background: var(--kp-coral); color: var(--kp-cream); animation: kr-banner-in .45s both, kr-pulse 1s .45s infinite; }
 .kr-banner-star { background: linear-gradient(180deg, #fff1a8, var(--kp-sun)); }
 .kr-banner-star svg { fill: currentColor; }
+.kr-banner-rush { background: linear-gradient(180deg, #ff9a3d, var(--kp-coral)); color: var(--kp-cream); } .kr-banner-rush svg { fill: var(--kp-sun); color: var(--kp-sun); }
+.kr-combo.kr-rush { background: linear-gradient(180deg, #ff9a3d, var(--kp-coral)); color: var(--kp-cream); box-shadow: 0 0 calc(var(--u) * 1.8) #ff9a3d; }
 .kr-callout { position: absolute; top: 45%; left: 50%; margin: 0; font-size: calc(var(--u) * 15); color: var(--kp-sun); transform: translate(-50%, -50%); white-space: nowrap; animation: kr-callout .9s cubic-bezier(.2, 1.4, .4, 1) both; }
+
+/* ── Kitchen lines: badge, broadcast board ─────────────────────────────── */
+.kr-line { display: inline-flex; align-items: center; gap: .4em; font-weight: 900; white-space: nowrap; color: var(--kp-cream); vertical-align: middle; }
+.kr-line > b { display: grid; place-items: center; flex: none; min-width: 1.55em; height: 1.55em; border-radius: .42em; background: var(--line); color: var(--kp-ink); font: 1em/1 var(--font-display); box-shadow: 0 0 0 .13em var(--kp-ink); }
+.kr-line > em { padding: 0 .55em; border-radius: 99px; background: #fff6e52e; font-size: .85em; font-style: normal; }
+.kr-corner > .kr-line { padding: calc(var(--u) * .5) calc(var(--u) * 1.2) calc(var(--u) * .5) calc(var(--u) * .6); font-size: max(11px, calc(var(--u) * 2.1)); background: #05071ae6; border: calc(var(--u) * .35) solid var(--line); border-radius: 99px; }
+/* Broadcast: every kitchen is on screen, so the HUD is the clock, the shared score and one card per kitchen along the bottom. */
+.kp-scene-stage:has(.kr-stage-broadcast) > .kp-scene-surface { --kr-hud-top: calc(11 * var(--u)); --kr-hud-bottom: calc(16.5 * var(--u)); }
+.kr-broadcast-top { position: absolute; top: calc(var(--u) * 1.6); left: calc(var(--u) * 1.6); right: calc(var(--u) * 1.6); display: flex; align-items: flex-start; justify-content: space-between; gap: calc(var(--u) * 2); }
+.kr-broadcast-top .kr-score { grid-template-columns: auto auto auto minmax(calc(var(--u) * 26), 1fr); padding-bottom: calc(var(--u) * .8); }
+.kr-broadcast-top .kr-star-bar { grid-column: auto; margin: 0 calc(var(--u) * 1.6) 0 calc(var(--u) * 1.4); }
+.kr-shared { background: var(--kp-sun); color: var(--kp-ink); font-size: calc(var(--u) * 2.1); }
+.kr-stage-broadcast .kr-banners { top: calc(var(--u) * 11.5); }
+.kr-board { position: absolute; left: calc(var(--u) * 1.6); right: calc(var(--u) * 1.6); bottom: calc(var(--u) * 1.4); display: flex; justify-content: center; gap: calc(var(--u) * 1.2); margin: 0; padding: 0; list-style: none; }
+.kr-board-line { position: relative; flex: 1 1 0; min-width: 0; max-width: calc(var(--u) * 38); display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: calc(var(--u) * .3) calc(var(--u) * 1); padding: calc(var(--u) * .8) calc(var(--u) * 1.2) calc(var(--u) * .9); background: #05071ae6; border: calc(var(--u) * .4) solid #fff6e533; border-top: calc(var(--u) * .9) solid var(--line); border-radius: calc(var(--u) * 1.8); box-shadow: 0 calc(var(--u) * .6) 0 #0009; }
+.kr-board-line > .kr-line { grid-column: 1 / -1; min-width: 0; font-size: calc(var(--u) * 2.3); }
+.kr-board-line > .kr-line > span { overflow: hidden; text-overflow: ellipsis; }
+.kr-board-line > output { font-size: calc(var(--u) * 4.2); line-height: 1; color: var(--kp-cream); animation: kr-bump .35s; }
+.kr-board-line > .kr-stars { display: flex; justify-self: end; gap: 1px; }
+.kr-board-line > .kr-stars svg { width: calc(var(--u) * 2.6); height: calc(var(--u) * 2.6); }
+.kr-board-line > em { position: absolute; top: calc(var(--u) * .5); right: calc(var(--u) * 1); font: calc(var(--u) * 2) var(--font-display); font-style: normal; color: #fff6e599; }
+.kr-board-line.kr-lead { border-color: var(--kp-sun); border-top-color: var(--line); box-shadow: 0 calc(var(--u) * .6) 0 #0009, 0 0 calc(var(--u) * 2.4) #ffd24a66; }
+.kr-board-line.kr-lead > em { color: var(--kp-sun); }
+.kr-board-line.kr-burning { animation: kr-pulse 1s infinite; border-color: var(--kp-coral); }
+.kr-board-orders { grid-column: 1 / -1; display: flex; align-items: center; gap: calc(var(--u) * .5); min-height: calc(var(--u) * 4.4); }
+.kr-board-orders > i { display: grid; place-items: center; width: calc(var(--u) * 4.2); height: calc(var(--u) * 4.2); border-radius: 50%; background: var(--kr-paper); box-shadow: 0 0 0 calc(var(--u) * .4) var(--kr-ok); font-size: calc(var(--u) * 4); }
+.kr-board-orders > i.kr-wait-warn { box-shadow: 0 0 0 calc(var(--u) * .4) var(--kr-warn); }
+.kr-board-orders > b { font: calc(var(--u) * 2) var(--font-display); color: #fff6e5b3; }
+.kr-board-orders > i.kr-wait-urgent { box-shadow: 0 0 0 calc(var(--u) * .5) var(--kr-bad); animation: kr-shake .55s infinite; }
+.kr-board-fire { width: calc(var(--u) * 3.6); height: calc(var(--u) * 3.6); color: var(--kp-coral); fill: var(--kp-sun); }
+/* Seven or eight kitchens: cards keep the badge letter, coins, stars and tickets; names return when there is room. */
+.kr-stage-broadcast[data-lines='7'] .kr-board-line > .kr-line > span, .kr-stage-broadcast[data-lines='8'] .kr-board-line > .kr-line > span { display: none; }
+.kr-stage-broadcast[data-lines='7'] .kr-board-orders > i, .kr-stage-broadcast[data-lines='8'] .kr-board-orders > i { width: calc(var(--u) * 3.2); height: calc(var(--u) * 3.2); font-size: calc(var(--u) * 3); }
 
 /* ── Controls (phone and solo) ─────────────────────────────────────────── */
 .kr-cluster { position: relative; --gap: calc(var(--g) * .07); width: calc(var(--g) + var(--gap) + var(--d)); height: calc(var(--g) * .9 + var(--a)); }
@@ -133,16 +175,17 @@
 .kr-strip-top { display: flex; align-items: center; gap: 8px; }
 .kr-me { display: grid; place-items: center; min-width: 28px; height: 28px; padding: 0 6px; border-radius: 99px; background: var(--chef); color: var(--kp-ink); font: 17px var(--font-display); box-shadow: 0 0 0 2px var(--kp-ink); }
 .kr-strip-time { margin-left: auto; font-size: 20px; }
-.kr-fullscreen { position: relative; display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; border: 2px solid #fff6e540; border-radius: 99px; background: #05071acc; color: var(--kp-cream); font: 900 12px var(--font-body); cursor: pointer; }
+.kr-strip-top > .kr-line { font-size: 13px; }
+.kr-fullscreen { position: relative; display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; white-space: nowrap; border: 2px solid #fff6e540; border-radius: 99px; background: #05071acc; color: var(--kp-cream); font: 900 12px var(--font-body); cursor: pointer; }
 .kr-fullscreen::after { content: ''; position: absolute; inset: -7px -4px; } /* 44px touch target around the slim pill. */
 .kr-fullscreen svg { width: 15px; height: 15px; stroke-width: 2.6; }
 @container kr-strip (max-width: 260px) { .kr-fullscreen { padding: 0 8px; } .kr-fullscreen span { display: none; } }
 .kr-fullscreen:focus-visible { outline: 3px solid var(--kp-sun); outline-offset: 2px; }
 /* While the phone controller is up, the shell header (title, room code, sound: phones play no kitchen audio) is hidden
    and the controller takes the whole visible viewport. Extra specificity outranks other games' immersive-phone rules. */
-.kp-shell.kp-shell-phone:has(.kr-phone) { padding-top: 0; }
-.kp-shell.kp-shell-phone:has(.kr-phone) > .kp-header { display: none; }
-.kp-shell.kp-shell-phone:has(.kr-phone) .kp-landscape-controller { top: calc(var(--phone-top, 0px) + max(6px, var(--safe-top))); bottom: auto; height: calc(var(--phone-height, 100dvh) - max(6px, var(--safe-top)) - max(6px, var(--safe-bottom))); }
+.kp-shell.kp-shell-phone:has(.kr-phone, .kr-handheld) { padding-top: 0; }
+.kp-shell.kp-shell-phone:has(.kr-phone, .kr-handheld) > .kp-header { display: none; }
+.kp-shell.kp-shell-phone:has(.kr-phone, .kr-handheld) .kp-landscape-controller { top: calc(var(--phone-top, 0px) + max(6px, var(--safe-top))); bottom: auto; height: calc(var(--phone-height, 100dvh) - max(6px, var(--safe-top)) - max(6px, var(--safe-bottom))); }
 .kr-strip-score { display: flex; align-items: baseline; gap: 3px; padding: 1px 8px; border-radius: 99px; background: #05071acc; color: var(--kp-sun); font-size: 20px; }
 .kr-strip-score small { font: 900 11px var(--font-body); color: var(--kp-lime); white-space: nowrap; }
 .kr-card { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 5px 8px; border-radius: 12px; background: #05071ad0; border: 2px solid #fff6e526; }
@@ -239,6 +282,40 @@
 /* Narrow phones: solo tickets keep the dish icon and patience bar; names return when there is room. */
 @container (max-height: 420px) and (max-width: 700px) { .kr-stage-solo .kr-order strong { display: none; } .kr-stage-solo .kr-order > header { justify-content: center; } }
 
+/* ── Phone in a restaurant of several kitchens: its own kitchen with the controls floating over it ───── */
+/* The camera follows the chef, so no bands are reserved: the pad and buttons are translucent and the tickets stay one row tall. */
+.kr-handheld, .kp-scene-stage:has(.kr-stage-handheld) > .kp-scene-surface { --p: clamp(108px, 34cqh, 150px); --g: clamp(84px, 26cqh, 116px); --kr-hud-left: 0px; --kr-hud-right: 0px; --kr-hud-bottom: 0px; --kr-hud-top: 0px; }
+.kp-scene-stage:has(.kr-stage-handheld) { border-radius: 16px; }
+.kr-handheld .kr-steer { opacity: .86; } .kr-handheld .kr-cluster { opacity: .94; }
+.kr-handheld .kr-action-act small { display: block; }
+.kr-stage-handheld .kr-rail { top: 6px; left: 6px; right: 150px; flex-wrap: wrap; gap: 5px; max-height: 96px; overflow: hidden; }
+.kr-stage-handheld .kr-rail::before { display: none; }
+.kr-stage-handheld .kr-order-compact { flex: 0 1 auto; min-width: 0; grid-template-columns: auto minmax(0, 1fr); container-type: normal; }
+.kr-stage-handheld .kr-order-compact .kr-order-parts { display: flex; }
+.kr-stage-handheld .kr-order-compact strong { display: none; }
+.kr-stage-handheld .kr-order-compact .kr-order-dish { font-size: 30px; }
+.kr-stage-handheld .kr-order-compact .kr-order-parts { font-size: 26px; }
+.kr-stage-handheld .kr-corner { top: 6px; right: 6px; gap: 5px; }
+.kr-stage-handheld .kr-timer { font-size: 22px; padding: 2px 12px 2px 8px; border-width: 2px; box-shadow: 0 3px 0 #0009; }
+.kr-stage-handheld .kr-corner .kr-score { padding: 3px 9px 7px 5px; gap: 2px 5px; border-width: 2px; border-radius: 13px; box-shadow: 0 3px 0 #0009; }
+.kr-stage-handheld .kr-coin { width: 22px; height: 22px; box-shadow: 0 0 0 2px var(--kp-ink); }
+.kr-stage-handheld .kr-score-value { font-size: 22px; }
+.kr-stage-handheld .kr-combo { padding: 2px 6px; border-radius: 8px; font-size: 14px; } .kr-stage-handheld .kr-combo small { font-size: 8px; }
+.kr-stage-handheld .kr-star-bar { height: 6px; margin: 5px 8px 0 3px; } .kr-stage-handheld .kr-star-bar > span { font-size: 15px; }
+.kr-stage-handheld .kr-corner > .kr-line { padding: 2px 8px 2px 4px; font-size: 12px; border-width: 2px; }
+.kr-stage-handheld .kr-banners { top: 104px; } .kr-stage-handheld .kr-banner { font-size: 15px; padding: 4px 14px; border-width: 2px; box-shadow: 0 3px 0 var(--kp-ink); }
+.kr-stage-handheld .kr-callout { font-size: 64px; }
+.kr-stage-handheld .kr-relaxed { font-size: 10px; padding: 1px 8px; }
+.kr-stage-handheld .kr-gain { left: 26px; top: -14px; font-size: 16px; }
+.kr-handheld .kr-steer { left: max(8px, var(--safe-left)); bottom: 8px; } .kr-handheld .kr-cluster { right: max(8px, var(--safe-right)); bottom: 10px; }
+.kr-handheld .kr-solo-status { left: calc(var(--p) + max(8px, var(--safe-left)) + 10px); bottom: 8px; width: auto; max-width: calc(100% - var(--p) - var(--g) * 2.1 - 60px); font-size: 12px; padding: 3px 9px 3px 5px; border-width: 2px; border-radius: 12px; }
+.kr-handheld .kr-solo-status .kr-item { font-size: 34px; }
+.kr-handheld .kr-solo-status small { display: block; }
+.kr-handheld .kr-solo-status em { max-width: 260px; padding: 3px 9px; border-radius: 9px; font-size: 12px; }
+.kr-handheld .kr-fullscreen { position: absolute; right: calc(var(--g) + var(--d) + 34px); bottom: 10px; }
+.kr-handheld .kr-fullscreen span { display: none; }
+.kr-handheld .kr-phone-alert { border-radius: 16px; }
+
 /* ── Settings ──────────────────────────────────────────────────────────── */
 .kr-settings { display: grid; gap: 12px; }
 .kr-settings-head { display: flex; align-items: end; justify-content: space-between; gap: 1rem; }
@@ -331,6 +408,31 @@
   .kr-awards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+/* A restaurant of several kitchens: one panel per kitchen in finishing order, each chef on a row with their award. */
+.kr-night { background: #ffd24a26 !important; color: var(--kp-sun); } .kr-night > svg { width: 20px; height: 20px; fill: currentColor; } .kr-night .kr-line { font-size: .95rem; }
+.kr-kitchens { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: clamp(6px, 1.1vh, 12px); width: 100%; margin: 0; padding: 0; list-style: none; text-align: left; }
+.kr-kitchens[data-lines='2'], .kr-kitchens[data-lines='3'] { grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 420px)); justify-content: center; }
+.kr-kitchens > li { min-width: 0; padding: 6px 8px 8px; border-radius: 16px; background: linear-gradient(180deg, color-mix(in srgb, var(--line) 26%, transparent), transparent 64px), #05071aa6; border: 3px solid color-mix(in srgb, var(--line) 70%, #05071a); box-shadow: 0 4px 0 #0008; animation: kr-award-in .45s calc(1.2s + var(--i) * .09s) cubic-bezier(.2, 1.4, .4, 1) both; }
+.kr-kitchens > li.kr-lead { border-color: var(--kp-sun); box-shadow: 0 4px 0 #0008, 0 0 22px #ffd24a55; }
+.kr-kitchens > li.kr-mine { outline: 3px solid var(--kp-cream); outline-offset: 2px; }
+.kr-kitchens header { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 0 8px; margin-bottom: 4px; }
+.kr-kitchens header > em { min-width: 2.2em; font-size: 1.15rem; font-style: normal; color: #fff6e5b3; text-align: center; }
+.kr-kitchens header > em svg { width: 24px; height: 24px; color: var(--kp-sun); fill: var(--kp-sun); vertical-align: -5px; }
+.kr-kitchens header > output { justify-self: end; font-size: 1.5rem; line-height: 1; color: var(--kp-cream); }
+.kr-kitchens header > .kr-stars { display: flex; } .kr-kitchens header > .kr-stars svg { width: 18px; height: 18px; }
+.kr-kitchens header > small { grid-column: 2 / -1; font-size: .72rem; font-weight: 800; color: #fff6e5a6; }
+.kr-kitchens ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.kr-kitchens ul > li { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 6px; min-height: 24px; padding: 0 8px 0 2px; border-radius: 99px; background: #05071a8c; }
+.kr-kitchens ul .kr-icon { font-size: 24px; }
+.kr-kitchens ul b { display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 3px; border-radius: 99px; background: var(--chef); color: var(--kp-ink); font: .72rem var(--font-display); }
+.kr-kitchens ul strong { overflow: hidden; font-size: .82rem; white-space: nowrap; text-overflow: ellipsis; }
+.kr-kitchens ul small { font: .78rem var(--font-display); color: var(--kp-sun); white-space: nowrap; }
+.kr-kitchens ul > li.kr-me-row { background: var(--kp-cream); color: var(--kp-ink); } .kr-kitchens ul > li.kr-me-row small { color: #8a4a00; }
+.kr-results[data-many] .kr-result-stars svg { width: clamp(30px, min(5.5vh, 8vw), 52px); height: clamp(30px, min(5.5vh, 8vw), 52px); }
+.kr-results[data-many] .kr-result-stars > span:nth-child(2) svg { width: clamp(38px, min(7vh, 10vw), 66px); height: clamp(38px, min(7vh, 10vw), 66px); }
+.kr-results[data-many] h1 { font-size: clamp(1.5rem, min(3.4vw, 5vh), 2.8rem); }
+@media (max-height: 800px) { .kr-kitchens ul > li { min-height: 21px; } .kr-kitchens ul .kr-icon { font-size: 21px; } .kr-kitchens > li { padding: 4px 6px 6px; } }
+
 /* ── Motion ────────────────────────────────────────────────────────────── */
 @keyframes kr-order-in { from { opacity: 0; transform: translateY(-60%) rotate(-4deg); } }
 @keyframes kr-shake { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-2.2deg) translateX(-2px); } 75% { transform: rotate(2.2deg) translateX(2px); } }
@@ -346,8 +448,11 @@
 @keyframes kr-spin { to { transform: rotate(360deg); } }
 @keyframes kr-star-in { 0% { opacity: 0; transform: scale(0) rotate(-120deg); } 100% { opacity: 1; transform: none; } }
 @keyframes kr-award-in { from { opacity: 0; transform: translateY(18px) scale(.92); } }
+@keyframes kr-gain { 0% { opacity: 0; transform: translateY(60%) scale(.6); } 18% { opacity: 1; transform: translateY(0) scale(1.15); } 70% { opacity: 1; transform: translateY(-40%) scale(1); } 100% { opacity: 0; transform: translateY(-110%) scale(.9); } }
+@keyframes kr-heat { from { opacity: .45; } to { opacity: 1; } }
 @keyframes kr-note { from { opacity: 0; transform: translateY(6px) scale(.9); } 8%, 85% { opacity: 1; transform: none; } to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .kr-stage *, .kr-phone *, .kr-results *, .kr-settings *, .kr-lobby *, .kr-tone-warn, .kr-tone-danger { animation: none !important; transition: none !important; }
   .kr-order-served, .kr-order-expired { opacity: .35; }
+  .kr-stage[data-fire]::before { animation: none; } .kr-gain { display: none; }
 }

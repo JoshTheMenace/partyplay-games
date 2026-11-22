@@ -3,13 +3,14 @@ import type { GameRules, Outcome, RoundContext } from '../../../party-contract/s
 import {
   ACCEL, BELT_SECONDS, BURN_AT, BURN_WARN, CHARACTERS, CHEF_RADIUS, CHOP_SECONDS, CHOPPABLE, DASH_COOLDOWN, DASH_SECONDS, DASH_SPEED,
   DEFAULT_SETTINGS, EVENT_LIMIT, EXTINGUISH_SECONDS, FIRE_SPREAD_SECONDS, FLAMMABLE, ICE_ACCEL, ICE_DRAG, INGREDIENTS, PAN_CAPACITY, PAN_FOODS,
-  PLATE_CAPACITY, POT_CAPACITY, POT_FOODS, RECIPES, RESPAWN_SECONDS, RETURN_SECONDS, SURFACES, THROW_SECONDS, THROW_SPEED, WALK_SPEED, WALKABLE,
-  WASH_SECONDS, cookSeconds, matchRecipe, neutral, tileAt,
+  PLATE_CAPACITY, POT_CAPACITY, POT_FOODS, RECIPES, RESPAWN_SECONDS, RETURN_SECONDS, RUSH_SECONDS, SURFACES, THROW_SECONDS, THROW_SPEED, WALK_SPEED, WALKABLE,
+  WASH_SECONDS, cookSeconds, lineSizes, matchRecipe, neutral, rankScores, tileAt, zeroStats,
   type CharacterId, type Chef, type ChefStats, type Command, type EventType, type GameEvent, type Input, type Item, type KitchenMap, type Level,
-  type Loose, type Order, type Part, type RecipeId, type Settings, type Tile, type TileState, type View, type Work,
+  type Loose, type Order, type Own, type Part, type RecipeId, type Settings, type Tile, type TileState, type View, type Work,
 } from './model';
 import { LEVELS, crewScale, kitchenMap, starThresholds } from './levels';
 import { nextRandom, nextRecipe, openingOrders, orderCap, orderPatience } from './orders';
+import { encodeWire, type Wire } from './wire';
 
 // ── Server-only state ───────────────────────────────────────────────────────
 /** Runtime fields ride along on the public Chef; publicView projects explicitly so they never leak. */
@@ -23,8 +24,9 @@ type Kitchen = {
   surfaces: number[]; heaters: number[]; flammable: number[]; belts: number[]; shown: number[]; next: number[]; neighbours: number[][];
   rackFor: number[]; plateFor: number[]; plateHome: number; dirtyReturns: boolean;
 };
+/** One kitchen and its crew. A service runs one of these per line (model.ts `lineSizes`). */
 export type State = {
-  settings: Settings; map: KitchenMap; level: Level; kitchen: Kitchen;
+  settings: Settings; map: KitchenMap; level: Level; kitchen: Kitchen; line: number; first: number;
   players: Cook[]; slots: Slot[]; loose: Drop[]; orders: Order[]; events: GameEvent[]; pending: Pending[];
   /** Home tile of pots, pans and extinguishers; chef who last put an item on a heater (burn blame). */
   homes: Map<number, number>; placedBy: Map<number, string>;
@@ -92,10 +94,9 @@ const character = (choice: unknown): CharacterId => {
   const id = (choice as { character?: unknown } | undefined)?.character;
   return CHARACTERS.find(item => item.id === id)?.id ?? 'chef';
 };
-const zeroStats = (): ChefStats => ({ served: 0, chopped: 0, washed: 0, cooked: 0, thrown: 0, caught: 0, extinguished: 0, burnt: 0, dashes: 0, falls: 0 });
 
-/** Builds a round on any map (tests pass custom maps from parseMap). */
-export function createState(ctx: RoundContext, settings: Settings, map: KitchenMap, level: Level): State {
+/** Builds one kitchen on any map (tests pass custom maps from parseMap). */
+export function createState(ctx: RoundContext, settings: Settings, map: KitchenMap, level: Level, line = 0, first = 0): State {
   const kitchen = analyse(map), count = ctx.players.length, now = ctx.nowMs, spawns = map.spawns.length ? map.spawns : [{ x: 0, z: 0 }];
   const players = ctx.players.map((player, i): Cook => {
     const spawn = spawns[i % spawns.length], lap = Math.floor(i / spawns.length);
@@ -107,7 +108,7 @@ export function createState(ctx: RoundContext, settings: Settings, map: KitchenM
     };
   });
   const s: State = {
-    settings: { ...settings }, map, level, kitchen, players, loose: [], orders: [], events: [], pending: [], homes: new Map(), placedBy: new Map(),
+    settings: { ...settings }, map, level, kitchen, line, first, players, loose: [], orders: [], events: [], pending: [], homes: new Map(), placedBy: new Map(),
     slots: map.tiles.map(() => ({ item: null, progress: 0, fire: 0, count: 0, spread: 0, sprayed: false })),
     startedAt: now, endsAt: now + settings.seconds * 1000, now, complete: false,
     score: 0, combo: 1, served: 0, failed: 0, stars: 0, bestStars: 0, thresholds: starThresholds(settings.level, count, settings.seconds),
@@ -498,7 +499,8 @@ function serve(s: State, c: Cook, tile: Tile, held: Item): boolean {
     emit(s, 'wrong', { ...where(tile), player: c.id, ...(recipe ? { recipe } : {}) });
     return say(s, c, !held.parts.length ? 'The plate is empty' : recipe ? `No one ordered ${RECIPES[recipe].name.toLowerCase()}` : 'That is not on the menu'), false;
   }
-  const left = clamp((order.expiresAt - s.now) / (order.expiresAt - order.createdAt), 0, 1), value = RECIPES[recipe].value + Math.round(8 * left) * s.combo;
+  // Rush hour: tips count double in the last seconds of the service.
+  const left = clamp((order.expiresAt - s.now) / (order.expiresAt - order.createdAt), 0, 1), rush = s.endsAt - s.now <= RUSH_SECONDS * 1000 ? 2 : 1, value = RECIPES[recipe].value + Math.round(8 * left) * s.combo * rush;
   s.orders.splice(s.orders.indexOf(order), 1);
   s.score += value; s.combo = Math.min(4, s.combo + 1); s.served++; s.recipeCounts[recipe] = (s.recipeCounts[recipe] ?? 0) + 1;
   c.stats.served++; c.held = null;
@@ -677,8 +679,53 @@ function highlight(stats: ChefStats) {
   return top ? `${stats[best[0]]} ${best[1]}` : 'Warming up';
 }
 
+// ── One kitchen ─────────────────────────────────────────────────────────────
+/** Advances one kitchen by a fixed step. `inputs` may hold the whole room; a kitchen reads only its own chefs. */
+export function tickLine(s: State, inputs: ReadonlyMap<string, Input>, dt: number, now: number) {
+  if (s.complete) return;
+  s.now = now;
+  if (now >= s.endsAt) { s.complete = true; return; }
+  updateGates(s);
+  for (const c of s.players) {
+    const input = inputs.get(c.id) ?? NEUTRAL;
+    if (input.seq > c.seq) { c.seq = input.seq; if (input.cmd && standing(c)) command(s, c, input.cmd); }
+    if (c.respawnAt && now >= c.respawnAt) respawn(s, c);
+    if (!standing(c)) continue;
+    if (c.dashQueued && now >= c.dashReady) startDash(s, c);
+    move(s, c, input, dt);
+  }
+  separate(s);
+  for (const c of s.players) if (standing(c)) { portal(s, c); c.target = aim(s, c); work(s, c, inputs.get(c.id) ?? NEUTRAL, dt); }
+  heat(s, dt); fires(s, dt); fly(s, dt); belts(s, dt);
+  for (let i = s.pending.length - 1; i >= 0; i--) if (now >= s.pending[i].at) { s.slots[s.pending[i].tile].count += s.pending[i].count; s.pending.splice(i, 1); }
+  updateOrders(s);
+}
+/** One kitchen as screens see it. The wire (wire.ts) carries these packed; tests and bots read them directly. */
+export function lineView(s: State): View {
+  const tiles: TileState[] = [];
+  for (const i of s.kitchen.shown) {
+    const slot = s.slots[i];
+    if (!slot.item && slot.progress <= 0 && slot.fire <= 0 && !slot.count) continue;
+    const tile: TileState = { at: i };
+    if (slot.item) tile.item = itemView(slot.item);
+    if (slot.progress > 0) tile.progress = r3(slot.progress);
+    if (slot.fire > 0) tile.fire = r3(slot.fire);
+    if (slot.count) tile.count = slot.count;
+    tiles.push(tile);
+  }
+  return {
+    settings: { ...s.settings }, players: s.players.map(chefView), tiles, loose: s.loose.map(looseView), orders: s.orders.map(order => ({ ...order })), events: s.events.slice(),
+    startedAt: s.startedAt, endsAt: s.endsAt, now: s.now, complete: s.complete, score: s.score, combo: s.combo, served: s.served, failed: s.failed,
+    stars: s.stars, thresholds: [...s.thresholds], recipeCounts: { ...s.recipeCounts }, gatesOpen: s.gatesOpen, gateWarning: s.gateWarning, line: s.line, first: s.first,
+  };
+}
+
 // ── Rules ───────────────────────────────────────────────────────────────────
-export const rules: GameRules<State, Input, never, Settings, View, null> = {
+/** A service: one kitchen for up to ten chefs, otherwise parallel kitchens of five to eight in seat order. */
+export type Service = { lines: State[]; seats: Map<string, Cook> };
+const lineOfSeat = (service: Service, playerId: string) => service.lines.find(line => line.players.some(c => c.id === playerId));
+
+export const rules: GameRules<Service, Input, never, Settings, Wire, Own | null> = {
   parseLobbyChoice(raw) {
     if (raw === undefined || raw === null) return { character: 'chef' };
     const value = raw as { character?: unknown };
@@ -705,57 +752,31 @@ export const rules: GameRules<State, Input, never, Settings, View, null> = {
   neutralInput: neutral,
   parseAction() { throw new Error('Kitchen Rush uses acknowledged input commands.'); },
   applyAction() {},
-  create: (ctx, settings) => createState(ctx, settings, kitchenMap(settings.level, ctx.players.length), LEVELS[settings.level]),
-  tick(s, inputs, dt, now) {
-    if (s.complete) return;
-    s.now = now;
-    if (now >= s.endsAt) { s.complete = true; return; }
-    updateGates(s);
-    for (const c of s.players) {
-      const input = inputs.get(c.id) ?? NEUTRAL;
-      if (input.seq > c.seq) { c.seq = input.seq; if (input.cmd && standing(c)) command(s, c, input.cmd); }
-      if (c.respawnAt && now >= c.respawnAt) respawn(s, c);
-      if (!standing(c)) continue;
-      if (c.dashQueued && now >= c.dashReady) startDash(s, c);
-      move(s, c, input, dt);
-    }
-    separate(s);
-    for (const c of s.players) if (standing(c)) { portal(s, c); c.target = aim(s, c); work(s, c, inputs.get(c.id) ?? NEUTRAL, dt); }
-    heat(s, dt); fires(s, dt); fly(s, dt); belts(s, dt);
-    for (let i = s.pending.length - 1; i >= 0; i--) if (now >= s.pending[i].at) { s.slots[s.pending[i].tile].count += s.pending[i].count; s.pending.splice(i, 1); }
-    updateOrders(s);
+  create(ctx, settings) {
+    let next = 0;
+    // Every kitchen gets the same seed, so the lines race over the same opening tickets.
+    const lines = lineSizes(ctx.players.length).map((size, line) => { const first = next; next += size; return createState({ ...ctx, players: ctx.players.slice(first, next) }, settings, kitchenMap(settings.level, size), LEVELS[settings.level], line, first); });
+    return { lines, seats: new Map(lines.flatMap(line => line.players.map((c): [string, Cook] => [c.id, c]))) };
   },
-  onPresenceChange(s, playerId, connected) {
-    const c = s.players.find(player => player.id === playerId);
-    if (!c) return;
+  tick(service, inputs, dt, now) { for (const line of service.lines) tickLine(line, inputs, dt, now); },
+  onPresenceChange(service, playerId, connected) {
+    const s = lineOfSeat(service, playerId), c = service.seats.get(playerId);
+    if (!s || !c) return;
     c.connected = connected;
     if (connected) return;
     c.vx = c.vz = c.dash = c.spray = 0; c.dashing = c.dashQueued = false; c.work = 'none';
     if (c.held && !c.respawnAt) { addLoose(s, rest(c.held, c.x, c.z)); c.held = null; emit(s, 'place', { ...where(c), player: c.id }); }
   },
-  publicView(s) {
-    const tiles: TileState[] = [];
-    for (const i of s.kitchen.shown) {
-      const slot = s.slots[i];
-      if (!slot.item && slot.progress <= 0 && slot.fire <= 0 && !slot.count) continue;
-      const tile: TileState = { at: i };
-      if (slot.item) tile.item = itemView(slot.item);
-      if (slot.progress > 0) tile.progress = r3(slot.progress);
-      if (slot.fire > 0) tile.fire = r3(slot.fire);
-      if (slot.count) tile.count = slot.count;
-      tiles.push(tile);
-    }
+  publicView: service => encodeWire(service.lines.map(lineView)),
+  playerView(service, playerId) { const c = service.seats.get(playerId); return c ? { seq: c.seq, note: c.note, noteAt: c.noteAt } : null; },
+  /** Kitchens are ranked by coins. With one kitchen everyone wins together once a dish is out; with several, the leading kitchen takes the night. */
+  outcome(service): Outcome {
+    const { lines } = service, ranks = rankScores(lines.map(s => s.score));
     return {
-      settings: { ...s.settings }, players: s.players.map(chefView), tiles, loose: s.loose.map(looseView), orders: s.orders.map(order => ({ ...order })), events: s.events.slice(),
-      startedAt: s.startedAt, endsAt: s.endsAt, now: s.now, complete: s.complete, score: s.score, combo: s.combo, served: s.served, failed: s.failed,
-      stars: s.stars, thresholds: [...s.thresholds], recipeCounts: { ...s.recipeCounts }, gatesOpen: s.gatesOpen, gateWarning: s.gateWarning,
+      complete: lines[0].complete, winners: lines.flatMap((s, i) => s.served && ranks[i] === 1 ? s.players.map(c => c.id) : []),
+      rows: lines.flatMap((s, i) => s.players.map(c => ({ playerId: c.id, score: s.score, rank: ranks[i], label: highlight(c.stats) }))),
     };
   },
-  playerView: () => null,
-  outcome: (s): Outcome => ({
-    complete: s.complete, winners: s.served ? s.players.map(c => c.id) : [],
-    rows: s.players.map(c => ({ playerId: c.id, score: s.score, rank: 1, label: highlight(c.stats) })),
-  }),
   dispose() {},
 };
 export default rules;

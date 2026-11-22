@@ -166,9 +166,11 @@ export function grabHint(chef: Pick<Chef, 'held' | 'x' | 'z'>, tile: Tile | unde
 }
 
 // ── Score and results ───────────────────────────────────────────────────────
-/** What the next serve's tip is multiplied by (the server multiplies by the combo before raising it). */
-export const nextTip = (combo: number) => `Next tip ×${Math.max(1, Math.min(4, combo))}`;
+/** What the next serve's tip is multiplied by (the server multiplies by the combo before raising it, and doubles it in rush hour). */
+export const nextTip = (combo: number, rush = false) => `Next tip ×${Math.max(1, Math.min(4, combo)) * (rush ? 2 : 1)}`;
 const ORDINAL = ['first', 'second', 'third'];
+/** 1st, 2nd, 3rd, 4th … for kitchen places. */
+export const place = (rank: number) => `${rank}${rank % 100 >= 11 && rank % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][rank % 10] ?? 'th'}`;
 /** Coins still needed for the next star, or null with all three. */
 export function starGoal(score: number, thresholds: readonly number[]): string | null {
   const next = thresholds.findIndex(target => score < target);

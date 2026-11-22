@@ -8,7 +8,7 @@ import { DEFAULT_SETTINGS, POT_SECONDS, type EventType, type GameEvent, type Vie
 const map = kitchenMap(0, 2), counter = map.tiles.find(tile => tile.kind === 'counter')!.index, stove = { ...map, tiles: map.tiles.map(tile => tile.index === counter ? { ...tile, kind: 'stove' as const } : tile) };
 const view = (patch: Partial<View> = {}): View => ({
   settings: DEFAULT_SETTINGS, players: [], tiles: [], loose: [], orders: [], events: [], startedAt: 0, endsAt: 180_000, now: 10_000, complete: false,
-  score: 0, combo: 1, served: 0, failed: 0, stars: 0, thresholds: [100, 200, 300], recipeCounts: {}, gatesOpen: true, gateWarning: false, ...patch,
+  score: 0, combo: 1, served: 0, failed: 0, stars: 0, thresholds: [100, 200, 300], recipeCounts: {}, gatesOpen: true, gateWarning: false, line: 0, first: 0, ...patch,
 });
 const event = (id: number, type: EventType, at = 10_000): GameEvent => ({ id, at, type });
 
@@ -85,22 +85,22 @@ test('mixer obeys mute and visibility, caps voices, stops loops when snapshots s
     const pot = { id: 1, kind: 'pot' as const, parts: [{ food: 'tomato' as const, state: 'chopped' as const }], cook: 1 };
     const fires = map.tiles.filter(tile => tile.kind === 'counter').slice(0, 6).map(tile => ({ at: tile.index, fire: .5, item: pot }));
     let current = view({ tiles: fires, now: 500 });
-    audio.update(current);
+    audio.update([current]);
     assert.equal(sources.filter(source => source.buffer?.name === 'deliver').length, 2, 'fresh service rings twice');
     assert.equal(live().filter(source => source.loop).length, 1, 'many fires share one loop');
     window.dispatchEvent(new CustomEvent('party-sound', { detail: { muted: true } })); assert.equal(live().length, 0);
-    const count = sources.length; current = view({ ...current, now: 550, events: [event(1, 'serve', 550)] }); audio.update(current);
+    const count = sources.length; current = view({ ...current, now: 550, events: [event(1, 'serve', 550)] }); audio.update([current]);
     assert.equal(sources.length, count, 'muted plays nothing');
     window.dispatchEvent(new CustomEvent('party-sound', { detail: { muted: false } }));
     document.hidden = true; document.dispatchEvent(new Event('visibilitychange')); assert.equal(live().length, 0);
     document.hidden = false;
     await new Promise(resolve => setTimeout(resolve, 130));
-    for (let i = 0; i < 40; i++) { current = view({ ...current, now: 600 + i * 50, events: [...current.events, event(10 + i, i % 2 ? 'place' : 'chop', 600 + i * 50)].slice(-32) }); audio.update(current); }
+    for (let i = 0; i < 40; i++) { current = view({ ...current, now: 600 + i * 50, events: [...current.events, event(10 + i, i % 2 ? 'place' : 'chop', 600 + i * 50)].slice(-32) }); audio.update([current]); }
     assert.ok(live().length <= 8, 'bursts are capped at eight voices');
     await new Promise(resolve => setTimeout(resolve, 1800));
     assert.equal(live().filter(source => source.loop).length, 0, 'stale snapshots stop the loops');
     audio.dispose(); audio.dispose(); assert.equal(closed, true); assert.equal(live().length, 0);
-    const disposed = sources.length; window.dispatchEvent(new Event('pointerdown')); audio.update(current); assert.equal(sources.length, disposed);
+    const disposed = sources.length; window.dispatchEvent(new Event('pointerdown')); audio.update([current]); assert.equal(sources.length, disposed);
   } finally {
     audio.dispose();
     names.forEach((name, i) => { if (saved[i]) Object.defineProperty(globalThis, name, saved[i]!); else Reflect.deleteProperty(globalThis, name); });
