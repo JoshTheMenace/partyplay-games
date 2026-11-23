@@ -8,6 +8,7 @@ import { hud } from '../game/hud';
 import { closeScreen, sendCommand } from '../game/predict';
 import { store, touch } from '../store';
 import { CityCounter, CityHud, CityMap, CityPockets, KnockedOut, useCityKeys } from './city';
+import { LockUp, Passport, Stall, Talk } from './city-extra';
 import { BossBar, Celebration, useCelebration } from './endgame';
 import { Crosshair, GoalChip, Hotbar, SelectedName, Toasts, Vitals } from './hud';
 import { DeathScreen, PauseSheet } from './menus';
@@ -46,10 +47,14 @@ function useMenuKeys(dead: boolean) {
 function Screens({ view, me, world, host, playerId }: { view: PrivateView; me: PubPlayer; world: View; host: boolean; playerId: string | null }) {
   const screen = useStore(store, s => s.screen), armor = useStore(hud, s => s.armor), worldId = world.worldId;
   if (view.dead) return view.city ? <KnockedOut message={view.deathMessage}/> : <DeathScreen message={view.deathMessage} kept={view.keepInventory}/>;
+  if (view.city?.cell && (!screen || screen === 'counter' || screen === 'map')) return <LockUp pv={view}/>;
   switch (screen) {
     case 'inventory': return view.city ? <CityPockets pv={view}/> : <InventoryScreen armor={armor} color={me.color}/>;
-    case 'counter': return view.city ? <CityCounter view={world} pv={view}/> : null;
+    case 'counter': return view.city ? <CityCounter view={world} pv={view} playerId={playerId}/> : null;
     case 'map': return view.city ? <CityMap view={world} pv={view} playerId={playerId}/> : null;
+    case 'passport': return view.city ? <Passport/> : null;
+    case 'talk': return view.city ? <Talk pv={view}/> : null;
+    case 'stall': return view.city ? <Stall pv={view}/> : null;
     case 'table': return <TableScreen/>;
     case 'furnace': return <FurnaceScreen/>;
     case 'chest': return <ChestScreen/>;
@@ -75,13 +80,18 @@ export function ControllerView({ publicView, privateView, playerId, connected, i
   celebrating.current = party.open;
   useServerToasts(privateView);
   useMenuKeys(dead);
-  const city = privateView?.city, counter = city?.open;
+  const city = privateView?.city, counter = city?.open, talk = city?.talk;
   useCityKeys(!!city && !dead);
   // The server opens and closes counters and job boards: the sheet follows.
   useEffect(() => {
     if (counter !== undefined && !store.get().screen) openMenu('counter');
     else if (counter === undefined && store.get().screen === 'counter') { store.set({ screen: null }); relockPointer(); }
   }, [counter]);
+  // The same for a talk with one of the city's characters.
+  useEffect(() => {
+    if (talk !== undefined && !store.get().screen) openMenu('talk');
+    else if (talk === undefined && store.get().screen === 'talk') { store.set({ screen: null }); relockPointer(); }
+  }, [talk]);
   // Death closes every container (the server returns grid/cursor items); the menu may stay open.
   useEffect(() => { if (dead && screen && screen !== 'pause') closeScreen(); }, [dead, screen]);
   // Desktop MC feel: losing the pointer lock (Esc, alt-tab) with nothing open shows the menu.
@@ -99,7 +109,7 @@ export function ControllerView({ publicView, privateView, playerId, connected, i
   const playing = !screen && !dead, sleeping = !!(me.flags & PF.SLEEPING);
   // The touch look layer fills the screen, so it renders first and every later control sits above it.
   return <div className="bw-hud" data-touch={touchMode}>
-    {playing && touchMode && <TouchControls creative={privateView.mode === 'creative'} drive={city?.ride ? (RIDES[city.ride[1]]?.air ? 'air' : 'ground') : undefined}/>}
+    {playing && touchMode && <TouchControls creative={privateView.mode === 'creative'} drive={city?.ride ? (RIDES[city.ride[1]]?.air ? 'air' : 'ground') : undefined} city={!!city}/>}
     {playing && !sleeping && !city?.ride && <Crosshair/>}
     {city && !dead && !screen && <CityHud view={publicView} pv={privateView} playerId={playerId} touchMode={touchMode}/>}
     {publicView.boss && privateView.dimension === 'end' && <BossBar boss={publicView.boss}/>}

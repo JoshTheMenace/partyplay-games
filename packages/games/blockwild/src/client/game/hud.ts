@@ -17,5 +17,7 @@ export type HudState = {
   armor: (Slot | null)[];
   /** The watching display: the id of the player its spectator camera follows (null when nobody is in shot). */
   focus: string | null;
+  /** Caper City, the watching display: the camera has cut to a part of the city that is still being drawn (a card covers the gap). */
+  cutting: boolean;
 };
-export const hud = createStore<HudState>({ hurt: 0, underwater: false, using: 0, screen: null, loading: false, armor: [null, null, null, null], focus: null });
+export const hud = createStore<HudState>({ hurt: 0, underwater: false, using: 0, screen: null, loading: false, armor: [null, null, null, null], focus: null, cutting: false });

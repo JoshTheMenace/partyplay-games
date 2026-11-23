@@ -6,6 +6,7 @@ import { emptyInventory, emptySlots } from '../shared/inventory';
 import { bodyBox, bodyCollides, collectBoxes, eyeInWater, newBody, regionCollides, regionTouches } from '../shared/physics';
 import { IF, MOB_TYPES, q2, q3, type Input } from '../shared/protocol';
 import { moveInCity, wakeAtClinic } from './city';
+import { glide } from './city-fun';
 import { damagePlayer, exhaust, explode } from './combat';
 import { activePlayers, addFx, canSleep, PROTECT_SECONDS, toast, type Player, type State } from './state';
 import { breakBlock, standNear } from './world';
@@ -104,7 +105,7 @@ export function applyMovement(state: State, player: Player, input: Input) {
   player.sneaking = (input.f & IF.SNEAK) !== 0;
   player.flying = state.settings.mode === 'creative' && (input.f & IF.FLYING) !== 0;
   const cp = state.city?.players[player.seat];
-  if (cp) cp.speed = Math.hypot(input.v[0], input.v[2]);
+  if (cp) { cp.speed = Math.hypot(input.v[0], input.v[2]); glide(state, player, input); }
   // A passenger's body is the vehicle's: the server carries it.
   if (player.dead || player.sleeping || input.tpAck < player.tp.n || cp?.ride && cp.seat > 0) return;
   const [x, y, z] = input.p;

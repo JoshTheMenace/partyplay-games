@@ -65,7 +65,7 @@ export function InstructionsView({ role }: InstructionsViewProps) {
     <p>Everyone explores the same boundless blocky world from their own phone or laptop. This screen follows the action.</p>
     <p>Punch trees, craft tools, dig for iron and diamonds, and get a roof over your heads before the first night.</p>
     <p>Later, brave the Nether, find the stronghold and defeat the Ender Dragon together.</p>
-    <p><b>Caper City</b> is the third mode: a whole city of residents with jobs, vehicles to borrow or buy, gigs for coins and the Watch on your heels when your mischief is seen. This screen shows the map, the most wanted and the richest.</p>
+    <p><b>Caper City</b> is the third mode: a whole city of residents with jobs, vehicles to borrow or buy, gigs for coins and the Watch on your heels when your mischief is seen. Race each other, fish off the pier, crack the bank with a friend on the alarm bell, chase the Golden Gull. This screen shows the map, what is going on, the most wanted and who is ahead.</p>
   </div>;
   return <div className="bw-instructions">
     <h2>Survive, mine, craft and build</h2>
@@ -74,7 +74,7 @@ export function InstructionsView({ role }: InstructionsViewProps) {
       <li><b>Keyboard:</b> WASD to move, mouse to look, left click mines, right click places, <kbd>E</kbd> opens your inventory.</li>
       <li>Start by punching a tree. The <b>Next goal</b> hint walks you through the rest, all the way to the Ender Dragon.</li>
       <li>Along the way: trade with villagers, craft armor, wire redstone, and hunt blazes and endermen for the eyes of ender that open the End.</li>
-      <li><b>Caper City:</b> tap the context button (or <kbd>F</kbd>) to get in a vehicle, talk or shop. Job boards pay coins for deliveries. <b>Mine</b> bonks; if someone sees it your Heat rises and the Watch comes. <kbd>M</kbd> or the minimap opens the map.</li>
+      <li><b>Caper City:</b> the <b>To do</b> card always shows three things worth trying; tap it for how. The yellow button (or <kbd>F</kbd>) does whatever is in front of you: get in, talk, shop, play a stall, start a race from a flag (<kbd>G</kbd> at the wheel). Job boards pay coins. <b>Bonk</b> bonks; if someone sees it your Heat rises and the Watch comes. <kbd>M</kbd> or the minimap opens the map.</li>
     </ul>
   </div>;
 }

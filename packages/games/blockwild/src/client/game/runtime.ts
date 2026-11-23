@@ -18,8 +18,10 @@ import { collisionBoxes, selectionBoxes } from '../../shared/shapes';
 import { surfaceHeight } from '../../shared/worldgen';
 import { crackStage } from '../../shared/mining';
 import { RIDES } from '../../shared/city/vehicles';
-import { CITY_ID } from '../../shared/protocol';
-import { cityHud, cityLook, CityScene } from '../city/scene';
+import { CITY_ID, CITY_PLAYER_ID } from '../../shared/protocol';
+import { CityHand } from '../city/hand';
+import { cityHud, cityLook, CityScene, GIFT } from '../city/scene';
+import type { Floater } from '../city/props';
 import type { Shown } from '../city/rides';
 import { store } from '../store';
 import type { Crack, VoxelEngine } from '../engine/index';
@@ -81,7 +83,7 @@ export class Runtime {
   private readonly effects = new ViewEffects();
   private readonly spectator: Spectator;
   private readonly controls: Controls | null = null;
-  private readonly hand: Hand | null = null;
+  private readonly hand: Hand | CityHand | null = null;
   private readonly interaction: Interaction | null = null;
   private player: LocalPlayer | null = null;
   private view: View | null = null;
@@ -138,6 +140,12 @@ export class Runtime {
   /** The vehicle the local player drives, as the vehicle renderer draws it. */
   private readonly ownRide: Shown = { id: 0, k: 0, x: 0, y: 0, z: 0, yaw: 0, pt: 0, paint: 0, f: 2, v: 0, spin: 0, seen: 0 };
   private rideSeen = 0;
+  /** The display: the followed player's speed (smoothed) and where they were last frame. */
+  private pace = 0;
+  private readonly paceFrom = { key: '', x: 0, z: 0 };
+  private readonly floaters: Floater[] = [];
+  /** Caper City: floating under a canopy right now. */
+  private chuting = false;
 
   constructor(private readonly d: RuntimeDeps) {
     const props = d.props();
@@ -174,11 +182,19 @@ export class Runtime {
     if (d.terrain === 'city') {
       this.entities.playerKey = 'citizen';
       this.city = new CityScene({ scene: d.scene, camera: d.camera, seed: d.seed, sfx: d.sfx, particles: this.particles, light: (x, y, z, out) => d.engine.lightRgb(x, y, z, out), getCell: this.getCell });
+      this.city.seatAt = seat => {
+        const id = this.view?.who[seat]?.[0], me = this.player?.render;
+        if (id && id === this.d.props().playerId && me) return { x: me.x, y: me.y, z: me.z, yaw: this.controls?.yaw ?? 0 };
+        const actor = id ? this.entities.players.get(id) : undefined;
+        return actor && !(actor.flags & (PF.RIDING | PF.OFFLINE)) ? actor : null;
+      };
       d.scope.defer(() => this.city?.dispose());
     }
     if (this.controller) {
       this.controls = new Controls(d.scope, d.canvas, { creative: () => this.view?.mode === 'creative' });
-      this.hand = new Hand(d.scene, d.camera, d.items, props.players.find(p => p.id === props.playerId)?.color ?? '#ffffff');
+      const shirt = props.players.find(p => p.id === props.playerId)?.color ?? '#ffffff';
+      // The city has its own figure, and so its own hand.
+      this.hand = this.city ? new CityHand(d.scene, d.camera, d.items, shirt) : new Hand(d.scene, d.camera, d.items, shirt);
       this.screen = new ScreenFx(this.hand.overlay, d.engine.shared, this.still);
       d.scope.defer(() => { this.screen?.dispose(); this.hand?.dispose(); });
       this.interaction = new Interaction({
@@ -344,7 +360,12 @@ export class Runtime {
     }
     const loaded = this.d.engine.world.isLoaded(body.x, body.z);
     const vyBefore = body.vy;
+    // Caper City: with a canopy to hand, a real fall opens it (a jump's landing is slower than this) and the rest is a float.
+    const floating = !!this.city && !!pv.city?.chute && !pv.dead && !body.onGround && !body.inWater && !body.onLadder && (this.chuting ? body.vy < 0 : body.vy < -11);
+    if (floating !== this.chuting) { this.chuting = floating; this.wake = true; }
+    if (floating) body.vy = Math.max(body.vy, -3.4);
     if (!pv.dead && !sleeping) player.update(dt, intent, this.getCell, mode, loaded, state.settings.autoJump);
+    if (floating) body.vy = Math.max(body.vy, -3.4);
     this.fallSpeed = Math.min(this.fallSpeed, vyBefore);
     this.movementSounds(player, body);
 
@@ -368,7 +389,7 @@ export class Runtime {
     const c = this.d.camera.position, eye = this.eye, dir = this.dir, reach = REACH[mode];
     eye[0] = c.x; eye[1] = c.y; eye[2] = c.z;
     dir[0] = -Math.sin(yaw) * Math.cos(pitch); dir[1] = Math.sin(pitch); dir[2] = -Math.cos(yaw) * Math.cos(pitch);
-    const boxes = this.city && view ? this.city.targets(this.entities.players.values(), view.who, p.playerId, true) : this.entities.mobBoxes();
+    const boxes = this.city && view ? this.city.targets(this.entities.players.values(), view.who, p.playerId) : this.entities.mobBoxes();
     const target = blocked ? null : pickTarget(raycastBlocks(this.getCell, eye, dir, reach), boxes, eye, dir, reach);
     if (this.city && view) this.cityContext(target, body, view, pv);
     if (!sameTarget(target, state.target)) { store.set({ target }); this.d.engine.visuals.outline(target?.kind === 'block' ? target : null); }
@@ -400,6 +421,7 @@ export class Runtime {
     pose.bobAmount = this.still ? 0 : this.effects.bobAmount;
     this.d.engine.lightRgb(body.x, eyeY, body.z, this.handLight);
     pose.visible = !pv.dead && !sleeping;
+    if (this.hand instanceof CityHand) this.hand.floating = this.chuting;
     this.hand!.setItem(held);
     this.hand!.update(dt, pose);
 
@@ -419,13 +441,14 @@ export class Runtime {
     p.setInput(buildInput({
       body, yaw: heading?.yaw ?? this.controls?.yaw ?? 0, pitch: heading?.pitch ?? this.controls?.pitch ?? 0, sprint: this.controls?.sprinting ?? false,
       using: !!i?.using, swinging: !!i?.swinging, dead: !!this.pv?.dead, slot: state.selected, mine: i?.mine ?? null,
-      tpAck: this.net.tpAck, queue: state.queue, bag: feed.get().bag?.rev ?? 0, parked: this.city?.rides.asking,
+      tpAck: this.net.tpAck, queue: state.queue, bag: feed.get().bag?.rev ?? 0, parked: this.city?.rides.asking, chute: this.chuting,
     }));
   }
 
   // Caper City ------------------------------------------------------------------------------------------------
   /** Driving (seat 0: this screen simulates the vehicle) or riding along (the body is the vehicle the server carries). */
   private updateRiding(dt: number, p: Props, intent: Controls['intent'], [id, k, seat]: readonly [number, number, number], blocked: boolean) {
+    this.chuting = false;
     const city = this.city!, controls = this.controls!, player = this.player!, body = player.body, drive = seat === 0 ? city.drive : null, kind = RIDES[k]!;
     const lookYaw = wrapAngle(controls.yaw - this.lastYaw), lookPitch = controls.pitch - this.lastPitch;
     this.lastYaw = controls.yaw;
@@ -458,7 +481,9 @@ export class Runtime {
     this.hand!.update(dt, this.pose);
     cityLook.yaw = yaw;
     const hudNow = cityHud.get(), pace = Math.round(Math.abs(speed));
-    if (hudNow.driving?.k !== k || hudNow.driving.speed !== pace || hudNow.driving.seat !== seat || hudNow.context?.kind !== 'exit') cityHud.set({ driving: { k, speed: pace, seat }, focus: null, context: { kind: 'exit', id, label: `Leave the ${kind.name}` } });
+    const spot = seat === 0 ? city.spotAt(x, y, z, true) : null, label = spot ? city.spotLabel(spot, this.pv?.city) : '';
+    if (hudNow.driving?.k !== k || hudNow.driving.speed !== pace || hudNow.driving.seat !== seat || hudNow.context?.kind !== 'exit' || (hudNow.spot?.id ?? -1) !== (spot?.i ?? -1) || (hudNow.spot?.label ?? '') !== label)
+      cityHud.set({ driving: { k, speed: pace, seat }, focus: null, context: { kind: 'exit', id, label: `Leave the ${kind.name}` }, spot: spot ? { id: spot.i, label } : null });
     const now = performance.now();
     if (now - this.lastBodyPublish > BODY_PUBLISH_MS) { this.lastBodyPublish = now; store.set({ body: { ...body } }); }
     this.sendInput(p, drive ? body : null, { yaw: drive?.ride.yaw ?? 0, pitch: drive?.ride.pitch ?? 0 });
@@ -472,20 +497,31 @@ export class Runtime {
       const what = city.describe(target.id, view.who);
       if (what && what.kind !== 'ride') focus = { name: what.name, line: what.line };
       if (what) context = what.kind === 'ride' ? { kind: 'enter', id: target.id, label: `Get in the ${what.name}` } : what.kind === 'keeper' ? { kind: 'shop', id: target.id, label: `Shop with ${what.name}` }
-        : what.kind === 'resident' && target.id >= CITY_ID ? { kind: 'talk', id: target.id, label: `Talk to ${what.name}` } : null;
+        : what.kind === 'resident' && target.id >= CITY_ID ? { kind: 'talk', id: target.id, label: `Talk to ${what.name}` }
+        : what.kind === 'player' && pv.city && pv.city.coins >= GIFT ? { kind: 'give', id: target.id - CITY_PLAYER_ID, label: `Give ${what.name} ${GIFT} coins` } : null;
     } else if (target?.kind === 'block' && cellId(target.cell) === B.job_board) context = { kind: 'board', id: cellIndex(target.x, target.y, target.z), label: 'Read the job board' };
     if (!context && !pv.dead) {
       const near = city.rides.nearest(body.x, body.z, 2.4);
       if (near && Math.abs(near.y - body.y) < 3) context = { kind: 'enter', id: near.id, label: `Get in the ${RIDES[near.k]!.name}` };
     }
-    if (context?.kind !== hud.context?.kind || context?.id !== hud.context?.id || focus?.name !== hud.focus?.name || focus?.line !== hud.focus?.line || hud.driving) cityHud.set({ context, focus, driving: null });
+    if (!pv.dead && (!context || context.kind === 'talk' || context.kind === 'shop')) {
+      // Standing where something can be done (the vault, a stall, the lock): that comes before a word with whoever is near.
+      const spot = city.spotAt(body.x, body.y, body.z, false);
+      if (spot) context = { kind: 'spot', id: spot.i, label: city.spotLabel(spot, pv.city) };
+    }
+    if (context?.kind !== hud.context?.kind || context?.id !== hud.context?.id || context?.label !== hud.context?.label || focus?.name !== hud.focus?.name || focus?.line !== hud.focus?.line || hud.driving || hud.spot) cityHud.set({ context, focus, driving: null, spot: null });
   }
   /** Draw the crowd, the vehicles and the beacon (every screen, the TV included). */
   private cityFrame(dt: number) {
     const city = this.city;
     if (!city) return;
     const own = this.rideSeen && this.pv?.city?.ride?.[0] === this.rideSeen && city.drive ? this.ownRide : null, body = this.player?.body ?? null;
-    city.frame(dt, this.view, this.entities.interp, this.d.camera, Math.min(104, store.get().settings.renderDistance * 16 - 6), body, own, this.pv?.city ?? null);
+    const floaters = this.floaters;
+    floaters.length = 0;
+    for (const actor of this.entities.players.values()) if (actor.flags & PF.CHUTE && actor.id !== this.d.props().playerId) floaters.push({ x: actor.x, y: actor.y, z: actor.z, yaw: actor.yaw, color: actor.color });
+    const me = this.player?.render;
+    if (this.chuting && me) floaters.push({ x: me.x, y: me.y, z: me.z, yaw: this.controls?.yaw ?? 0, color: this.shirt || '#ffffff' });
+    city.frame(dt, this.view, this.entities.interp, this.d.camera, Math.min(104, store.get().settings.renderDistance * 16 - 6), body, own, this.pv?.city ?? null, floaters, this.controller ? feed.get().bag?.career?.fe ?? null : null);
   }
 
   /** Footsteps, landing dust and water splashes for the local player. */
@@ -545,8 +581,15 @@ export class Runtime {
     this.subjects.length = count;
     const seed = this.d.seed;
     const focus = this.view?.who[this.focusSeat]?.[0] ?? null;
-    this.spectator.update(this.d.camera, this.subjects, this.getCell, (x, z) => this.groundY(seed, x, z), dt, focus);
-    hud.set({ focus: this.spectator.focus });
+    // How fast the followed player is going (a vehicle is chased, a walker drifted after).
+    const followed = this.subjects.find(s => s.key === (focus ?? this.spectator.focus)), was = this.paceFrom;
+    if (followed && was.key === followed.key && dt > 0) this.pace += (Math.min(40, Math.hypot(followed.x - was.x, followed.z - was.z) / dt) - this.pace) * Math.min(1, dt * 3);
+    else this.pace = 0;
+    if (followed) Object.assign(was, { key: followed.key, x: followed.x, z: followed.z });
+    this.spectator.update(this.d.camera, this.subjects, this.getCell, (x, z) => this.groundY(seed, x, z), dt, focus, this.city ? this.pace : 0);
+    // A cut across the city lands before that part of it is drawn: say so, and the display covers the gap with a card.
+    const at = this.d.camera.position, cutting = !!this.city && !!followed && !this.d.engine.meshedAround(at.x, at.z);
+    if (this.spectator.focus !== hud.get().focus || cutting !== hud.get().cutting) hud.set({ focus: this.spectator.focus, cutting });
   }
   /** The top of the nearest solid surface at or under a point (within a shadow's reach), or null. */
   private groundBelow(x: number, y: number, z: number, reach = SHADOW_REACH): number | null {

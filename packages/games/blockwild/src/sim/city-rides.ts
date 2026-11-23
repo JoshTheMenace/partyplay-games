@@ -5,7 +5,7 @@
  */
 import { CITY, crossX, crossZ, GROUND, type Bay } from '../shared/city/plan';
 import { isSolid } from '../shared/blocks';
-import { RIDE, RIDES, rideHits } from '../shared/city/vehicles';
+import { RIDE, rideClass, RIDES, rideHits, TUNE } from '../shared/city/vehicles';
 import { MISCHIEF, scrapValue } from '../shared/city/economy';
 import { bodyCollides } from '../shared/physics';
 import { NS, q2, RF, type PubRide } from '../shared/protocol';
@@ -13,6 +13,10 @@ import { teleport } from './players';
 import { addFx, nextId, toast, type Player, type State } from './state';
 import { anyPlayerNear, crowdNear, kindOf, news, rideOf, seatOf, vehicleOf, type CityState, type Rail, type Vehicle } from './city-state';
 import { addExtra, earn, mischief } from './city-watch';
+import { stamp } from './city-career';
+import { bailOut } from './city-fun';
+import { isService } from './city-jobs';
+import { holdsGull } from './city-play';
 
 const N = CITY.n;
 /** Unit steps and yaws of the four headings (N, E, S, W), and how far right of the road's middle a lane runs. */
@@ -22,6 +26,8 @@ const BOX_IN = CITY.pitch - 8, BOX_OUT = 8, WAIT_AT = BOX_IN - 3;
 const PARK_RANGE = 96, CLEAR_RANGE = 128, TRAFFIC_RANGE = 112, TRAFFIC_NEAR = 68, ABANDONED = 150;
 /** How fast an empty aircraft comes down (blocks a second). */
 const SINK = 7;
+/** Seconds before a city bike or a service vehicle taken from its bay is stood there again. */
+const RESTOCK = 100;
 /** Traffic kinds, weighted (hatchbacks, pickups, vans, cabs, the odd scooter and coupé). */
 const TRAFFIC_KINDS = [1, 1, 1, 2, 3, 4, 4, 1, 0, 5, 6, 2];
 const approach = (value: number, target: number, rate: number, dt: number) => value + Math.max(-rate * dt, Math.min(rate * dt, target - value));
@@ -37,7 +43,8 @@ function removeVehicle(city: CityState, vehicle: Vehicle) {
   for (const [key, id] of city.boxes) if (id === vehicle.id) city.boxes.delete(key);
   city.vehicles.splice(city.vehicles.indexOf(vehicle), 1);
 }
-const bayFree = (city: CityState, bay: Bay) => !city.vehicles.some(v => Math.abs(v.x - bay.x) < 3.2 && Math.abs(v.z - bay.z) < 3.2);
+/** Nothing stands in a bay (a bike's rack is a narrow one). */
+const bayFree = (city: CityState, bay: Bay) => { const room = bay.kind === RIDE.clunker ? 1.6 : 3.2; return !city.vehicles.some(v => Math.abs(v.x - bay.x) < room && Math.abs(v.z - bay.z) < room); };
 
 /** Stand the seed's parked vehicles in the bays near players, and clear parked and abandoned ones nobody is near. */
 function tickParking(state: State) {
@@ -47,8 +54,11 @@ function tickParking(state: State) {
     for (let cz = Math.floor(player.z - PARK_RANGE) >> 6; cz <= Math.floor(player.z + PARK_RANGE) >> 6; cz++) for (let cx = Math.floor(player.x - PARK_RANGE) >> 6; cx <= Math.floor(player.x + PARK_RANGE) >> 6; cx++) {
       for (const index of city.bayCells.get(cx + (cz << 12)) ?? []) {
         const bay = city.plan.bays[index]!;
-        if (city.emptied.has(index) || city.parked.has(index) || (bay.x - player.x) ** 2 + (bay.z - player.z) ** 2 > PARK_RANGE ** 2 || !bayFree(city, bay)) continue;
-        const vehicle = addVehicle(state, bay.kind, bay.x, GROUND, bay.z, bay.yaw, bay.paint);
+        // A taken bay stays empty, except the city's own: bikes and service vehicles are stood back in theirs after a while.
+        if (city.emptied.has(index) && !(isService(bay.kind) && state.clock >= (city.emptiedAt.get(index) ?? 0))) continue;
+        if (city.parked.has(index) || (bay.x - player.x) ** 2 + (bay.z - player.z) ** 2 > PARK_RANGE ** 2 || !bayFree(city, bay)) continue;
+        city.emptied.delete(index);
+        const vehicle = addVehicle(state, bay.kind, bay.x, bay.y ?? GROUND, bay.z, bay.yaw, bay.paint);
         vehicle.bay = index;
         city.parked.set(index, vehicle.id);
       }
@@ -203,21 +213,25 @@ function seat(state: State, player: Player, vehicle: Vehicle, place: number) {
   cp.seat = place;
   cp.open = -1;
   cp.offers = null;
-  player.pace = kind.top;
+  // A tuned engine of the player's own is quicker (the driver's screen knows it too).
+  player.pace = kind.top * (vehicle.owner === player.seat && cp.tuned >> vehicle.k & 1 ? TUNE : 1);
   player.aloft = !!kind.air;
   vehicle.sink = false;
   if (place === 0) vehicle.driver = player.seat;
   else vehicle.riders[place - 1] = player.seat;
-  if (vehicle.bay >= 0) { city.emptied.add(vehicle.bay); city.parked.delete(vehicle.bay); vehicle.bay = -1; }
+  if (vehicle.bay >= 0) { city.emptied.add(vehicle.bay); city.emptiedAt.set(vehicle.bay, state.clock + RESTOCK); city.parked.delete(vehicle.bay); vehicle.bay = -1; }
   if (vehicle.rail) { for (const [key, id] of city.boxes) if (id === vehicle.id) city.boxes.delete(key); vehicle.rail = null; vehicle.siren = false; }
   cp.rx = vehicle.x;
   cp.rz = vehicle.z;
+  stamp(state, player, 'wheels');
+  if (kind.sea) stamp(state, player, 'sail');
   teleport(state, player, vehicle.x, vehicle.y, vehicle.z, vehicle.yaw);
 }
 /** `interact` on a vehicle: take the wheel if it is free, else a passenger seat. */
 export function enterVehicle(state: State, player: Player, id: number): boolean {
   const city = state.city!, cp = seatOf(state, player), vehicle = vehicleOf(city, id);
-  if (!vehicle || cp.ride || state.clock < cp.dizzyUntil || !rideHits(kindOf(vehicle), vehicle.x, vehicle.z, vehicle.yaw, player.x, player.z, 3) || Math.abs(player.y - vehicle.y) > 3) return false;
+  if (holdsGull(state, player.seat)) { toast(player, 'The gull will not get in. On foot, or let it go.'); return false; }
+  if (!vehicle || cp.ride || cp.cellUntil || state.clock < cp.dizzyUntil || !rideHits(kindOf(vehicle), vehicle.x, vehicle.z, vehicle.yaw, player.x, player.z, 3) || Math.abs(player.y - vehicle.y) > 3) return false;
   const kind = kindOf(vehicle);
   if (vehicle.driver >= 0) {
     const free = Array.from({ length: kind.seats - 1 }, (_, k) => k).find(k => (vehicle.riders[k] ?? -1) < 0);
@@ -230,7 +244,7 @@ export function enterVehicle(state: State, player: Player, id: number): boolean 
     if (vehicle.v > 5) { toast(player, 'It is going too fast to hop in.'); return false; }
     addExtra(state, vehicle.x + Math.cos(vehicle.yaw) * -1.8, vehicle.y, vehicle.z + Math.sin(vehicle.yaw) * 1.8, false, player.seat, NS.FLEE);
     mischief(state, player, vehicle.k === RIDE.cruiser ? MISCHIEF.cruiser : MISCHIEF.jack, true);
-  } else if (vehicle.owner !== player.seat) mischief(state, player, vehicle.k === RIDE.cruiser ? MISCHIEF.cruiser : MISCHIEF.borrow, false);
+  } else if (vehicle.owner !== player.seat && !kindOf(vehicle).free && !onDuty(state, player, vehicle.k)) mischief(state, player, vehicle.k === RIDE.cruiser ? MISCHIEF.cruiser : MISCHIEF.borrow, false);
   seat(state, player, vehicle, 0);
   addFx(state, 'door', vehicle.x, vehicle.y + 1, vehicle.z, 4);
   return true;
@@ -250,12 +264,37 @@ export function exitVehicle(state: State, player: Player): boolean {
   // Left of the driver's seat first, then the right, behind and in front.
   const spots = [[-cos * side, sin * side], [cos * side, -sin * side], [sin * end, cos * end], [-sin * end, -cos * end]] as const;
   const spot = spots.find(([dx, dz]) => !bodyCollides(state.get, { x: vehicle.x + dx, y: vehicle.y + 0.01, z: vehicle.z + dz, sneaking: false })) ?? spots[0];
-  teleport(state, player, vehicle.x + spot[0], vehicle.y + 0.01, vehicle.z + spot[1]);
+  // Out of a boat: onto the nearest dry footing within a stride or two (a jetty, the shore), else over the side.
+  const dry = kind.sea ? dryLanding(state, vehicle.x, vehicle.z) : null;
+  if (dry) teleport(state, player, dry[0], dry[1], dry[2]);
+  else teleport(state, player, vehicle.x + spot[0], vehicle.y + 0.01, vehicle.z + spot[1]);
   player.fallPeak = player.y;
+  // Out of an aircraft above the rooftops: the canopy opens by itself.
+  if (kind.air && !player.onGround && !player.dead) bailOut(state, player);
   vehicle.sink = !!kind.air && vehicle.driver < 0 && !vehicle.riders.some(rider => rider >= 0);
   addFx(state, 'door', vehicle.x, vehicle.y + 1, vehicle.z, 0);
   return true;
 }
+
+/** Somewhere to stand within four blocks of (x, z): solid underfoot, room for a body, the nearest at about street level (a plank beats the top of a rail or a lamp). */
+function dryLanding(state: State, x: number, z: number): [number, number, number] | null {
+  let best: [number, number, number] | null = null, bestCost = Infinity;
+  for (let dz = -4; dz <= 4; dz++) for (let dx = -4; dx <= 4; dx++) {
+    const cx = Math.floor(x) + dx + 0.5, cz = Math.floor(z) + dz + 0.5, d = Math.hypot(cx - x, cz - z);
+    if (d >= 4.2) continue;
+    for (let y = GROUND - 2; y <= GROUND + 3; y++) {
+      if (!isSolid(state.get(Math.floor(cx), y - 1, Math.floor(cz))) || bodyCollides(state.get, { x: cx, y, z: cz, sneaking: false })) continue;
+      const cost = d + Math.abs(y - GROUND) * 2;
+      if (cost < bestCost) { best = [cx, y, cz]; bestCost = cost; }
+      break;
+    }
+  }
+  return best;
+}
+/** Service vehicles are there to be used by whoever has that job in hand (set by sim/city-work.ts). */
+const onDuty = (state: State, player: Player, k: number) => { const gig = seatOf(state, player).gig; return !!gig && DUTY[gig.k] === k; };
+/** The vehicle each gig kind works with (index = gig kind). */
+export const DUTY: readonly (number | undefined)[] = [undefined, undefined, undefined, RIDE.trundler, RIDE.patch, RIDE.squirt];
 
 /** Copy drivers' accepted poses onto their vehicles, carry passengers along, and count the distance. */
 function tickRiders(state: State) {
@@ -282,11 +321,11 @@ export function callVehicle(state: State, player: Player, k: number): boolean {
   const city = state.city!, cp = seatOf(state, player);
   if (!(cp.own >> k & 1) || cp.ride) return false;
   if (cp.heat >= 10) { toast(player, 'Not while the Watch is after you.'); return false; }
-  const bays = city.plan.bays.filter(bay => Math.abs(bay.x - player.x) < 70 && Math.abs(bay.z - player.z) < 70 && (RIDES[k]!.air ? bay.kind >= 8 : bay.kind < 8) && bayFree(city, bay));
+  const bays = city.plan.bays.filter(bay => Math.abs(bay.x - player.x) < 70 && Math.abs(bay.z - player.z) < 70 && bay.kind !== RIDE.clunker && rideClass(bay.kind) === rideClass(k) && bayFree(city, bay));
   const bay = bays.sort((a, b) => Math.hypot(a.x - player.x, a.z - player.z) - Math.hypot(b.x - player.x, b.z - player.z))[0];
-  if (!bay) { toast(player, RIDES[k]!.air ? 'Aircraft are delivered to Gullwing Field.' : 'No free parking bay near here.'); return false; }
+  if (!bay) { toast(player, RIDES[k]!.air ? 'Aircraft are delivered to Gullwing Field.' : RIDES[k]!.sea ? 'Boats are delivered to the moorings by the pier.' : 'No free parking bay near here.'); return false; }
   for (const old of city.vehicles.filter(v => v.owner === player.seat && v.k === k && v.driver < 0)) removeVehicle(city, old);
-  const vehicle = addVehicle(state, k, bay.x, GROUND, bay.z, bay.yaw, player.seat % 8);
+  const vehicle = addVehicle(state, k, bay.x, bay.y ?? GROUND, bay.z, bay.yaw, cp.paint);
   vehicle.owner = player.seat;
   toast(player, `Your ${RIDES[k]!.name} is parked ${Math.round(Math.hypot(bay.x - player.x, bay.z - player.z))} blocks away.`);
   return true;

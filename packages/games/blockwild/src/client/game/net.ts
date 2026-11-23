@@ -12,6 +12,8 @@ export type InputSource = {
   bag?: number;
   /** Caper City: ask for the parked vehicles (see IF.PARKED). */
   parked?: boolean;
+  /** Caper City: floating under a canopy (see IF.CHUTE). */
+  chute?: boolean;
 };
 
 /** The one Input sent through setInput. Without a live body (not spawned yet, dead) the position is flagged NO_POS. */
@@ -26,6 +28,7 @@ export function buildInput(s: InputSource): Input {
   if (s.using) f |= IF.USING;
   if (s.swinging) f |= IF.SWINGING;
   if (s.parked) f |= IF.PARKED;
+  if (s.chute) f |= IF.CHUTE;
   return {
     p: [q3(body.x), q3(body.y), q3(body.z)], v: [q2(body.vx), q2(body.vy), q2(body.vz)], yaw: q3(wrapAngle(s.yaw)), pitch: q3(s.pitch), f,
     slot: s.slot, mine: s.mine, tpAck: s.tpAck, cmds, bag: s.bag ?? 0,

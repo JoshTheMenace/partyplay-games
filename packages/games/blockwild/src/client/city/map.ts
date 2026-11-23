@@ -2,19 +2,22 @@
  * The city map: the plan painted once into a canvas at one pixel a block (streets, what stands on every lot, the trade
  * signs of the places that do something), then drawn into the HUD's minimap, the full map and the TV with markers on top.
  */
-import { AIRFIELD, BEACH, CITY, CITY_SIZE, footprint, lotCell, QUAY, type CityPlan, type Lot, type LotKind, type PlaceKind } from '../../shared/city/plan';
+import { AIRFIELD, BEACH, CITY, CITY_SIZE, footprint, ISLE, lotCell, PIER, QUAY, SHORE, type CityPlan, type Lot, type LotKind, type PlaceKind } from '../../shared/city/plan';
+import { cityExtras } from '../../shared/city/extras';
+import { isleHeight } from '../../shared/city/buildings';
 import { SIGNS } from '../../shared/city/buildings';
 import { SIGN_COLORS, SIGN_ICONS } from '../art/city';
 
 /** The world rectangle the map covers (blocks), and its size in pixels. */
-export const MAP = { x0: CITY.x0 - QUAY - 14, z0: CITY.z0 - QUAY - 14, w: CITY_SIZE + QUAY + 14 + AIRFIELD.w + 22, h: CITY_SIZE + QUAY + 14 + BEACH + 44 } as const;
+export const MAP = { x0: CITY.x0 - QUAY - 14, z0: CITY.z0 - QUAY - 14, w: CITY_SIZE + QUAY + 14 + AIRFIELD.w + 22, h: ISLE.z + ISLE.r + 12 - (CITY.z0 - QUAY - 14) } as const;
 const GROUND: Record<LotKind, string> = {
   shop: '#b9b3a3', boutique: '#b9b3a3', office: '#b9b3a3', flats: '#b9b3a3', house: '#8fbf74', warehouse: '#5b5e68', plot: '#86c06a', park: '#6fb863', hall: '#d6cdb4', bank: '#d6cdb4', hotel: '#d6cdb4',
   clinic: '#d6cdb4', watch: '#d6cdb4', school: '#d6cdb4', market: '#d6cdb4', cinema: '#d6cdb4', fair: '#8fbf74', garage: '#5b5e68', depot: '#5b5e68', scrap: '#8a8273', hangar: '#a9abb0',
+  firehouse: '#5b5e68', busdepot: '#5b5e68', pier: '#2f79ad', isle: '#2f79ad',
 };
 const ROOF: Partial<Record<LotKind, string>> = {
   shop: '#d59a52', boutique: '#c9a987', office: '#7f93ab', flats: '#b0786a', house: '#b5503a', warehouse: '#7d838e', hall: '#f1ead6', bank: '#e9dcbc', hotel: '#e6b89c', clinic: '#f1f1ec', watch: '#3b4f8f',
-  school: '#c19a6b', cinema: '#c3b3d8', garage: '#e6e8ea', depot: '#3a8fbf', scrap: '#e0b23c', hangar: '#e6e8ea',
+  school: '#c19a6b', cinema: '#c3b3d8', garage: '#e6e8ea', depot: '#3a8fbf', scrap: '#e0b23c', hangar: '#e6e8ea', firehouse: '#c8503f', busdepot: '#e98f4c',
 };
 /** Context options for every map canvas (see paintCityMap). */
 export const SOFT: CanvasRenderingContext2DSettings = { willReadFrequently: true };
@@ -27,6 +30,13 @@ function paintLot(ctx: CanvasRenderingContext2D, lot: Lot) {
   if (box && roof) { local(box[0], box[1], box[2], box[3], '#00000038'); local(box[0], box[1], box[2] - 1, box[3] - 1, roof); }
   if (lot.kind === 'park') { local(18, 18, 29, 29, '#4d9ad0'); local(23, 0, 24, 47, '#cfc7ad'); local(0, 23, 47, 24, '#cfc7ad'); }
   if (lot.kind === 'plot') rect(ctx, lot.x0 + 5, lot.z0 + 5, lot.x0 + 16, lot.z0 + 16, '#a98f5e');
+  if (lot.kind === 'pier') { rect(ctx, PIER.x0, SHORE, PIER.x0 + PIER.w - 1, SHORE + PIER.d, '#b08a57'); rect(ctx, lot.x0, SHORE + PIER.d - 10, lot.x1, lot.z1, '#b08a57'); return; }
+  if (lot.kind === 'isle') {
+    for (let z = lot.z0; z <= lot.z1; z++) for (let x = lot.x0; x <= lot.x1; x++) { const h = isleHeight(x, z); if (h !== null && h >= -1) rect(ctx, x, z, x, z, h > 0 ? '#6fb863' : '#e6d59a'); }
+    rect(ctx, ISLE.x - 2, ISLE.z - 2, ISLE.x + 2, ISLE.z + 2, '#f1ead6');
+    rect(ctx, ISLE.x - 1, ISLE.z - ISLE.r - 10, ISLE.x + 1, ISLE.z - 20, '#b08a57');
+    return;
+  }
   if (lot.kind === 'hangar') { local(4, 44, lot.z1 - lot.z0 - 4, 64, '#3a3d46'); for (const u of [120, 200]) local(u, 8, u + 30, 30, '#8fa3b8'); for (const u of [14, 44]) local(u - 4, 20, u + 4, 28, '#3a3d46'); }
 }
 
@@ -51,6 +61,10 @@ export function paintCityMap(plan: CityPlan): HTMLCanvasElement | null {
     rect(ctx, x0, z0 + k * CITY.pitch + 3, x1, z0 + k * CITY.pitch + 12, '#3a3d46');
   }
   for (const lot of plan.lots) paintLot(ctx, lot);
+  // Ramps (a yellow chevron of a strip) and where races start.
+  const extras = cityExtras(plan.seed);
+  for (const ramp of extras.ramps) rect(ctx, ramp.x, ramp.z, ramp.x + ramp.dx * (ramp.long - 1) - ramp.dz * 2, ramp.z + ramp.dz * (ramp.long - 1) + ramp.dx * 2, '#e6b93a');
+  for (const course of extras.courses) { rect(ctx, course.x - 2, course.z - 2, course.x + 1, course.z + 1, '#fff6e5'); rect(ctx, course.x - 2, course.z - 2, course.x - 1, course.z - 1, '#05071a'); rect(ctx, course.x, course.z, course.x + 1, course.z + 1, '#05071a'); }
   return canvas;
 }
 
@@ -75,7 +89,7 @@ export function signFor(kind: PlaceKind): HTMLCanvasElement | null {
 /** A place's sign as a data URL, for lists in the UI. */
 export const signUrl = (kind: PlaceKind) => signFor(kind)?.toDataURL() ?? '';
 
-export type Marker = { x: number; z: number; color: string; kind: 'self' | 'player' | 'gig' | 'home' | 'plot' | 'hot'; yaw?: number; label?: string };
+export type Marker = { x: number; z: number; color: string; kind: 'self' | 'player' | 'gig' | 'home' | 'plot' | 'hot' | 'event'; yaw?: number; label?: string };
 /**
  * Draw the map into `ctx` (a square of `size` CSS pixels): `span` world blocks across, centred on (cx, cz), north up,
  * with the places' signs and the markers on top (those outside are pinned to the edge). `signs`: draw the trade signs.
@@ -92,7 +106,7 @@ export function drawMap(ctx: CanvasRenderingContext2D, base: HTMLCanvasElement, 
     if (icon && x > -sign && z > -sign && x < w + sign && z < h + sign) ctx.drawImage(icon, Math.round(x - sign / 2), Math.round(z - sign / 2), sign, sign);
   }
   for (const marker of markers) {
-    const inside = marker.kind === 'gig' || marker.kind === 'home' || marker.kind === 'plot' ? 9 : -6;
+    const inside = marker.kind === 'gig' || marker.kind === 'home' || marker.kind === 'plot' || marker.kind === 'event' ? 9 : -6;
     const x = inside > 0 ? Math.max(inside, Math.min(w - inside, px(marker.x))) : px(marker.x), z = inside > 0 ? Math.max(inside, Math.min(h - inside, pz(marker.z))) : pz(marker.z);
     if (x < -8 || z < -8 || x > w + 8 || z > h + 8) continue;
     ctx.save();
@@ -112,6 +126,15 @@ export function drawMap(ctx: CanvasRenderingContext2D, base: HTMLCanvasElement, 
       ctx.rotate(Math.PI / 4);
       ctx.strokeRect(-5, -5, 10, 10);
       ctx.fillRect(-5, -5, 10, 10);
+    } else if (marker.kind === 'event') {
+      // Something going on: a ring with a bright middle.
+      ctx.beginPath();
+      ctx.arc(0, 0, 6.5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fill();
+      ctx.fillStyle = '#05071a';
+      ctx.fillRect(-1, -4, 2, 5);
+      ctx.fillRect(-1, 2, 2, 2);
     } else if (marker.kind === 'home' || marker.kind === 'plot') {
       ctx.beginPath();
       ctx.moveTo(0, -7); ctx.lineTo(7, 0); ctx.lineTo(5, 0); ctx.lineTo(5, 6); ctx.lineTo(-5, 6); ctx.lineTo(-5, 0); ctx.lineTo(-7, 0);

@@ -15,10 +15,13 @@ import { spawnItem } from './entities';
 import { lineOfSight } from './mobs';
 import { moveBody } from './motion';
 import { findPath } from './pathfind';
-import { teleport } from './players';
 import { addFx, PROTECT_SECONDS, toast, type Player, type State } from './state';
 import { cruisersAfter, exitVehicle, sendCruiser } from './city-rides';
-import { crowdNear, news, playersNear, rideOf, seatOf, whereIs, type CityPlayer, type Npc } from './city-state';
+import { crowdNear, news, playersNear, REP, rideOf, seatOf, whereIs, type CityPlayer, type Npc } from './city-state';
+import { repAdd, stamp } from './city-career';
+import { sightAt } from './city-events';
+import { smoked } from './city-fun';
+import { collectBounty, holdsGull, lockUp, stealGull } from './city-play';
 
 export const GRAB_SECONDS = 1.2;
 const OFFICER_SIGHT = 34, GRAB_REACH = 2.2, RUN = [0, 2.1, 4.9, 5.3, 5.7], FLEE_SPEED = 4.6, HOME_SPEED = 2.2, LOOT: readonly number[] = [I.coin_purse, I.gold_watch, I.swag_bag];
@@ -57,13 +60,16 @@ export function addExtra(state: State, x: number, y: number, z: number, officer:
 
 /** A resident or officer near enough (and with a clear view) to have seen what a player just did. 2: an officer saw it. */
 function witnessed(state: State, player: Player, victim = -1): 0 | 1 | 2 {
-  const city = state.city!, eye = player.y + 1.5, sees = (x: number, z: number) => lineOfSight(state, x, 65.5, z, player.x, eye, player.z);
+  const city = state.city!, eye = player.y + 1.5, sees = (x: number, z: number) => !smoked(city, x, z) && lineOfSight(state, x, 65.5, z, player.x, eye, player.z);
+  // After dark people see half as far, and nobody sees into smoke.
+  const night = (state.time >= 13500 && state.time < 22500 ? 0.55 : 1) * sightAt(state, player.x, player.z);
   let seen: 0 | 1 | 2 = 0, checks = 0;
+  if (smoked(city, player.x, player.z)) return 0;
   for (const npc of city.npcs.values()) if (npc.officer && npc.s !== NS.DIZZY && Math.hypot(npc.x - player.x, npc.z - player.z) < OFFICER_SIGHT && sees(npc.x, npc.z)) return 2;
   crowdNear(city, player.x, player.z, WITNESS * 2, (i, x, z) => {
     if (seen === 2 || i === victim || checks > 6 || city.npcs.get(i)?.s === NS.DIZZY) return;
     const resident = city.people.list[i]!, d = Math.hypot(x - player.x, z - player.z);
-    if (d > (resident.snitch || resident.job === 'officer' ? WITNESS * 2 : WITNESS)) return;
+    if (d > (resident.snitch || resident.job === 'officer' ? WITNESS * 2 : WITNESS) * night) return;
     checks++;
     if (sees(x, z)) seen = resident.job === 'officer' ? 2 : 1;
   });
@@ -105,19 +111,33 @@ export function bonk(state: State, player: Player, i: number, pie = false): bool
   addFx(state, pie ? 'splat' : 'bonk', npc.x, npc.y + 1.5, npc.z);
   if (!pie) {
     cp.stats.bonks++;
+    stamp(state, player, 'bonk');
     if (!officer && !npc.extra) {
       spawnItem(state, npc.x, npc.y + 1, npc.z, { id: I.coin, n: 2 + Math.floor(state.rand() * 7) }, { scatter: true });
       const roll = state.rand();
       if (roll < 0.1) spawnItem(state, npc.x, npc.y + 1, npc.z, { id: roll < 0.025 ? I.gold_watch : I.coin_purse, n: 1 }, { scatter: true });
     }
   }
-  mischief(state, player, officer ? MISCHIEF.bonkOfficer : pie ? MISCHIEF.pie : MISCHIEF.bonk, officer, i);
+  if (mischief(state, player, officer ? MISCHIEF.bonkOfficer : pie ? MISCHIEF.pie : MISCHIEF.bonk, officer, i)) repAdd(cp, officer ? REP.WATCH : REP.FOLK, officer ? -8 : -2);
+  return true;
+}
+/** A pie in a player's face: stars for a moment, nothing spilled. */
+export function splatPlayer(state: State, player: Player, other: Player): boolean {
+  const cp = state.city!.players[other.seat]!;
+  addFx(state, 'splat', other.x, other.y + 1.6, other.z);
+  if (state.clock < other.protectedUntil || state.clock - cp.bonkedAt < 2) return false;
+  cp.bonkedAt = state.clock;
+  cp.dizzyUntil = state.clock + 1.2;
+  other.hurt++;
+  toast(other, `${player.name} got you with a cream pie!`);
+  mischief(state, player, MISCHIEF.bonkPlayer, false);
   return true;
 }
 /** One player bonks another: stars, a tumble and a few of their coins on the ground. */
 export function bonkPlayer(state: State, player: Player, other: Player): boolean {
   const cp = state.city!.players[other.seat]!;
-  if (!state.settings.bonks || other === player || other.dead || !other.connected || state.clock < other.protectedUntil || state.clock - cp.bonkedAt < 3 || Math.hypot(other.x - player.x, other.z - player.z) > 3.4 || Math.abs(other.y - player.y) > 2.5) return false;
+  // Whoever holds the Golden Gull can always be bonked for it, whatever the room's rule.
+  if ((!state.settings.bonks && !holdsGull(state, other.seat)) || cp.cellUntil || other === player || other.dead || !other.connected || state.clock < other.protectedUntil || state.clock - cp.bonkedAt < 3 || Math.hypot(other.x - player.x, other.z - player.z) > 3.4 || Math.abs(other.y - player.y) > 2.5) return false;
   cp.bonkedAt = state.clock;
   cp.dizzyUntil = state.clock + 1.6;
   const spill = Math.min(cp.coins, Math.max(3, Math.round(cp.coins * 0.05))), dx = other.x - player.x, dz = other.z - player.z, d = Math.hypot(dx, dz) || 1;
@@ -126,8 +146,11 @@ export function bonkPlayer(state: State, player: Player, other: Player): boolean
   if (!cp.ride) impulse(state, other, dx / d * 6, 5, dz / d * 6);
   other.hurt++;
   seatOf(state, player).stats.bonks++;
+  stamp(state, player, 'bonk');
   addFx(state, 'bonk', other.x, other.y + 1.7, other.z);
-  mischief(state, player, MISCHIEF.bonkPlayer, false);
+  stealGull(state, player, other);
+  // A price on their head makes it a citizen's arrest (no heat for that); otherwise it is mischief like any other.
+  if (!collectBounty(state, player, other)) mischief(state, player, MISCHIEF.bonkPlayer, false);
   return true;
 }
 
@@ -137,12 +160,15 @@ export function bust(state: State, player: Player) {
   if (cp.ride) exitVehicle(state, player);
   let loot = 0;
   player.inv.forEach((slot, k) => { if (slot && LOOT.includes(slot.id)) { loot += slot.n; player.inv[k] = null; } });
-  Object.assign(cp, { coins: cp.coins - fine, heat: 0, spell: 0, grab: 0, gig: null, open: -1, offers: null });
+  if (cp.gig?.rider !== undefined && cp.gig.rider >= 0) city.npcs.delete(cp.gig.rider);
+  Object.assign(cp, { heat: 0, spell: 0, grab: 0, gig: null, open: -1, offers: null, hold: null, fish: 0 });
   cp.stats.busts++;
-  teleport(state, player, x + (player.seat % 5 - 2) * 0.9, y, z + (player.seat % 3 - 1) * 0.9);
+  repAdd(cp, REP.WATCH, -6);
+  // Into the lock-up with the fine to settle: pay, work it off, sit it out, or wait for a friend at the lock.
+  lockUp(state, player, Math.round(fine * (cp.rep[REP.WATCH]! < 10 ? 1.25 : 1)));
   player.protectedUntil = state.clock + PROTECT_SECONDS;
-  toast(player, `Nabbed! The Watch fined you ${fine} coins${loot ? ' and took the loot' : ''}.`);
-  news(state, `${player.name} was nabbed by the Watch and fined ${fine} coins`);
+  toast(player, `Nabbed!${loot ? ' The Watch took the loot.' : ''} You are in the lock-up.`);
+  news(state, `${player.name} was nabbed by the Watch`);
   addFx(state, 'bust', x, y + 1, z);
   standDown(state, player.seat);
 }
@@ -163,10 +189,12 @@ export function wakeAtClinic(state: State, player: Player) {
 /** Does any officer have eyes on this player right now? */
 function officerSees(state: State, player: Player): boolean {
   const city = state.city!, eye = player.y + 1.5;
-  for (const npc of city.npcs.values()) if (npc.officer && npc.s !== NS.DIZZY && Math.hypot(npc.x - player.x, npc.z - player.z) < OFFICER_SIGHT && lineOfSight(state, npc.x, npc.y + 1.6, npc.z, player.x, eye, player.z)) return true;
-  for (const v of city.vehicles) if (v.siren && Math.hypot(v.x - player.x, v.z - player.z) < OFFICER_SIGHT && lineOfSight(state, v.x, v.y + 1.4, v.z, player.x, eye, player.z)) return true;
+  if (smoked(city, player.x, player.z)) return false;
+  const reach = OFFICER_SIGHT * sightAt(state, player.x, player.z);
+  for (const npc of city.npcs.values()) if (npc.officer && npc.s !== NS.DIZZY && Math.hypot(npc.x - player.x, npc.z - player.z) < reach && lineOfSight(state, npc.x, npc.y + 1.6, npc.z, player.x, eye, player.z)) return true;
+  for (const v of city.vehicles) if (v.siren && v.rail && Math.hypot(v.x - player.x, v.z - player.z) < reach && lineOfSight(state, v.x, v.y + 1.4, v.z, player.x, eye, player.z)) return true;
   let seen = false;
-  crowdNear(city, player.x, player.z, OFFICER_SIGHT, (i, x, z) => { if (!seen && city.people.list[i]!.job === 'officer' && city.ract[i] === ACT.PATROL && !city.npcs.has(i)) seen = lineOfSight(state, x, 65.6, z, player.x, eye, player.z); });
+  crowdNear(city, player.x, player.z, reach, (i, x, z) => { if (!seen && city.people.list[i]!.job === 'officer' && city.ract[i] === ACT.PATROL && !city.npcs.has(i)) seen = lineOfSight(state, x, 65.6, z, player.x, eye, player.z); });
   return seen;
 }
 /** Send one more officer after a seat: the nearest one on the beat, else a reinforcement from round a corner. */
@@ -201,7 +229,7 @@ export function tickHeat(state: State, dt: number) {
       const lot = cp.flat >= 0 ? city.plan.lots[cp.flat]! : null, home = !!lot && player.x >= lot.x0 - 3 && player.x <= lot.x1 + 4 && player.z >= lot.z0 - 3 && player.z <= lot.z1 + 4;
       cp.heat = Math.max(0, cp.heat - (home ? COOLING_HOME : COOLING) * dt);
       if (cp.heat <= 0) {
-        if (cp.spell >= 2) { cp.stats.escapes++; news(state, `${player.name} gave the Watch the slip`); toast(player, 'You lost them. Heat: Calm'); }
+        if (cp.spell >= 2) { cp.stats.escapes++; repAdd(cp, REP.MAGPIES, 4); news(state, `${player.name} gave the Watch the slip`); toast(player, 'You lost them. Heat: Calm'); stamp(state, player, 'slip'); }
         cp.spell = 0;
         standDown(state, player.seat);
         continue;
@@ -226,7 +254,7 @@ function steer(state: State, npc: Npc, tx: number, tz: number, speed: number, dt
 /** An officer after a player: straight at them when in view, else along a planned path, else to where they were. */
 function pursue(state: State, npc: Npc, player: Player, cp: CityPlayer, dt: number) {
   const city = state.city!, tier = heatTier(cp.heat), dx = player.x - npc.x, dz = player.z - npc.z, d = Math.hypot(dx, dz), dy = player.y - npc.y;
-  const sees = d < OFFICER_SIGHT && lineOfSight(state, npc.x, npc.y + 1.6, npc.z, player.x, player.y + 1.5, player.z);
+  const sees = d < OFFICER_SIGHT && !smoked(city, player.x, player.z) && !smoked(city, npc.x, npc.z) && lineOfSight(state, npc.x, npc.y + 1.6, npc.z, player.x, player.y + 1.5, player.z);
   if (sees) cp.seenAt = state.clock;
   const ride = rideOf(state, player), slow = !ride || cp.speed < 3;
   if (d < GRAB_REACH + (ride ? 1.6 : 0) && Math.abs(dy) < 2.2 && slow && state.clock >= player.protectedUntil) {
@@ -237,9 +265,9 @@ function pursue(state: State, npc: Npc, player: Player, cp: CityPlayer, dt: numb
     cp.grab += dt;
     if (cp.grab >= GRAB_SECONDS) {
       if (tier <= 1 && cp.spell <= 1) {
-        const fine = Math.min(cp.coins, 15);
+        const fine = cp.rep[REP.WATCH]! >= 45 ? 0 : Math.min(cp.coins, 15);
         Object.assign(cp, { coins: cp.coins - fine, heat: 0, spell: 0, grab: 0 });
-        toast(player, `"Behave yourself." Ticketed ${fine} coins.`);
+        toast(player, fine ? `"Behave yourself." Ticketed ${fine} coins.` : '"Oh, it is you. Mind how you go." No ticket for a friend of the Watch.');
         addFx(state, 'bust', player.x, player.y + 1, player.z);
         standDown(state, player.seat);
       } else bust(state, player);

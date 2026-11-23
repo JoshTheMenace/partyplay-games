@@ -139,6 +139,11 @@
 .bw-tbtn-jump{right:24px;bottom:1px}
 .bw-tbtn-use{right:96px;bottom:95px;border-color:var(--kp-sky)}
 .bw-tbtn-sneak{right:21px;bottom:178px;width:54px;height:54px;font-size:.72rem}
+/* A small phone on its side with the room's header still showing leaves about 250px for the game: the cluster closes up so Sneak clears the corner buttons. */
+.bw-touch{container-type:size}
+@container (max-height:290px){.bw-tbtn-mine{bottom:62px;width:68px;height:68px}.bw-tbtn-jump{width:56px;height:56px}.bw-tbtn-use{right:86px;bottom:74px;width:56px;height:56px}.bw-tbtn-sneak{bottom:134px;width:44px;height:44px}}
+/* In the air Down sits beside Up: the corner above belongs to the horn. */
+.bw-tactions-drive .bw-tbtn-sneak{right:96px;bottom:1px;width:62px;height:62px;font-size:.8rem}
 .bw-tcorner{top:max(8px,var(--safe-top));display:flex;gap:16px}
 .bw-tbtn-small{position:static;width:48px;height:44px;border-radius:.7rem;font-size:.72rem}
 .bw-tbtn-drop{position:relative;isolation:isolate;overflow:hidden;margin-right:16px}
@@ -429,6 +434,9 @@
 .bw-gig[data-late=true]{border-color:var(--kp-coral)}
 .bw-gig[data-late=true] span{color:#ffb0a6}
 .bw-context{position:absolute;left:50%;bottom:calc(max(6px,var(--safe-bottom)) + var(--bw-slot) + 58px);transform:translateX(-50%);min-height:44px;padding:6px 16px;border-radius:99px;background:#ffd24a;border:3px solid var(--kp-ink);box-shadow:0 4px 0 #b8860b,0 8px 18px #0008;font:900 .95rem/1.1 var(--font-body);color:var(--kp-ink);white-space:nowrap;cursor:pointer;touch-action:manipulation}
+/* On touch the prompt keeps clear of the action buttons to its right (and so of as much on its left): a long one takes two lines on a small phone. */
+.bw-hud[data-touch=true] .bw-context{max-width:calc(100% - 352px);white-space:normal;text-align:center;border-radius:22px}
+.bw-hud[data-touch=true] .bw-ridebar .bw-context{max-width:none;white-space:nowrap}
 .bw-context[data-kind=exit]{background:var(--kp-cream)}
 .bw-context kbd{margin-right:7px;background:#05071a22;border-color:#05071a55}
 .bw-focus{position:absolute;left:50%;top:calc(50% + 26px);transform:translateX(-50%);margin:0;padding:3px 11px;border-radius:9px;background:#05071acc;border:2px solid #fff6e53d;display:grid;justify-items:center;text-align:center;font-size:.8rem;line-height:1.25;white-space:nowrap}
@@ -463,6 +471,8 @@
 .bw-map-actions{display:grid;gap:5px}
 @media(max-width:640px){.bw-map-layout{grid-template-columns:1fr}.bw-legend{grid-template-columns:repeat(3,1fr)}}
 @media(max-height:430px){.bw-legend{grid-template-columns:1fr 1fr;font-size:.62rem}.bw-legend .bw-sign{width:13px;height:13px;margin-right:3px}}
+/* A small phone on its side: the map as tall as the sheet allows, with what can be done from it (call a vehicle, drop the gig) beside it and above the legend, not under the fold. */
+@media(max-width:640px) and (max-height:430px){.bw-map-layout{grid-template-columns:auto minmax(0,1fr)}.bw-map-canvas{width:auto;height:calc(100dvh - 90px)}.bw-map-actions{order:-1}}
 .bw-knocked h2{color:var(--kp-sun)}
 
 /* The TV in the city. */
@@ -484,3 +494,81 @@
 .bw-city-news li:last-child{flex:0 0 auto;max-width:60%;border-color:var(--kp-sun);color:#ffe9a6}
 .bw-ledger .bw-journal-name small{margin-right:4px;color:var(--kp-sun)}
 @media(prefers-reduced-motion:reduce){.bw-heat[data-seen=true] .bw-heat-lamp,.bw-dizzy,.bw-city-news li{animation:none}.bw-coins{transition:none}}
+
+/* Caper City, second helping -------------------------------------------------------------------------------------- */
+.bw-todo{display:grid;gap:1px;justify-items:start;min-height:44px;padding:4px 9px 5px;border-radius:9px;background:#05071ad9;border:2px solid #78d95599;color:var(--kp-cream);text-align:left;pointer-events:auto;max-width:100%}
+.bw-todo b{font:800 .56rem/1.2 var(--font-body);letter-spacing:.09em;text-transform:uppercase;color:var(--kp-lime)}
+.bw-todo span{font:800 .68rem/1.25 var(--font-body);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.bw-todo span::before{content:'';display:inline-block;width:.5em;height:.5em;margin-right:.4em;border:2px solid var(--kp-lime);border-radius:2px;vertical-align:.02em}
+.bw-todo:focus-visible{outline:3px solid var(--kp-sun);outline-offset:2px}
+.bw-passport-sheet .bw-panel{width:min(94vw,720px)}
+.bw-passport-count{font:800 .78rem var(--font-body);color:#fff6e5cc;white-space:nowrap}
+.bw-passport-count b{color:var(--kp-sun);font-size:1.05rem}
+.bw-stamps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:4px;max-height:min(64vh,460px);overflow-y:auto;overscroll-behavior:contain}
+.bw-stamp{display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:7px;min-height:38px;padding:4px 8px 4px 6px;border-radius:7px;background:#0c1030;border:2px solid #fff6e51f}
+.bw-stamp i{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;border:2px dashed #fff6e566;font:900 .8rem/1 var(--font-body);font-style:normal;color:var(--kp-ink)}
+.bw-stamp[data-got=true]{background:#1f3a2a;border-color:#78d95566}
+.bw-stamp[data-got=true] i{background:var(--kp-lime);border:2px solid var(--kp-ink)}
+.bw-stamp[data-next=true]{border-color:var(--kp-sun)}
+.bw-stamp b{display:block;font:800 .78rem/1.2 var(--font-body);color:var(--kp-cream)}
+.bw-stamp small{display:block;font:700 .66rem/1.25 var(--font-body);color:#fff6e5a6}
+.bw-stamp em{font:900 .76rem var(--font-body);font-style:normal;color:var(--kp-sun)}
+@media (max-height:420px){
+  .bw-stamps{max-height:calc(100vh - 86px);grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+  .bw-todo{padding:3px 8px 4px}
+  .bw-todo span{font-size:.64rem}
+}
+.bw-biz{display:flex;align-items:center;gap:8px;margin:4px 0 0;padding:6px 6px 6px 10px;border-radius:7px;background:#2a1f4a;border:2px solid #b58aff66;font:700 .74rem/1.3 var(--font-body);color:#fff6e5d9}
+.bw-biz span{flex:1;min-width:0}
+.bw-biz b{color:var(--kp-grape)}
+.bw-biz[data-mine=true]{background:#1f3a2a;border-color:#78d95566}
+.bw-biz[data-mine=true] b{color:var(--kp-lime)}
+.bw-fish{position:absolute;left:50%;top:26%;transform:translateX(-50%);margin:0;padding:5px 14px;border-radius:999px;background:#05071ad9;border:2px solid #28c6e7;color:var(--kp-cream);font-size:.86rem;white-space:nowrap;pointer-events:none}
+.bw-fish[data-bite=true]{background:var(--kp-sun);border-color:var(--kp-ink);color:var(--kp-ink);font-size:1.1rem;animation:bw-bite .25s ease-in-out infinite alternate}
+@keyframes bw-bite{to{transform:translateX(-50%) scale(1.08)}}
+.bw-spot{bottom:calc(max(12px,var(--safe-bottom)) + 70px)}
+@media (prefers-reduced-motion:reduce){.bw-fish[data-bite=true]{animation:none}}
+.bw-hold{position:absolute;left:50%;top:34%;transform:translateX(-50%);min-width:190px;margin:0;padding:5px 14px 9px;border-radius:10px;background:#05071ad9;border:2px solid var(--kp-grape);color:var(--kp-cream);font-size:.82rem;text-align:center;pointer-events:none;overflow:hidden}
+.bw-hold i{position:absolute;left:0;bottom:0;height:5px;background:var(--kp-grape);transition:width .2s linear}
+.bw-race{border-color:var(--kp-cream)}
+
+.bw-cell-ways{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.bw-cell-ways .bw-resume{display:grid;gap:1px;min-width:180px}
+.bw-cell-ways .bw-resume small{font:700 .68rem/1.2 var(--font-body);opacity:.8}
+.bw-cell-ways .bw-resume[data-alt=true]{background:var(--kp-sky)}
+@media (max-height:420px){.bw-cell p{margin:.2rem 0}.bw-cell-ways .bw-resume{min-width:150px}}
+.bw-cell{background:radial-gradient(circle,#1f2757e0,#05071af2)}
+.bw-cell h2{color:var(--kp-cream)}
+.bw-death .bw-cell-ways .bw-resume{width:auto}
+.bw-errand{border-color:var(--kp-lime)}
+.bw-errand[data-done=true]{background:#1f3a2a}
+.bw-talk-sheet .bw-panel{width:min(94vw,560px)}
+.bw-talk{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:start}
+.bw-talk-face{display:block;width:54px;height:54px;border-radius:8px;border:2px solid var(--kp-ink);border-top-width:14px;border-bottom-width:10px;box-shadow:0 0 0 2px #fff6e533;position:relative}
+.bw-talk-face::before,.bw-talk-face::after{content:'';position:absolute;top:9px;width:7px;height:8px;background:#1d1d2a}
+.bw-talk-face::before{left:9px}
+.bw-talk-face::after{right:9px}
+.bw-talk-role{margin:0 0 4px;font:800 .66rem/1.2 var(--font-body);letter-spacing:.06em;text-transform:uppercase;color:var(--kp-lime)}
+.bw-talk-line{margin:0;font:700 .9rem/1.4 var(--font-body);color:var(--kp-cream)}
+.bw-talk-ways{display:flex;gap:10px;margin-top:10px}
+.bw-talk-ways .bw-resume{flex:1;display:grid;gap:1px;margin-top:0;font-size:1.05rem}
+.bw-talk-ways .bw-resume small,.bw-stall-sheet .bw-resume small{font:700 .66rem/1.2 var(--font-body);opacity:.8;display:block}
+.bw-talk-ways .bw-resume[data-alt=true]{flex:0 0 34%;background:#fff6e5}
+.bw-stall-note{display:block!important;max-width:none}
+.bw-stall-bar{position:relative;height:34px;margin:8px 0;border-radius:8px;border:3px solid var(--kp-ink);background:linear-gradient(90deg,#ff5748,#ffd24a 60%,#78d955 80%,#78d955 94%,#fff6e5 94%);overflow:hidden}
+.bw-stall-bar[data-stall='1']{background:linear-gradient(90deg,#ff5748,#ffd24a 30%,#78d955 44%,#fff6e5 47%,#fff6e5 53%,#78d955 56%,#ffd24a 70%,#ff5748)}
+.bw-stall-bar b{position:absolute;top:-3px;bottom:-3px;width:6px;margin-left:-3px;background:var(--kp-ink);box-shadow:0 0 0 2px var(--kp-cream)}
+@media (max-height:420px){.bw-talk-line{font-size:.8rem;line-height:1.3}.bw-talk-face{width:44px;height:44px}.bw-stall-bar{height:28px;margin:5px 0}}
+.bw-city-banner{position:absolute;left:50%;top:clamp(70px,12vh,120px);transform:translateX(-50%);max-width:min(58vw,1000px);margin:0;display:grid;gap:2px;padding:clamp(6px,1vh,12px) clamp(14px,2vw,30px);border-radius:12px;background:#05071aee;border:3px solid var(--kp-coral);box-shadow:0 10px 30px #000a;text-align:center;animation:bw-banner .45s cubic-bezier(.2,1.4,.4,1)}
+.bw-city-banner b{font:800 clamp(.62rem,.95vw,1rem)/1.1 var(--font-body);letter-spacing:.14em;text-transform:uppercase;color:#ff9a8f}
+.bw-city-banner span{font:400 clamp(1rem,2vw,2.1rem)/1.15 var(--font-display);color:var(--kp-cream)}
+@keyframes bw-banner{from{transform:translate(-50%,-140%)}to{transform:translate(-50%,0)}}
+.bw-city-cut{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:.4em;background:radial-gradient(circle at 50% 45%,#1f2757,#05071a 70%);z-index:1}
+.bw-city-cut p{margin:0;font-size:clamp(2rem,5.5vw,5.5rem);color:var(--kp-sun)}
+.bw-city-cut span{font:800 clamp(1rem,2.2vw,2.2rem) var(--font-body);color:var(--kp-cream)}
+.bw-city-tv .bw-tv-top,.bw-city-tv .bw-city-panel,.bw-city-tv .bw-city-news{z-index:2}
+.bw-city-list[data-kind=now]{border-color:var(--kp-lime)}
+.bw-city-list[data-kind=now] h3{color:var(--kp-lime)}
+.bw-city-list[data-kind=now] li i{background:var(--kp-lime)}
+.bw-ledger-title{font:800 .7em var(--font-body);color:var(--kp-sun)}
+@media(prefers-reduced-motion:reduce){.bw-city-banner{animation:none}}

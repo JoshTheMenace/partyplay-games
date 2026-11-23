@@ -45,7 +45,7 @@ function DropButton() {
 }
 
 /** `drive`: the player is in a vehicle (the stick steers; the buttons become brake, or up and down in the air). */
-export function TouchControls({ creative, drive }: { creative: boolean; drive?: 'ground' | 'air' | undefined }) {
+export function TouchControls({ creative, drive, city = false }: { creative: boolean; drive?: 'ground' | 'air' | undefined; city?: boolean }) {
   const [sneak, setSneak] = useState(false), [stick, setStick] = useState<[number, number] | null>(null);
   const knob = useRef<HTMLSpanElement>(null), stickPointer = useRef<{ id: number; x: number; y: number } | null>(null), look = useRef<{ id: number; x: number; y: number } | null>(null);
   const toggleSneak = (on: boolean) => { touch.sneak = on; setSneak(on); };
@@ -118,15 +118,16 @@ export function TouchControls({ creative, drive }: { creative: boolean; drive?: 
         : <span className="bw-stick-hint">{drive ? 'Steer' : 'Move'}</span>}
     </div>
     <div className="bw-tcorner">
-      <DropButton/>
+      {/* Nothing is dropped from behind a wheel. */}
+      {!drive && <DropButton/>}
       <button type="button" className="bw-tbtn bw-tbtn-small" aria-label="Items: open inventory" onClick={toggleInventory}>Items</button>
       <button type="button" className="bw-tbtn bw-tbtn-small" aria-label="Menu" onClick={() => openMenu('pause')}>☰</button>
     </div>
-    {drive ? <div className="bw-tactions">
+    {drive ? <div className="bw-tactions bw-tactions-drive">
       <HoldButton label={drive === 'air' ? 'Climb (hold)' : 'Brake (hold)'} keys={['jump']} className="bw-tbtn-jump">{drive === 'air' ? 'Up' : 'Brake'}</HoldButton>
       {drive === 'air' && <HoldButton label="Descend (hold)" keys={['flyDown']} className="bw-tbtn-sneak">Down</HoldButton>}
     </div> : <div className="bw-tactions">
-      <HoldButton label="Mine or attack (hold)" keys={['mine']} className="bw-tbtn-mine">Mine</HoldButton>
+      <HoldButton label={city ? 'Bonk (hold to mine on your plot)' : 'Mine or attack (hold)'} keys={['mine']} className="bw-tbtn-mine">{city ? 'Bonk' : 'Mine'}</HoldButton>
       <HoldButton label="Use or place (hold to eat or draw)" keys={['use']} className="bw-tbtn-use">Use</HoldButton>
       <HoldButton label={creative ? 'Jump (double-tap to fly, hold to rise)' : 'Jump'} keys={['jump']} className="bw-tbtn-jump">Jump</HoldButton>
       {creative

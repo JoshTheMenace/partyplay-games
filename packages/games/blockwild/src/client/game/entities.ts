@@ -18,6 +18,7 @@ import { I } from '../../shared/items';
 import { wrapAngle } from '../../shared/coords';
 import { DRAGON_PARTS, DRAGON_PHASE, MOB, MOB_TYPES, MS, PF, PK, type PubArrow, type PubItem, type PubMob, type PubPlayer, type Scene } from '../../shared/protocol';
 import type { SharedUniforms } from '../engine/index';
+import { HAT_PIECES } from '../city/hats';
 import { flameGeometry, flameMaterial } from './effects';
 import { byId, damp, Interpolator, lerp, lerpAngle } from './interp';
 import { attach, detach, PROFESSIONS, villagerModel, wearArmor, type Attachment, type ModelKey, type ModelLibrary, type Pivot, type Rig } from './models';
@@ -354,7 +355,14 @@ export class Entities {
     }
     this.refreshRig(actor, this.playerKey);
     const armor = p.armor ?? NO_ARMOR, worn = armorKey(armor);
-    if (worn !== actor.extraKey) this.outfit(actor, worn, worn ? wearArmor(actor.rig, armor) : null);
+    if (this.playerKey === 'citizen') {
+      // Caper City: nobody wears armor; the first number is the hat (client/city/hats.ts), worn in place of the cap.
+      const hat = armor[0] ?? 0, key = hat + 1;
+      if (key !== actor.extraKey) {
+        this.outfit(actor, key, attach(actor.rig, HAT_PIECES[hat] ?? []));
+        actor.rig.root.traverse(node => { if (node.name === 'cap') node.visible = !HAT_PIECES[hat]?.length; });
+      }
+    } else if (worn !== actor.extraKey) this.outfit(actor, worn, worn ? wearArmor(actor.rig, armor) : null);
     if (actor.name !== p.name || actor.color !== p.color) {
       if (actor.tag) { actor.rig.root.remove(actor.tag); actor.tag.material.map?.dispose(); actor.tag.material.dispose(); }
       actor.tag = nameTag(p.name, p.color);

@@ -110,11 +110,27 @@ add('coin', 'materials', { hidden: true });
 add('coin_purse', 'materials', { stack: 16 });
 add('gold_watch', 'materials', { stack: 16 });
 add('swag_bag', 'materials', { stack: 4 });
+add('water_balloon', 'combat', { stack: 16 });
+add('banana_peel', 'combat', { stack: 16 });
+add('smoke_puff', 'tools', { stack: 8 });
+add('parasol', 'tools', { stack: 1 });
+add('kazoo', 'tools', { stack: 1 });
+add('fishing_rod', 'tools', { stack: 1 });
+add('tiddler', 'materials', { stack: 16 });
+add('silver_dab', 'materials', { stack: 16 });
+add('stripey_mullet', 'materials', { stack: 16 });
+add('moon_carp', 'materials', { stack: 16 });
+add('golden_guppy', 'materials', { stack: 16 });
+add('old_boot', 'materials', { stack: 16 });
+add('lost_parcel', 'materials', { hidden: true });
+add('gold_bar', 'materials', { stack: 8 });
+add('fair_ticket', 'materials', { stack: 64 });
+add('plush_gull', 'materials', { stack: 4 });
 
 const FOODS: [ItemName, number, number][] = [
   ['bread', 5, 6], ['apple', 4, 2.4], ['golden_apple', 4, 9.6], ['carrot', 3, 3.6], ['potato', 1, 0.6], ['baked_potato', 5, 6], ['melon_slice', 2, 1.2],
   ['beef', 3, 1.8], ['cooked_beef', 8, 12.8], ['porkchop', 3, 1.8], ['cooked_porkchop', 8, 12.8], ['chicken', 2, 1.2], ['cooked_chicken', 6, 7.2],
-  ['mutton', 2, 1.2], ['cooked_mutton', 6, 9.6], ['rotten_flesh', 4, 0.8], ['burger', 8, 8], ['donut', 4, 3], ['fizz_pop', 2, 1],
+  ['mutton', 2, 1.2], ['cooked_mutton', 6, 9.6], ['rotten_flesh', 4, 0.8], ['burger', 8, 8], ['donut', 4, 3], ['fizz_pop', 2, 1], ['ice_cream', 3, 2], ['hot_dog', 6, 5], ['candy_floss', 2, 1],
 ];
 for (const [key, hunger, saturation] of FOODS) add(key, 'food', { food: { hunger, saturation } });
 table[I.carrot]!.places = B.carrots;

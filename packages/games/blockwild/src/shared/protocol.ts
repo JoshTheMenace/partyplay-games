@@ -20,9 +20,10 @@ export type Action = { type: 'noop' };
 
 /** Input flags (`Input.f`). */
 /** PARKED (Caper City): this screen has not seen the parked vehicles round it lately, so list them in the next scene. */
-export const IF = { ON_GROUND: 1, SNEAK: 2, SPRINT: 4, FLYING: 8, USING: 16, SWINGING: 32, NO_POS: 64, PARKED: 128 } as const;
+/** CHUTE (Caper City): the player is floating down under a canopy (the server lets them only if they may: see sim/city-fun.ts). */
+export const IF = { ON_GROUND: 1, SNEAK: 2, SPRINT: 4, FLYING: 8, USING: 16, SWINGING: 32, NO_POS: 64, PARKED: 128, CHUTE: 256 } as const;
 /** Public player flags (`PubPlayer.flags`). */
-export const PF = { SNEAKING: 1, SLEEPING: 2, DEAD: 4, FLYING: 8, USING: 16, OFFLINE: 32, BURNING: 64, RIDING: 128, DIZZY: 256 } as const;
+export const PF = { SNEAKING: 1, SLEEPING: 2, DEAD: 4, FLYING: 8, USING: 16, OFFLINE: 32, BURNING: 64, RIDING: 128, DIZZY: 256, CHUTE: 512 } as const;
 /** Mob state bits (`PubMob.s`). ANGRY: provoked (zombified piglins). BURNING: on fire. */
 export const MS = { SHEARED: 1, BABY: 2, ANGRY: 4, BURNING: 8 } as const;
 
@@ -58,8 +59,12 @@ export type CmdBody =
  * open place, j = count). sell (i = inventory slot). gig (i = offer of the open board). quit: drop the gig. pay: settle
  * heat at the Watch House. heal: the clinic. call (i = vehicle kind): fetch an owned vehicle at a garage. scrap: sell the
  * vehicle being driven. grab: empty the till or vault being looked at (i = its place).
+ * Second helping (append only). give (i = seat, j = coins). spot (i = index into the city's spots): do what that spot is for.
+ * say (i = 0 accept or hand in, 1 not now): answer the character being talked to. cell (i = 0 pay the fine, 1 community
+ * service). stall (i = stall, j = the player's timing 0..1000). wear (i = hat). biz: buy the business whose counter is open.
+ * tune (i = an owned vehicle kind): the dealer's tune-up.
  */
-export const CITY_ACTS = ['exit', 'horn', 'open', 'shut', 'buy', 'sell', 'gig', 'quit', 'pay', 'heal', 'call', 'scrap', 'grab'] as const;
+export const CITY_ACTS = ['exit', 'horn', 'open', 'shut', 'buy', 'sell', 'gig', 'quit', 'pay', 'heal', 'call', 'scrap', 'grab', 'give', 'spot', 'say', 'cell', 'stall', 'wear', 'biz', 'tune'] as const;
 export type CityAct = typeof CITY_ACTS[number];
 export type Cmd = { n: number } & CmdBody;
 export type CmdType = CmdBody['t'];
@@ -109,7 +114,8 @@ export type PubArrow = { id: number; x: number; y: number; z: number; vx: number
 export const FX_KINDS = ['break', 'place', 'hit', 'explode', 'mob', 'hurtMob', 'die', 'pickup', 'eat', 'splash', 'bow', 'door', 'chest', 'furnace', 'craft', 'levelup',
   'portal', 'travel', 'ignite', 'fizz', 'lever', 'button', 'piston', 'tnt', 'trade', 'spawner', 'ghast', 'fireball', 'lamp',
   'eye', 'shatter', 'portalOpen', 'dragonDeath', 'acid', 'crystal', 'pearl', 'blazeShoot', 'scream', 'teleport', 'observer',
-  'bonk', 'splat', 'coins', 'siren', 'gasp', 'horn', 'crash', 'bust'] as const;
+  'bonk', 'splat', 'coins', 'siren', 'gasp', 'horn', 'crash', 'bust',
+  'water', 'slip', 'smoke', 'toot', 'cast', 'bite', 'reel', 'chute', 'fanfare', 'whistle', 'alarm', 'ding', 'squawk', 'hose', 'stamp'] as const;
 export type FxKind = typeof FX_KINDS[number];
 /**
  * Monotonic id; clients play each once. a: cell value for break/place, mob type for mob; piston: the moved cells'
@@ -119,7 +125,10 @@ export type FxKind = typeof FX_KINDS[number];
  * a crystal destroyed; 'pearl' a pearl landing (the thrower arrives); 'blazeShoot' a blaze volley; 'scream' an enderman
  * provoked; 'teleport' an enderman or player vanishing/arriving here; 'observer' an observer pulse.
  * Caper City: 'bonk' (stars over a head), 'splat' (a cream pie), 'coins' (a = how many), 'siren' (heat rose; a = tier), 'gasp'
- * (bystanders saw it), 'horn' (a = vehicle kind), 'crash', 'bust' (an arrest or a ticket).
+ * (bystanders saw it), 'horn' (a = vehicle kind), 'crash', 'bust' (an arrest or a ticket). Second helping: 'water' (a balloon
+ * bursts), 'slip' (a banana peel does its work), 'smoke' (a puff), 'toot' (a kazoo note; a = which), 'cast' / 'bite' / 'reel'
+ * (a fishing line; reel a = the catch), 'chute' (a canopy opens), 'fanfare' (a win), 'whistle' (a race starts), 'alarm' (the bank),
+ * 'ding' (a checkpoint, a stop, a stall), 'squawk' (the gull), 'hose' (water on a fire), 'stamp' (a passport stamp).
  */
 export type Fx = { id: number; k: FxKind; x: number; y: number; z: number; a?: number };
 /** World totals; `dragons` counts Ender Dragons slain (0 in worlds from before save v10). */
@@ -158,15 +167,19 @@ export const RF = { ASLEEP: 1, DRIVEN: 2, SIREN: 4, TRAFFIC: 8, OWNED: 16, BRAKI
 export type PubRide = { id: number; k: number; x: number; y: number; z: number; yaw: number; paint: number; f: number; v: number; pt?: number };
 /** The city scoreboard and round clock, in the public view about once a second. */
 export type CityView = {
-  /** [seat, coins, heat tier 0..4, net worth] for everyone. */
+  /** [seat, coins, heat tier 0..4, net worth, stamps, fish, race wins, best jump] for everyone. */
   board: number[][];
+  /** What is going on in the city right now, for maps, beacons and the TV: [kind (EV), x, z, seconds left, a, b]. */
+  ev?: number[][];
+  /** Street races: [id, course, state (0 forming, 1 running, 2 over), seconds (to the start, or run so far), ...seats in running order]. */
+  races?: number[][];
   /** Seconds left in a timed round (absent in free play). */
   left?: number;
   /** The newest news line (n counts them, so each plays once). */
   news?: [n: number, text: string];
 };
 /** A gig on offer at a job board: kind (GIG kinds), pay and where it goes (block coordinates). */
-export type GigOffer = { k: number; pay: number; x: number; z: number; secs: number };
+export type GigOffer = { k: number; pay: number; x: number; z: number; secs: number; /** A cab fare: where the passenger waits to be fetched. */ pick?: [number, number] };
 /** The gig a seat is on: `stage` 0 = fetch (cab riders), 1 = deliver; (x, z) is where to go now. */
 export type GigView = { k: number; stage: number; x: number; z: number; left: number; pay: number; drops: number };
 /** A seat's own city state. */
@@ -183,7 +196,30 @@ export type CityPrivate = {
   own: number; flat: number; plot: number;
   /** Ticks left of seeing stars after a bonk. */
   dizzy?: number;
+  /** May open a canopy when falling (a parasol in the pockets, or just out of an aircraft). */
+  chute?: 1;
+  /** A line in the water: [1 waiting for a bite or 2 a fish is on (press Use now), the float's x, z]. */
+  fish?: number[];
+  /** Who owns the business whose counter is open (a seat; absent when nobody does). */
+  owner?: number;
+  /** The race this seat is in: [race id, flags taken, place (1 = leading), racers, seconds (to the start while it forms, then run), course]. */
+  race?: number[];
+  /** The character whose dialogue is open (index into CHARACTERS), and the errand in hand: [character, done, needed]. */
+  talk?: number; errand?: number[];
+  /** In the lock-up: [seconds left, the fine to settle]. */
+  cell?: number[];
+  /** 0..1 while something is being held down to finish it (cracking the vault, hosing a fire, working a lock). */
+  hold?: number;
+  /** Shopkeepers remember: prices are up for this seat for a while. */
+  wary?: 1;
 };
+/** City event kinds (`CityView.ev[i][0]`, append only). */
+export const EV = { SPILL: 0, CRATE: 1, FIRE: 2, GULL: 3, SALE: 4, BLACKOUT: 5, BOUNTY: 6, VAULT: 7, RACE: 8 } as const;
+/**
+ * What a player has made of the city, as the screens need it: it rides in the bag (sent only when it changes). Stamps
+ * and feathers are 16- and 20-bit halves; story, rep, look and biz are packed (see sim/city-state.ts).
+ */
+export type Career = { st: number[]; fe: number[]; story: number; rep: number; look: number; biz: number };
 /** A seat's identity; `View.who` lists every player of the round in seat order (the index is the seat number). */
 export type Who = [id: string, name: string, color: string];
 /** One player on the TV's roster: where they are and how they are doing, without the per-frame detail. */
@@ -213,18 +249,23 @@ export type View = {
   victory?: Victory;
   /** Caper City: the scoreboard, about once a second. */
   city?: CityView;
-  /** Caper City: each seat's final ledger line as numbers in LEDGER_KEYS order (the row's index is the seat), once the round is finished. */
-  ledger?: number[][];
+  /**
+   * Caper City: each seat's final ledger line as numbers in LEDGER_KEYS order (the row's index is the seat), once the round is
+   * finished; empty until then and in the wild. It is a cached field (sent once, when `revision` moves), because the room
+   * server repeats the results snapshot many times a second.
+   */
+  ledger: number[][];
 };
 /** One player's career totals for the City Ledger (and the save). */
-export type LedgerEntry = { id: string; worth: number; coins: number; earned: number; gigs: number; bonks: number; busts: number; escapes: number; peak: number; drove: number; flew: number; kos: number };
+export type LedgerEntry = { id: string; worth: number; coins: number; earned: number; gigs: number; bonks: number; busts: number; escapes: number; peak: number; drove: number; flew: number; kos: number;
+  fish: number; wins: number; jump: number; tips: number; helped: number; bounties: number; stamps: number; feathers: number; gull: number };
 /**
  * The ledger on the wire: these numbers for each seat (ids come from `who`). Results snapshots repeat many times a
  * second, so a line is thirty-odd bytes, not an object with eleven names in it.
  */
-export const LEDGER_KEYS = ['worth', 'coins', 'earned', 'gigs', 'bonks', 'busts', 'escapes', 'peak', 'drove', 'flew', 'kos'] as const;
+export const LEDGER_KEYS = ['worth', 'coins', 'earned', 'gigs', 'bonks', 'busts', 'escapes', 'peak', 'drove', 'flew', 'kos', 'fish', 'wins', 'jump', 'tips', 'helped', 'bounties', 'stamps', 'feathers', 'gull'] as const;
 export const encodeLedger = (entry: LedgerEntry): number[] => LEDGER_KEYS.map(key => entry[key]);
-export const decodeLedger = (view: Pick<View, 'ledger' | 'who'>): LedgerEntry[] => (view.ledger ?? []).map((row, seat) => ({ id: view.who[seat]?.[0] ?? '', ...Object.fromEntries(LEDGER_KEYS.map((key, k) => [key, row[k] ?? 0])) }) as LedgerEntry);
+export const decodeLedger = (view: { ledger?: number[][]; who: Who[] }): LedgerEntry[] => (view.ledger ?? []).map((row, seat) => ({ id: view.who[seat]?.[0] ?? '', ...Object.fromEntries(LEDGER_KEYS.map((key, k) => [key, row[k] ?? 0])) }) as LedgerEntry);
 
 export type ScreenKind = 'table' | 'furnace' | 'chest' | 'trade';
 /** One villager offer: pay `buy` (+ `buyB`) from the inventory for `sell`; `left` uses remain until the next restock. */
@@ -246,6 +287,8 @@ export type Bag = {
   screen: Screen | null;
   /** Worn armor: head, chest, legs, feet. */
   armor: (Slot | null)[];
+  /** Caper City: the seat's stamps, feathers, errands, standing, look and businesses. */
+  career?: Career;
 };
 export type PrivateView = {
   ack: number;
@@ -493,7 +536,7 @@ export function parseCmd(raw: unknown): Cmd | null {
 export function parseInput(raw: unknown): Input {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return neutralInput();
   const r = raw as Record<string, unknown>, p = vec(r.p, POS);
-  let f = int(r.f, 0, 255) ?? 0;
+  let f = int(r.f, 0, 1023) ?? 0;
   if (!p) f |= IF.NO_POS;
   const mine = vec(r.mine, [[0, COORD], [0, HEIGHT - 1], [0, COORD]]);
   const seen = new Set<number>(), cmds: Cmd[] = [];

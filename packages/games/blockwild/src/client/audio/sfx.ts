@@ -212,6 +212,38 @@ export class Sfx {
     this.synths.set('splat', make(0.22, t => { low += (noise() - low) * 0.18; return low * Math.exp(-t * 18) * 1.6; }));
     // An engine's single beat (played faster the faster a vehicle goes).
     this.synths.set('putt', make(0.09, t => (Math.sin(2 * Math.PI * 70 * t) + 0.5 * Math.sin(2 * Math.PI * 141 * t)) * Math.exp(-t * 34) * Math.min(1, t * 300) * 0.5));
+    // Caper City, second helping. A water balloon bursting: a pop and a wet spatter.
+    this.synths.set('burst', make(0.3, t => { low += (noise() - low) * 0.3; return Math.sin(2 * Math.PI * (240 - t * 500) * t) * Math.exp(-t * 40) * 0.6 + low * Math.exp(-t * 12) * 1.2; }));
+    // A slip on a banana peel: a slide whistle going down.
+    phase = 0;
+    this.synths.set('slide', make(0.42, t => { phase += (1500 - 2600 * t) / rate; return Math.sin(2 * Math.PI * phase) * Math.sin(Math.PI * t / 0.42) * 0.28; }));
+    // A puff of smoke: a soft cough of air.
+    this.synths.set('puff', make(0.5, t => { low += (noise() - low) * 0.06; return low * Math.sin(Math.PI * Math.min(1, t / 0.5)) * Math.exp(-t * 4) * 2.4; }));
+    // A kazoo: a buzzing reed (play it at different pitches for a tune).
+    this.synths.set('toot', make(0.26, t => { const f = 330 * (1 + 0.012 * Math.sin(2 * Math.PI * 6 * t)); return Math.tanh(3 * (Math.sin(2 * Math.PI * f * t) + 0.6 * Math.sin(2 * Math.PI * f * 2 * t) + 0.35 * Math.sign(Math.sin(2 * Math.PI * f * 3 * t)))) * Math.min(1, t * 60) * Math.min(1, (0.26 - t) * 25) * 0.16; }));
+    // A float landing on the water.
+    this.synths.set('plop', make(0.18, t => Math.sin(2 * Math.PI * (520 - 1900 * t) * t) * Math.exp(-t * 22) * 0.45));
+    // A bite: two quick blips, the second higher.
+    this.synths.set('nibble', make(0.24, t => { const second = t > 0.11, local = second ? t - 0.11 : t; return Math.sin(2 * Math.PI * (second ? 1320 : 990) * t) * Math.exp(-local * 30) * 0.3; }));
+    // Reeling in: a ratchet.
+    this.synths.set('reel', make(0.5, t => (Math.floor(t * 40) % 2 ? 1 : -1) * Math.exp(-(t * 40 % 1) * 6) * Math.min(1, (0.5 - t) * 8) * 0.14 + Math.sin(2 * Math.PI * (300 + t * 500) * t) * 0.05));
+    // A canopy filling with air.
+    this.synths.set('flump', make(0.45, t => { low += (noise() - low) * 0.08; return low * Math.min(1, t * 30) * Math.exp(-t * 7) * 2.6 + Math.sin(2 * Math.PI * 70 * t) * Math.exp(-t * 18) * 0.5; }));
+    // A win: three notes up and a held fourth.
+    this.synths.set('fanfare', make(0.9, t => { const k = Math.min(3, Math.floor(t / 0.14)), local = t - k * 0.14, f = [523, 659, 784, 1047][k]!; return (Math.sign(Math.sin(2 * Math.PI * f * t)) * 0.5 + Math.sin(2 * Math.PI * f * t)) * Math.exp(-local * (k === 3 ? 4 : 9)) * 0.14; }));
+    // A starter's whistle: a pea rattling in a high tone.
+    this.synths.set('whistle', make(0.55, t => Math.sin(2 * Math.PI * (2350 + 90 * Math.sign(Math.sin(2 * Math.PI * 38 * t))) * t) * Math.min(1, t * 50) * Math.min(1, (0.55 - t) * 20) * 0.17));
+    // An alarm bell: a hammer on a gong, twelve times a second.
+    this.synths.set('alarm', make(1.2, t => { const local = t * 12 % 1 / 12; return (Math.sin(2 * Math.PI * 1480 * t) + 0.6 * Math.sin(2 * Math.PI * 2210 * t)) * Math.exp(-local * 60) * Math.min(1, (1.2 - t) * 6) * 0.2; }));
+    // A bell: one clear ring.
+    this.synths.set('ding', make(0.6, t => (Math.sin(2 * Math.PI * 1175 * t) + 0.45 * Math.sin(2 * Math.PI * 2350 * t) + 0.2 * Math.sin(2 * Math.PI * 3525 * t)) * Math.exp(-t * 7) * 0.22));
+    // A gull: a nasal cry falling twice.
+    phase = 0;
+    this.synths.set('squawk', make(0.6, t => { const local = t % 0.3; phase += (1250 - 1500 * local) / rate; return Math.tanh(3 * Math.sin(2 * Math.PI * phase)) * Math.sin(Math.PI * local / 0.3) * 0.2; }));
+    // Water from a hose: a steady hiss.
+    this.synths.set('hose', make(0.4, t => { const n = noise(), hiss = n - last; last = n; return hiss * Math.sin(Math.PI * t / 0.4) * 0.35; }));
+    // A rubber stamp: a thump and a bright tick.
+    this.synths.set('stamp', make(0.3, t => Math.sin(2 * Math.PI * (130 - t * 200) * t) * Math.exp(-t * 26) * 0.7 + Math.sin(2 * Math.PI * 1760 * t) * Math.exp(-Math.max(0, t - 0.05) * 30) * (t > 0.05 ? 0.16 : 0)));
     // The dragon dying: a long roar climbing in pitch into a bright, ringing wash.
     phase = 0;
     this.synths.set('dragonDeath', make(6, t => {

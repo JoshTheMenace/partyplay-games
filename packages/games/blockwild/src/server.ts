@@ -4,6 +4,7 @@
  */
 import type { GameRules } from '../../../party-contract/src/index';
 import { neutralInput, parseAction, parseInput, validateSettings, type Action, type Input, type PrivateView, type Settings, type View } from './shared/protocol';
+import { finishCity } from './sim/city';
 import { createState, saveSource, setPresence, tickState } from './sim/game';
 import { exportSave, parseSave } from './sim/save';
 import type { State } from './sim/state';
@@ -24,7 +25,7 @@ export const rules: GameRules<State, Input, Action, Settings, View, PrivateView>
     const save = parseSave(raw);
     return { state: createState(ctx, save.settings, { save }), settings: save.settings };
   },
-  finish(state) { state.finished = true; },
+  finish(state) { if (state.city) finishCity(state); else state.finished = true; },
   outcome,
   dispose(state) { state.world.cache.clear(); },
 };

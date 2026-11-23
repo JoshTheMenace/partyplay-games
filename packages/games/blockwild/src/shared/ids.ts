@@ -48,5 +48,8 @@ export const I = {
   blaze_rod: 348, blaze_powder: 349, ender_pearl: 350, ender_eye: 351, nether_wart: 352, end_crystal: 353,
   // Caper City.
   bopper: 354, cream_pie: 355, disguise_kit: 356, burger: 357, donut: 358, fizz_pop: 359, coin: 360, coin_purse: 361, gold_watch: 362, swag_bag: 363,
+  // Caper City, second helping: gadgets, a rod and what it catches, things found and won.
+  water_balloon: 364, banana_peel: 365, smoke_puff: 366, parasol: 367, kazoo: 368, fishing_rod: 369, tiddler: 370, silver_dab: 371, stripey_mullet: 372, moon_carp: 373, golden_guppy: 374,
+  old_boot: 375, lost_parcel: 376, gold_bar: 377, fair_ticket: 378, ice_cream: 379, hot_dog: 380, candy_floss: 381, plush_gull: 382,
 } as const;
 export type ItemName = keyof typeof I;

@@ -46,7 +46,7 @@ const run = (state: State, ticks = 1, inputs: Record<string, Input> = {}) => { f
 
 test('the manifest seats a full room and caches the roster of names with the journal', () => {
   assert.equal(manifest.players.max, MAX_ROOM_PLAYERS);
-  assert.deepEqual(manifest.snapshotCache.fields, ['edits', 'who']);
+  assert.deepEqual(manifest.snapshotCache.fields, ['edits', 'who', 'ledger'], 'the ledger is Caper City\'s results table: an empty list in the wild');
   assert.ok(manifest.prepareTimeoutMs >= 60000, 'one slow phone among 64 must not fail the start');
 });
 

@@ -128,7 +128,7 @@ function ownMaterials(root: Object3D, copy: boolean): Rig['materials'] {
  * `glow` names the material so it lights itself (eyes); `opacity` < 1 makes it see-through (a crystal's glass).
  */
 type Part = {
-  pivot: Pivot | 'eye' | 'snout'; size: [number, number, number] | null; at: [number, number, number]; offset: [number, number, number]; color: number;
+  pivot: Pivot | 'eye' | 'snout' | 'cap'; size: [number, number, number] | null; at: [number, number, number]; offset: [number, number, number]; color: number;
   shirt?: boolean; parent?: Pivot; tex?: readonly string[]; glow?: boolean; opacity?: number;
 };
 const SKIN = 0xc68e6a, PANTS = 0x3b4a8c;
@@ -305,8 +305,9 @@ function citizen(): Part[] {
     { pivot: 'eye', parent: 'arm_r', size: s(0.12, 0.2, 0.15), at: s(0, -0.38, 0), offset: [0, 0, 0], color: skin },
     { pivot: 'head', size: s(0.42, 0.42, 0.42), at: s(0, 1.06, 0), offset: s(0, 0.21, 0), color: skin },
     facePart('head', -0.1 * k, 0.24 * k, 0.07 * k, 0.09 * k, 0.21 * k, 0x1d1d2a), facePart('head', 0.1 * k, 0.24 * k, 0.07 * k, 0.09 * k, 0.21 * k, 0x1d1d2a), facePart('head', 0, 0.1 * k, 0.14 * k, 0.03 * k, 0.21 * k, 0x8a5a4a),
-    { pivot: 'eye', parent: 'head', size: s(0.47, 0.11, 0.47), at: s(0, 0.47, 0), offset: [0, 0, 0], color: 0xffffff, shirt: true },
-    { pivot: 'eye', parent: 'head', size: s(0.34, 0.04, 0.18), at: s(0, 0.44, -0.31), offset: [0, 0, 0], color: 0x23232a },
+    // The cap everyone arrives in (hidden under any other hat: client/city/hats.ts).
+    { pivot: 'cap', parent: 'head', size: s(0.47, 0.11, 0.47), at: s(0, 0.47, 0), offset: [0, 0, 0], color: 0xffffff, shirt: true },
+    { pivot: 'cap', parent: 'head', size: s(0.34, 0.04, 0.18), at: s(0, 0.44, -0.31), offset: [0, 0, 0], color: 0x23232a },
     { pivot: 'eye', parent: 'head', size: s(0.46, 0.2, 0.08), at: s(0, 0.3, 0.2), offset: [0, 0, 0], color: 0x4a2f18 },
   ];
 }

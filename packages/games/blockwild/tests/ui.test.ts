@@ -251,7 +251,7 @@ type Seat = Omit<RosterEntry, 'seat'>;
 const seat = (i: number): Seat => ({ x: 0, y: 64, z: 0, held: i ? B.torch : 0, flags: i === 3 ? 32 : 0, health: 13, armor: 0 });
 /** A public view with `players` seats; `change` moves or dresses single seats on the roster. */
 const view = (players: number, change: (i: number) => Partial<Seat> = () => ({})): View => ({
-  seed: 42, worldId: '42-test', mode: 'survival', difficulty: 'normal', time: 14000, day: 2, revision: 1, edits: [], recent: [], er: 1, sleeping: 0, sleepNeed: players,
+  seed: 42, worldId: '42-test', mode: 'survival', difficulty: 'normal', time: 14000, day: 2, revision: 1, edits: [], recent: [], er: 1, ledger: [], sleeping: 0, sleepNeed: players,
   stats: { mined: 1234, placed: 56, crafted: 7, mobs: 8, deaths: 1, days: 2, dragons: 0 },
   who: Array.from({ length: players }, (_, i) => [`p${i}`, `Explorer_${String(i).padStart(2, '0')}_long`, '#ff5748']),
   roster: Array.from({ length: players }, (_, i) => encodeRoster({ seat: i, ...seat(i), ...change(i) })),

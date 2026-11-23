@@ -7,7 +7,8 @@
 import { B, makeCell, SLAB_TOP } from '../blocks';
 import { CHUNK, HEIGHT } from '../constants';
 import { localIndex } from '../coords';
-import { footprint, GROUND, layoutOf, lotCell, lotDepth, lotWidth, ROOM, STOREY, type CityPlan, type Lot, type PlaceKind } from './plan';
+import { rampHeight, type Extras } from './extras';
+import { footprint, GROUND, ISLE, layoutOf, lotCell, lotDepth, lotWidth, PIER, ROOM, SHORE, STOREY, type CityPlan, type Lot, type PlaceKind } from './plan';
 
 /** Writes clipped to one chunk (world coordinates in, chunk cells out). */
 export class Canvas {
@@ -60,6 +61,7 @@ const PLAZA = cell(B.pavement, 1), LAMP = cell(B.light_panel, SLAB_TOP), GLASS =
 /** The sign of each trade: its icon (a `shop_sign` state) and the colour of the band beside it. The map uses the same pair. */
 export const SIGNS: Record<PlaceKind, readonly [icon: number, band: number]> = {
   food: [0, 0], gizmo: [1, 4], hardware: [2, 1], pawn: [3, 5], realtor: [4, 3], cabs: [5, 1], depot: [6, 2], dealer: [7, 0], scrap: [8, 6], clinic: [9, 7], watch: [10, 6], bank: [11, 3], hall: [12, 7], airfield: [13, 2],
+  hats: [17, 4], fire: [19, 0], bus: [18, 6], bait: [16, 2],
 };
 const mix = (style: number, salt: number) => Math.imul(style ^ salt, 0x9e3779b1) >>> 0;
 
@@ -370,6 +372,93 @@ const PAINTERS: Record<Lot['kind'], (f: Frame, plan: CityPlan, lot: Lot) => void
     lamp(f, 3, 3, 5);
     lamp(f, f.w - 4, 3, 5);
   },
+  firehouse(f, plan, lot) {
+    const [u0, v0, u1, v1] = footprint(lot)!, place = plan.places[lot.place]!, door = u0 + u1 >> 1;
+    f.box(0, -1, 0, f.w - 1, -1, f.d - 1, B.asphalt);
+    if (f.misses(0, 0, f.w - 1, f.d - 1)) return;
+    // A red brick engine house: two tall bays either side of the watch room, a hose tower on the corner.
+    f.box(u0, -1, v0, u1, -1, v1, CONCRETE(1));
+    f.walls(u0, 0, v0, u1, 6, v1, B.bricks);
+    f.walls(u0, 4, v0, u1, 4, v1, CONCRETE(2));
+    f.box(u0, 7, v0, u1, 7, v1, CONCRETE(1));
+    for (const u of [u0 + 3, u1 - 10]) { f.box(u, 0, v0, u + 7, 3, v0, B.air); f.box(u + 3, 5, v0 + 4, u + 4, 5, v0 + 4, LAMP); }
+    f.box(door, 0, v0, door + 1, 2, v0, B.air);
+    f.box(door - 2, 5, v0, door + 3, 5, v0, cell(B.sign_band, 0));
+    for (const u of [door, door + 1]) f.set(u, 5, v0, cell(B.shop_sign, SIGNS.fire[0]));
+    f.box(door - 3, 0, v0 + 7, door + 4, 0, v0 + 7, B.counter);
+    f.set(door + 1, 1, v0 + 7, B.till);
+    f.box(door, 6, v0 + 3, door + 1, 6, v0 + 3, LAMP);
+    f.box(u1 - 3, 8, v1 - 3, u1 - 1, 13, v1 - 1, B.bricks);
+    f.box(u1 - 3, 14, v1 - 3, u1 - 1, 14, v1 - 1, CONCRETE(2));
+    f.set(u1 - 2, 15, v1 - 2, B.lantern);
+    if (place.board) f.c.set(place.board[0], place.board[1], place.board[2], B.job_board);
+    lamp(f, 1, 1, 5);
+    lamp(f, f.w - 2, 1, 5);
+  },
+  busdepot(f, plan, lot) {
+    const box = footprint(lot)!, place = plan.places[lot.place]!;
+    f.box(0, -1, 0, f.w - 1, -1, f.d - 1, B.asphalt);
+    // A yard of buses round a small ticket office, with a shelter for whoever is waiting.
+    building(f, box, 0, { wall: STUCCO(5), trim: METAL(2), floor: PLAZA, window: WINDOW(1), every: 3, run: 2, lit: 50, ground: 'shop', room: true, fit: 'desk', roof: 'flat', sign: SIGNS.bus }, lot.style);
+    if (place.board) f.c.set(place.board[0], place.board[1], place.board[2], B.job_board);
+    for (const u of [36, 44]) f.box(u, 0, 4, u, 2, 4, B.steel_post);
+    f.box(35, 3, 3, 45, 3, 5, cell(B.awning, 0));
+    f.box(37, 0, 5, 43, 0, 5, B.oak_slab);
+    for (let u = 2; u < 13; u += 6) for (const v of [4, 16]) f.set(u, -1, v, cell(B.asphalt, 5));
+    lamp(f, 1, 1, 5);
+    lamp(f, f.w - 2, 1, 5);
+  },
+  pier(f, plan, lot) {
+    const c = f.c, TOP = GROUND - 1, end = SHORE + PIER.d, layout = layoutOf(lot);
+    // Planks on posts out over the water, with a rail and a lamp every eight blocks.
+    for (let z = Math.max(SHORE, c.z0); z < Math.min(end, c.z0 + CHUNK); z++) {
+      c.box(PIER.x0, TOP, z, PIER.x0 + PIER.w - 1, TOP, z, B.oak_planks);
+      if (z % 6 === 0) for (const x of [PIER.x0, PIER.x0 + PIER.w - 1]) c.box(x, SEABED, z, x, TOP - 1, z, B.oak_log);
+      for (const x of [PIER.x0, PIER.x0 + PIER.w - 1]) c.set(x, GROUND, z, z % 8 === 4 ? B.oak_log : cell(B.oak_fence, 1 | 4));
+      if (z % 8 === 4) for (const x of [PIER.x0, PIER.x0 + PIER.w - 1]) c.set(x, GROUND + 1, z, B.lantern);
+    }
+    // The head of the pier: a wide deck with the bait hut in the middle, open to the sea for fishing on three sides.
+    const z0 = end - 10, z1 = lot.z1;
+    c.box(lot.x0, TOP, z0, lot.x1, TOP, z1, B.oak_planks);
+    for (const x of [lot.x0, lot.x1]) for (const z of [z0, z1]) { c.box(x, SEABED, z, x, TOP - 1, z, B.oak_log); c.box(x, GROUND, z, x, GROUND + 1, z, B.oak_log); c.set(x, GROUND + 2, z, B.lantern); }
+    for (const x of [PIER.x0, PIER.x0 + PIER.w - 1]) c.box(x, GROUND, z0, x, GROUND + 1, z0 + 1, B.air);
+    const [ku, kv] = layout.keeper;
+    for (const [du, dv] of [[-3, -1], [3, -1], [-3, 2], [3, 2]] as const) f.box(ku + du, 0, kv + dv, ku + du, 3, kv + dv, B.oak_fence);
+    f.box(ku - 3, 4, kv - 2, ku + 3, 4, kv + 2, cell(B.awning, 0));
+    f.box(ku - 3, 0, layout.counterV, ku + 3, 0, layout.counterV, B.counter);
+    f.set(ku - 2, 4, layout.counterV - 2, cell(B.shop_sign, SIGNS.bait[0]));
+    f.box(ku + 2, 0, kv + 2, ku + 3, 0, kv + 2, B.crate);
+    void plan;
+  },
+  isle(f, _plan, lot) {
+    const c = f.c, x = ISLE.x, z = ISLE.z, top = GROUND + 2;
+    if (lot.x1 < c.x0 || lot.x0 >= c.x0 + CHUNK) return;
+    // The lighthouse: a banded tower on the summit with a lamp room and a gallery, a ladder up its lee side.
+    for (let y = 0; y < 16; y++) c.box(x - 2, top + y, z - 2, x + 2, top + y, z + 2, y % 6 < 3 ? STUCCO(7) : STUCCO(4));
+    c.box(x - 1, top, z - 1, x + 1, top + 15, z + 1, B.air);
+    c.box(x, top, z - 2, x, top + 1, z - 2, B.air);
+    c.box(x - 3, top + 16, z - 3, x + 3, top + 16, z + 3, CONCRETE(1));
+    c.box(x - 1, top + 17, z - 1, x + 1, top + 19, z + 1, LIT(1));
+    c.box(x - 2, top + 20, z - 2, x + 2, top + 20, z + 2, cell(B.roof_tiles, 0));
+    c.box(x, top, z + 1, x, top + 16, z + 1, cell(B.ladder, 0));
+    c.set(x, top + 16, z + 1, cell(B.ladder, 0));
+    c.set(x, top + 16, z, B.air);
+    // A shack, a jetty to the north, a landing pad and a few trees bent by the wind.
+    c.box(x + 6, top - 1, z - 4, x + 10, top + 2, z, B.oak_planks);
+    c.box(x + 7, top - 1 + 1, z - 3, x + 9, top + 1, z - 1, B.air);
+    c.box(x + 6, top, z - 2, x + 6, top + 1, z - 2, B.air);
+    c.box(x + 5, top + 3, z - 5, x + 11, top + 3, z + 1, cell(B.roof_tiles, 1));
+    c.set(x + 8, top + 2, z - 2, B.lantern);
+    c.box(x - 1, GROUND - 1, z - ISLE.r - 10, x + 1, GROUND - 1, z - 20, B.oak_planks);
+    for (const dz of [-ISLE.r - 10, -ISLE.r - 4]) for (const dx of [-1, 1]) c.box(x + dx, SEABED, z + dz, x + dx, GROUND - 2, z + dz, B.oak_log);
+    c.box(x - 15, GROUND, z + 2, x - 9, GROUND, z + 8, CONCRETE(2));
+    c.box(x - 13, GROUND, z + 4, x - 11, GROUND, z + 6, cell(B.concrete, 1));
+    for (const [dx, dz, tall] of [[-8, -9, 4], [9, 8, 5], [3, 12, 3], [-14, -4, 3]] as const) {
+      const h = isleHeight(x + dx, z + dz) ?? 0, y = GROUND + h;
+      c.box(x + dx, y, z + dz, x + dx, y + tall, z + dz, B.oak_log);
+      c.box(x + dx - 2, y + tall, z + dz - 2, x + dx + 2, y + tall + 1, z + dz + 2, B.oak_leaves, true);
+    }
+  },
   hangar(f, plan, lot) {
     const s = lot.style, w = f.w, d = f.d, box = footprint(lot)!;
     // The airfield runs along u: the terminal by the gate, two helipads, two open hangars and the runway down the far side.
@@ -392,6 +481,55 @@ const PAINTERS: Record<Lot['kind'], (f: Frame, plan: CityPlan, lot: Lot) => void
   },
 };
 
+/** Gull Rock's ground at (x, z): how far its top stands above the street's level (−1: a sandbar under the waves; null: open sea). */
+export function isleHeight(x: number, z: number): number | null {
+  const d = Math.sqrt((x - ISLE.x) * (x - ISLE.x) + (z - ISLE.z) * (z - ISLE.z));
+  return d > ISLE.r ? null : d > 23 ? -2 : d > 20 ? -1 : d > 15 ? 0 : d > 9 ? 1 : 2;
+}
+const BARS_X = cell(B.iron_bars, 2 | 8), BARS_Z = cell(B.iron_bars, 1 | 4), SEABED = 56;
+/** A sign on a post: what marks a spot where something can be done. */
+function signPost(c: Canvas, x: number, z: number, icon: number, height = 2) { c.box(x, GROUND, z, x, GROUND + height - 1, z, B.steel_post); c.set(x, GROUND + height, z, cell(B.shop_sign, icon)); }
+/**
+ * The small things that stand where the extras are: race flag posts on their corners, the stunt ramps, the lock-up cage,
+ * the alarm bell post and the spray pad's sign. Painted into whichever chunk each cell falls in.
+ */
+export function paintExtras(c: Canvas, extras: Extras) {
+  const near = (x: number, z: number, reach: number) => x + reach >= c.x0 && x - reach < c.x0 + CHUNK && z + reach >= c.z0 && z - reach < c.z0 + CHUNK;
+  for (const spot of extras.spots) {
+    if (!near(spot.x, spot.z, 14)) continue;
+    const x = Math.floor(spot.x), z = Math.floor(spot.z);
+    // A race starts in the middle of a crossing: its flag stands on the corner pavement, tall enough to find.
+    if (spot.kind === 'race') { c.box(x + 6, GROUND, z - 6, x + 6, GROUND + 4, z - 6, B.steel_post); c.box(x + 6, GROUND + 5, z - 6, x + 6, GROUND + 6, z - 6, cell(B.shop_sign, 21)); }
+    else if (spot.kind === 'alarm') signPost(c, x, z, 26);
+    else if (spot.kind === 'lock') signPost(c, x, z, 25);
+    else if (spot.kind === 'paint') { signPost(c, x + 3, z - 3, 23, 3); c.box(x - 2, GROUND - 1, z - 2, x + 2, GROUND - 1, z + 2, cell(B.asphalt, 5)); }
+    else if (spot.kind === 'stall') c.set(x, GROUND + 4, z + 2, cell(B.shop_sign, 30));
+    else if (spot.kind === 'prize') c.set(x, GROUND + 3, z + 2, cell(B.shop_sign, 24));
+  }
+  const cage = extras.cage;
+  if (near((cage.x0 + cage.x1) / 2, (cage.z0 + cage.z1) / 2, 5)) {
+    c.box(cage.x0, GROUND - 1, cage.z0, cage.x1, GROUND - 1, cage.z1, CONCRETE(1));
+    for (let y = GROUND; y < GROUND + 3; y++) {
+      c.box(cage.x0, y, cage.z0, cage.x1, y, cage.z0, BARS_X);
+      c.box(cage.x0, y, cage.z1, cage.x1, y, cage.z1, BARS_X);
+      c.box(cage.x0, y, cage.z0, cage.x0, y, cage.z1, BARS_Z);
+      c.box(cage.x1, y, cage.z0, cage.x1, y, cage.z1, BARS_Z);
+      for (const x of [cage.x0, cage.x1]) for (const z of [cage.z0, cage.z1]) c.set(x, y, z, B.steel);
+    }
+    c.box(cage.x0, GROUND + 3, cage.z0, cage.x1, GROUND + 3, cage.z1, METAL(0));
+    c.set(cage.x0 + 2, GROUND, cage.z0 + 2, B.oak_slab);
+  }
+  for (const ramp of extras.ramps) {
+    if (!near(ramp.x + ramp.dx * ramp.long / 2, ramp.z + ramp.dz * ramp.long / 2, ramp.long)) continue;
+    for (let k = 0; k < ramp.long; k++) for (let w = 0; w < ramp.wide; w++) {
+      // `wide` lies to the right of the way it climbs.
+      const x = ramp.x + ramp.dx * k - ramp.dz * w, z = ramp.z + ramp.dz * k + ramp.dx * w, h = rampHeight(k);
+      c.box(x, GROUND, z, x, GROUND + h - 2, z, CONCRETE(1));
+      c.set(x, GROUND + h - 1, z, w === 1 ? cell(B.asphalt, ramp.dx ? 2 : 1) : B.asphalt);
+    }
+  }
+}
+
 /** A landmark building: the generic block with a sign over the door, a counter inside and lamps on the forecourt. */
 function landmark(f: Frame, plan: CityPlan, lot: Lot, o: { wall: number; trim: number; window: number; ground: Look['ground']; lit?: number; every?: number }) {
   const box = footprint(lot)!, place = plan.places[lot.place];
@@ -407,6 +545,7 @@ function landmark(f: Frame, plan: CityPlan, lot: Lot, o: { wall: number; trim: n
     f.box(door - 1, 0, back + 4, door + 2, 0, back + 4, B.gold_block);
     for (let u = u0! + 3; u < u1! - 1; u += 5) if (Math.abs(u - door) > 3) f.box(u, 0, v0! - 2, u, STOREY.ground - 1, v0! - 2, CONCRETE(2));
   }
+  if (place?.board && lot.kind !== 'depot') f.c.set(place.board[0], place.board[1], place.board[2], B.job_board);
   for (const u of [3, f.w - 4]) lamp(f, u, 2);
 }
 

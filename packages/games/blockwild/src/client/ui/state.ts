@@ -27,14 +27,18 @@ export function toast(text: string, ms = 3600, tone?: Toast['tone']) {
   setTimeout(() => ui.set(state => ({ toasts: state.toasts.filter(t => t.id !== id) })), ms);
 }
 export const isNightWarning = (text: string) => /sun is setting|night falls/i.test(text);
-/** Surface server toasts once each. The first view after mounting may carry an old toast, so it only sets the baseline. */
+/**
+ * Surface server toasts once each. The first view after mounting only sets the baseline: it may carry a toast this
+ * screen showed before a reconnect, or none yet (0), in which case the first real one is new and is shown. A loaded
+ * world counts its toasts from 1 again, and its first view has none, so the baseline follows it down.
+ */
 export function useServerToasts(view: PrivateView | null) {
-  const [seen, setSeen] = useState<number | null>(null), n = view?.toast?.n ?? null;
+  const [seen, setSeen] = useState<number | null>(null), n = view ? view.toast?.n ?? 0 : null;
   useEffect(() => {
     if (n === null || n === seen) return;
     if (seen !== null && view?.toast) {
-      const night = isNightWarning(view.toast.text);
-      toast(view.toast.text, night ? 7000 : 3600, night ? 'night' : undefined);
+      // (A message of several lines is several notices: what was done, and the passport stamp it earned.)
+      for (const line of view.toast.text.split('\n')) { const night = isNightWarning(line); toast(line, night ? 7000 : 3600, night ? 'night' : undefined); }
     }
     setSeen(n);
   }, [n]);

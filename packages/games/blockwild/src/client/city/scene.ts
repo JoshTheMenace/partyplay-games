@@ -18,23 +18,36 @@ import type { Particles } from '../game/particles';
 import { TINTS } from '../game/particles';
 import { createStore } from '../store';
 import { Crowd } from './crowd';
+import { cityExtras, spotNear, type Extras, type Spot } from '../../shared/city/extras';
+import { CHARACTERS, CITY_GUIDE, standings, stepOf } from '../../shared/city/story';
+import { feed } from '../game/feed';
+import { EV } from '../../shared/protocol';
+import { Props, type Floater } from './props';
 import { Rides, type Shown } from './rides';
 
 type Light = (x: number, y: number, z: number, out: [number, number, number]) => readonly [number, number, number];
 /** What the city HUD shows that only the scene knows. */
 export type CityHud = {
   /** The thing the context button acts on: a vehicle to board or leave, a resident to talk to, a board to read. */
-  context: { kind: 'enter' | 'exit' | 'talk' | 'shop' | 'board'; id: number; label: string } | null;
+  context: { kind: 'enter' | 'exit' | 'talk' | 'shop' | 'board' | 'give' | 'spot'; id: number; label: string } | null;
   /** The resident under the crosshair: name and what they are doing. */
   focus: { name: string; line: string } | null;
   /** The vehicle driven: its kind and speed (blocks a second). */
   driving: { k: number; speed: number; seat: number } | null;
   /** Counts up whenever the local vehicle crashes (the HUD shakes its speedometer). */
   crashes: number;
+  /** The spot the player is standing at or parked on (a race start, the spray pad…), when it is something to do from a driving seat. */
+  spot: { id: number; label: string } | null;
 };
-export const cityHud = createStore<CityHud>({ context: null, focus: null, driving: null, crashes: 0 });
+export const cityHud = createStore<CityHud>({ context: null, focus: null, driving: null, crashes: 0, spot: null });
+/** Colours of the things that go on in the city, by EV kind (for beacons, hovering marks and the map). */
+export const EVENT_COLORS = [0x2fa69a, 0xffd24a, 0xff5748, 0xffd24a, 0x78d955, 0x6b7280, 0xff5748, 0xb58aff, 0xfff6e5];
 /** Where the local player faces (their view on foot, the vehicle's nose when driving): the minimap's arrow reads it. */
 export const cityLook = { yaw: 0 };
+/** The spots of the city being drawn (the HUD looks a context button's spot up here). */
+export const spots: { list: readonly Spot[] } = { list: [] };
+/** Coins handed over by one press of Give. */
+export const GIFT = 10;
 
 export type CityDeps = { scene: Object3D; camera: PerspectiveCamera; seed: number; sfx: Sfx; particles: Particles; light: Light; getCell: CellReader };
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -89,6 +102,10 @@ export class CityScene {
   readonly people: People;
   readonly crowd: Crowd;
   readonly rides: Rides;
+  readonly props: Props;
+  readonly extras: Extras;
+  /** What is going on in the city, as last told (the public view carries it about once a second). */
+  events: number[][] = [];
   drive: Drive | null = null;
   private readonly beacon: Mesh;
   private readonly live: PubNpc[] = [];
@@ -99,18 +116,44 @@ export class CityScene {
   private camPitch = -0.28;
   private lookedAt = 0;
   private time = 0;
+  /** Smoke still hanging (a puff's effect names how long). */
+  private readonly clouds: { x: number; y: number; z: number; until: number }[] = [];
+  private readonly feathers: (readonly [number, number, number])[] = [];
+  private readonly marks: [number, number, number, number][] = [];
+  private readonly fires: [number, number, number][] = [];
+  /** Checkpoints to draw: the next flag of the local player's race ([x, z, yaw, colour]). */
+  readonly gates: [number, number, number, number][] = [];
+  /** Where a seat is on this screen right now (set by the Runtime: the gull rides its holder, a bounty hangs over a head). */
+  seatAt: (seat: number) => { x: number; y: number; z: number; yaw: number } | null = () => null;
+  races: number[][] = [];
 
   constructor(private readonly d: CityDeps) {
     this.plan = cityPlan(d.seed);
     this.people = cityPeople(d.seed);
     this.crowd = new Crowd(d.scene, this.people, d.light);
     this.rides = new Rides(d.scene, d.light);
+    this.props = new Props(d.scene, d.light);
+    this.extras = cityExtras(d.seed);
+    this.crowd.guides = standings(d.seed);
+    spots.list = this.extras.spots;
     // The gig beacon: a tall shaft of light over where to go.
     this.beacon = new Mesh(new BoxGeometry(1.6, 40, 1.6).translate(0, 20, 0), new MeshBasicMaterial({ color: 0xffd24a, transparent: true, opacity: 0.28, blending: AdditiveBlending, depthWrite: false, fog: false }));
     this.beacon.visible = false;
     this.beacon.renderOrder = 8;
     d.scene.add(this.beacon);
-    cityHud.set({ context: null, focus: null, driving: null });
+    cityHud.set({ context: null, focus: null, driving: null, spot: null });
+  }
+
+  /** What the button at a spot says right now. */
+  spotLabel(spot: Spot, city: PrivateView['city'] | null | undefined): string {
+    if (spot.kind === 'race') { const forming = this.races.find(race => race[1] === spot.a && race[2] === 0); return city?.race ? 'You are in: line up' : forming ? `Join the ${this.extras.courses[spot.a]!.name} (${forming[3]}s)` : spot.label; }
+    if (city?.hold !== undefined && (spot.kind === 'vault' || spot.kind === 'alarm' || spot.kind === 'lock')) return spot.kind === 'vault' ? 'Stop cracking' : spot.kind === 'alarm' ? 'Let go of the bell' : 'Leave the lock';
+    return spot.label;
+  }
+  /** The spot at (x, y, z) that can be used now: `driving` picks the ones worked from a vehicle. */
+  spotAt(x: number, y: number, z: number, driving: boolean): Spot | null {
+    const spot = spotNear(this.extras, x, y, z);
+    return spot && (spot.kind === 'race' || spot.kind === 'paint') === driving ? spot : null;
   }
 
   /** Start, stop or resync the local vehicle from the private view (the server's teleport has already moved the body). */
@@ -149,7 +192,7 @@ export class CityScene {
    * Draw the city for this frame. `interp` holds the two scenes the entity renderer is between; `self`: where the
    * local player stands (null on the TV); `own`: the vehicle the local player drives, where their physics has it.
    */
-  frame(dt: number, view: View | null, interp: Interpolator<Scene>, camera: PerspectiveCamera, range: number, self: { x: number; z: number } | null, own: Shown | null, gig: PrivateView['city'] | null) {
+  frame(dt: number, view: View | null, interp: Interpolator<Scene>, camera: PerspectiveCamera, range: number, self: { x: number; z: number } | null, own: Shown | null, gig: PrivateView['city'] | null, floaters: readonly Floater[], found: readonly number[] | null) {
     const a = interp.a, b = interp.b, t = interp.alpha, live = this.live, older = new Map((a?.npcs ?? []).map(npc => [npc.i, npc]));
     live.length = 0;
     for (const npc of b?.npcs ?? []) {
@@ -159,7 +202,46 @@ export class CityScene {
     this.eye.copy(camera.position);
     if (view) this.crowd.update(dt, view.day, view.time, this.eye, range, live, self);
     this.rides.update(dt, a?.rides, b?.rides, t, own, self ? this.eye.set(self.x, 0, self.z) : this.eye);
-    const target = gig?.gig;
+    if (view?.city?.ev) { this.events = view.city.ev; this.races = view.city.races ?? []; }
+    let gull: [number, number, number, number] | null = null;
+    // Feathers not yet found (a playing seat only), the float of a line in the water, and a mark over whatever is going on near.
+    const feathers = this.feathers, marks = this.marks, fires = this.fires, cx = camera.position.x, cz = camera.position.z;
+    feathers.length = marks.length = fires.length = 0;
+    if (found) this.extras.feathers.forEach((at, i) => { if (!(found[i >= 20 ? 1 : 0]! >> (i % 20) & 1) && (at[0] - cx) ** 2 + (at[2] - cz) ** 2 < 70 * 70) feathers.push(at); });
+    // A mark over each character who still has an errand for this player (a playing seat only).
+    const story = found ? feed.get().bag?.career?.story ?? 0 : -1;
+    if (story >= 0) this.crowd.guides.forEach((at, who) => { if (stepOf(story, who) < CHARACTERS[who]!.errands.length && (at.x - cx) ** 2 + (at.z - cz) ** 2 < 60 * 60) marks.push([at.x, GROUND + 2.9, at.z, 0x78d955]); });
+    for (const event of this.events) {
+      const [k, x, z, , a] = event as [number, number, number, number, number];
+      if ((x - cx) ** 2 + (z - cz) ** 2 > 110 * 110) continue;
+      // The gull rides on its holder's head; a bounty hangs over the wanted one; the rest mark a place.
+      const on = k === EV.GULL && a ? this.seatAt(a - 1) : k === EV.BOUNTY ? this.seatAt(event[5]!) : null;
+      if (k === EV.GULL) gull = on ? [on.x, on.y + 2.25, on.z, on.yaw] : [x + 0.5, GROUND, z + 0.5, this.time * 0.4];
+      // (A gull on a head is its own mark.)
+      if (on) { if (k !== EV.GULL) marks.push([on.x, on.y + 3.2, on.z, EVENT_COLORS[k] ?? 0xffffff]); }
+      else if (k !== EV.BOUNTY) marks.push([x, GROUND + (k === EV.FIRE ? 7 : 4.5), z, EVENT_COLORS[k] ?? 0xffffff]);
+      // A fire: flames and smoke by how fierce it still is.
+      if (k !== EV.FIRE) continue;
+      fires.push([x + 0.5, z + 0.5, a]);
+      for (let n = dt * (3 + a * 0.12); n > 0; n--) {
+        if (n < 1 && Math.random() > n) break;
+        const fx = x + (Math.random() - 0.5) * 3.4, fz = z + (Math.random() - 0.5) * 3.4;
+        this.d.particles.flame(fx, GROUND + 1 + Math.random() * 2.2, fz);
+        this.d.particles.smoke(fx, GROUND + 2.5 + Math.random() * 2, fz, 0.8, 'big');
+      }
+    }
+    // A race: the next flag is a gate across the street, and the beacon stands on it.
+    const race = gig?.race, course = race ? this.extras.courses[race[5]!] : undefined, flag = race && course ? course.points[race[1]!] : undefined;
+    this.gates.length = 0;
+    if (flag && course && race) {
+      const from = race[1]! > 0 ? course.points[race[1]! - 1]! : [course.x, course.z];
+      this.gates.push([flag[0], flag[1], Math.abs(flag[0] - from[0]!) > Math.abs(flag[1] - from[1]!) ? Math.PI / 2 : 0, race[1] === course.points.length - 1 ? 0xfff6e5 : 0xffd24a]);
+    }
+    const line = gig?.fish;
+    this.props.update(dt, { floaters, feathers, float: line ? [line[1]!, line[2]!, line[0] === 2] : null, gates: this.gates, marks, fires, gull });
+    for (const cloud of this.clouds) if (Math.random() < dt * 14) this.d.particles.smoke(cloud.x + (Math.random() - 0.5) * 5, cloud.y + Math.random() * 2 - 0.5, cloud.z + (Math.random() - 0.5) * 5, 0.9, 'big');
+    while (this.clouds.length && this.time > this.clouds[0]!.until) this.clouds.shift();
+    const target = gig?.gig ?? (flag ? { x: flag[0], z: flag[1] } : undefined);
     this.beacon.visible = !!target;
     if (target) {
       this.beacon.position.set(target.x, GROUND, target.z);
@@ -172,11 +254,11 @@ export class CityScene {
     const plot = this.plan.plots[index];
     return !!plot && x >= plot.x0 && x <= plot.x1 && z >= plot.z0 && z <= plot.z1 && y >= plot.y0 && y <= plot.y1;
   }
-  /** Boxes the crosshair can hit: residents, vehicles and (when bonking is on) other players. */
-  *targets(players: Iterable<{ id: string; box: readonly number[]; flags: number }>, who: View['who'], selfId: string | null, bonks: boolean): Iterable<{ id: number; box: readonly [number, number, number, number, number, number] }> {
+  /** Boxes the crosshair can hit: residents, vehicles and other players (to bonk where the room allows it, or to hand coins to). */
+  *targets(players: Iterable<{ id: string; box: readonly number[]; flags: number }>, who: View['who'], selfId: string | null): Iterable<{ id: number; box: readonly [number, number, number, number, number, number] }> {
     yield* this.crowd.reach;
     yield* this.rides.reach;
-    if (bonks) for (const player of players) {
+    for (const player of players) {
       const seat = who.findIndex(([id]) => id === player.id);
       if (seat >= 0 && player.id !== selfId && !(player.flags & (PF.DEAD | PF.OFFLINE | PF.RIDING))) yield { id: CITY_PLAYER_ID + seat, box: player.box as [number, number, number, number, number, number] };
     }
@@ -185,6 +267,7 @@ export class CityScene {
   /** What a target id is, for the HUD: a resident's name and doings, a vehicle's name, a player's name. */
   describe(id: number, who: View['who']): { name: string; line: string; kind: 'resident' | 'keeper' | 'ride' | 'player' } | null {
     if (id >= CITY_PLAYER_ID) return { name: who[id - CITY_PLAYER_ID]?.[1] ?? 'Player', line: 'Another player', kind: 'player' };
+    if (id >= CITY_ID + CITY_GUIDE) { const character = CHARACTERS[id - CITY_ID - CITY_GUIDE]; return character ? { name: character.name, line: character.role, kind: 'resident' } : null; }
     if (id >= CITY_ID) {
       const i = id - CITY_ID, resident = this.crowd.resident(i), act = this.crowd.actOf(i);
       if (!resident) return { name: i - this.people.list.length >= 4096 ? 'Officer of the Watch' : 'Passer-by', line: '', kind: 'resident' };
@@ -207,6 +290,21 @@ export class CityScene {
       case 'horn': sfx.synth('horn', { at, range: 40, pitch: fx.a === 3 || fx.a === 2 ? 0.75 : fx.a === 0 || fx.a === 6 ? 1.3 : 1 }); return true;
       case 'crash': sfx.synth('crash', { at, range: 40 }); particles.burst(fx.x, fx.y, fx.z, TINTS.dark, 12, 3); return true;
       case 'bust': sfx.synth('bust', isSelf ? {} : { at }); return true;
+      case 'water': sfx.synth('burst', { at }); particles.burst(fx.x, fx.y, fx.z, TINTS.splash, 22, 4, 0.09); return true;
+      case 'slip': sfx.synth('slide', { at }); particles.burst(fx.x, fx.y, fx.z, TINTS.spark, 8, 2.5); return true;
+      case 'smoke': sfx.synth('puff', { at }); this.clouds.push({ x: fx.x, y: fx.y, z: fx.z, until: this.time + (fx.a ?? 6) }); for (let k = 0; k < 14; k++) particles.smoke(fx.x + (Math.random() - 0.5) * 3, fx.y + Math.random() * 1.5 - 0.5, fx.z + (Math.random() - 0.5) * 3, 0.9, 'big'); return true;
+      case 'toot': sfx.synth('toot', { at, range: 28, pitch: TUNE[(fx.a ?? 0) % TUNE.length]! }); particles.burst(fx.x, fx.y + 0.3, fx.z, TINTS.happy, 2, 1.2, 0.05); return true;
+      case 'cast': sfx.synth('plop', { at }); particles.splash(fx.x, fx.y, fx.z); return true;
+      case 'bite': sfx.synth('nibble', isSelf ? { volume: 0.9 } : { at, volume: 0.5 }); particles.splash(fx.x, fx.y, fx.z); return true;
+      case 'reel': sfx.synth('reel', { at }); particles.splash(fx.x, fx.y, fx.z); return true;
+      case 'chute': sfx.synth('flump', { at }); return true;
+      case 'fanfare': sfx.synth('fanfare', isSelf ? {} : { at, range: 40 }); particles.burst(fx.x, fx.y + 1, fx.z, TINTS.spark, 24, 4); return true;
+      case 'whistle': sfx.synth('whistle', { at, range: 60 }); return true;
+      case 'alarm': sfx.synth('alarm', { at, range: 70 }); return true;
+      case 'ding': sfx.synth('ding', isSelf ? { volume: 0.8 } : { at }); return true;
+      case 'squawk': sfx.synth('squawk', { at, range: 50 }); return true;
+      case 'hose': sfx.synth('hose', { at }); particles.burst(fx.x, fx.y, fx.z, TINTS.splash, 6, 2.5, 0.06); return true;
+      case 'stamp': sfx.synth('stamp', isSelf ? {} : { at, volume: 0.5 }); particles.burst(fx.x, fx.y, fx.z, TINTS.happy, 12, 2.6); return true;
     }
     return false;
   }
@@ -214,10 +312,13 @@ export class CityScene {
   dispose() {
     this.crowd.dispose();
     this.rides.dispose();
+    this.props.dispose();
     this.d.scene.remove(this.beacon);
     this.beacon.geometry.dispose();
     (this.beacon.material as MeshBasicMaterial).dispose();
-    cityHud.set({ context: null, focus: null, driving: null });
+    cityHud.set({ context: null, focus: null, driving: null, spot: null });
   }
 }
 const JOB_LINE = 'Rather busy right now';
+/** The kazoo's tune as pitch ratios (a jaunty eight notes, round and round). */
+const TUNE = [1, 1.26, 1.5, 1.26, 1.68, 1.5, 1.26, 1.12];

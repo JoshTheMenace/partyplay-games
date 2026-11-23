@@ -129,7 +129,9 @@ export function closeScreen() {
   const open = store.get().screen;
   if (!open) return;
   store.set({ screen: null });
-  if (open === 'pause' || open === 'map') return;
+  if (open === 'pause' || open === 'map' || open === 'passport' || open === 'stall' || open === 'cell') return;
+  // A talk with one of the city's characters ends with "not now".
+  if (open === 'talk') { sendCommand({ t: 'city', a: 'say', i: 1 }); return; }
   // A city counter is the server's to close.
   if (open === 'counter') { sendCommand({ t: 'city', a: 'shut' }); return; }
   screenKey = '';

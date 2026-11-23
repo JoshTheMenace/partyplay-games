@@ -13,7 +13,8 @@ export const SOUND_FILES: readonly string[] = [...SAMPLES, ...SAMPLE_FAMILIES.fl
 export type SynthSound = 'eat' | 'burp' | 'levelup' | 'click' | 'hurt' | 'fizz' | 'piston' | 'portal' | 'travel' | 'scrape' | 'villager' | 'ghast' | 'shriek'
   | 'eye' | 'roar' | 'flap' | 'scream' | 'vwoop' | 'blaze' | 'blazeShoot' | 'silverfish' | 'portalOpen' | 'dragonDeath'
   /** Caper City: no samples fit, so all of these are synthesized. */
-  | 'bonk' | 'coins' | 'horn' | 'siren' | 'crash' | 'bust' | 'splat' | 'putt';
+  | 'bonk' | 'coins' | 'horn' | 'siren' | 'crash' | 'bust' | 'splat' | 'putt'
+  | 'burst' | 'slide' | 'puff' | 'toot' | 'plop' | 'nibble' | 'reel' | 'flump' | 'fanfare' | 'whistle' | 'alarm' | 'ding' | 'squawk' | 'hose' | 'stamp';
 
 const STEP: Record<SoundGroup, string> = { stone: 'step-stone', metal: 'step-stone', glass: 'step-stone', wood: 'step-wood', grass: 'step-grass', gravel: 'step-snow', sand: 'step-snow', snow: 'step-snow', wool: 'step-cloth' };
 const IMPACT: Record<SoundGroup, string> = { stone: 'impact-stone', metal: 'impact-metal', glass: 'impact-glass', wood: 'impact-wood', grass: 'impact-soft', gravel: 'impact-soft', sand: 'impact-soft', snow: 'impact-soft', wool: 'impact-soft' };

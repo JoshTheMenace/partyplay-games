@@ -262,7 +262,7 @@ stairs('roof_stairs', 'roof_tiles_0', brick);
 slab('roof_slab', 'roof_tiles_0', brick);
 family('metal_sheet', 6, { hardness: 2, sound: 'metal' });
 slab('awning', 'awning', { hardness: 0.6, tool: 'shears', sound: 'wool' });
-family('shop_sign', 16, { hardness: 1, sound: 'wood', tex: tex('sign_band_0') }, 'side');
+family('shop_sign', 32, { hardness: 1, sound: 'wood', tex: tex('sign_band_0') }, 'side');
 family('sign_band', 8, { hardness: 1, sound: 'wood' });
 metal('steel', 1);
 rock('steel_post', 3, { shape: 'fence', state: 'custom', sound: 'metal', tex: tex('steel') });

@@ -264,6 +264,7 @@ export function bucketUse(world: World, held: number, x: number, y: number, z: n
 export const isCrystalBase = (cell: number) => cellId(cell) === B.obsidian || cellId(cell) === B.bedrock;
 /** Items thrown at once by right-click (no block target, or a block they don't use): the client sends `useItem`. */
 /** Items a tap of Use throws or uses up at once (the city's cream pie and disguise kit among them). */
-export const isThrown = (held: number) => held === I.ender_pearl || held === I.ender_eye || held === I.cream_pie || held === I.disguise_kit;
+export const isThrown = (held: number) => held === I.ender_pearl || held === I.ender_eye || held === I.cream_pie || held === I.disguise_kit
+  || held === I.water_balloon || held === I.banana_peel || held === I.smoke_puff || held === I.kazoo || held === I.fishing_rod;
 /** Whether holding right-click with this item is a timed use (eat or draw a bow) finished by `useItem`. */
 export const isHeldUse = (held: number, food: number) => held === I.bow || !!itemOf(held)?.food && (food < 20 || held === I.golden_apple);

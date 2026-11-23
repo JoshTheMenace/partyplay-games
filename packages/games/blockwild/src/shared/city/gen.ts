@@ -8,8 +8,9 @@ import { CHUNK_CELLS } from '../chunk';
 import { CHUNK } from '../constants';
 import { localIndex } from '../coords';
 import { hash3 } from '../noise';
-import { Canvas, paintLot } from './buildings';
-import { AIRFIELD, BEACH, CITY, CITY_SIZE, cityPlan, GROUND, QUAY } from './plan';
+import { Canvas, isleHeight, paintExtras, paintLot } from './buildings';
+import { cityExtras } from './extras';
+import { AIRFIELD, BEACH, CITY, CITY_SIZE, cityPlan, GROUND, QUAY, SHORE } from './plan';
 
 const N = CITY.n, TOP = GROUND - 1, SEA_TOP = 62, SEABED = 56;
 const ASPHALT = B.asphalt, LINE_Z = makeCell(B.asphalt, 1), LINE_X = makeCell(B.asphalt, 2), ZEBRA_Z = makeCell(B.asphalt, 3), ZEBRA_X = makeCell(B.asphalt, 4), BAY = makeCell(B.asphalt, 5);
@@ -22,9 +23,7 @@ function gridOf(local: number): { road: number; block: number; at: number } {
   const k = Math.floor(local / CITY.pitch), at = local - k * CITY.pitch;
   return at < CITY.road ? { road: k, block: -1, at } : { road: -1, block: k, at: at - CITY.road };
 }
-/** The pier runs south from the beach at this x for this many blocks. */
-export const PIER = { x0: CITY.x0 + 6 * CITY.pitch + CITY.road + 20, w: 7, d: 78 } as const;
-const SOUTH = CITY.z0 + CITY_SIZE + QUAY;
+const SOUTH = SHORE;
 /** Land (true) or sea, and how deep into the beach a column is (0 = not beach). */
 function shore(x: number, z: number): { land: boolean; beach: number } {
   const lx = x - CITY.x0, lz = z - CITY.z0, inX = lx >= -QUAY && lx < CITY_SIZE + QUAY;
@@ -44,6 +43,15 @@ export function generateCityChunk(seed: number, cx: number, cz: number): Uint16A
   const canvas = new Canvas(cells, x0, z0);
   for (let lz = 0; lz < CHUNK; lz++) for (let lx = 0; lx < CHUNK; lx++) {
     const x = x0 + lx, z = z0 + lz, { land, beach } = shore(x, z);
+    const isle = land ? null : isleHeight(x, z);
+    if (isle !== null) {
+      // Gull Rock: sand at the waterline, grass on its back.
+      const top = TOP + isle;
+      for (let y = SEABED - 3; y < top; y++) cells[localIndex(lx, y, lz)] = y < top - 3 ? B.stone : isle > 0 ? B.dirt : B.sand;
+      cells[localIndex(lx, top, lz)] = isle > 0 ? B.grass_block : B.sand;
+      for (let y = top + 1; y <= SEA_TOP; y++) cells[localIndex(lx, y, lz)] = B.water;
+      continue;
+    }
     if (!land) {
       // The beach slopes from the promenade into the water; beyond it the seabed lies flat under six blocks of sea.
       const sand = beach ? Math.max(SEABED, TOP - (beach >> 3)) : SEABED;
@@ -64,6 +72,7 @@ export function generateCityChunk(seed: number, cx: number, cz: number): Uint16A
       for (const index of plan.blockLots[gz.block * N + gx.block]!) paintLot(canvas, plan, plan.lots[index]!);
     }
   } else edges(canvas, seed, x0, z0);
+  paintExtras(canvas, cityExtras(seed));
   return cells;
 }
 
@@ -127,15 +136,7 @@ function edges(c: Canvas, seed: number, x0: number, z0: number) {
   if (x0 <= west && west < x0 + CHUNK) c.box(west, GROUND, za, west, GROUND, zb, RAIL_Z);
   if (z0 <= north && north < z0 + CHUNK) c.box(xa, GROUND, north, xb, GROUND, north, RAIL_X);
   if (x0 <= east && east < x0 + CHUNK) for (let z = za; z <= zb; z++) if (z < AIRFIELD.z0 - 4 || z >= AIRFIELD.z0 + AIRFIELD.d + 4) c.set(east, GROUND, z, RAIL_Z);
-  // The pier: planks on posts out over the water, with a rail and a lamp every eight blocks.
-  for (let z = Math.max(SOUTH, z0); z < Math.min(SOUTH + PIER.d, z0 + CHUNK); z++) {
-    c.box(PIER.x0, TOP, z, PIER.x0 + PIER.w - 1, TOP, z, B.oak_planks);
-    if (z % 6 === 0) for (const x of [PIER.x0, PIER.x0 + PIER.w - 1]) c.box(x, SEABED, z, x, TOP - 1, z, B.oak_log);
-    for (const x of [PIER.x0, PIER.x0 + PIER.w - 1]) c.set(x, GROUND, z, z % 8 === 4 ? B.oak_log : makeCell(B.oak_fence, 1 | 4));
-    if (z % 8 === 4) for (const x of [PIER.x0, PIER.x0 + PIER.w - 1]) c.set(x, GROUND + 1, z, B.lantern);
-  }
-  if (x0 + CHUNK > AIRFIELD.x0 && x0 < AIRFIELD.x0 + AIRFIELD.w && z0 + CHUNK > AIRFIELD.z0 && z0 < AIRFIELD.z0 + AIRFIELD.d) {
-    const plan = cityPlan(seed);
-    paintLot(c, plan, plan.lots[plan.lots.length - 1]!);
-  }
+  // The lots outside the grid: the airfield, the pier and Gull Rock (each painter clips itself to this chunk).
+  const plan = cityPlan(seed);
+  for (const index of [plan.field, plan.pier, plan.isle]) paintLot(c, plan, plan.lots[index]!);
 }

@@ -13,7 +13,7 @@ import { IF, MOB, mobBox, type Cmd, type Input } from '../shared/protocol';
 import { craftFromInventory, recipeById } from '../shared/recipes';
 import { collisionBoxes } from '../shared/shapes';
 import { equip } from './armor';
-import { cityCommand } from './city';
+import { cityAte, cityCommand } from './city';
 import { damageMob, exhaust, mobHitBoxes, mobState, spawnArrow } from './combat';
 import { celebrate, chestSlots, click, closeScreen, furnaceAt, MAX_CHESTS, MAX_FURNACES, openScreen } from './containers';
 import { throwEye, useEndFrame } from './ender-eyes';
@@ -279,7 +279,7 @@ function useItemCommand(state: State, player: Player, slot: number): boolean {
     // In the city food mends health directly (nobody goes hungry there).
     if (state.city ? player.health >= MAX_HEALTH : player.food >= MAX_FOOD && stack.id !== I.golden_apple && survival(state)) return false;
     if (held < EAT_SECONDS - 0.4) return false;
-    if (state.city) player.health = Math.min(MAX_HEALTH, player.health + item.food.hunger);
+    if (state.city) { player.health = Math.min(MAX_HEALTH, player.health + item.food.hunger); cityAte(state, player); }
     player.food = Math.min(MAX_FOOD, player.food + item.food.hunger);
     player.saturation = Math.min(player.food, player.saturation + item.food.saturation);
     if (stack.id === I.golden_apple) player.health = Math.min(20, player.health + 4);

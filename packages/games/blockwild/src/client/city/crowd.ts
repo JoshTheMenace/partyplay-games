@@ -9,6 +9,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { ACT, residentAt, type Look, type People, type Pose, type Resident } from '../../shared/city/people';
 import { GROUND } from '../../shared/city/plan';
 import { CITY_ID, EXTRA_OFFICERS, NS, type PubNpc } from '../../shared/protocol';
+import { CHARACTERS, CITY_GUIDE, type Standing } from '../../shared/city/story';
 
 type Light = (x: number, y: number, z: number, out: [number, number, number]) => readonly [number, number, number];
 /** A box of a part: size, centre (relative to the part's pivot) and a brightness for its vertices. */
@@ -78,6 +79,8 @@ export class Crowd {
   private readonly color = new Color();
   private readonly rgb: [number, number, number] = [1, 1, 1];
   private readonly colors = new Map<number, Color>();
+  /** The people with errands: where each stands (set once the seed is known). */
+  guides: readonly Standing[] = [];
 
   constructor(private readonly parent: Object3D, private readonly people: People, private readonly light: Light) {
     for (const key of Object.keys(GEOMETRY) as PartKey[]) {
@@ -95,6 +98,7 @@ export class Crowd {
   private lookOf(i: number): Look {
     const resident = this.people.list[i];
     if (resident) return resident.look;
+    if (i >= CITY_GUIDE) return CHARACTERS[i - CITY_GUIDE]?.look ?? OFFICER;
     const k = i - this.people.list.length;
     return k >= EXTRA_OFFICERS ? OFFICER : { skin: EXTRA_SKIN[k % 4]!, hair: 0x4a2f18, cut: 1 + k % 3, top: EXTRA_TOPS[k % 6]!, legs: 0x3a3f4a, hat: k % 4 === 0 ? 1 : 0, hatColor: 0x3a3f4a, bib: 0, scale: 1 };
   }
@@ -159,6 +163,8 @@ export class Crowd {
       figures.push({ i, x, y, z, yaw, s, act, moving: moving || step > dt * 0.4, walk: memory.walk, look, scale: look.scale * 1.06, near, blend });
     };
     for (const npc of live) { lives.add(npc.i); add(npc.i, npc.x, npc.y, npc.z, npc.yaw, npc.s, -1, false, true); }
+    // The characters stand where they always stand, day and night.
+    this.guides.forEach((at, k) => add(CITY_GUIDE + k, at.x, GROUND, at.z, at.yaw, NS.STAND, ACT.REST, false, false));
     for (const i of this.candidates) {
       if (lives.has(i)) continue;
       residentAt(people, list[i]!, day, time, pose);

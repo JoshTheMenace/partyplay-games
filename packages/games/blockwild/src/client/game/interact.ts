@@ -15,7 +15,6 @@ import type { Target } from '../store';
 import { IMPACT_PITCH, impactSound } from '../audio/sounds';
 import type { Sfx } from '../audio/sfx';
 import type { Controls } from './controls';
-import type { Hand } from './hand';
 import type { EditOverlay } from './overlay';
 import type { Particles } from './particles';
 import { sendCommand } from './predict';
@@ -23,7 +22,7 @@ import type { Rect } from './sprites';
 import { blockUse, breakWrites, doorToggle, holdUse, useWrites, writesHitBodies, type Aim } from './targeting';
 
 export type InteractContext = {
-  getCell: CellReader; overlay: EditOverlay; sfx: Sfx; particles: Particles; hand: Hand;
+  getCell: CellReader; overlay: EditOverlay; sfx: Sfx; particles: Particles; hand: { swing(): void };
   tileOf(cell: number, face: number): Rect | null;
   itemRect(id: number): Rect | null;
   light(x: number, y: number, z: number): number;
@@ -196,9 +195,10 @@ export class Interaction {
     }
     if (isThrown(f.held)) {
       // Ender pearls and eyes fly from the hand; the server launches them (and keeps the pearl's cooldown).
-      if (pressed) {
+      // (A kazoo plays for as long as Use is held.)
+      if (pressed || f.held === I.kazoo) {
         sendCommand({ t: 'useItem', slot: f.slot });
-        this.ctx.sfx.play('bow', { volume: 0.35, pitch: 0.7 });
+        if (f.held !== I.kazoo && f.held !== I.fishing_rod) this.ctx.sfx.play('bow', { volume: 0.35, pitch: 0.7 });
         this.swing();
       }
       this.placeWait = PLACE_REPEAT;

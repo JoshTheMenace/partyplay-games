@@ -81,6 +81,14 @@ export function shotPose(shot: Shot, s: Subject, time: number, getCell: CellRead
   return out;
 }
 
+/** A chase shot for a subject at speed: behind and above the way it is heading, further back the faster it goes, looking past it down the road. */
+export function chasePose(s: Subject, pace: number, getCell: CellReader, out: number[]) {
+  const hx = s.x, hy = s.y + 1.4, hz = s.z, fx = -Math.sin(s.yaw), fz = -Math.cos(s.yaw), back = 8 + Math.min(6, pace * 0.25);
+  const dx = -fx * back, dy = 4.2, dz = -fz * back, length = Math.hypot(dx, dy, dz), hit = raycastBlocks(getCell, [hx, hy, hz], [dx, dy, dz], length, isOpaque), k = hit ? Math.max(1.5, hit.distance - 0.4) / length : 1;
+  out[0] = hx + dx * k; out[1] = hy + dy * k; out[2] = hz + dz * k; out[3] = hx + fx * 5; out[4] = hy; out[5] = hz + fz * 5;
+  return out;
+}
+
 /**
  * Display camera: follows each player for ~20 s with varied third-person shots (easing between them, cutting
  * across long distances), or drifts in a slow flyover when nobody is playing.
@@ -99,8 +107,12 @@ export class Spectator {
 
   constructor(private readonly centre: { x: number; z: number }) {}
 
-  /** `prefer` is the subject the server asks the display to follow; without one the camera takes turns by itself. */
-  update(camera: PerspectiveCamera, subjects: readonly Subject[], getCell: CellReader, groundY: (x: number, z: number) => number, dt: number, prefer: string | null = null) {
+  /**
+   * `prefer` is the subject the server asks the display to follow; without one the camera takes turns by itself.
+   * `pace`: how fast the subject is going (m/s). A walker gets the usual easy drift; something quick (a vehicle in Caper
+   * City) is chased from behind, and the camera keeps up instead of trailing.
+   */
+  update(camera: PerspectiveCamera, subjects: readonly Subject[], getCell: CellReader, groundY: (x: number, z: number) => number, dt: number, prefer: string | null = null, pace = 0) {
     this.time += dt;
     this.shotTime += dt;
     let subject = subjects.find(s => s.key === this.focus);
@@ -121,6 +133,7 @@ export class Spectator {
       this.centre.x = subject.x;
       this.centre.z = subject.z;
       shotPose(SHOTS[this.shotIndex % SHOTS.length]!, subject, this.time, getCell, want);
+      if (pace > 6) chasePose(subject, pace, getCell, want);
     } else {
       // Flyover: a slow wide circle above the terrain, looking ahead and down.
       this.flyAngle += dt * 0.025;
@@ -130,7 +143,8 @@ export class Spectator {
       want[3] = ax; want[4] = Math.max(groundY(ax, az), 62) + 6; want[5] = az;
     }
     const far = Math.hypot(want[0]! - this.pos[0]!, want[1]! - this.pos[1]!, want[2]! - this.pos[2]!) > CUT_DISTANCE;
-    const k = !this.started || far ? 1 : damp(subject ? 2.2 : 1.2, dt), kl = !this.started || far ? 1 : damp(subject ? 3.5 : 1.2, dt);
+    // The quicker the subject, the tighter the camera holds on (at vehicle speeds it is all but fixed to its spot behind).
+    const quick = Math.min(14, Math.max(0, pace - 3) * 1.6), k = !this.started || far ? 1 : damp(subject ? 2.2 + quick : 1.2, dt), kl = !this.started || far ? 1 : damp(subject ? 3.5 + quick : 1.2, dt);
     for (let i = 0; i < 3; i++) {
       this.pos[i]! += (want[i]! - this.pos[i]!) * k;
       this.look[i]! += (want[i + 3]! - this.look[i]!) * kl;

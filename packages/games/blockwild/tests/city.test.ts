@@ -55,7 +55,7 @@ test('the plan is the same every time, fills every block and has every kind of p
   assert.deepEqual(plan.blockLots.map(lots => plan.lots[lots[0]!]!.kind), other.blockLots.map(lots => other.lots[lots[0]!]!.kind), 'the zoning is fixed');
   for (const kind of PLACE_KINDS) assert.ok(plan.byKind(kind).length >= 1, kind);
   assert.equal(plan.plots.length, 12);
-  for (const lot of plan.lots.slice(0, -1)) {
+  for (const lot of plan.lots.filter(lot => lot.bx < CITY.n)) {
     assert.ok(lot.x0 >= CITY.x0 + CITY.road && lot.x1 < CITY.x0 + CITY_SIZE && lot.z0 >= CITY.z0 + CITY.road && lot.z1 < CITY.z0 + CITY_SIZE, `lot ${lot.i}`);
     assert.ok((lot.x0 - CITY.x0) % CITY.pitch >= CITY.road && (lot.z0 - CITY.z0) % CITY.pitch >= CITY.road, 'no lot stands in a road');
   }
@@ -252,11 +252,14 @@ test('heat rises only when mischief is seen, drains when the Watch loses sight, 
   assert.ok(cp.grab > 0 && playerView(state, 'p0').city!.grab! > 0, 'an officer has hold');
   tick(state, 30);
   assert.equal(cp.stats.busts, 1);
-  assert.equal(cp.coins, 200 - fineFor(200, 2));
   assert.equal(cp.heat, 0);
   assert.equal(ada.inv[5], null, 'the loot is confiscated');
-  assert.ok(Math.hypot(ada.x - c.plan.jail[0], ada.z - c.plan.jail[2]) < 4, 'outside the Watch House');
   assert.match(playerView(state, 'p0').toast!.text, /Nabbed/);
+  // The lock-up first (tests/city2.test.ts has its ways out); paying the fine puts her on the Watch House steps.
+  assert.ok(cp.cellUntil > state.clock && cp.coins === 200 && cp.fine === fineFor(200, 2));
+  assert.equal(run(state, ada, { t: 'city', a: 'cell', i: 0 }), true);
+  assert.equal(cp.coins, 200 - fineFor(200, 2));
+  assert.ok(Math.hypot(ada.x - c.plan.jail[0], ada.z - c.plan.jail[2]) < 4, 'outside the Watch House');
   // The numbers the HUD and the server share.
   assert.deepEqual([heatTier(0), heatTier(HEAT_TIERS[0]), heatTier(59), heatTier(100)], [0, 1, 2, 4]);
   assert.deepEqual([fineFor(1000, 3), fineFor(10, 4), clinicBill(1000), clinicBill(5)], [175, 10, 80, 5]);
@@ -375,7 +378,7 @@ test('the city cannot be mined, but an owned plot can be built on; a bought vehi
   cp.coins = 5000;
   assert.equal(run(state, ada, { t: 'interact', id: CITY_ID + clerk }), true);
   assert.equal(run(state, ada, { t: 'city', a: 'buy', i: 1 }), true);
-  assert.ok(cp.plot >= 0 && cp.coins === 5000 - 900);
+  assert.ok(cp.plot >= 0 && cp.coins === 5000 - 900 + 40, 'the deed, less its price, plus the passport stamp for a first plot');
   assert.equal(run(state, ada, { t: 'city', a: 'buy', i: 0 }), true, 'and a flat');
   assert.ok(cp.flat >= 0);
   const plot = plan.plots[cp.plot]!;
@@ -422,12 +425,13 @@ test('a city save keeps coins, property and careers, and nothing of the city its
   assertSerializable(save);
   assert.equal(save.version, CITY_SAVE_VERSION);
   assert.deepEqual([save.mode, save.minutes, save.bonks, save.animals.length, save.villagers.length], ['city', 20, false, 0, 0]);
-  assert.ok(Buffer.byteLength(json) < 2500, `a fresh city is tiny: ${Buffer.byteLength(json)} bytes`);
+  assert.ok(Buffer.byteLength(json) < 2700, `a fresh city is tiny: ${Buffer.byteLength(json)} bytes`);
   const loaded = rules.loadSave!(ctx(['Bo', 'Ada', 'Cy']), JSON.parse(json), validateSettings({}));
   assert.deepEqual(loaded.settings, { mode: 'city', seed: SEED, difficulty: 'normal', keepInventory: true, minutes: 20, bonks: false });
   const back = loaded.state.city!.players[1]!, fresh = loaded.state.city!.players[2]!;
-  assert.deepEqual([back.coins, back.own, back.flat, back.plot], [1234, 0b100011, 17, 3]);
-  assert.deepEqual(back.stats, { earned: 900, gigs: 6, bonks: 2, busts: 1, escapes: 3, peak: 77, drove: 4322, flew: 12, kos: 1 });
+  // (Being worth 2,000 coins stamped Ada's passport on the way: 100 coins.)
+  assert.deepEqual([back.coins, back.own, back.flat, back.plot], [1334, 0b100011, 17, 3]);
+  assert.deepEqual(back.stats, { earned: 1000, gigs: 6, bonks: 2, busts: 1, escapes: 3, peak: 77, drove: 4322, flew: 12, kos: 1, fish: 0, wins: 0, jump: 0, tips: 0, helped: 0, bounties: 0, gull: 0 });
   assert.deepEqual([fresh.coins, fresh.own, fresh.plot], [START_COINS, 0, -1]);
   assert.equal(loaded.state.world.edits.size, 1);
   assert.equal(loaded.state.city!.vehicles.length, 0, 'vehicles come back from the seed');
@@ -457,12 +461,13 @@ test('the worst legal city save stays under 256 KiB', () => {
     i--;
   }
   const chests = [...edits].filter(([, value]) => (value & 255) === B.chest).map(([index]) => index), furnaces = [...edits].filter(([, value]) => (value & 255) === B.furnace_lit).map(([index]) => index);
-  const stats = { earned: big, gigs: big, bonks: big, busts: big, escapes: big, peak: big, drove: big, flew: big, kos: big };
+  const stats = { earned: big, gigs: big, bonks: big, busts: big, escapes: big, peak: big, drove: big, flew: big, kos: big, fish: 9999, wins: 999, jump: 999, tips: 99999, helped: 999, bounties: 999, gull: 9999 };
+  const record = { coins: big, own: 2 ** RIDES.length - 1, flat: 4095, plot: 63, stats, stamps: [65535, 65535] as [number, number], feathers: [2 ** 20 - 1, 2 ** 20 - 1] as [number, number], story: 2 ** 24 - 1, rep: 2 ** 21 - 1, look: 2 ** 23 - 1, biz: 2 ** 21 - 1 };
   const players = Array.from({ length: MAX_SAVED_PLAYERS }, (_, i) => ({
     name: name(i), x: 4095.99, y: 127.99, z: 4095.99, yaw: -3.141, pitch: -1.571, health: 19.5, food: 19, saturation: 19.99, inv: fullSlots(36),
     armor: [I.diamond_helmet, I.diamond_chestplate, I.diamond_leggings, I.diamond_boots].map(id => ({ id, n: 1, d: 360 })), bed: [4095, 127, 4095] as [number, number, number],
     stats: { mined: 999999999, placed: 999999999, crafted: 999999999, mobs: 999999999, deaths: 999999999, distance: 999999999 }, milestones: 2 ** 30,
-    city: { coins: big, own: 2 ** RIDES.length - 1, flat: 4095, plot: 63, stats },
+    city: record,
   }));
   const source: SaveSource = {
     settings: validateSettings({ seed: 999999, mode: 'city', minutes: 30, bonks: false }), worldId: `999999-${'z'.repeat(57)}`, time: 23999, day: 999999999, edits, players,
@@ -477,7 +482,7 @@ test('the worst legal city save stays under 256 KiB', () => {
   assert.ok(bytes < MAX_SAVE_BYTES, `${bytes} bytes`);
   const parsed = parseSave(JSON.parse(json));
   assert.equal(parsed.players.length, MAX_SAVED_PLAYERS);
-  assert.deepEqual(parsed.players[95]!.city, { coins: big, own: 2 ** RIDES.length - 1, flat: 4095, plot: 63, stats });
+  assert.deepEqual(parsed.players[95]!.city, record);
 });
 
 test('what screens are sent: the city rides in the private view, the scoreboard once a second, the ledger at the end', () => {
@@ -503,16 +508,17 @@ test('what screens are sent: the city rides in the private view, the scoreboard 
   c.players[1]!.coins = 900;
   c.players[2]!.own = 1 << RIDE.pebble!;
   assert.equal(outcome(state).complete, false);
+  assert.deepEqual(outcome(state).rows.map(row => row.score), [START_COINS, 900, START_COINS + RIDES[RIDE.pebble!]!.price], 'a row a seat while the round runs');
   state.clock = 601;
   tick(state);
   const result = outcome(state), view = publicView(state);
   assert.equal(result.complete, true);
   assert.deepEqual(result.winners, ['p1']);
-  assert.deepEqual(result.rows.map(row => row.score), [START_COINS, 900, START_COINS + RIDES[RIDE.pebble!]!.price]);
-  assert.deepEqual(decodeLedger(view).map(line => [line.id, line.worth]), result.rows.map(row => [row.playerId, row.score]), 'the ledger travels as numbers by seat and reads back by id');
+  assert.deepEqual(result.rows, [], 'and none once it is over: the room repeats the outcome twenty times a second, the ledger goes once');
+  assert.deepEqual(decodeLedger(view).map(line => [line.id, line.worth]), [['p0', START_COINS], ['p1', 900], ['p2', START_COINS + RIDES[RIDE.pebble!]!.price]], 'the ledger travels as numbers by seat and reads back by id');
   assert.equal(view.journal, undefined, 'the wild journal stays out of city results');
   assertSerializable(view);
-  const entry = (id: string, patch: Partial<LedgerEntry>): LedgerEntry => ({ id, worth: 0, coins: 0, earned: 0, gigs: 0, bonks: 0, busts: 0, escapes: 0, peak: 0, drove: 0, flew: 0, kos: 0, ...patch });
+  const entry = (id: string, patch: Partial<LedgerEntry>): LedgerEntry => ({ id, worth: 0, coins: 0, earned: 0, gigs: 0, bonks: 0, busts: 0, escapes: 0, peak: 0, drove: 0, flew: 0, kos: 0, fish: 0, wins: 0, jump: 0, tips: 0, helped: 0, bounties: 0, stamps: 0, feathers: 0, gull: 0, ...patch });
   const won = cityAwards([entry('a', { worth: 900, gigs: 5 }), entry('b', { worth: 100, bonks: 9, peak: 80, busts: 2 }), entry('c', { worth: 100, escapes: 2, drove: 800 })]);
   assert.deepEqual(Object.fromEntries(won.map(award => [award.title, award.ids])), { Tycoon: ['a'], 'Most Wanted': ['b'], Slippery: ['c'], 'Road Hog': ['c'], 'Bonk Champion': ['b'], Jailbird: ['b'], 'Model Citizen': ['a'] });
   assert.deepEqual(cityAwards([entry('a', { worth: START_COINS }), entry('b', { worth: START_COINS })]), [], 'a round nobody did anything in hands out nothing: the starting coins make no Tycoon');

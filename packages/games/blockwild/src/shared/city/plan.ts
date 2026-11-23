@@ -17,6 +17,12 @@ export const GROUND = 64;
 export const CITY_SIZE = CITY.n * CITY.pitch + CITY.road;
 /** The island: the grid plus a quay; east of it the airfield strip, south of it the beach. */
 export const QUAY = 12, AIRFIELD = { x0: CITY.x0 + CITY_SIZE + 4, z0: CITY.z0 + 96, w: 72, d: 400 } as const, BEACH = 44;
+/** The south shore: where the beach begins (the pier starts here), the pier itself, and Gull Rock out in the bay. */
+export const SHORE = CITY.z0 + CITY_SIZE + QUAY;
+export const PIER = { x0: CITY.x0 + 6 * CITY.pitch + CITY.road + 20, w: 7, d: 78 } as const;
+export const ISLE = { x: CITY.x0 + 300, z: SHORE + BEACH + 82, r: 26 } as const;
+/** Where a boat's keel rides: just under the surface of the sea (the top water cell is y 62). */
+export const SEA_Y = 62.6;
 /** Where players and vehicles may be: the island and the water around it (the shared movement code clamps to this). */
 export const CITY_BOUNDS = { x0: CITY.x0 - 96, z0: CITY.z0 - 96, x1: CITY.x0 + CITY_SIZE + 176, z1: CITY.z0 + CITY_SIZE + 176, top: 122 } as const;
 export const inCity = (x: number, z: number) => x >= CITY_BOUNDS.x0 && x <= CITY_BOUNDS.x1 && z >= CITY_BOUNDS.z0 && z <= CITY_BOUNDS.z1;
@@ -24,10 +30,10 @@ export const clampToCity = (v: number, axis: 0 | 2) => Math.max(axis ? CITY_BOUN
 
 /** What a lot holds. */
 export type LotKind = 'shop' | 'boutique' | 'office' | 'flats' | 'house' | 'warehouse' | 'plot' | 'park' | 'hall' | 'bank' | 'hotel' | 'clinic' | 'watch' | 'school'
-  | 'market' | 'cinema' | 'fair' | 'garage' | 'depot' | 'scrap' | 'hangar';
+  | 'market' | 'cinema' | 'fair' | 'garage' | 'depot' | 'scrap' | 'hangar' | 'firehouse' | 'busdepot' | 'pier' | 'isle';
 /** Places a player can do something at. */
-export type PlaceKind = 'food' | 'gizmo' | 'hardware' | 'pawn' | 'realtor' | 'cabs' | 'depot' | 'dealer' | 'scrap' | 'clinic' | 'watch' | 'bank' | 'hall' | 'airfield';
-export const PLACE_KINDS: readonly PlaceKind[] = ['food', 'gizmo', 'hardware', 'pawn', 'realtor', 'cabs', 'depot', 'dealer', 'scrap', 'clinic', 'watch', 'bank', 'hall', 'airfield'];
+export type PlaceKind = 'food' | 'gizmo' | 'hardware' | 'pawn' | 'realtor' | 'cabs' | 'depot' | 'dealer' | 'scrap' | 'clinic' | 'watch' | 'bank' | 'hall' | 'airfield' | 'hats' | 'fire' | 'bus' | 'bait';
+export const PLACE_KINDS: readonly PlaceKind[] = ['food', 'gizmo', 'hardware', 'pawn', 'realtor', 'cabs', 'depot', 'dealer', 'scrap', 'clinic', 'watch', 'bank', 'hall', 'airfield', 'hats', 'fire', 'bus', 'bait'];
 export const DISTRICTS = ['Brasswick', 'Pennymarket', 'Quillside', 'Larkrise', 'Cinder Yards', 'Mossback Park', 'Sunny Strand', 'Gullwing Field'] as const;
 
 /**
@@ -40,8 +46,8 @@ export type Lot = { i: number; bx: number; bz: number; x0: number; z0: number; x
  * point outside it; `board` is its job board block and `till` its cash till (cell coordinates), when it has them.
  */
 export type Place = { i: number; kind: PlaceKind; lot: number; name: string; door: [number, number]; walk: [number, number]; counter: [number, number]; front: [number, number]; board?: Vec3; till?: Vec3 };
-/** A parking bay: where a parked vehicle's centre sits, its heading and what the seed parked there (kind −1 = empty). */
-export type Bay = { x: number; z: number; yaw: number; kind: number; paint: number };
+/** A parking bay: where a parked vehicle's centre sits, its heading and what the seed parked there (kind −1 = empty); `y` when not at street level (a mooring). */
+export type Bay = { x: number; z: number; yaw: number; kind: number; paint: number; y?: number };
 /** A sidewalk corner: block (bx, bz), corner 0..3 = NW, NE, SE, SW. */
 export type Corner = { x: number; z: number };
 /** A buildable plot: the lot it is in and its inclusive build box. */
@@ -49,6 +55,8 @@ export type Plot = { lot: number; x0: number; z0: number; x1: number; z1: number
 
 export type CityPlan = {
   seed: number; lots: Lot[]; places: Place[]; bays: Bay[]; plots: Plot[];
+  /** The lots outside the street grid: the airfield, the pier (with its hut and moorings) and Gull Rock. */
+  field: number; pier: number; isle: number;
   /** Lots of each block (index bz * N + bx). */
   blockLots: number[][];
   /** Where a new player stands: the middle of the town hall plaza. */
@@ -128,7 +136,7 @@ export const lotAt = (plan: CityPlan, x: number, z: number): Lot | undefined => 
  * on each side and `depth` rows deep (0 = to the back of the lot less the margin). Open-air lots have no entry.
  */
 const SHAPES: Partial<Record<LotKind, readonly [setback: number, margin: number, depth: number]>> = {
-  shop: [1, 0, 15], boutique: [1, 0, 15], office: [2, 1, 0], flats: [3, 1, 0], house: [5, 2, 11], warehouse: [6, 2, 14], hall: [26, 6, 20], bank: [5, 6, 36],
+  shop: [1, 0, 15], boutique: [1, 0, 15], office: [2, 1, 0], flats: [3, 1, 0], house: [5, 2, 11], warehouse: [6, 2, 14], firehouse: [7, 2, 13], busdepot: [8, 14, 12], hall: [26, 6, 20], bank: [5, 6, 36],
   hotel: [6, 4, 36], clinic: [8, 5, 30], watch: [11, 6, 30], school: [11, 4, 26], cinema: [3, 4, 38], garage: [14, 2, 30], depot: [12, 2, 32], scrap: [8, 15, 10],
 };
 /** The building's local box [u0, v0, u1, v1] (inclusive), or null for open-air lots (parks, plots, the market, the fair). */
@@ -136,6 +144,8 @@ export function footprint(lot: Lot): [number, number, number, number] | null {
   const shape = SHAPES[lot.kind];
   // The airfield's building is its small terminal by the gate.
   if (lot.kind === 'hangar') return [60, 4, 83, 16];
+  // The bait hut is an open stall at the pier's far end: no walls to walk through.
+  if (lot.kind === 'pier' || lot.kind === 'isle') return null;
   if (!shape) return null;
   const [setback, margin, depth] = shape, w = lotWidth(lot), d = lotDepth(lot);
   return [margin, setback, w - 1 - margin, depth ? setback + depth - 1 : d - 1 - margin];
@@ -147,6 +157,8 @@ export function footprint(lot: Lot): [number, number, number, number] | null {
 export function lotWalk(lot: Lot): [number, number] {
   const [x, z] = lotCell(lot, layoutOf(lot).door[0], 0);
   if (lot.kind === 'hangar') return [blockX(CITY.n - 1) + CITY.lot + 1.5, z + 0.5];
+  // The pier is reached from the last street's north pavement (its people cross the road and the quay to it).
+  if (lot.kind === 'pier' || lot.kind === 'isle') return [PIER.x0 + 3.5, blockZ(CITY.n - 1) + CITY.lot + 1.5];
   const [dx, dz] = FACING[lot.face]!;
   return [x + 0.5 + dx * 2, z + 0.5 + dz * 2];
 }
@@ -159,6 +171,8 @@ export const ROOM = 11, STOREY = { ground: 5, upper: 4 } as const;
  */
 export function layoutOf(lot: Lot) {
   const box = footprint(lot), w = lotWidth(lot);
+  // The pier's hut stands at its seaward end, the counter facing back up the pier.
+  if (lot.kind === 'pier') { const u = w >> 1, v = lotDepth(lot) - 6; return { door: [u, 0] as const, counterV: v, keeper: [u, v + 1] as const, customer: [u, v - 2] as const, till: [u + 1, v] as const, board: [u + 3, v] as const }; }
   if (!box) { const u = w >> 1, v = lotDepth(lot) >> 1; return { door: [u, 0] as const, counterV: v, keeper: [u, v + 1] as const, customer: [u, v - 2] as const, till: [u + 1, v] as const, board: [u + 3, v] as const }; }
   const u = (box[0] + box[2]) >> 1, v = box[1];
   return { door: [u, v] as const, counterV: v + 7, keeper: [u, v + 8] as const, customer: [u, v + 5] as const, till: [u + 1, v + 7] as const, board: [u + 3, v] as const };
@@ -172,14 +186,15 @@ const SHOP_NAMES: Record<string, readonly string[]> = {
   pawn: ['Second Chance Pawn', 'Odd Lots', 'The Magpie Nest', 'No Questions Emporium'],
   realtor: ['Keys & Deeds', 'Nook & Cranny Homes', 'Front Door Friends'],
   cabs: ['Hopper Cabs', 'Zig Zag Taxi', 'Beeline Cabs'],
-  boutique: ['Thimble & Thread', 'Petal Pushers', 'The Sock Drawer', 'Ink & Quill Books', 'Snip Snip Barbers', 'Tick Tock Clocks', 'Hat Trick', 'Button Moon', 'The Kite Cupboard', 'Wobbly Records',
+  hats: ['Hat Trick', 'Lid & Brim', 'The Bonnet Box', 'Top Drawer Toppers'],
+  boutique: ['Thimble & Thread', 'Petal Pushers', 'The Sock Drawer', 'Ink & Quill Books', 'Snip Snip Barbers', 'Tick Tock Clocks', 'Stitch in Time', 'Button Moon', 'The Kite Cupboard', 'Wobbly Records',
     'Fern & Fable', 'Mitten Kitten Knits', 'Lamp Champ', 'The Candle Corner', 'Bubble & Scrub Laundry', 'Teacup Antiques'],
 };
 const pickName = (list: readonly string[], seed: number, a: number, b: number) => list[hash3(seed, a, b, 0x7a3) % list.length]!;
 
 // Planning -------------------------------------------------------------------------------------------------------------
 /** The functional shop kinds a shop block must hold, in the order its lots take them (the rest are boutiques). */
-const SHOP_MIX: readonly PlaceKind[] = ['gizmo', 'hardware', 'cabs', 'pawn', 'realtor'];
+const SHOP_MIX: readonly PlaceKind[] = ['gizmo', 'hardware', 'cabs', 'pawn', 'realtor', 'hats'];
 /** Vehicle kinds the seed parks at the kerb, weighted towards the small ones (indexes into shared/city/vehicles.ts). */
 const PARKED: readonly number[] = [1, 1, 1, 0, 2, 3, 1, 6, 5, 0, 2, 1];
 
@@ -216,8 +231,8 @@ function build(seed: number): CityPlan {
     if (mark) {
       const [kind, use, name] = mark, face = zone === 'PD' || zone === 'CL' || zone === 'GA' ? 3 : zone === 'DP' || zone === 'SY' ? 2 : zone === 'BK' ? 3 : 0;
       const lot = addLot(bx, bz, 0, 0, 47, 47, face, kind, kind === 'hotel' ? 9 : kind === 'bank' ? 3 : 1, name);
-      // The depot, the town hall (parcels to post from the plaza) and the market carry job boards.
-      if (use) addPlace(lot, use, name, zone === 'DP' || zone === 'TH' || zone === 'MK');
+      // The depot, the town hall (parcels to post from the plaza), the market and the clinic (ambulance runs) carry job boards.
+      if (use) addPlace(lot, use, name, zone === 'DP' || zone === 'TH' || zone === 'MK' || zone === 'CL');
       continue;
     }
     switch (zone) {
@@ -241,7 +256,13 @@ function build(seed: number): CityPlan {
         else for (const [lx0, lz0, face] of [[0, 0, 0], [26, 0, 0], [0, 26, 2], [26, 26, 2]] as const) addLot(bx, bz, lx0, lz0, lx0 + 21, lz0 + 21, face, 'flats', 3 + hash3(seed, bx + lx0, bz, lz0) % 5);
         break;
       case 'H': rows(bx, bz, (lx0, lz0, lx1, lz1, face, slot) => { addLot(bx, bz, lx0, lz0, lx1, lz1, face, 'house', hash3(seed, bx, bz, slot) % 2); }); break;
-      case 'I': for (const [lz0, face] of [[0, 0], [26, 2]] as const) addLot(bx, bz, 0, lz0, 47, lz0 + 21, face, 'warehouse', 1); break;
+      case 'I':
+        for (const [lz0, face] of [[0, 0], [26, 2]] as const) {
+          // Two of the yards' sheds are the fire brigade's and the bus company's (the same lots under other roofs).
+          const service = bz === 0 && lz0 === 0 ? bx === 7 ? 'firehouse' : bx === 8 ? 'busdepot' : null : null, lot = addLot(bx, bz, 0, lz0, 47, lz0 + 21, face, service ?? 'warehouse', 1);
+          if (service) addPlace(lot, service === 'firehouse' ? 'fire' : 'bus', service === 'firehouse' ? 'Cinder Yards Fire Brigade' : 'Trundle Lines Depot', true);
+        }
+        break;
       case 'PL':
         for (const [lx0, lz0, face] of [[0, 0, 0], [26, 0, 0], [0, 26, 2], [26, 26, 2]] as const) {
           const lot = addLot(bx, bz, lx0, lz0, lx0 + 21, lz0 + 21, face, 'plot', 0, `Plot ${plots.length + 1}`);
@@ -256,9 +277,21 @@ function build(seed: number): CityPlan {
   lots.push(field);
   blockLots[N * N]!.push(field.i);
   const gate = layoutOf(field);
+  const fieldBoard = lotCell(field, gate.board[0], gate.board[1]);
   places.push({ i: places.length, kind: 'airfield', lot: field.i, name: field.name, door: lotCell(field, gate.door[0], gate.door[1]), walk: lotWalk(field),
-    counter: lotSpot(field, gate.keeper[0], gate.keeper[1]), front: lotSpot(field, gate.customer[0], gate.customer[1]) });
+    counter: lotSpot(field, gate.keeper[0], gate.keeper[1]), front: lotSpot(field, gate.customer[0], gate.customer[1]), board: [fieldBoard[0], GROUND + 1, fieldBoard[1]] });
   field.place = places.length - 1;
+  // The pier (its hut sells rods and boats and buys the catch) and Gull Rock, the island to the south-west.
+  const outside = (kind: LotKind, x0: number, z0: number, x1: number, z1: number, name: string): Lot => {
+    const lot: Lot = { i: lots.length, bx: N + lots.length - field.i, bz: N, x0, z0, x1, z1, face: 0, kind, floors: 0, style: hash2(seed, lots.length, 0x15e), place: -1, name };
+    lots.push(lot);
+    blockLots.push([lot.i]);
+    return lot;
+  };
+  const pier = outside('pier', PIER.x0 - 7, SHORE, PIER.x0 + PIER.w + 6, SHORE + PIER.d + 4, 'Sunny Strand Pier');
+  addPlace(pier, 'bait', 'Brine & Bait');
+  delete places[places.length - 1]!.till;
+  const isle = outside('isle', ISLE.x - ISLE.r, ISLE.z - ISLE.r, ISLE.x + ISLE.r, ISLE.z + ISLE.r, 'Gull Rock');
 
   // Parking bays: four along each side of every road segment, plus the bays at places (fixed kinds).
   const bays: Bay[] = [];
@@ -288,7 +321,17 @@ function build(seed: number): CityPlan {
   fixed(first('dealer'), 6, [[12, 6]], 3);
   fixed(first('dealer'), 0, [[36, 6]], 4);
   fixed(first('dealer'), 2, [[42, 6]], 5);
-  fixed(first('clinic'), 3, [[6, 3]], 5);
+  fixed(first('clinic'), 13, [[6, 3]]);
+  fixed(first('fire'), 12, [[10, 3], [37, 3]]);
+  fixed(first('bus'), 11, [[4, 10], [10, 10]]);
+  // City bikes stand in racks where people gather: free to ride, no questions asked.
+  const rack = (lot: Lot | undefined, spots: readonly (readonly [number, number])[]) => { if (lot) for (const [u, v] of spots) { const [x, z] = lotSpot(lot, u, v); bays.push({ x, z, yaw: [0, -Math.PI / 2, Math.PI, Math.PI / 2][lot.face]!, kind: 10, paint: 0 }); } };
+  rack(lots.find(lot => lot.kind === 'hall'), [[8, 3], [12, 3], [35, 3], [39, 3]]);
+  for (const lot of lots.filter(lot => lot.kind === 'park' || lot.kind === 'school' || lot.kind === 'market' || lot.kind === 'fair' || lot.kind === 'cinema' || lot.kind === 'hotel')) rack(lot, [[3, 1], [7, 1]]);
+  // Moorings along the pier's east side, sterns to the deck so a boat can be stepped into (dinghies near the shore end, a speedboat
+  // further out), and one at Gull Rock's jetty.
+  for (const [dz, kind, paint] of [[38, 14, 2], [44, 14, 4], [52, 15, 0], [59, 14, 6]] as const) bays.push({ x: PIER.x0 + PIER.w + (kind === 15 ? 2.6 : 1.9), z: SHORE + dz + 0.5, yaw: -Math.PI / 2, kind, paint, y: SEA_Y });
+  bays.push({ x: ISLE.x + 3.2, z: ISLE.z - ISLE.r - 6.5, yaw: 0, kind: 14, paint: 1, y: SEA_Y });
   for (const cab of places.filter(place => place.kind === 'cabs')) {
     // A cab stand claims the two kerb bays nearest its door for cabs.
     const near = bays.map((bay, index) => ({ index, d: Math.hypot(bay.x - cab.walk[0], bay.z - cab.walk[1]) })).sort((a, b) => a.d - b.d).slice(0, 2);
@@ -304,7 +347,7 @@ function build(seed: number): CityPlan {
   const kinds = new Map<PlaceKind, Place[]>();
   for (const place of places) kinds.set(place.kind, [...kinds.get(place.kind) ?? [], place]);
   return {
-    seed, lots, places, bays, plots, blockLots,
+    seed, lots, places, bays, plots, blockLots, field: field.i, pier: pier.i, isle: isle.i,
     spawn: [sx, GROUND, sz], jail: [watch.walk[0], GROUND, watch.walk[1]], clinic: [clinic.walk[0], GROUND, clinic.walk[1]],
     byKind: kind => kinds.get(kind) ?? [],
   };

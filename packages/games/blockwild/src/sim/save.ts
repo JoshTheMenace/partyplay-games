@@ -18,14 +18,22 @@ import { armorOf, durabilityOf, isItem, maxStack, type Slot } from '../shared/it
 import { MOB_TYPES, MS, q2, q3, validateSettings, type Settings, type Stats, type Victory } from '../shared/protocol';
 import { PROFESSIONS } from '../shared/trades';
 import { RIDES } from '../shared/city/vehicles';
-import { STAT_KEYS as STAT_KEYS_CITY, type CityRecord } from './city-state';
+import { packRep, REP_START, STAT_KEYS as STAT_KEYS_CITY, STAT_KEYS_2, type CityRecord } from './city-state';
 import { MAX_CHESTS, MAX_FURNACES } from './containers';
 import { packEdits, unpackEdits as unpackJournal } from './journal';
 import type { Furnace, PlayerStats, SavedPlayerState } from './state';
 
 export const SAVE_VERSION = 11;
-/** Caper City saves: only city worlds are written (and read) as this version. */
-export const CITY_SAVE_VERSION = 12;
+/**
+ * Caper City saves: only city worlds are written as this version. Version 12 (the city's first) still loads: its player
+ * records hold thirteen numbers, version 13's hold CITY_FIELDS (stamps, feathers, errands, standing, look, businesses and
+ * seven more career totals after them).
+ */
+export const CITY_SAVE_VERSION = 13;
+const FIRST_CITY_VERSION = 12, CITY_OLD = 4 + STAT_KEYS_CITY.length;
+/** The most each extra number may be (so the worst file has a size): two stamp halves, two feather halves, story, rep, look, biz. */
+const CITY_EXTRA = [65535, 65535, 2 ** 20 - 1, 2 ** 20 - 1, 2 ** 24 - 1, 2 ** 21 - 1, 2 ** 23 - 1, 2 ** 21 - 1] as const;
+export const CITY_FIELDS = CITY_OLD + CITY_EXTRA.length + STAT_KEYS_2.length;
 /**
  * Oldest version that still loads. Edits only record differences from generated terrain, so a world saved before the
  * expansion generator (version 8) would silently grow lava caves and structures through its builds: it is refused.
@@ -51,7 +59,7 @@ export type SavedPlayer = {
   /** Bed cell used as the respawn point, or null for the world spawn. */
   spawn: Vec3 | null;
   stats: PlayerStats; milestones: number;
-  /** Caper City (v12, city saves only): [coins, owned vehicles (bitmask), flat lot + 1, plot + 1, then STAT_KEYS in order]. */
+  /** Caper City (city saves only): [coins, owned vehicles (bitmask), flat lot + 1, plot + 1, then STAT_KEYS in order]; v13 adds stamps ×2, feathers ×2, story, rep, look, biz and STAT_KEYS_2. */
   c?: number[];
 };
 export type SavedFurnace = { i: number; slots: PackedSlots; burn: number; burnMax: number; cook: number };
@@ -63,7 +71,7 @@ export type VillagerState = Omit<SavedVillager, 'home'> & { home: Vec3 | null };
 /** The End's progress (v10): the dragon's life and health, pillars (0..9) that still hold crystals, the exit portal and the egg. */
 export type SavedEnd = { dragon: 'alive' | 'dead'; health: number; crystals: number[]; portalActive: boolean; egg: boolean };
 export type SaveData = {
-  format: 'blockwild'; version: 11 | 12; seed: number;
+  format: 'blockwild'; version: 11 | 12 | 13; seed: number;
   /** Stable world identity (derived from the seed when missing). */
   worldId: string; mode: Settings['mode']; difficulty: Settings['difficulty']; keepInventory: boolean;
   /** Caper City settings (city saves only). */
@@ -137,7 +145,8 @@ export function exportSave(source: SaveSource): SaveData {
       // Armor makes health fractional: a sliver of health still loads (at least half a heart).
       health: p.dead ? MAX_HEALTH : Math.max(0.5, q2(p.health)), food: p.dead ? MAX_FOOD : p.food, saturation: q2(p.dead ? 5 : p.saturation),
       inv: packSlots(p.inv), armor: packSlots(p.armor), spawn: p.bed ? [...p.bed] : null, stats: { ...p.stats, distance: Math.round(p.stats.distance) }, milestones: p.milestones,
-      ...settings.mode === 'city' && p.city ? { c: [p.city.coins, p.city.own, p.city.flat + 1, p.city.plot + 1, ...STAT_KEYS_CITY.map(key => Math.round(p.city!.stats[key]))] } : {},
+      ...settings.mode === 'city' && p.city ? { c: [p.city.coins, p.city.own, p.city.flat + 1, p.city.plot + 1, ...STAT_KEYS_CITY.map(key => Math.round(p.city!.stats[key])),
+        ...p.city.stamps, ...p.city.feathers, p.city.story, p.city.rep, p.city.look, p.city.biz, ...STAT_KEYS_2.map(([key, most]) => Math.min(most, Math.round(p.city!.stats[key])))] } : {},
     })),
     chests: [...source.chests].map(([i, slots]) => ({ i, slots: packSlots(slots) })),
     furnaces: [...source.furnaces].map(([i, f]) => ({ i, slots: packSlots(f.slots), burn: q2(f.burn), burnMax: q2(f.burnMax), cook: q2(f.cook) })),
@@ -217,7 +226,7 @@ export function parseSave(raw: unknown): ParsedSave {
   if (settings.seed < 1 || settings.seed !== raw.seed || settings.mode !== raw.mode || settings.difficulty !== raw.difficulty || settings.keepInventory !== raw.keepInventory) throw invalid('settings');
   const city = settings.mode === 'city';
   // The city arrived with version 12; its settings are written out in full.
-  if (city && (raw.version < CITY_SAVE_VERSION || settings.minutes !== raw.minutes || settings.bonks !== raw.bonks)) throw invalid('settings');
+  if (city && (raw.version < FIRST_CITY_VERSION || settings.minutes !== raw.minutes || settings.bonks !== raw.bonks)) throw invalid('settings');
   if (raw.worldId !== undefined && (typeof raw.worldId !== 'string' || !/^[a-z0-9-]{1,64}$/.test(raw.worldId))) throw invalid('settings');
   if (typeof raw.edits !== 'string' || typeof raw.populated !== 'string') throw invalid('edits');
   const edits = raw.version >= 11 ? unpackEdits(raw.edits) : unpackOldEdits(raw.edits);
@@ -238,7 +247,7 @@ export function parseSave(raw: unknown): ParsedSave {
       health: number(value.health, 0.5, MAX_HEALTH, 'players'), food: integer(value.food, 0, MAX_FOOD, 'players'), saturation: number(value.saturation, 0, MAX_FOOD, 'players'),
       inv: slots(value.inv, INVENTORY_SIZE, 'inventory'), armor: armorSlots(value.armor), bed: bed && !stale(bed[0], bed[2]) ? bed : null,
       stats: statsOf(value.stats, PLAYER_STAT_KEYS), milestones: integer(value.milestones, 0, 2 ** 30, 'players'),
-      ...cityOf(value.c, city),
+      ...cityOf(value.c, city, raw.version as number),
     };
   });
   // Animals and villagers do not exist in the city: their room in the file is what the city records use.
@@ -286,12 +295,15 @@ export function parseSave(raw: unknown): ParsedSave {
 }
 
 /** A player's city record (only city saves carry one; coins and totals are bounded so the file's size is too). */
-function cityOf(value: unknown, city: boolean): { city?: CityRecord } {
+function cityOf(value: unknown, city: boolean, version: number): { city?: CityRecord } {
   if (value === undefined) return {};
   if (!city) throw invalid('players');
-  const c = list(value, 4 + STAT_KEYS_CITY.length, 'city').map(n => integer(n, 0, 99_999_999, 'city'));
-  if (c.length !== 4 + STAT_KEYS_CITY.length || c[1]! >= 2 ** RIDES.length || c[2]! > 4096 || c[3]! > 64) throw invalid('city');
-  return { city: { coins: c[0]!, own: c[1]!, flat: c[2]! - 1, plot: c[3]! - 1, stats: Object.fromEntries(STAT_KEYS_CITY.map((key, k) => [key, c[4 + k]!])) as CityRecord['stats'] } };
+  const want = version >= CITY_SAVE_VERSION ? CITY_FIELDS : CITY_OLD, c = list(value, want, 'city').map((n, k) => integer(n, 0, k < CITY_OLD ? 99_999_999 : k < CITY_OLD + CITY_EXTRA.length ? CITY_EXTRA[k - CITY_OLD]! : STAT_KEYS_2[k - CITY_OLD - CITY_EXTRA.length]?.[1] ?? 0, 'city'));
+  if (c.length !== want || c[1]! >= 2 ** RIDES.length || c[2]! > 4096 || c[3]! > 64) throw invalid('city');
+  const e = (k: number) => c[CITY_OLD + k] ?? 0, old = c.length === CITY_OLD;
+  const stats = { ...Object.fromEntries(STAT_KEYS_CITY.map((key, k) => [key, c[4 + k]!])), ...Object.fromEntries(STAT_KEYS_2.map(([key], k) => [key, e(CITY_EXTRA.length + k)])) } as CityRecord['stats'];
+  // A version 12 player starts the new things from scratch (standing at its starting marks).
+  return { city: { coins: c[0]!, own: c[1]!, flat: c[2]! - 1, plot: c[3]! - 1, stats, stamps: [e(0), e(1)], feathers: [e(2), e(3)], story: e(4), rep: old ? packRep(REP_START) : e(5), look: e(6), biz: e(7) } };
 }
 function endOf(value: unknown): SavedEnd {
   if (!isObject(value) || (value.dragon !== 'alive' && value.dragon !== 'dead') || typeof value.portalActive !== 'boolean' || typeof value.egg !== 'boolean') throw invalid('end');

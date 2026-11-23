@@ -6,18 +6,34 @@
  */
 import { RIDES } from '../shared/city/vehicles';
 import { cityPeople, residentAt, type People, type Pose } from '../shared/city/people';
-import { cityPlan, type CityPlan } from '../shared/city/plan';
+import { CITY, cityPlan, lotWalk, type CityPlan } from '../shared/city/plan';
 import { START_COINS } from '../shared/city/economy';
 import type { Vec3 } from '../shared/coords';
 import type { GigOffer } from '../shared/protocol';
+import type { Race, Vault } from './city-play';
 import type { Player, State } from './state';
 
 /** Career totals for the ledger (saved). `peak`: highest heat reached; `drove`, `flew`: blocks covered. */
-export type CityStats = { earned: number; gigs: number; bonks: number; busts: number; escapes: number; peak: number; drove: number; flew: number; kos: number };
-export const newStats = (): CityStats => ({ earned: 0, gigs: 0, bonks: 0, busts: 0, escapes: 0, peak: 0, drove: 0, flew: 0, kos: 0 });
+export type CityStats = { earned: number; gigs: number; bonks: number; busts: number; escapes: number; peak: number; drove: number; flew: number; kos: number;
+  /** Second helping: fish landed, races won, the longest stunt jump (blocks), coins busked, fires and patients seen to, bounties collected, seconds with the gull. */
+  fish: number; wins: number; jump: number; tips: number; helped: number; bounties: number; gull: number };
+export const newStats = (): CityStats => ({ earned: 0, gigs: 0, bonks: 0, busts: 0, escapes: 0, peak: 0, drove: 0, flew: 0, kos: 0, fish: 0, wins: 0, jump: 0, tips: 0, helped: 0, bounties: 0, gull: 0 });
+/** The first nine are what a version 12 save holds; a version 13 save adds the rest, each with the most it may be. */
 export const STAT_KEYS = ['earned', 'gigs', 'bonks', 'busts', 'escapes', 'peak', 'drove', 'flew', 'kos'] as const;
+export const STAT_KEYS_2 = [['fish', 9999], ['wins', 999], ['jump', 999], ['tips', 99999], ['helped', 999], ['bounties', 999], ['gull', 9999]] as const;
+/** Reputation with the townsfolk, the Watch and the Magpies (0..100 each), and how it packs into one integer. */
+export type Rep = [folk: number, watch: number, magpies: number];
+export const REP = { FOLK: 0, WATCH: 1, MAGPIES: 2 } as const, REP_START: Rep = [20, 20, 0];
+export const packRep = (rep: readonly number[]) => rep[0]! | rep[1]! << 7 | rep[2]! << 14;
+export const unpackRep = (n: number): Rep => [Math.min(100, n & 127), Math.min(100, n >> 7 & 127), Math.min(100, n >> 14 & 127)];
+/** A look: the hat worn (0 = the cap everyone starts in), the paint of owned vehicles and which owned kinds are tuned. */
+export const packLook = (hat: number, paint: number, tuned: number) => hat | paint << 4 | tuned << 7;
+/** Up to three businesses (place indices) in one integer. */
+export const MAX_BIZ = 3;
+export const packBiz = (biz: readonly number[]) => biz.reduce((n, place, k) => n | place + 1 << k * 7, 0);
+export const unpackBiz = (n: number) => [n & 127, n >> 7 & 127, n >> 14 & 127].filter(Boolean).map(place => place - 1);
 /** What a save keeps of a seat's city life. */
-export type CityRecord = { coins: number; own: number; flat: number; plot: number; stats: CityStats };
+export type CityRecord = { coins: number; own: number; flat: number; plot: number; stats: CityStats; stamps: [number, number]; feathers: [number, number]; story: number; rep: number; look: number; biz: number };
 /** A gig in progress: `stage` 0 = fetch the rider (cabs), 1 = deliver; `until` is the deadline (sim seconds). */
 export type Gig = { k: number; stage: number; x: number; z: number; until: number; pay: number; drops: number; place: number; rider: number; from: [number, number] };
 export type CityPlayer = {
@@ -38,6 +54,30 @@ export type CityPlayer = {
   /** Speed claimed by the client's last input (m/s), and the last position counted towards distance driven. */
   speed: number; rx: number; rz: number;
   stats: CityStats;
+  /** Saved with the seat: passport stamps and golden feathers (bit halves), errand steps (3 bits a character), standing, look and businesses. */
+  stamps: [number, number]; feathers: [number, number]; story: number; rep: Rep; hat: number; paint: number; tuned: number; biz: number[];
+  /** Session only (sim/city-fun.ts and friends). `chuteUntil`: a free canopy after bailing out; `gliding`: under one now. */
+  chuteUntil: number; gliding: boolean; glideFrom: number;
+  /** Shopkeepers are wary of this seat until then (prices up). */
+  waryUntil: number;
+  /** Fishing: 0 nothing, 1 waiting, 2 a bite; when the bite comes or goes; where the float is, whether that is deep water and where the cast was made from. */
+  fish: number; fishAt: number; fishX: number; fishZ: number; fishDeep: boolean; fishFrom: [number, number];
+  /** Busking: when the last note was played, how warm the tune is (0..1, tips grow with it), notes played, and the pitch: where, and the coins it has given. */
+  tootAt: number; tune: number; notes: number; pitch: number[];
+  /** A hold-to-finish action: what, its key (a place, a fire) and seconds done. */
+  hold: { what: string; key: number; done: number; at: number } | null;
+  /** The number of the player's newest toast when this tick began: a passport stamp earned since joins that message instead of replacing it. */
+  toastN: number;
+  /** The character being talked to (−1 none) and the errand in hand: character, step, and the stat it counts from. */
+  talk: number; errand: { who: number; step: number; base: number } | null;
+  /** The lock-up: released at this time (0 = free); community service still owed (litter to sweep). */
+  cellUntil: number; service: number; fine: number;
+  /** Airtime of the vehicle driven: where it left the ground. */
+  air: { x: number; z: number } | null;
+  /** The race this seat is in (0 none) and its next checkpoint. */
+  race: number; lap: number;
+  /** Slipped on a peel at this time (so one peel does not fell the same player twice). */
+  slipAt: number;
 };
 /** A traffic car's place on the lane rails (see rides.ts). */
 export type Rail = {
@@ -72,6 +112,13 @@ export type Npc = {
   target: number;
   path: Vec3[] | null; pathIndex: number; pathAt: number; stuck: number; angry: boolean;
 };
+/**
+ * Something going on in the city, as every screen is told once a second: kind (EV), where, until when, and two numbers
+ * the kind gives meaning to (a fire's strength, a bounty's seat). `helpers`: what each seat has done towards it.
+ */
+export type CityEvent = { id: number; k: number; x: number; z: number; until: number; a: number; b: number; helpers: Map<number, number>; quietAt: number };
+/** A banana peel: the item entity screens draw, where it lies, until when, and who dropped it when. */
+export type Peel = { item: number; x: number; z: number; until: number; by: number; at: number };
 export type CityState = {
   plan: CityPlan; people: People;
   /** By seat (the index in State.players). */
@@ -88,6 +135,14 @@ export type CityState = {
   boxes: Map<number, number>;
   /** When each place's till fills again. */
   tills: Map<number, number>;
+  /** What is going on in the city (fires, spills, the gull…): sim/city-events.ts owns the list. */
+  events: CityEvent[]; eventId: number; nextEventAt: number; lastEvent: number;
+  /** Who owns each business (place → seat), when each next pays out, and when emptied service bays may be restocked. */
+  owners: Map<number, number>; payAt: number; emptiedAt: Map<number, number>; skipPay: Set<number>;
+  /** Street races forming or running, and the bank's vault (sim/city-play.ts). */
+  races: Race[]; vault: Vault;
+  /** Banana peels lying about, smoke hanging in the air and the water balloons that burst this tick (sim/city-fun.ts). */
+  peels: Peel[]; smokes: { x: number; z: number; until: number }[]; splashes: { x: number; z: number; by: number }[];
   news: [number, string] | null;
   /** When a timed round ends (sim seconds; 0 = free play). */
   endsAt: number;
@@ -100,8 +155,13 @@ export type CityState = {
 
 export const newCityPlayer = (record?: CityRecord): CityPlayer => ({
   coins: record?.coins ?? START_COINS, heat: 0, seenAt: -1e9, hotAt: -1e9, spell: 0, grab: 0, ride: 0, seat: 0, gig: null, open: -1, offers: null,
-  own: record?.own ?? 0, flat: record?.flat ?? -1, plot: record?.plot ?? -1, dizzyUntil: 0, bonkedAt: -1e9, sendAt: 0, toldAt: -1e9, speed: 0, rx: 0, rz: 0, stats: record ? { ...record.stats } : newStats(),
+  own: record?.own ?? 0, flat: record?.flat ?? -1, plot: record?.plot ?? -1, dizzyUntil: 0, bonkedAt: -1e9, sendAt: 0, toldAt: -1e9, speed: 0, rx: 0, rz: 0, stats: record ? { ...newStats(), ...record.stats } : newStats(),
+  stamps: record ? [...record.stamps] : [0, 0], feathers: record ? [...record.feathers] : [0, 0], story: record?.story ?? 0, rep: record ? unpackRep(record.rep) : [...REP_START],
+  hat: (record?.look ?? 0) & 15, paint: (record?.look ?? 0) >> 4 & 7, tuned: (record?.look ?? 0) >> 7, biz: unpackBiz(record?.biz ?? 0),
+  chuteUntil: 0, gliding: false, glideFrom: 0, waryUntil: 0, fish: 0, fishAt: 0, fishX: 0, fishZ: 0, fishDeep: false, fishFrom: [0, 0], tootAt: -1e9, tune: 0, notes: 0, pitch: [0, 0, 0], hold: null, talk: -1, errand: null, cellUntil: 0, service: 0, fine: 0, air: null, race: 0, lap: 0, slipAt: -1e9, toastN: 0,
 });
+/** A seat's saved record. */
+export const recordOf = (cp: CityPlayer): CityRecord => ({ coins: cp.coins, own: cp.own, flat: cp.flat, plot: cp.plot, stats: { ...cp.stats }, stamps: [...cp.stamps], feathers: [...cp.feathers], story: cp.story, rep: packRep(cp.rep), look: packLook(cp.hat, cp.paint, cp.tuned), biz: packBiz(cp.biz) });
 
 export function newCityState(seed: number, minutes: number): CityState {
   const plan = cityPlan(seed), people = cityPeople(seed), n = people.list.length, bayCells = new Map<number, number[]>();
@@ -112,10 +172,17 @@ export function newCityState(seed: number, minutes: number): CityState {
   });
   return {
     plan, people, players: [], vehicles: [], npcs: new Map(), cells: new Map(), rx: new Float32Array(n), rz: new Float32Array(n), rcell: new Int32Array(n).fill(-1), ract: new Uint8Array(n),
-    emptied: new Set(), parked: new Map(), bayCells, boxes: new Map(), tills: new Map(), news: null, endsAt: minutes * 60, extras: 0, frame: null, paths: 0,
+    emptied: new Set(), parked: new Map(), bayCells, boxes: new Map(), tills: new Map(), races: [], vault: { progress: 0, bellAt: 0, rung: false, shutUntil: 0, crew: new Set() }, peels: [], smokes: [], splashes: [], events: [], eventId: 0, nextEventAt: 75, lastEvent: -1, owners: new Map(), payAt: 60, emptiedAt: new Map(), skipPay: new Set(), news: null, endsAt: minutes * 60, extras: 0, frame: null, paths: 0,
   };
 }
 
+const DOORS = new WeakMap<CityPlan, [number, number][]>();
+/** Every door something can be sent to: the walk point of each lot with a building in the street grid. */
+export function doorsOf(plan: CityPlan): [number, number][] {
+  let doors = DOORS.get(plan);
+  if (!doors) DOORS.set(plan, doors = plan.lots.filter(lot => lot.bx < CITY.n && lot.kind !== 'park' && lot.kind !== 'plot').map(lotWalk));
+  return doors;
+}
 export const cellKey = (x: number, z: number, shift = 4) => (Math.floor(x) >> shift) + ((Math.floor(z) >> shift) << 12);
 export const cityOf = (state: State) => state.city!;
 export const seatOf = (state: State, player: Player) => state.city!.players[player.seat]!;

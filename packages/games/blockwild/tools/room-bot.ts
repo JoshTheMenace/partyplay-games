@@ -10,11 +10,15 @@
  * In Caper City (mode city) each bot walks the streets to an intersection of its own, spread over the whole city, and
  * then paces a block up and down there, so a room of bots loads every district at once (BW_BOTS=stay keeps them on the plaza).
  * Every other bot steps over to the first parked vehicle it comes near, gets in and drives its route instead (BW_BOTS=walk: nobody drives).
+ * The second helping: a driver that comes through a race's start crossing starts or joins the race there; a bot in the lock-up takes
+ * community service; every seventh bot hands the nearest player a coin now and then; a bot spoken to by a character says "not now".
  * The bot's shape is declared here, as far as this hook uses it: the games repository cannot import the platform's types.
  */
-type Private = { ack: number; tp: { n: number; x: number; y: number; z: number }; bag?: { rev: number }; mode: string; dead: boolean; near?: { v?: number[][] }; city?: { ride?: number[] } };
+type Private = { ack: number; tp: { n: number; x: number; y: number; z: number }; bag?: { rev: number }; mode: string; dead: boolean; near?: { v?: number[][]; p?: number[][] }; city?: { ride?: number[]; cell?: number[]; race?: number[]; talk?: number; coins?: number } };
 type Bot = { index: number; snapshot: { privateView: unknown } | null };
-type Me = { tp: number; x: number; y: number; z: number; home: number[]; t: number; bag: number; dig: number; target: number[] | null; leg: number; tried: number; want: number[] | null; rode: boolean; dodge: number };
+type Me = { tp: number; x: number; y: number; z: number; home: number[]; t: number; bag: number; dig: number; target: number[] | null; leg: number; tried: number; want: number[] | null; rode: boolean; dodge: number; acted: number };
+/** Where the four street races start (shared/city/extras.ts `ROUTES`): crossings of the grid, as [kx, kz], in spot order. */
+const RACE_STARTS = [[4, 3], [1, 10], [2, 2], [7, 1]];
 /** Top speeds of the city's vehicle kinds (shared/city/vehicles.ts), blocks a second. */
 const TOPS = [14, 19, 17, 16, 20, 27, 25, 24, 17, 30];
 /** The city's street grid (shared/city/plan.ts): road centres every 64 blocks from 1736. */
@@ -28,7 +32,7 @@ export default {
     const pv = bot.snapshot?.privateView as Private | null | undefined;
     if (!pv) return undefined;
     let me = bots.get(bot);
-    if (!me) bots.set(bot, me = { tp: 0, x: 0, y: 0, z: 0, home: [0, 0, 0], t: 0, bag: 0, dig: 0, target: null, leg: 0, tried: 0, want: null, rode: false, dodge: 0 });
+    if (!me) bots.set(bot, me = { tp: 0, x: 0, y: 0, z: 0, home: [0, 0, 0], t: 0, bag: 0, dig: 0, target: null, leg: 0, tried: 0, want: null, rode: false, dodge: 0, acted: 0 });
     // A teleport a few blocks away is a vehicle boarded or left, or a step the server refused (the route goes on); a far one is a new start.
     if (pv.tp.n !== me.tp) {
       const near = Math.hypot(pv.tp.x - me.x, pv.tp.z - me.z) < 12, rides = !!pv.city?.ride, city = pv.mode === 'city';
@@ -63,6 +67,15 @@ export default {
       else if (me.leg === 2) { me.z = towards(me.z, az, step); me.x = towards(me.x, ax, step / 2); if (me.z === az) me.leg = 3; }
       else { me.z = towards(me.z, Math.max(ROAD(0), Math.min(ROAD(10), end)), step); me.x = towards(me.x, ax, step / 2); }
       if (me.x !== before[0] || me.z !== before[1]) heading = Math.atan2(before[0]! - me.x, before[1]! - me.z);
+      // The second helping, one thing every few seconds at most.
+      if (!cmds.length && me.t - me.acted > 4) {
+        const race = RACE_STARTS.findIndex(([kx, kz]) => Math.hypot(ROAD(kx!) - me.x, ROAD(kz!) - me.z) < 10), other = pv.near?.p?.find(t => Math.hypot(t[1]! - me.x, t[3]! - me.z) > 0.5 && Math.hypot(t[1]! - me.x, t[3]! - me.z) < 7);
+        if (pv.city?.cell) cmds.push({ n: pv.ack + 1, t: 'city', a: 'cell', i: 1 });
+        else if (pv.city?.talk !== undefined) cmds.push({ n: pv.ack + 1, t: 'city', a: 'say', i: 1 });
+        else if (ride && ride[2] === 0 && race >= 0 && !pv.city?.race) cmds.push({ n: pv.ack + 1, t: 'city', a: 'spot', i: race });
+        else if (bot.index % 7 === 3 && other && (pv.city?.coins ?? 0) > 5) cmds.push({ n: pv.ack + 1, t: 'city', a: 'give', i: other[0], j: 1 });
+        if (cmds.length) me.acted = me.t;
+      }
     } else if (creative) {
       // Up out of the trees, then outwards, each bot on its own bearing.
       flags = 8;

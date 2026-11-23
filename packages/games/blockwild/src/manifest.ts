@@ -3,6 +3,6 @@ export const manifest = {
   contractVersion: '1.0', id: 'blockwild', title: 'Blockwild', description: 'Survive, mine, craft and build together in a boundless blocky world, or chase coins and mischief in Caper City.',
   assetBase: '/games/blockwild/', modes: ['shared-display'], players: { min: 1, max: MAX_ROOM_PLAYERS },
   orientation: { controller: 'landscape', personalView: 'landscape' }, timing: 'realtime', input: ['state', 'action'],
-  sessionControls: ['save', 'finish'], snapshotCache: { revisionField: 'revision', fields: ['edits', 'who'], keyedPairsFields: ['edits'] },
+  sessionControls: ['save', 'finish'], snapshotCache: { revisionField: 'revision', fields: ['edits', 'who', 'ledger'], keyedPairsFields: ['edits'] },
   simulation: { stepHz: 20, snapshotHz: 20, maxCatchUpSteps: 4 }, privatePlayerViews: true, supportsSolo: true, prepareTimeoutMs: 90000,
 } as const satisfies GameManifest;

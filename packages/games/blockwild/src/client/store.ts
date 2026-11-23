@@ -32,7 +32,7 @@ export type Target =
   | { kind: 'mob'; id: number; distance: number };
 /** Screens the player can open. 'inventory' uses the 2×2 grid; table/furnace/chest mirror PrivateView.screen. */
 /** 'counter' (a shop counter or a job board the server opened) and 'map' are Caper City's. */
-export type OpenScreen = 'inventory' | 'creative' | 'pause' | 'counter' | 'map' | ScreenKind | null;
+export type OpenScreen = 'inventory' | 'creative' | 'pause' | 'counter' | 'map' | 'passport' | 'talk' | 'cell' | 'stall' | ScreenKind | null;
 export type RenderDistance = 4 | 6 | 8;
 export type ClientSettings = { renderDistance: RenderDistance; sensitivity: number; invertY: boolean; fov: number; muted: boolean; showGoals: boolean; autoJump: boolean };
 

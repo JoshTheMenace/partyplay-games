@@ -10,7 +10,7 @@ import { encodeLedger,
   encodeArrow, encodeFx, encodeItem, encodeMob, encodePlayer, encodeRoster, MOB, MS, nearEvery, PF, q2, rosterEvery, tvEvery,
   type Bag, type FxKind, type JournalEntry, type PrivateView, type PubMob, type PubPlayer, type Screen, type View, type Who, type WireScene,
 } from '../shared/protocol';
-import { cityLedger, cityOutcome, cityPrivate, cityPublic, cityScene, PARKED_EVERY } from './city';
+import { careerOf, cityLedger, cityOutcome, cityPrivate, cityPublic, cityScene, PARKED_EVERY } from './city';
 import { mobState } from './combat';
 import { screenSlots } from './containers';
 import { bossView } from './dragon';
@@ -46,7 +46,7 @@ function flagsOf(player: Player): number {
 /** Flags with the city's two: riding a vehicle (the body is not drawn) and seeing stars. */
 function flagsIn(state: State, player: Player): number {
   const cp = state.city?.players[player.seat];
-  return flagsOf(player) | (cp?.ride ? PF.RIDING : 0) | (cp && state.clock < cp.dizzyUntil ? PF.DIZZY : 0);
+  return flagsOf(player) | (cp?.ride ? PF.RIDING : 0) | (cp && state.clock < cp.dizzyUntil ? PF.DIZZY : 0) | (cp?.gliding ? PF.CHUTE : 0);
 }
 const armorIds = (armor: readonly (Slot | null)[]): PubPlayer['armor'] => [armor[0]?.id ?? 0, armor[1]?.id ?? 0, armor[2]?.id ?? 0, armor[3]?.id ?? 0];
 function playerTuple(state: State, player: Player): number[] {
@@ -58,7 +58,7 @@ function playerTuple(state: State, player: Player): number[] {
   }
   return encodePlayer(player.seat, {
     x: player.x, y: player.y, z: player.z, yaw: player.yaw, pitch: player.pitch, held, swing: player.swing, hurt: player.hurt, health: player.health,
-    flags: flagsIn(state, player), armor: armorIds(player.armor), ...crack ? { mine: crack } : {},
+    flags: flagsIn(state, player), armor: state.city ? [state.city.players[player.seat]?.hat ?? 0, 0, 0, 0] : armorIds(player.armor), ...crack ? { mine: crack } : {},
   });
 }
 
@@ -118,6 +118,16 @@ function whoOf(players: readonly Player[]): Who[] {
   return who;
 }
 
+const NO_LEDGER: number[][] = [];
+/** The final ledger, built once (it is a cached field: the same array until the round is over). */
+const ledgers = new WeakMap<State, number[][]>();
+function ledgerOf(state: State) {
+  let ledger = ledgers.get(state);
+  if (!ledger) ledgers.set(state, ledger = cityLedger(state).map(encodeLedger));
+  return ledger;
+}
+/** A city round that has finished: its results screen needs the ledger and nothing of the streets. */
+const cityOver = (state: State) => !!state.city && state.finished;
 export function publicView(state: State): View {
   const { settings, players } = state, frame = buildFrame(state), recent: number[] = [];
   for (const [index, value] of state.world.recent) recent.push(index, value);
@@ -125,19 +135,21 @@ export function publicView(state: State): View {
     seed: settings.seed, worldId: state.worldId, mode: settings.mode, difficulty: settings.difficulty, time: Math.floor(state.time), day: state.day,
     revision: state.revision, edits: editList(state), recent, er: state.editRev, who: whoOf(players),
     sleeping: players.filter(player => player.sleeping).length, sleepNeed: sleepNeed(activePlayers(state).length), stats: { ...state.stats },
+    ledger: state.city && state.finished ? ledgerOf(state) : NO_LEDGER,
   };
-  if (state.ticks % rosterEvery(players.length) === 0) view.roster = players.map(player => encodeRoster({
+  // The City Ledger is up: nobody is looking at the streets, and the room repeats this snapshot twenty times a second for as long as it is.
+  const over = cityOver(state);
+  if (!over && state.ticks % rosterEvery(players.length) === 0) view.roster = players.map(player => encodeRoster({
     seat: player.seat, x: player.x, y: player.y, z: player.z, health: player.health, held: player.inv[player.slot]?.id ?? 0, flags: flagsIn(state, player), armor: armorPoints(player.armor),
   }));
-  if (state.ticks % tvEvery(players.length) === 0) {
+  if (!over && state.ticks % tvEvery(players.length) === 0) {
     const subject = players[state.focus];
     view.tv = subject ? { ...tvScene(frame, subject.x, subject.z), focus: state.focus } : { p: [], m: [], i: [], a: [], f: [], focus: -1 };
     if (state.city && subject) Object.assign(view.tv, cityScene(state, subject.x, subject.z, state.ticks % PARKED_EVERY < tvEvery(players.length)));
   }
-  if (state.city) {
+  if (state.city && !over) {
     const city = cityPublic(state);
     if (city) view.city = city;
-    if (state.finished) view.ledger = cityLedger(state).map(encodeLedger);
   }
   const boss = bossView(state), victory = victoryView(state);
   // The results screen and the victory celebration both read the journal.
@@ -162,7 +174,8 @@ function screenView(state: State, player: Player): Screen | null {
  * and are the bulk of a private view, so the view carries the bag only until the client's input confirms the revision.
  */
 function bagOf(state: State, player: Player): Bag {
-  const bag = { inv: copySlots(player.inv), cursor: copySlot(player.cursor), grid: copySlots(player.grid), out: copySlot(player.out), screen: screenView(state, player), armor: copySlots(player.armor) };
+  const cp = state.city?.players[player.seat];
+  const bag = { inv: copySlots(player.inv), cursor: copySlot(player.cursor), grid: copySlots(player.grid), out: copySlot(player.out), screen: screenView(state, player), armor: copySlots(player.armor), ...cp ? { career: careerOf(cp) } : {} };
   const text = JSON.stringify(bag);
   if (text !== player.bagText) {
     player.bagText = text;
@@ -179,12 +192,13 @@ export function playerView(state: State, playerId: string): PrivateView {
     dead: player.dead, mode: state.settings.mode,
     keepInventory: state.settings.keepInventory, armorPoints: armorPoints(player.armor), dimension: dimensionAt(player.x, player.z),
   };
-  if ((state.ticks + player.seat) % nearEvery(state.players.length) === 0) {
+  const over = cityOver(state);
+  if (!over && (state.ticks + player.seat) % nearEvery(state.players.length) === 0) {
     view.near = sceneAround(frameOf(state), player.x, player.z, NEAR);
     if (state.city) Object.assign(view.near, cityScene(state, player.x, player.z, player.parkedAsk || (state.ticks + player.seat) % PARKED_EVERY < nearEvery(state.players.length)));
   }
   if (state.city) view.city = cityPrivate(state, player);
-  if (player.bagAck !== bag.rev) view.bag = bag;
+  if (player.bagAck !== bag.rev && !over) view.bag = bag;
   const burning = Math.ceil(player.fire * 20), portal = q2(player.portal);
   if (burning > 0) view.burning = burning;
   if (portal > 0) view.portal = portal;
