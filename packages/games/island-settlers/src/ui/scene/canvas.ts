@@ -128,6 +128,23 @@ const paintRiver: Paint = (ctx, w, h) => {
   ctx.fillStyle = '#bfe4f7'; roundRect(ctx, w * 0.1, h * 0.44, w * 0.45, h * 0.12, h * 0.06); ctx.fill();
 };
 
+/**
+ * Tile top: lighter in the middle, darker toward the rim, with soft speckles. It multiplies the terrain
+ * colour, so every hex gets a little relief without a texture per terrain.
+ */
+const paintTileTop: Paint = (ctx, w) => {
+  const g = ctx.createRadialGradient(w / 2, w / 2, w * 0.08, w / 2, w / 2, w * 0.5);
+  g.addColorStop(0, '#ffffff'); g.addColorStop(0.62, '#f1f1f1'); g.addColorStop(1, '#cfcfcf');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, w);
+  let seed = 7;
+  const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 90; i++) {
+    const light = random() < 0.5, r = (0.012 + random() * 0.03) * w;
+    ctx.fillStyle = light ? 'rgb(255 255 255 / 0.12)' : 'rgb(0 0 0 / 0.035)';
+    ctx.beginPath(); ctx.ellipse(random() * w, random() * w, r * 1.6, r, random() * Math.PI, 0, Math.PI * 2); ctx.fill();
+  }
+};
+
 const paintOcean: Paint = (ctx, w) => {
   const g = ctx.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2);
   g.addColorStop(0, '#1d6b9e'); g.addColorStop(0.55, '#155a88'); g.addColorStop(1, '#0b2d4f');
@@ -159,6 +176,13 @@ export function textures(scope: ResourceScope) {
     dot: () => make('dot', 64, 64, paintSpot(false)),
     dash: () => make('dash', 128, 32, paintSpot(true)),
     ocean: () => make('ocean', 512, 512, paintOcean),
+    /** Extruded hex caps carry their plan coordinates as UVs (−1…1), so the texture is centred on the tile. */
+    tileTop: () => {
+      const texture = make('tileTop', 256, 256, paintTileTop);
+      texture.repeat.set(0.5, 0.5);
+      texture.offset.set(0.5, 0.5);
+      return texture;
+    },
     fishSign: (numbers: number[]) => make(`fish${numbers.join(',')}`, 224, 256, paintFishSign(numbers), true),
     river: () => make('river', 64, 32, paintRiver),
   };

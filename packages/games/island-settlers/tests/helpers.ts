@@ -4,7 +4,7 @@ import { assertSerializable } from '../../../party-contract/src/serializable';
 import {
   GOODS, SEAT_COLORS, type Action, type CardPicks, type Cards, type Good, type Picks, type PromptKind, type Settings,
 } from '../src/model';
-import { rules } from '../src/server';
+import { island as rules } from '../src/server';
 import { commit } from '../src/engine/actions';
 import { dueAt } from '../src/engine/auto';
 import { transfer } from '../src/engine/cards';

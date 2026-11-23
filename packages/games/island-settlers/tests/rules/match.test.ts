@@ -4,7 +4,7 @@ import {
   COSTS, FINALE_MS, GOODS, RESOURCES, type Action, type CardPicks, type Cards, type Command, type Field,
   type Picks, type PrivateView, type Settings,
 } from '../../src/model';
-import { rules } from '../../src/server';
+import { island as rules } from '../../src/server';
 import type { State } from '../../src/engine/state';
 import { act, game, inventory, serializable, tick, view } from '../helpers';
 

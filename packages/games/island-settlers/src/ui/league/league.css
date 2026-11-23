@@ -1,0 +1,130 @@
+/* Archipelago: TV panel and plate (sizes in u), the phone strip and the room results. */
+.island-settlers-league {
+  flex: none; padding: calc(12 * var(--u)) calc(14 * var(--u)); display: grid; gap: calc(6 * var(--u));
+  font-size: max(12px, calc(18 * var(--u)));
+}
+.island-settlers-league header { display: grid; gap: calc(2 * var(--u)); }
+.island-settlers-league h3 { margin: 0; font: 400 calc(26 * var(--u)) / 1 var(--font-display); color: var(--kp-sun); }
+.island-settlers-league header p { color: var(--is-dim); font-weight: 800; font-size: max(12px, calc(17 * var(--u))); }
+.island-settlers-league h4 {
+  margin: calc(4 * var(--u)) 0 0; font: 400 calc(20 * var(--u)) / 1 var(--font-display);
+  display: flex; align-items: baseline; justify-content: space-between;
+}
+.island-settlers-league h4 small { font: 800 max(11px, calc(15 * var(--u))) var(--font-body); color: var(--is-dim); }
+.island-settlers-league-islands, .island-settlers-league-leaders { display: grid; gap: 0; }
+.island-settlers-league-island {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; align-content: center;
+  column-gap: calc(8 * var(--u)); padding: 0 calc(8 * var(--u)); box-sizing: border-box;
+  border-radius: calc(10 * var(--u)); border: calc(2 * var(--u)) solid transparent;
+}
+.island-settlers-league-island[data-dense] { grid-template-rows: auto; }
+.island-settlers-league-island b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.15; }
+.island-settlers-league-island small {
+  grid-column: 1; color: var(--is-dim); font-size: max(11px, calc(14 * var(--u))); line-height: 1.1;
+}
+.island-settlers-league-island[data-shown] { border-color: var(--kp-sun); background: rgb(255 210 74 / 0.14); }
+.island-settlers-league-island[data-phase='done'] b { color: var(--kp-lime); }
+.island-settlers-league-pips { grid-row: 1 / -1; grid-column: 2; align-self: center; display: flex; gap: calc(3 * var(--u)); }
+.island-settlers-league-pips i {
+  min-width: calc(24 * var(--u)); height: calc(24 * var(--u)); box-sizing: border-box; display: grid; place-items: center;
+  border-radius: calc(6 * var(--u)); background: var(--pip); color: var(--kp-ink);
+  font: 400 max(11px, calc(17 * var(--u))) / 1 var(--font-display);
+}
+.island-settlers-league-island[data-dense] .island-settlers-league-pips i { height: calc(20 * var(--u)); min-width: calc(22 * var(--u)); }
+.island-settlers-league-pips i[data-off] { opacity: 0.4; }
+.island-settlers-league-leaders li {
+  height: calc(34 * var(--u)); display: flex; align-items: center; gap: calc(6 * var(--u)); min-width: 0;
+}
+.island-settlers-league-leaders li > span { width: 1.4em; color: var(--is-dim); text-align: right; }
+.island-settlers-league-leaders b { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.island-settlers-league-leaders small { color: var(--is-dim); font-size: max(11px, calc(14 * var(--u))); }
+.island-settlers-league-leaders em { font-style: normal; font-size: calc(24 * var(--u)); color: var(--kp-sun); min-width: 1.2em; text-align: right; }
+.island-settlers-league-leaders li[data-shown] b { color: var(--kp-sun); }
+
+.island-settlers-plate { pointer-events: none; display: flex; justify-content: flex-start; }
+.island-settlers-plate p {
+  margin: calc(4 * var(--u)) 0 0; padding: calc(6 * var(--u)) calc(20 * var(--u)); display: grid; justify-items: start;
+  border-radius: calc(16 * var(--u)); background: var(--kp-cream); color: var(--kp-ink);
+  border: calc(3 * var(--u)) solid var(--kp-ink); box-shadow: 0 calc(5 * var(--u)) 0 rgb(5 7 26 / 0.5);
+  animation: island-settlers-plate-in 700ms cubic-bezier(.2, 1.3, .4, 1) both;
+}
+.island-settlers-plate small { font: 800 max(11px, calc(14 * var(--u))) / 1.1 var(--font-body); letter-spacing: 0.08em; text-transform: uppercase; }
+.island-settlers-plate b { font: 400 calc(30 * var(--u)) / 1.05 var(--font-display); }
+.island-settlers-cut {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle at 50% 55%, #2b86b8, #0b2d4f);
+  animation: island-settlers-cut 620ms ease-out both;
+}
+@keyframes island-settlers-cut { from { opacity: 1; } 35% { opacity: 1; } to { opacity: 0; } }
+@keyframes island-settlers-plate-in { from { opacity: 0; translate: 0 calc(-40 * var(--u)); scale: 0.8; } to { opacity: 1; translate: 0 0; scale: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .island-settlers-plate p, .island-settlers-cut { animation: none; }
+}
+
+/* Phone strip */
+.island-settlers-league-strip {
+  margin: 0 0 .35rem; padding: .3rem .7rem; display: flex; align-items: center; gap: .6rem; min-height: 32px;
+  border-radius: 999px; background: rgb(255 246 229 / 0.1); font-size: 14px; font-weight: 800; white-space: nowrap;
+}
+.island-settlers-league-strip b { color: var(--kp-sun); overflow: hidden; text-overflow: ellipsis; }
+.island-settlers-league-strip span { color: var(--is-dim); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.island-settlers-league-strip em { font-style: normal; }
+.island-settlers-league-strip[data-horn] { background: var(--kp-coral); color: var(--kp-ink); }
+.island-settlers-league-strip[data-horn] :is(b, span) { color: var(--kp-ink); }
+
+/* The room on a waiting phone */
+.island-settlers-room { padding: .55rem .7rem; border-radius: 14px; background: rgb(255 246 229 / 0.07); border: 2px solid var(--is-panel-border); }
+.island-settlers-room h3 { margin: 0 0 .3rem; font: 400 18px/1.1 var(--font-display); display: flex; justify-content: space-between; align-items: baseline; }
+.island-settlers-room h3 small { font: 800 13px var(--font-body); color: var(--is-dim); }
+.island-settlers-room ol { margin: 0; padding: 0; list-style: none; display: grid; }
+.island-settlers-room li { display: flex; align-items: center; gap: .45rem; min-height: 30px; font-size: 15px; min-width: 0; }
+.island-settlers-room li > span { width: 1.6em; text-align: right; color: var(--is-dim); }
+.island-settlers-room b { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.island-settlers-room small { color: var(--is-dim); font-size: 12px; white-space: nowrap; }
+.island-settlers-room em { font-style: normal; color: var(--kp-sun); font-size: 18px; min-width: 1.3em; text-align: right; }
+.island-settlers-room li[data-you] { color: var(--kp-sun); }
+
+/* Room results */
+.island-settlers-league-results { display: grid; gap: clamp(10px, 1.6vh, 18px); }
+.island-settlers-league-results .island-settlers-results-winners span { display: grid; justify-items: start; min-width: 0; }
+/* The title is tight (line-height .86) and filtered, so it paints over what follows: clear its descenders and shadow. */
+.island-settlers-league-results .island-settlers-results-winners small {
+  position: relative; margin-top: calc(var(--hero-name) * 0.24);
+  font: 800 clamp(13px, 1.9vh, 18px) / 1.2 var(--font-body); color: var(--is-dim); letter-spacing: 0.04em;
+}
+.island-settlers-league-you {
+  margin: 0; padding: .6rem .9rem; display: flex; align-items: center; gap: .8rem; border-radius: 1rem;
+  background: color-mix(in srgb, var(--seat) 22%, transparent); border: 2px solid var(--seat); font-weight: 800;
+}
+.island-settlers-league-you b { font-size: 1.8rem; color: var(--kp-sun); }
+.island-settlers-league-results[data-seats='many'] { --row: clamp(24px, 3.4vh, 34px); --fs: clamp(13px, 1.6vh, 17px); }
+.island-settlers-league-table {
+  margin: 0; padding: 0; list-style: none; columns: var(--columns, 4) 230px; column-gap: 22px;
+}
+.island-settlers-league-table li {
+  display: flex; align-items: center; gap: .45em; min-width: 0; height: var(--row); padding: 0 .45em;
+  border-top: 1px solid var(--line); break-inside: avoid;
+}
+.island-settlers-league-table li > span { width: 2.6ch; color: var(--is-dim); flex: none; }
+/* A name is what a player looks for: when a row is tight the island's name gives way first. */
+.island-settlers-league-table b { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.island-settlers-league-table b i { font-style: normal; font-size: .7em; color: var(--is-dim); }
+.island-settlers-league-table small {
+  flex: 0 100000 auto; min-width: 3ch; overflow: hidden; text-overflow: ellipsis;
+  color: var(--is-dim); font-size: .78em; white-space: nowrap;
+}
+.island-settlers-league-table em { font-style: normal; font-size: 1.2em; color: var(--kp-sun); min-width: 1.4em; text-align: right; }
+.island-settlers-league-table li[data-winner] { background: color-mix(in srgb, var(--seat) 26%, transparent); box-shadow: inset 5px 0 var(--seat); }
+.island-settlers-league-table li[data-you] { outline: 2px solid var(--kp-sun); outline-offset: -2px; border-radius: 6px; }
+.island-settlers-league-extras { display: grid; gap: 14px 24px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
+.island-settlers-league-winners, .island-settlers-league-awards { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px 16px; }
+.island-settlers-league-winners { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.island-settlers-league-winners li { display: flex; align-items: baseline; gap: .5em; min-width: 0; }
+.island-settlers-league-winners small { color: var(--is-dim); width: 7.5em; flex: none; }
+.island-settlers-league-winners b { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 0 .6em; }
+.island-settlers-league-winners b span { color: var(--seat); }
+.island-settlers-league-winners em { font-style: normal; color: var(--kp-sun); }
+.island-settlers-league-awards { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.island-settlers-league-awards li { padding: .5rem .7rem; border-radius: .8rem; border: 1px solid var(--line); background: rgb(5 7 26 / 0.35); display: grid; gap: .1rem; }
+.island-settlers-league-awards b { color: var(--kp-sun); font-family: var(--font-display); font-weight: 400; }
+.island-settlers-league-awards small { color: var(--is-dim); }

@@ -21,10 +21,10 @@ const TONES = {
   cream: { fill: '#fff6e5', pip: '#05071a' }, red: { fill: '#d8352e', pip: '#fff6e5' },
   yellow: { fill: '#ffd23a', pip: '#05071a' },
 } as const;
-type Tone = keyof typeof TONES;
+export type Tone = keyof typeof TONES;
 const TUMBLE_SWAP = 60, SQUASH = 120, POP = 260;
 
-function Face({ value, tone }: { value: number; tone: Tone }) {
+export function Face({ value, tone }: { value: number; tone: Tone }) {
   const { fill, pip } = TONES[tone];
   return <svg viewBox="0 0 24 24" aria-hidden="true">
     <rect x="1.2" y="1.2" width="21.6" height="21.6" rx="5" fill={fill} stroke="#05071a" strokeWidth="1.4"/>
@@ -33,7 +33,7 @@ function Face({ value, tone }: { value: number; tone: Tone }) {
 }
 
 /** C&K event die: a black ship or a gate in the track colour. */
-function EventFace({ face }: { face: EventDie }) {
+export function EventFace({ face }: { face: EventDie }) {
   const fill = face === 'ship' ? '#1b1f3b' : TRACK_META[face].color;
   return <svg viewBox="0 0 24 24" aria-hidden="true">
     <rect x="1.2" y="1.2" width="21.6" height="21.6" rx="5" fill={fill} stroke="#05071a" strokeWidth="1.4"/>

@@ -3,7 +3,7 @@
  * Every rejected combination carries a one-line reason (ENGINE §14.4); nothing is silently dropped.
  */
 import {
-  CPU_LEVELS, DEFAULT_SETTINGS, MAPS, MISSIONS, MODES, MODULE_IDS, ROUND_SECONDS, SCENARIOS,
+  CPU_LEVELS, DEFAULT_SETTINGS, ISLANDS_MODES, MAPS, MISSIONS, MODES, MODULE_IDS, ROUND_SECONDS, SCENARIOS,
   SEAFARERS_SCENARIOS, TABLE_SIZE, TARGET_RANGE, TIMER_PRESETS, VARIANTS,
   type ModuleId, type Scenario, type Settings, type Variant,
 } from './model';
@@ -91,7 +91,7 @@ function list<T extends string>(value: unknown, allowed: readonly T[], what: str
 export function validateSettings(raw: unknown): Settings {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) fail('Settings must be an object.');
   const r = { ...DEFAULT_SETTINGS, ...(raw as Partial<Settings>) };
-  const flags = typeof r.citiesKnights === 'boolean' && typeof r.balancedDice === 'boolean';
+  const flags = [r.citiesKnights, r.balancedDice, r.quickStart].every(flag => typeof flag === 'boolean');
   if (!flags) fail('Choose valid game options.');
   if (!Number.isInteger(r.tableSize) || r.tableSize < TABLE_SIZE.min || r.tableSize > TABLE_SIZE.max) {
     fail(`Choose a table size from ${TABLE_SIZE.min} to ${TABLE_SIZE.max}.`);
@@ -110,6 +110,8 @@ export function validateSettings(raw: unknown): Settings {
     tableSize: r.tableSize,
     cpuLevel: oneOf(r.cpuLevel, CPU_LEVELS, 'CPU level'),
     balancedDice: r.balancedDice,
+    islands: oneOf(r.islands, ISLANDS_MODES, 'island format'),
+    quickStart: r.quickStart,
   };
   const reasons = restrictions(s);
   for (const key of [...s.scenarios, ...s.variants]) if (reasons[key]) fail(reasons[key]);

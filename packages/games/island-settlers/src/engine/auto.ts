@@ -161,7 +161,7 @@ export function dueAt(s: State): number {
     ...steps.map(([, x]) => x.deadline), ...Object.values(s.prompts).map(p => p.deadline),
     ...Object.values(s.offers).map(o => o.expires),
   ].filter((x): x is number => x !== null);
-  if (allReady(s)) times.push(t.openedAt + CONNECT_MIN_OPEN_SECONDS * 1000);
+  if (allReady(s) && !s.league) times.push(t.openedAt + CONNECT_MIN_OPEN_SECONDS * 1000);
   return times.length ? Math.min(...times) : Infinity;
 }
 
@@ -177,8 +177,10 @@ export function expireDue(s: State) {
   }
   for (const [seat, timer] of Object.entries(s.timers)) {
     const owes = due(timer.deadline) && s.timers[seat] === timer && !waits(s, seat);
-    if (owes) autoStep(s, seat, reasonFor(s, seat));
+    // An archipelago window closing on a connected seat is the round ending, not a missed turn.
+    const quiet = s.league && s.turn.stage === 'round' && s.seats[seat].connected;
+    if (owes) autoStep(s, seat, quiet ? null : reasonFor(s, seat));
   }
   expireOffers(s);
-  if (windowClosable(s, CONNECT_MIN_OPEN_SECONDS * 1000)) queueEffect(s, { type: 'end-round' });
+  if (!s.league && windowClosable(s, CONNECT_MIN_OPEN_SECONDS * 1000)) queueEffect(s, { type: 'end-round' });
 }

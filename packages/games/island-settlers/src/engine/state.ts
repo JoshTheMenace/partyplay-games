@@ -72,6 +72,10 @@ export type TurnState = Turn & {
   partnerDone: boolean;
   /** Opportunities started so far (results). */
   opportunities: number;
+  /** Archipelago: this island's round is over and it waits for the league's verdict. */
+  closed: boolean;
+  /** Connect with five or more seats: when the horn sounded this round (most seats were done), else null. */
+  hornAt: number | null;
 };
 
 /** A step deadline owed by one seat. base: the preset deadline; deadline: after disconnect grace. */
@@ -142,6 +146,10 @@ export type State = {
   stats: Stats;
   results: Results | null;
   intent: { seat: SeatId; piece: IntentPiece } | null;
+  /** Archipelago: one of several islands. The league rolls for all of them and ends their rounds together. */
+  league: boolean;
+  /** Dice the league rolled for this island's next roll. */
+  nextDice: [number, number] | null;
   startedAt: number;
   /** Module-owned state, typed by each module. */
   ext: Partial<Record<ModuleId, unknown>>;

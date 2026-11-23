@@ -1,23 +1,29 @@
 /** Glanceable screens (EXPERIENCE §4.2): waiting, the roll, and the main-turn "Now" panel. */
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { ArcadeButton, Modal } from '../../../../../party-ui/src/index';
 import { EMOTES, type Emote } from '../../model';
 import { CardChips, Die, Icon } from '../shared/icons';
 import { EMOTE_LABEL } from '../shared/labels';
 import { useCtl } from './context';
-import { hintChips, payout, PURCHASE_LABEL, usable } from './logic';
+import { LeagueContext, RoomBoard } from '../league/phone';
+import { hintChips, payout, PURCHASE_LABEL, roundRolls, usable } from './logic';
 import { MapView } from './MapView';
 import { BuyDevSheet } from './Build';
 
+/** The last roll and what it paid you. An archipelago round has several rolls: each gets its own line. */
 export function PayoutCard() {
-  const { pub, me } = useCtl();
-  const line = payout(pub, me.seat), roll = pub.lastRoll;
-  if (!line || !roll) return null;
-  return <section className="island-settlers-payout" data-tone={line.tone} aria-label="Last roll">
-    <span className="island-settlers-dice">{roll.dice.map((d, i) => <Die key={i} value={d} size={34}/>)}</span>
-    <p>{line.text}</p>
-    {line.tone === 'gain' && <CardChips cards={line.cards}/>}
-  </section>;
+  const { pub, me } = useCtl(), league = useContext(LeagueContext);
+  const rolls = league ? roundRolls(pub) : [], shown = rolls.length > 1 ? rolls : pub.lastRoll ? [pub.lastRoll] : [];
+  return <>{shown.map(roll => {
+    const line = payout(pub, me.seat, roll)!;
+    // Keyed by the roll, so each new one tumbles in.
+    return <section key={roll.id} className="island-settlers-payout" data-tone={line.tone} aria-label="Roll"
+      data-compact={shown.length > 1 || undefined}>
+      <span className="island-settlers-dice">{roll.dice.map((d, i) => <Die key={i} value={d} size={shown.length > 1 ? 26 : 34}/>)}</span>
+      <p>{line.text}</p>
+      {line.tone === 'gain' && <CardChips cards={line.cards}/>}
+    </section>;
+  })}</>;
 }
 
 function Log() {
@@ -67,8 +73,10 @@ function Hints() {
 }
 
 export function Waiting() {
+  const { me } = useCtl();
   return <div className="island-settlers-screen">
     <PayoutCard/>
+    <RoomBoard seat={me.seat}/>
     <MapView mini/>
     <Hints/>
     <SkipPaired/>

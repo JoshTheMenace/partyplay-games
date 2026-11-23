@@ -43,8 +43,9 @@ function run(s: State, e: Effect) {
 }
 
 function rollEffect(s: State, seat: string | null) {
-  const { dice, deck } = rollDice(random(s, 'dice'), s.diceDeck, s.lastTotal);
-  s.diceDeck = deck;
+  const { dice, deck } = s.nextDice ? { dice: s.nextDice, deck: s.diceDeck }
+    : rollDice(random(s, 'dice'), s.diceDeck, s.lastTotal);
+  Object.assign(s, { diceDeck: deck, nextDice: null });
   const roll: RollDraft = {
     seat, dice, total: dice[0] + dice[1], eventDie: null, grants: [], blocked: [], shortages: [], gold: {},
   };
@@ -76,7 +77,7 @@ function publish(s: State, roll: RollDraft) {
     by.set(g.seat, cards);
   }
   const paid = [...by].map(([id, cards]) => `${seatName(s, id)} +${cardsText(cards)}`).join(', ');
-  const who = roll.seat ? `${seatName(s, roll.seat)} rolled` : 'Rolled';
+  const who = roll.seat && !s.league ? `${seatName(s, roll.seat)} rolled` : 'Rolled';
   const text = `${who} ${roll.total}${paid ? `: ${paid}` : ''}`;
   const { gold: _gold, ...fields } = roll;
   const event = emit(s, { kind: 'roll', ...fields, text });

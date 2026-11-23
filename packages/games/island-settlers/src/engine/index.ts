@@ -4,13 +4,14 @@ import { RESOURCES, SEAT_COLORS, TABLE_SIZE, type Good, type SeatId, type Settin
 import { PERSONAS } from '../cpu/personas';
 import { modulesFor } from '../settings';
 import { commit } from './actions';
-import { dueAt, expireDue, wakeCpus } from './auto';
+import { autoStep, dueAt, expireDue, wakeCpus } from './auto';
 import { makeBoard } from './board/index';
 import { emptyHand } from './cards';
 import { setConnected } from './clock';
 import { devDeck } from './dev';
+import { advance } from './effects';
 import { emit } from './events';
-import { beginSetupStep, CPU_BUDGET, makeSetupPlan } from './flow';
+import { beginSetupStep, CPU_BUDGET, makeSetupPlan, soundHorn } from './flow';
 import { activeModules } from './modules/registry';
 import { need } from './need';
 import { buildProfile } from './profile';
@@ -35,7 +36,7 @@ function newSeat(id: SeatId, name: string, seat: number, cpu: Seat['cpu']): Seat
 }
 
 /** Humans keep their room colour when free; CPUs fill up to tableSize with the unused palette slots. */
-function seatTable(ctx: RoundContext, settings: Settings): Seat[] {
+function seatTable(ctx: RoundContext, settings: Settings, island: number | null): Seat[] {
   const used = new Set<number>(), free = () => SEAT_COLORS.findIndex((_, i) => !used.has(i));
   const take = (i: number) => { used.add(i); return i; };
   const seats = ctx.players.map(p => {
@@ -44,7 +45,9 @@ function seatTable(ctx: RoundContext, settings: Settings): Seat[] {
   });
   const size = Math.max(settings.tableSize, seats.length, TABLE_SIZE.min);
   for (let i = 1; seats.length < size; i++) {
-    const id = `cpu-${i}`, persona = PERSONAS[(i - 1) % PERSONAS.length];
+    // Archipelago: ids are unique across the room and neighbouring islands get different personas.
+    const id = island === null ? `cpu-${i}` : `cpu-${island + 1}-${i}`;
+    const persona = PERSONAS[(i - 1 + 3 * (island ?? 0)) % PERSONAS.length];
     if (seats.some(x => x.id === id)) continue;
     const cpu = {
       level: settings.cpuLevel, persona: persona.id, label: persona.label,
@@ -55,10 +58,11 @@ function seatTable(ctx: RoundContext, settings: Settings): Seat[] {
   return seats;
 }
 
-export function createGame(ctx: RoundContext, settings: Settings): State {
+/** `island`: its index when it is one island of an archipelago; the league rolls for it and ends its rounds (flow.ts). */
+export function createGame(ctx: RoundContext, settings: Settings, island: number | null = null): State {
   need(ctx.players.length >= 1 && ctx.players.length <= TABLE_SIZE.max, 'Island Settlers needs 1–10 players.');
   const modules = modulesFor(settings), mods = activeModules(modules), profile = buildProfile(settings, mods);
-  const table = seatTable(ctx, settings), n = table.length;
+  const table = seatTable(ctx, settings, island), n = table.length;
   const decorators = mods.flatMap(m => (m.board?.decorate ? [{ id: m.id, decorate: m.board.decorate }] : []));
   const made = makeBoard({ seatCount: n, settings, random: generator(ctx.seed, 'board'), decorators });
   const s: State = {
@@ -74,10 +78,11 @@ export function createGame(ctx: RoundContext, settings: Settings): State {
     turn: {
       id: 0, stage: 'setup', round: 0, active: null, partner: null, next: null, setup: null,
       setupPlan: [], setupIndex: 0, anchor: null, captain: 0, openedAt: ctx.nowMs,
-      activeDone: false, partnerDone: false, opportunities: 0,
+      activeDone: false, partnerDone: false, opportunities: 0, closed: false, hornAt: null,
     },
     timers: {}, queue: [], prompts: {}, offers: {}, awards: {}, events: [], lastRoll: null,
-    stats: emptyStats(table.map(x => x.id)), results: null, intent: null, startedAt: ctx.nowMs, ext: {},
+    stats: emptyStats(table.map(x => x.id)), results: null, intent: null, league: island !== null, nextDice: null,
+    startedAt: ctx.nowMs, ext: {},
   };
   s.order = shuffle(table.map(x => x.id), random(s, 'cards'));
   const deck = mods.find(m => m.devDeck)?.devDeck?.(n) ?? devDeck(n);
@@ -88,6 +93,8 @@ export function createGame(ctx: RoundContext, settings: Settings): State {
   const text = 'Place starting pieces; round 2 goes in reverse order';
   emit(s, { kind: 'turn', seat: null, stage: 'setup', round: 0, text });
   beginSetupStep(s);
+  // Quick start: every starting piece is placed at once, in the usual order, on the best open spots.
+  while (settings.quickStart && s.turn.stage === 'setup') { autoStep(s, s.turn.active!, null); advance(s); }
   wakeCpus(s);
   return s;
 }
@@ -115,7 +122,7 @@ export function presence(s: State, id: SeatId, connected: boolean, now: number) 
   if (!seat || seat.cpu || seat.connected === connected || s.turn.stage === 'ended') return;
   commit(s, now, next => {
     setConnected(next, id, connected);
-    if (!connected) closeOffers(next, id, 'withdrawn');
+    if (!connected) { closeOffers(next, id, 'withdrawn'); soundHorn(next); }
     const text = `${seat.name} ${connected ? 'reconnected' : 'disconnected'}`;
     emit(next, { kind: 'presence', seat: id, connected, text });
   });

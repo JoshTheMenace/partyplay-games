@@ -4,7 +4,7 @@ import { GRACE_SECONDS, TIMERS, type PromptKind, type TimerPreset } from '../../
 import { dueAt } from '../../src/engine/auto';
 import { openPrompt } from '../../src/engine/prompts';
 import type { State } from '../../src/engine/state';
-import { rules } from '../../src/server';
+import { island as rules } from '../../src/server';
 import { act, edit, fastForward, game, grant, pastSetup, pub, rig, tick } from '../helpers';
 
 const lastAuto = (s: State) => [...s.events].reverse().find(e => e.kind === 'auto');

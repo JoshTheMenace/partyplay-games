@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { FINALE_MS, SEAT_COLORS } from '../../src/model';
 import { finish, partnerOf, roundLimit } from '../../src/engine/flow';
 import { openPrompt } from '../../src/engine/prompts';
-import { rules } from '../../src/server';
+import { island as rules } from '../../src/server';
 import { act, edit, fastForward, game, grant, pastSetup, pub, rig, serializable, tick, unchanged, view } from '../helpers';
 
 test('stale and duplicate turn ids are rejected; prompts do not change turn.id', () => {

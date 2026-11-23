@@ -14,7 +14,8 @@ import { bridge } from '../../shared/bridge';
 import { regions, regionStyle, unit } from '../../shared/layout';
 import { freshEvents, useReducedMotion } from '../../shared/timeline';
 import { DiceChip } from './Dice';
-import { FlipCards } from './Finale';
+import { FlipCards, WinnerCard } from './Finale';
+import { DiceThrow, HornBanner } from './Throw';
 import { Flights, type Locate } from './Flights';
 import { GainChips } from './Gains';
 import { ProductionStrip } from './Strip';
@@ -106,6 +107,9 @@ export function Theatre({ publicView: pub, serverNowMs, host }: TheatreProps) {
       style={regionStyle(area.strip)}><ProductionStrip pub={pub} reduced={reduced}/></div>}
     <GainChips pub={pub} beats={beats} now={now} at={at} reduced={reduced}/>
     <FlipCards pub={pub} now={now} at={at} reduced={reduced}/>
+    <WinnerCard pub={pub} now={now} reduced={reduced} u={u} board={area.board!}/>
     <Flights beats={beats} now={now} at={at} reduced={reduced}/>
+    <DiceThrow pub={pub} beats={beats} now={now} reduced={reduced} u={u} board={area.board!} chip={area.dice!}/>
+    <HornBanner beats={beats} now={now} reduced={reduced} u={u} board={area.board!}/>
   </div>;
 }

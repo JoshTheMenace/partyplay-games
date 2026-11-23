@@ -57,7 +57,7 @@ function headline(s: State): Now {
   const t = s.turn, a = t.active!, partner = t.partner, who = (id: SeatId | null) => seatName(s, id);
   const say = (seats: SeatId[], title: string, detail = ''): Now => ({ seats, title, detail });
   if (s.results) {
-    const w = s.results.winners, title = `${names(s, w)} ${plural(w.length, 'wins', 'win')}!`;
+    const w = s.results.winners, title = w.length ? `${names(s, w)} ${plural(w.length, 'wins', 'win')}!` : 'Game over';
     return say(w, title, t.stage === 'finale' ? 'Revealing hidden points' : 'Final scores');
   }
   const table = Object.values(s.prompts).filter(p => p.scope === 'table');
@@ -81,6 +81,7 @@ function headline(s: State): Now {
       return say([a], `${who(a)} places a ${piece}`, detail);
     }
     case 'roll': {
+      if (s.league) return say([], `Round ${t.round}`, 'One roll for every island');
       const title = s.settings.mode === 'connect' ? `Round ${t.round}: ${who(a)} rolls` : `${who(a)} rolls`;
       return say([a], title, partner ? `${who(partner)} builds next` : '');
     }
@@ -92,8 +93,10 @@ function headline(s: State): Now {
     }
     case 'paired': return say([partner!], `${who(partner)}'s build turn`, 'Build and trade with the bank only');
     case 'round': {
+      if (t.closed) return say([], `Round ${t.round} is in`, 'Waiting for the other islands');
       const waiting = s.order.filter(id => !s.seats[id].ready), done = s.order.length - waiting.length;
-      return say(waiting, `Round ${t.round}: everyone plays`, `${done} of ${s.order.length} done`);
+      const horn = t.hornAt === null ? '' : ' · the horn has sounded';
+      return say(waiting, `Round ${t.round}: everyone plays`, `${done} of ${s.order.length} done${horn}`);
     }
     default: return say([], 'Game over');
   }

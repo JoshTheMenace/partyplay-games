@@ -2,6 +2,8 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { ResultsViewProps } from '../../../../../party-ui/src/index';
 import type { PublicView } from '../../model';
+import { islandOf, type RoomView } from '../../wire';
+import { LeagueResults } from '../league/results';
 import { hasDevCards } from '../shared/labels';
 import { DiceHistogram, GoodsLegend } from './charts';
 import { buildColumns, buildRows } from './data';
@@ -9,6 +11,7 @@ import { Hero } from './Hero';
 import { Awards, GainedList, StatsTable } from './SeatStats';
 import { Standings, YouCard } from './Standings';
 import './results.css';
+import '../league/league.css';
 
 /** wide: two columns (≥ 1100 px); stacked: one column; narrow: phone portrait (< 560 px). */
 function useMode() {
@@ -26,7 +29,14 @@ function useMode() {
 const Section = ({ title, children }: { title: string; children: ReactNode }) =>
   <section className="island-settlers-results-section"><h2>{title}</h2>{children}</section>;
 
-export function ResultsView({ outcome, publicView: pub, playerId }: ResultsViewProps<PublicView>) {
+/** One island: its full results. An archipelago: the room's standings, champions and awards. */
+export function ResultsView(props: ResultsViewProps<RoomView>) {
+  const league = props.publicView.league;
+  if (league.shared) return <LeagueResults league={league} outcome={props.outcome} playerId={props.playerId}/>;
+  return <IslandResults {...props} publicView={islandOf(league, league.island)}/>;
+}
+
+function IslandResults({ outcome, publicView: pub, playerId }: ResultsViewProps<PublicView>) {
   const [ref, mode, width] = useMode();
   const rows = buildRows(pub, outcome, playerId), columns = buildColumns(rows), stats = pub.results?.stats;
   const wide = mode === 'wide';

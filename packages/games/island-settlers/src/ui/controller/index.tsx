@@ -7,6 +7,8 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import type { Action } from '../../model';
 import { BoardMap } from '../map/index';
 import { TradePanel } from '../trade/index';
+import { featuredIsland, islandProps, useSeat, type RoomProps } from '../league/adapt';
+import { LeagueContext, LeagueStrip } from '../league/phone';
 import { useSfx } from '../sfx/index';
 import { ActionBar } from './ActionBar';
 import { BuildMenu } from './Build';
@@ -24,6 +26,7 @@ import { NowPanel, Roll, Waiting } from './Overview';
 import { MoveShip, Place } from './Place';
 import { Robber } from './Robber';
 import './controller.css';
+import '../league/league.css';
 import './screens.css';
 
 export { ActionBar } from './ActionBar';
@@ -113,6 +116,7 @@ function Frame({ ctl }: { ctl: ReturnType<typeof useController> }) {
           <BoardMap pub={ctl.pub} seat={ctl.me.seat} serverNowMs={ctl.now} className="island-settlers-board"/>
         </aside>}
         <div className="island-settlers-ctl-main" ref={main}>
+          <LeagueStrip seat={ctl.me.seat} now={ctl.now}/>
           <Header/>
           <Readiness/>
           <Reconnect/>
@@ -130,13 +134,19 @@ function Seated(props: SeatedProps) {
   return <Frame ctl={useController(props)}/>;
 }
 
-export function ControllerView(props: Props) {
-  if (!props.privateView) {
+/** A phone with no seat in this round (it joined late), or one whose views have not arrived yet. */
+export function ControllerView(props: RoomProps) {
+  const seat = useSeat(props), room = props.publicView;
+  if (!seat) {
+    const now = featuredIsland(room).now;
     return <div className="island-settlers-ctl" data-spectator>
       <header className="island-settlers-head"><div className="island-settlers-head-text">
-        <h2>{props.publicView.now.title}</h2><p>{props.publicView.now.detail || 'Watching this round'}</p>
+        <h2>{props.privateView ? 'Finding your island' : now.title}</h2>
+        <p>{props.privateView ? 'One moment' : now.detail || 'Watching this round'}</p>
       </div></header>
     </div>;
   }
-  return <Seated {...props} privateView={props.privateView}/>;
+  return <LeagueContext.Provider value={room.league.shared ? { league: room.league, home: seat.home } : null}>
+    <Seated {...islandProps(props, seat.pub, seat.me)} privateView={seat.me}/>
+  </LeagueContext.Provider>;
 }

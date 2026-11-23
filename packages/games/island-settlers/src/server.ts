@@ -15,7 +15,14 @@ import { seatPrompts } from './engine/prompts';
 import { sfc32 } from './engine/rng';
 import type { State } from './engine/state';
 
+import {
+  createLeague, leagueAct, leagueOutcome, leaguePresence, leagueTick, type League,
+} from './league/index';
+import { roomView, seatView, sync } from './league/views';
+import type { RoomView, SeatView } from './wire';
+
 export type { State } from './engine/state';
+export type { League } from './league/index';
 
 export type { Brain, Decision } from './cpu/index';
 export type Decide = (pub: PublicView, me: PrivateView, brain: Brain) => Decision;
@@ -66,7 +73,8 @@ export function cpuStep(s: State, now: number, decide = brain) {
   }
 }
 
-export const rules: GameRules<State, null, Action, Settings, PublicView, PrivateView> = {
+/** One island: the engine as GameRules. The league below wraps it; tests and tools drive it directly. */
+export const island: GameRules<State, null, Action, Settings, PublicView, PrivateView> = {
   validateSettings,
   parseInput(raw) {
     if (raw !== null) throw new Error('This game uses discrete actions.');
@@ -74,17 +82,44 @@ export const rules: GameRules<State, null, Action, Settings, PublicView, Private
   },
   neutralInput: () => null,
   parseAction,
-  create: createGame,
+  create: (ctx, settings) => createGame(ctx, settings),
   applyAction,
-  tick(s, _inputs, _dt, now) {
-    tick(s, now);
-    cpuStep(s, now);
-  },
+  tick(s, _inputs, _dt, now) { step(s, now); },
   onPresenceChange: presence,
   publicView: s => publicView(s),
   playerView: (s, id) => privateView(s, id),
   outcome,
   dispose: dropViews,
+};
+
+function step(s: State, now: number) {
+  tick(s, now);
+  cpuStep(s, now);
+}
+
+/** The room: one island, or an archipelago of them (league/index.ts), in the wire format of wire.ts. */
+export const rules: GameRules<League, null, Action, Settings, RoomView, SeatView> = {
+  validateSettings, parseInput: island.parseInput, neutralInput: () => null, parseAction,
+  create(ctx, settings) {
+    const l = createLeague(ctx, settings);
+    sync(l, ctx.nowMs);
+    return l;
+  },
+  applyAction(l, id, a, now) {
+    try { leagueAct(l, id, a, now); } finally { sync(l, now); }
+  },
+  tick(l, _inputs, _dt, now) {
+    leagueTick(l, now, step);
+    sync(l, now);
+  },
+  onPresenceChange(l, id, connected, now) {
+    leaguePresence(l, id, connected, now);
+    sync(l, now);
+  },
+  publicView: roomView,
+  playerView: (l, id) => seatView(l, id),
+  outcome: leagueOutcome,
+  dispose(l) { for (const s of l.islands) dropViews(s); },
 };
 
 export default rules;

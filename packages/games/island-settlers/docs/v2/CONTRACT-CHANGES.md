@@ -96,3 +96,32 @@ Additive edits to `src/model.ts` / `src/geometry.ts` made during the build waves
   (1 grain 1 ore) and Taxation → pirate are not wired; `cornerWhy` in `modules/explorers/rules.ts` is the
   fog/lair check to reuse. (4) WP-tb-a: E&P + Fishing spends (2 fish ignore the pirate, 5 fish a free
   road or ship, 7 fish a second move) need the E&P ship helpers in `modules/explorers/sea.ts`.
+
+## Deep pass, November 2026 (big rooms, wire format)
+
+- `model.ts` `Settings`: `islands: 'one' | 'many'` (default `one`; rooms above ten are always many) and
+  `quickStart: boolean` (default false). `validateSettings` rejects other values.
+- `model.ts` `Action`: `{ type: 'sync' }`, sent by a page that is missing the full copy of its views. The
+  room answers it before any island sees it; any turn id is accepted.
+- `model.ts` `GameEvent`: `{ kind: 'horn'; seconds }`, emitted when the horn pulls a round's clocks in.
+  The TV plays its sound and banner; phones still playing get a notice.
+- Engine state (not on the wire): `State.league`, `State.nextDice`, `turn.closed`, `turn.hornAt`.
+  `createGame(ctx, settings, island?)` takes the island's index in an archipelago. `flow.finish` takes
+  an optional headline and finale length. `flow.nextRound`, `flow.sharedRoll`, `flow.hurry`,
+  `flow.soundHorn` and `flow.HORN` are new. `deliveries.noExtremes` is exported.
+- `server.ts`: `rules` is now the room (`GameRules<League, null, Action, Settings, RoomView, SeatView>`);
+  the previous object is exported as `island`. Tests and tools that drive one island import `island`.
+- `LeagueResults` (wire) carries the winners, the reason, the length and the awards. The room's standings
+  stay on the server (`League.results.standings`): from the finale every island card's `vp` is the final
+  total and `roomRanks` ranks them, so the same numbers are not sent twice.
+- `League.sent[seat]` is `{ rev, times, whole, shared, held, mine }` (ENGINE §21.5).
+- `wire.ts` (new, browser-safe): `RoomView`, `SeatView`, `LeagueView`, `IslandWire`, `IslandCard`,
+  `BoardWire`, `encodeBoard`/`decodeBoard`, `islandOf`, `seatView`, the island plan. `graph.ts` (moved
+  from `engine/board/graph.ts`, which re-exports it) is browser-safe for the same reason.
+- `manifest.ts`: `players.max` is `MAX_ROOM_PLAYERS`; `snapshotCache` is `{ revisionField: 'rev', fields: ['league'] }`.
+- Client views take `GameViewProps<null, Action, RoomView, SeatView>`; `ui/league/adapt.ts` turns them
+  into the island props (`PublicView`, `PrivateView`) every existing view is written against.
+- `HudFrameProps`: optional `league` and `home`. `LeftRail` takes children (the archipelago panel) in
+  the offers' slot. Theatre: `Flight.swap` / `toBank`; `trade`, `bank` and `horn` events are animated.
+- Engine behaviour: in an archipelago a window that closes on a connected seat is not an `auto` event
+  or a counted timeout (the round simply ended).

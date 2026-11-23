@@ -32,8 +32,10 @@ client at runtime; server-only files must never be (the client may use `import t
 
 | File | Purpose |
 | --- | --- |
-| `src/manifest.ts` | Standalone `GameManifest` (same id, portrait, turn-based, snapshotCache on `mapRev`). |
-| `src/server.ts` | Thin `GameRules` adapter over `engine/`; wires the CPU scheduler into `tick`. Exports `rules` + default. |
+| `src/manifest.ts` | Standalone `GameManifest` (same id, portrait, turn-based, 1–64 players, snapshotCache on `rev` with the one field `league`). |
+| `src/server.ts` | `island`: thin `GameRules` adapter over `engine/` for one island, with the CPU scheduler in `tick` (tests and tools drive it directly). `rules` + default: the room, a league of islands over `island` (§20) in the wire format (§21). |
+| `src/wire.ts` | What travels to the browsers and how they rebuild island views from it: island plan, compact boards, room view, short and full seat views (§21). |
+| `src/graph.ts` | Vertices and edges from tiles by corner-key merge. Browser-safe, because the client rebuilds a board from its tiles with the same code. |
 | `src/client.tsx` | `GameClientModule` wiring for `ui/`. Exports `client` + default. |
 | `src/model.ts` | Wire contract: settings, board, pieces, actions, events, views, commands, results. |
 | `src/geometry.ts` | Pointy-top axial hex math, token and footprint sizes, pips. |
@@ -53,7 +55,7 @@ client at runtime; server-only files must never be (the client may use `import t
 | `parse.ts` | `parseAction`: shape, id lengths (≤80), card counts (≤200), byte budget. |
 | `board/index.ts` | `makeBoard(settings, seatCount, rng, modules)`: layout → terrain → numbers → ports → module decorations → graph. |
 | `board/layouts.ts` | Base land shapes (3–4 / 5–6 / 7–10) and the shared seeded island-growth helper. |
-| `board/graph.ts` | Vertices/edges from tiles by corner-key merge (port legacy), coast flags, bounds. |
+| `board/graph.ts` | Re-exports `src/graph.ts` (vertices/edges from tiles by corner-key merge, coast flags). |
 | `board/terrain.ts` | Terrain mixes per size and the clustered-terrain check. |
 | `board/numbers.ts` | Constrained number placement with scored retries. |
 | `board/ports.ts` | Perimeter walk and evenly spaced port slots. |
@@ -94,6 +96,15 @@ client at runtime; server-only files must never be (the client may use `import t
 | `modules/explorers/ships.ts` | Expedition ships, movement budget, cargo, discovery. |
 | `modules/explorers/missions.ts` | Land Ho!, pirate lairs, fish, spices, council, mission scoring. |
 | `modules/explorers/board.ts` | Hidden region, council/lair/spice/shoal placement (board hook). |
+
+### League (server-only, `src/league/`)
+
+| File | Purpose |
+| --- | --- |
+| `index.ts` | `League` state, dealing a room onto islands, the shared rolls, round closing and the horn for the whole room, the room's winner, results, outcome (§20). |
+| `director.ts` | Which island the TV features, chosen once a tick on the server. |
+| `awards.ts` | Room awards at the end (titles only; they score nothing). |
+| `views.ts` | `sync` (bumps the shared revision exactly when the shared JSON changed), `roomView`, `seatView` (§21). |
 
 ### CPU (server-only, `src/cpu/`)
 
@@ -280,6 +291,9 @@ seats' in-flight actions (fixes legacy "The turn changed"). Prompt answers are m
   (`legal.settlement` hook: e.g. no settling on fog, the Explorers home-region rule).
 - **Auto on timeout.** Settlement: highest `pips + 2·new resource types + port bonus` legal spot;
   route: the legal edge that points toward the best open spot two steps away (`auto.ts`).
+- **Quick start** (`settings.quickStart`, any room). `createGame` runs that same auto-placement for
+  every setup step at once, silently (no `auto` events, no timeout counts), so the round begins at
+  the first roll with the second settlements already paid.
 - Setup ends → Standard: the first seat's `roll`. Connect: round 1.
 
 ### 3.4 Roll and production
@@ -374,6 +388,11 @@ private hands and a shared board for 3–10 seats:
    then checks victory for **all** seats: everyone at or above their target qualifies, the highest
    total wins, ties share the win.
 6. There is no paired rule in Connect.
+7. **The horn** (five or more seats, `flow.HORN`). Once 70% of the seats are done (offline seats count)
+   and somebody is still playing, every clock still running is pulled in to 12 s from now and a `horn`
+   event tells the table. Without it one seat that never taps Done holds a ten-seat round for the whole
+   window, every round. Tables of three and four keep their full window. An archipelago counts the
+   whole room instead (§20).
 
 ### 3.9 Victory and end
 
@@ -711,7 +730,8 @@ seat, CPUs included, label = "CPU · persona" or the top two score parts.
   (one event per step of a ship, knight, wagon, expedition or guard), `dev-buy`, `dev-play`
   (Monopoly carries `taken` per victim), `award`, `reveal`, `barbarians` (C&K attack or Barbarian
   Attack battle: strength, defense, result, losers, defenders), `auto` (timeouts and CPU
-  fallbacks), `presence`, `emote`, `module` (typed by `module` + `name`), `win`.
+  fallbacks), `presence`, `horn` (`seconds` left for everyone still playing), `emote`, `module`
+  (typed by `module` + `name`), `win`.
 - **Text policy.** The server always writes a short `text` (ticker fallback, phone log, screen
   readers). Clients render core kinds from the structured fields (emblem chips, icons) and use
   `text` for `module` events and anything they do not special-case.
@@ -896,12 +916,11 @@ blocking placements).
 - **Budgets tested:** 10-seat E&P + C&K projections < 2 ms each; public view (excluding cached
   board/pieces) < 12 KB; private view < 8 KB.
 
-## 17. Projections and snapshotCache
+## 17. Projections
 
-- Manifest: `snapshotCache: { revisionField: 'mapRev', fields: ['board', 'pieces', 'settings'] }`.
-  These three fields are always present. `board` and `settings` never change; `pieces` changes
-  only through `pieces.ts`, which sets `mapDirty`; commit bumps `mapRev` when dirty. `mapRev` is a
-  non-negative integer and is not itself cached.
+- `publicView(s)` and `privateView(s, seat)` describe ONE island and are the UI's and the CPU's
+  contract. They no longer travel as they are: §21 is the wire. `mapRev` still bumps only when
+  `pieces` changes (the scene and the map key their rebuilds on object identity, not on it).
 - Everything in `PublicView`/`PrivateView` is JSON: records, arrays, numbers, strings, booleans,
   null. Optional properties are omitted, never `undefined`. Tests run `assertSerializable` on
   every view during full matches.
@@ -922,6 +941,10 @@ blocking placements).
 - `results` appears at the finale (it is where stats and hidden VP become public).
 
 ## 18. Server adapter (`server.ts`)
+
+`island` is the adapter below, one island as `GameRules`. `rules`, the object the platform registers,
+wraps it: `create` deals the room (§20), `applyAction` routes a seat's action to its island, `tick`
+ticks every island and then conducts the room, and every entry point ends with `sync` (§21).
 
 - `validateSettings` → `settings.ts`. `parseInput` → `null`. `parseAction` → `engine/parse.ts`.
 - `create(ctx, settings)` → `engine.createGame` (seats CPUs, board, setup plan, first deadline).
@@ -978,3 +1001,127 @@ Open questions for the lead:
 5. **Legacy typecheck break.** Replacing `model.ts` breaks the legacy `src/` files until WP-core
    removes them. The build plan schedules that removal first; it needs the lead's go-ahead since it
    deletes legacy source from the game package (a preserved copy exists under `output/`).
+
+## 20. The archipelago (`src/league/`)
+
+One board cannot hold thirty people, and a turn-based table of ten already waits a long time. So a
+room above ten players (`ONE_ISLAND_MAX`), or a room of five or more whose host picks
+`settings.islands: 'many'`, is a **league of islands**. This is the game's own format.
+
+### 20.1 Dealing
+
+- `islandCount = ceil(humans / 4)` islands of `ISLAND_SEATS` = 4. Players are shuffled with the round
+  seed (people who joined together are mixed) and dealt as evenly as possible; CPUs fill every island
+  to four, so islands are the same size and comparable (11 players sit 4, 4, 3 + one CPU). At most
+  three seats in a room are CPUs. Sixteen islands at the platform's 64 seats.
+- Every island is a complete engine `State` created with `createGame(ctx, settings, index)`: its own
+  generated board (seed mixed with the index), bank, development deck, robber and awards. It plays
+  the host's map, expansions and target with `islandSettings`: `mode: 'connect'`, `tableSize: 4`, and
+  timers never Off (Off plays as Relaxed: one idle seat must not hold sixty-three people).
+- CPU ids are `cpu-<island>-<n>` and personas are offset per island, so ids and names are unique in
+  the room.
+- Four seats is the board this game is quickest and most contested on, and the standard 19-hex
+  layout. Islands trade among their own four.
+
+### 20.2 A round, for the whole room
+
+```
+every island at the first roll ──▶ the room rolls ROLLS_PER_ROUND (3) dice pairs
+   each island: roll ▸ pay ▸ (7: discards, the captain's robber) ▸ roll ▸ … ▸ its window opens
+   seats trade and build; an island whose four are done closes and waits
+   70% of the room done ──▶ the horn: every open window ends in 12 s
+every island closed ──▶ the room's verdict ──▶ next round, or the finale
+```
+
+- **Shared rolls.** `rollAll` draws the round's dice once (the room's own stream, or its balanced
+  deck). `deal` hands each island its next roll `ROLL_GAP_MS` (2.4 s) after the last, once that roll
+  (and any 7 it caused) has resolved there: `flow.sharedRoll` queues a `roll` effect with
+  `state.nextDice`, and the last one also queues `main`. Nobody rolls: `flow.role` is null in an
+  archipelago's roll stage, so nothing can be played before the dice. An island's captain still
+  rotates; it only matters for who moves the robber on a 7.
+- **Why three rolls.** With one roll a round (Connect as it is for one island) a four-seat game needs
+  about 55 rounds and most of them hold nothing for most players. Three rolls make each window a real
+  turn: about 20 rounds, a 13–20 minute game, and the same median wait.
+- **Windows and the horn.** Each island's window is the host's round length from its own opening. A
+  seat with nothing it could possibly do (no cards, no playable card, no free command) is marked done
+  at once. `flow.endRound` on an archipelago island only sets `turn.closed`. `conduct` sounds the horn
+  when `HORN.share` of ALL seats in the room are done; an island whose window opens after the horn (it
+  was resolving a 7) still gets `LATE_WINDOW_MS` (20 s).
+- **The verdict.** When every island is closed: everybody at or above their target on any island
+  qualifies; the highest total wins; a tie goes to whoever had more public points at the end of the
+  round before (and the one before that, back to the start); seats level all the way share the win.
+  Otherwise `flow.nextRound` on every island and the next rolls after `ROLL_BEAT_MS`. The round limit
+  is the Connect one, counted in rounds.
+- **The finale.** `flow.finish` on every island in the same tick, each with the room's winners who
+  sit on it and the room's headline; `LEAGUE_FINALE_MS` (11 s). `League.results` holds the room's
+  standings (rank in the room and on the island) and the awards.
+- **Deliveries.** On four-seat tables that scenario rerolls a 2 or a 12. The room does it once, so
+  every island still sees the same dice. **Cities & Knights:** the Alchemist (choose the dice before
+  rolling) is left out of an archipelago's Science deck; the event die is each island's own.
+
+### 20.3 The TV's director (`director.ts`)
+
+Each island has a heat that decays with a nine-second half-life and rises with what happens on it (a
+city 45, a settlement 34, a robber move 28, a trade 22, an award 40, …), plus 25 while somebody there
+is within two points of the target and up to 40 for time off air. A shot runs at least 7 s; another
+island takes it when it is 30 hotter, and nothing holds it past 18 s. No cut while the dice are
+rolling. An island whose round is already in is never chosen while others play. The finale stays
+with the champion.
+
+### 20.4 What gives out beyond 64
+
+The rules have no limit of their own (`islandCount` works for any roster and server cost per seat is
+flat). Three things stop at 64: the platform seats 64 (`MAX_ROOM_PLAYERS`); the TV's rail fits
+sixteen islands at 720p with a readable score per seat, and the room results fit 64 names above the
+fold in four columns; and the shared view carries every seat's name and score (about 80 bytes a
+seat) each time it changes.
+
+## 21. The wire (`src/wire.ts`, `src/league/views.ts`)
+
+The platform snapshots every socket ten times a second and caches only the public fields the
+manifest names, under one revision. Before this the game sent 12–19 kB of public state to every
+socket every snapshot (120–190 kB/s a phone). Now:
+
+1. **Everything shared is one cached field.** The public view is `{ rev, league }`. `sync` runs at the
+   end of every entry into the rules and bumps `rev` exactly when the JSON of `league` changed, so a
+   quiet snapshot is `{"rev":n}`. `league` holds the settings, one card per island (name, phase,
+   seats, public points, done flags; refreshed every two seconds or when a phase changes), the index
+   and the full view of the featured island, the round's dice and the room results (winners, reason,
+   length, awards). From the finale each card's points are the seat's final total, so the room's
+   standings are not sent a second time: `roomRanks` ranks the cards.
+2. **A seat's own island and private view ride its private snapshot**, which the platform cannot
+   cache. `seatView` sends them whole in `FULL_TIMES` (2) consecutive snapshots after they change and
+   as `{rev, home}` afterwards. A page that never saw the current revision whole (it joined or
+   reloaded mid-round, or skipped a frame) sends the `sync` action and gets it again; a reconnect does
+   the same on the server side. With one island the phone uses the shared copy of the island and only
+   the private view rides the seat snapshot.
+3. **A board travels as its tiles and ports** (`encodeBoard`: about 1 kB instead of 24–40 kB). The
+   client rebuilds vertices and edges with `graph.ts`, the code the engine used, so ids agree;
+   `tests/league/wire.test.ts` checks every map and size.
+4. **Island views are trimmed, not reshaped.** An `IslandWire` is the island's `PublicView` without
+   `board`/`settings`, with 24 events (16 in an archipelago, 8 once the game is over). The client's
+   `islandOf` turns it back into a `PublicView` and keeps one decoded board per island, so the rest of
+   the UI is written against the same views as before.
+5. **No message should pass 32 KiB.** The platform enforces that only on what browsers send, but a
+   snapshot that stacks a changed shared view (up to 20 kB at 64 seats) on a full seat view (up to
+   20 kB) is a 40 kB frame. So in an archipelago, when the shared view changed in the same snapshot and
+   the two together pass `MESSAGE_BYTES` (26,000; the island copy is measured once for its four seats
+   and the private view is taken to weigh what the seat's last one did), `seatView` answers with the
+   revision the page already holds and sends the new one whole in the next snapshot (`HOLD_TIMES`, five
+   at most, if the shared view keeps changing). A phone's island and private view travel together, so what it shows stays
+   consistent; it is at most half a second older. With one island the island IS the shared copy, so
+   the private view always goes with it and nothing is held. And an archipelago's shared view is final
+   from the finale on (results, final totals, the champion's island): `sync` stops rebuilding it once
+   every island has ended, so the results frame, which carries the outcome for all 64 seats, does not
+   carry the room again. `LeaguePhase` `ended` therefore reaches the wire only with one island.
+
+Measured in simulation (`tools/sim.ts`, seats thinking 2.5–7 s): a phone receives 5 KiB/s at four
+seats, 12 KiB/s at ten on one island in Standard and 31 KiB/s in Connect, 24 KiB/s at 32 and 29 KiB/s
+at 64. The largest single message to a phone is 22 kB at four seats and 29 kB at 32 and at 64. One
+island of ten is the exception: its shared view alone reaches 30–32 kB at the very end (results with
+every stat for ten seats) and a private view can ride with it, 44–45 kB in all; the original game's
+frames there were larger still. Real-room figures are in QA.md.
+
+Privacy is unchanged and tested at 64 seats: the shared view holds only public island views, the
+island cards (public points; final totals from the finale) and the room results; a seat's snapshot
+holds its own private view and the public view of its own island.

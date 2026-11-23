@@ -248,6 +248,18 @@
 .island-settlers-hud-row[data-dense] .island-settlers-hud-stats { flex-wrap: nowrap; }
 .island-settlers-hud-row[data-active] .island-settlers-hud-vp { text-shadow: none; }
 .island-settlers-hud-vp[data-up] { color: var(--kp-sun); }
+.island-settlers-hud-vp { position: relative; }
+.island-settlers-hud-vp[data-pop] { animation: island-settlers-vp-pop 700ms cubic-bezier(.2, 1.6, .4, 1) both; }
+.island-settlers-hud-vp > i {
+  position: absolute; right: 0; bottom: 100%; font-style: normal; font-size: 0.55em; color: var(--kp-sun);
+  text-shadow: 0 calc(2 * var(--u)) var(--kp-ink); animation: island-settlers-vp-plus 900ms ease-out both;
+}
+@keyframes island-settlers-vp-pop { from { scale: 1; } 35% { scale: 1.55; color: var(--kp-sun); } to { scale: 1; } }
+@keyframes island-settlers-vp-plus { from { opacity: 0; translate: 0 60%; } 25% { opacity: 1; } to { opacity: 0; translate: 0 -60%; } }
+@media (prefers-reduced-motion: reduce) {
+  .island-settlers-hud-vp[data-pop], .island-settlers-hud-vp > i { animation: none; }
+  .island-settlers-hud-vp > i { display: none; }
+}
 .island-settlers-hud-table {
   flex: none; min-height: calc(120 * var(--u)); padding: calc(10 * var(--u)) calc(16 * var(--u));
   display: grid; align-content: center; gap: calc(6 * var(--u)); font-size: max(12px, calc(18 * var(--u)));

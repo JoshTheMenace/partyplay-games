@@ -7,13 +7,22 @@ import { useEffect, useRef, type MouseEvent } from 'react';
 import type { SceneViewProps } from '../../../../../party-ui/src/index';
 import { mountThreeScene } from '../../../../../party-3d/src/index';
 import { ResourceScope } from '../../../../../party-runtime/src/index';
-import type { PrivateView, PublicView, Settings } from '../../model';
+import type { PublicView, Settings } from '../../model';
+import { islandOf, seatView, type RoomView, type SeatView } from '../../wire';
 import { bridge } from '../shared/bridge';
 import { reducedMotion } from '../shared/timeline';
 import { createBoardScene, type BoardScene } from './board-scene';
 import { loadKit } from './kit';
 
-type Props = SceneViewProps<Settings, PublicView, PrivateView>;
+type Props = SceneViewProps<Settings, RoomView, SeatView>;
+
+/** A seated host watches their own island; everyone else's TV shows the featured one. */
+function islandFor(p: Props): PublicView | null {
+  if (!p.publicView) return null;
+  const own = p.playerId && p.privateView
+    ? seatView(p.roundId, p.playerId, p.publicView, p.privateView).view?.pub : null;
+  return own ?? islandOf(p.publicView.league, p.publicView.league.island);
+}
 /** With no snapshot at all, report ready after this long so the round can still start. */
 const EMPTY_READY_MS = 4000;
 
@@ -43,7 +52,7 @@ export function SceneView(props: Props) {
         resize: () => scene.resize({ width: el.clientWidth, height: el.clientHeight }),
         frame(now, dt) {
           report(scene); // the previous frame already drew the board
-          const p = latest.current, view = p.publicView;
+          const p = latest.current, view = islandFor(p);
           const seat = view?.seats.find(s => s.id === p.playerId)?.seat ?? null;
           const host = !!p.isHost && !!p.playerId;
           if (`${seat}:${host}` !== viewer) { viewer = `${seat}:${host}`; scene.setViewer(seat, host); }

@@ -1,7 +1,7 @@
 /** Pure controller helpers (no React): hints, payout lines, spots, field readiness. */
 import type {
   BuildOption, BuildPiece, CardPicks, Cards, CardsField, Command, Field, Offer, PickField, Picks, PrivateView, Prompt,
-  PublicView, Purchase, SeatId, TaskKind,
+  PublicView, Purchase, SeatId, TaskKind, RollEvent,
 } from '../../model';
 import { tileLabel } from '../shared/board';
 import { cardTotal, count, goodsIn, goodText, needText, plural } from '../shared/format';
@@ -49,8 +49,13 @@ export const incoming = (pub: PublicView, seat: SeatId): Offer[] => pub.offers
 export type Payout = { tone: 'gain' | 'blocked' | 'seven' | 'none'; text: string; cards: Cards };
 
 /** The last roll from this seat's point of view: "+1 wool from 10", "Nothing from 6: the robber …". */
-export function payout(pub: PublicView, seat: SeatId): Payout | null {
-  const roll = pub.lastRoll;
+/** This round's rolls, oldest first: the roll events since the round began (three in an archipelago). */
+export function roundRolls(pub: PublicView): RollEvent[] {
+  const start = pub.events.filter(e => e.kind === 'turn' && e.stage === 'roll').at(-1)?.id ?? Infinity;
+  return pub.events.filter((e): e is RollEvent => e.kind === 'roll' && e.id > start);
+}
+
+export function payout(pub: PublicView, seat: SeatId, roll = pub.lastRoll): Payout | null {
   if (!roll) return null;
   const cards: Cards = {};
   for (const g of roll.grants.filter(x => x.seat === seat)) cards[g.good] = count(cards, g.good) + g.amount;

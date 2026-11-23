@@ -1,7 +1,8 @@
 import { lazy, Suspense, type ComponentType } from 'react';
 import type { GameClientModule } from '../../../party-ui/src/index';
 import { AudioView } from './audio';
-import type { Action, PrivateView, PublicView, Settings } from './model';
+import type { Action, Settings } from './model';
+import { resetWire, type RoomView, type SeatView } from './wire';
 import { InstructionsView } from './ui/instructions';
 import { SettingsView } from './ui/settings';
 import { bridge } from './ui/shared/bridge';
@@ -13,7 +14,7 @@ function lazyView<P extends object>(load: () => Promise<ComponentType<P>>): Comp
   return props => <Suspense fallback={null}><View {...props}/></Suspense>;
 }
 
-export const client: GameClientModule<null, Action, Settings, PublicView, PrivateView> = {
+export const client: GameClientModule<null, Action, Settings, RoomView, SeatView> = {
   AudioView, immersivePhone: true,
   settingsWide: true,
   SceneView: lazyView(async () => (await import('./ui/scene/index')).SceneView),
@@ -24,6 +25,6 @@ export const client: GameClientModule<null, Action, Settings, PublicView, Privat
   SettingsView,
   InstructionsView,
   prepare() {},
-  dispose() { bridge.reset(); },
+  dispose() { bridge.reset(); resetWire(); },
 };
 export default client;

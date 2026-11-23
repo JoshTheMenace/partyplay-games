@@ -19,6 +19,17 @@
   border-color: rgb(255 87 72 / 0.5);
 }
 .island-settlers-dice { display: flex; gap: 4px; grid-row: span 2; }
+/* A new roll tumbles in: the card pops and the dice spin down onto their faces. */
+.island-settlers-payout { animation: island-settlers-payout-in 420ms cubic-bezier(.2, 1.4, .4, 1) both; }
+.island-settlers-payout .island-settlers-die { animation: island-settlers-die-in 520ms cubic-bezier(.2, 1.2, .4, 1) both; }
+.island-settlers-payout .island-settlers-die + .island-settlers-die { animation-delay: 60ms; }
+.island-settlers-payout[data-compact] { padding-block: 6px; margin-bottom: 6px; }
+.island-settlers-payout[data-compact] p { font-size: 16px; }
+@keyframes island-settlers-payout-in { from { opacity: 0; scale: 0.94; } }
+@keyframes island-settlers-die-in { from { rotate: -200deg; scale: 0.4; } 70% { rotate: 12deg; scale: 1.12; } }
+@media (prefers-reduced-motion: reduce) {
+  .island-settlers-payout, .island-settlers-payout .island-settlers-die { animation: none; }
+}
 .island-settlers-hints { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .island-settlers-hints li {
   padding: 8px 12px; border-radius: 999px; font-size: 16px; font-weight: 800; background: var(--kp-ink);

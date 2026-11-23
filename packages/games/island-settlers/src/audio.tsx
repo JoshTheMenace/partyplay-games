@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react';
 import type { GameAudioProps } from '../../../party-ui/src/index';
 import { ResourceScope } from '../../../party-runtime/src/index';
-import type { PublicView } from './model';
+import type { RoomView } from './wire';
 import { Soundtrack } from './music';
 
 /** Host authority owns the speakers, even when the host occupies a player seat. */
-export function AudioView({ isHost, connected, phase }: GameAudioProps<PublicView>) {
+export function AudioView({ isHost, connected, phase }: GameAudioProps<RoomView>) {
   const active = useRef(false), sync = useRef<(retry?: boolean) => void>(() => {});
   active.current = connected && phase === 'playing';
   useEffect(() => {

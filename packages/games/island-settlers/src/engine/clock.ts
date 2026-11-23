@@ -7,8 +7,12 @@ import { GRACE_SECONDS, TIMERS, type SeatId, type TimedStep } from '../model';
 import type { OpenPrompt, State, Timer } from './state';
 
 /** Preset deadline for `step` from now, or null with the Off preset. */
+/** An archipelago's opening placements are never slower than this: the whole room waits for the last island. */
+export const LEAGUE_SETUP_SECONDS = 30;
+
 export function baseDeadline(s: State, step: TimedStep): number | null {
-  const seconds = TIMERS[s.settings.timer][step];
+  const preset = TIMERS[s.settings.timer][step];
+  const seconds = s.league && step === 'setup' && preset !== null ? Math.min(preset, LEAGUE_SETUP_SECONDS) : preset;
   return seconds === null ? null : s.now + seconds * 1000;
 }
 

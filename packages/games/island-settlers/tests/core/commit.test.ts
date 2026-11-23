@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { GOODS } from '../../src/model';
 import { placeBuilding, placeRoute, removeBuilding, setRobber } from '../../src/engine/pieces';
 import { int } from '../../src/engine/rng';
-import { cpuStep, rules } from '../../src/server';
+import { cpuStep, island as rules } from '../../src/server';
 import { act, edit, fastForward, game, grant, inventory, pastSetup, pub, rig, serializable, tick, unchanged, view } from '../helpers';
 
 test('rejected actions leave the state structuredClone-equal', () => {

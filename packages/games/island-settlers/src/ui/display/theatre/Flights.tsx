@@ -34,12 +34,12 @@ const cardStyle = (good: Good, i: number) =>
   ({ '--good': GOOD_META[good].color, '--good-deep': GOOD_META[good].deep, '--i': i }) as CSSProperties;
 
 /** A resource card (or a fanned stack when one flight carries several goods) with its "+n" badge. */
-export function GoodCard({ goods }: { goods: { good: Good; amount: number }[] }) {
+export function GoodCard({ goods, plain }: { goods: { good: Good; amount: number }[]; plain?: boolean }) {
   const total = goods.reduce((n, g) => n + g.amount, 0);
   return <span className="island-settlers-card-stack" data-count={goods.length}>
     {goods.map(({ good }, i) => <span key={good} className="island-settlers-card" style={cardStyle(good, i)}>
       <Icon name={good} size="66%"/></span>)}
-    <b className="island-settlers-card-badge kp-numeral">+{total}</b>
+    <b className="island-settlers-card-badge kp-numeral">{plain ? total : `+${total}`}</b>
   </span>;
 }
 
@@ -53,14 +53,16 @@ const FaceDown = () => <span className="island-settlers-card island-settlers-car
 function FlightView({ flight, t, at }: { flight: Flight; t: number; at: Locate }) {
   const local = t - flight.delay;
   if (local < 0 || local >= flight.ms) return null;
-  const a = from(flight.from, at), b = at.seat(flight.seat);
+  const a = from(flight.from, at), b = flight.toBank ? at.bank() : at.seat(flight.seat);
   if (!a || !b) return null;
-  const steal = !!flight.faceDown, p = (steal ? EASE.steal : EASE.fly)(local / flight.ms);
-  const bend = steal ? { x: -120 * at.u, y: 0 } : { x: 0, y: -FLY.lift * at.u };
+  const steal = !!flight.faceDown, side = steal || flight.swap;
+  const p = (steal ? EASE.steal : EASE.fly)(local / flight.ms);
+  // Rail-to-rail cards bow out to the left of the rail; a swap's two hands take different bows.
+  const bend = side ? { x: (flight.key === 'get' ? -200 : -120) * at.u, y: 0 } : { x: 0, y: -FLY.lift * at.u };
   const { x, y } = arc(a, b, bend, p), shrink = 1 - 0.25 * clamp01((p - 0.8) / 0.2);
   return <span className="island-settlers-flight" data-steal={steal || undefined}
     style={{ transform: `translate(${x}px, ${y}px) translate(-50%, -50%) scale(${shrink})` }}>
-    {steal ? <FaceDown/> : <GoodCard goods={flight.goods}/>}
+    {steal ? <FaceDown/> : <GoodCard goods={flight.goods} plain={flight.swap || flight.toBank}/>}
   </span>;
 }
 
@@ -93,7 +95,7 @@ function useBumps(beats: Beat[], now: number, at: Locate, reduced: boolean) {
     if (reduced || now <= prev) return;
     for (const b of beats) for (const f of b.flights) {
       const land = b.start + f.delay + f.ms;
-      if (land > prev && land <= now) {
+      if (land > prev && land <= now && !f.toBank) {
         at.chip(f.seat)?.animate([{ scale: 1 }, { scale: 1.12 }, { scale: 1 }], BUMP);
       }
     }

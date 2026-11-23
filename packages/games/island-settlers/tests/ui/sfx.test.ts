@@ -95,6 +95,7 @@ test('every event kind maps to its recipe', () => {
     reveal: [{ ...base(), kind: 'reveal', seat: 'a', tile: 't', terrain: 'wood' }, []],
     auto: [{ ...base(), kind: 'auto', seat: 'a', step: 'roll', reason: 'timeout' }, []],
     presence: [{ ...base(), kind: 'presence', seat: 'a', connected: false }, []],
+    horn: [{ ...base(), kind: 'horn', seconds: 12 }, ['horn']],
     emote: [{ ...base(), kind: 'emote', seat: 'a', emote: 'gg' }, []],
     barbarians: [
       { ...base(), kind: 'barbarians', strength: 3, defense: 2, result: 'pillaged', losers: [], defenders: [],
@@ -123,6 +124,7 @@ test('each recipe synthesizes its documented voices', () => {
     trade: [['sine', 523], ['sine', 659], ['sine', 784]], tick: [['square', 1000]],
     barbarians: [['sine', 72], ['sawtooth', 110]],
     victory: [['triangle', 523], ['triangle', 1047], ['sine', 659]],
+    horn: [['sawtooth', 147], ['sawtooth', 220], ['sine', 440]],
   };
   const noises: Partial<Record<SoundName, number>> = {
     dice: 6, steal: 1, victory: 1, route: 1, settlement: 2, city: 2, robber: 1,

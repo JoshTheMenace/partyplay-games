@@ -37,12 +37,12 @@ export function role(s: State, id: SeatId): Role | null {
   const t = s.turn;
   switch (t.stage) {
     case 'setup': return t.active === id ? 'setup' : null;
-    case 'roll': return t.active === id ? 'roll' : null;
+    case 'roll': return t.active === id && !s.league ? 'roll' : null;
     case 'main':
       if (t.active === id) return t.activeDone ? null : 'main';
       return t.partner === id && concurrent(s) && !t.partnerDone ? 'paired' : null;
     case 'paired': return t.partner === id ? 'paired' : null;
-    case 'round': return s.seats[id]?.ready ? null : 'round';
+    case 'round': return s.seats[id]?.ready || t.closed ? null : 'round';
     default: return null;
   }
 }
@@ -131,10 +131,10 @@ function beginTurn(s: State) {
 function beginRound(s: State) {
   const t = s.turn, n = s.order.length, captain = s.order[t.captain];
   const next = s.order[(t.captain + 1) % n];
-  Object.assign(t, { id: t.id + 1, stage: 'roll', active: captain, partner: null, next });
+  Object.assign(t, { id: t.id + 1, stage: 'roll', active: captain, partner: null, next, closed: false, hornAt: null });
   s.intent = null;
   for (const id of s.order) { s.seats[id].ready = false; startOpportunity(s, id); }
-  startTimer(s, captain, 'roll');
+  if (!s.league) startTimer(s, captain, 'roll');
   emit(s, { kind: 'turn', seat: captain, stage: 'roll', round: t.round, text: `Round ${t.round}` });
 }
 
@@ -146,6 +146,14 @@ export function roll(s: State, id: SeatId) {
   stopTimer(s, id);
   queueEffect(s, { type: 'roll', seat: id });
   queueEffect(s, { type: 'main' });
+}
+
+/** Archipelago: the league's dice for this island's round. The captain still moves the robber on a 7. */
+export function sharedRoll(s: State, dice: [number, number], last: boolean) {
+  need(s.league && s.turn.stage === 'roll' && !s.queue.length, 'This island is not waiting for the roll.');
+  s.nextDice = dice;
+  queueEffect(s, { type: 'roll', seat: s.turn.active });
+  if (last) queueEffect(s, { type: 'main' });
 }
 
 /** Roll resolved: open the main step (Standard) or the Connect window. */
@@ -166,6 +174,31 @@ export function openMain(s: State) {
   startTimer(s, partner.id, 'paired');
 }
 
+/**
+ * The horn: in a round with HORN.seats or more seats, once HORN.share of them are done the rest get
+ * HORN.seconds, so one slow seat cannot hold a big table for the whole window. An archipelago counts
+ * the whole room instead (league/index.ts).
+ */
+export const HORN = { share: 0.7, seconds: 12, seats: 5 } as const;
+
+/** The horn sounds: pull every clock still running in to `limit` and tell the table. */
+export function hurry(s: State, limit: number) {
+  for (const t of Object.values(s.timers)) {
+    if (t.deadline === null || t.deadline > limit) Object.assign(t, { base: limit, deadline: limit });
+  }
+  const seconds = Math.max(1, Math.round((limit - s.now) / 1000));
+  emit(s, { kind: 'horn', seconds, text: `The horn! ${seconds} seconds to finish` });
+}
+
+export function soundHorn(s: State) {
+  const t = s.turn, n = s.order.length;
+  if (s.league || t.stage !== 'round' || t.hornAt !== null || n < HORN.seats) return;
+  const done = s.order.filter(id => s.seats[id].ready || !s.seats[id].connected).length;
+  if (done === n || done < Math.ceil(HORN.share * n)) return;
+  t.hornAt = s.now;
+  hurry(s, s.now + HORN.seconds * 1000);
+}
+
 /** The `end` action: end the opportunity, finish the paired turn, or mark ready in a Connect round. */
 export function end(s: State, id: SeatId) {
   const r = role(s, id), t = s.turn;
@@ -174,7 +207,7 @@ export function end(s: State, id: SeatId) {
     stopTimer(s, id);
     closeOffers(s, id, 'withdrawn');
     Object.assign(seat(s, id), { ready: true, freeRoutes: 0 });
-    return;
+    return soundHorn(s);
   }
   endOpportunity(s, id);
   if (r === 'main') t.activeDone = true; else if (t.stage === 'main') t.partnerDone = true;
@@ -220,18 +253,26 @@ function closeRound(s: State): boolean {
   return false;
 }
 
-/** `end-round` effect (Connect): round hooks, victory for all seats, next captain. */
+/**
+ * `end-round` effect (Connect): round hooks, victory for all seats, next captain. An archipelago island
+ * stops after the hooks: the league compares every island, then calls `nextRound` or `finish`.
+ */
 export function endRound(s: State) {
   for (const id of s.order) endOpportunity(s, id);
+  if (s.league) { s.turn.closed = true; return; }
   const winners = winCheck(s, s.order);
   if (winners.length) return finish(s, winners, 'target');
+  nextRound(s);
+}
+
+export function nextRound(s: State) {
   if (!closeRound(s)) return;
   s.turn.captain = (s.turn.captain + 1) % s.order.length;
   beginRound(s);
 }
 
 /** Connect window: closes when everyone is ready (offline counts) after the minimum, or at the deadline. */
-export const allReady = (s: State) => s.turn.stage === 'round' && !s.queue.length
+export const allReady = (s: State) => s.turn.stage === 'round' && !s.turn.closed && !s.queue.length
   && s.order.every(id => s.seats[id].ready || !s.seats[id].connected);
 
 export const windowClosable = (s: State, minOpenMs: number) => allReady(s) && s.now >= s.turn.openedAt + minOpenMs;
@@ -244,12 +285,15 @@ export function checkWin(s: State) {
   if (winners.length) finish(s, winners, 'target');
 }
 
-/** Enter the finale: everything pending is cleared; results become public for FINALE_MS. */
-export function finish(s: State, winners: SeatId[], reason: EndReason) {
+/**
+ * Enter the finale: everything pending is cleared; results become public for `finaleMs`. An archipelago
+ * island gets the league's winners who sit on it (maybe none) and the league's own headline as `text`.
+ */
+export function finish(s: State, winners: SeatId[], reason: EndReason, text?: string, finaleMs = FINALE_MS) {
   const t = s.turn;
   Object.assign(t, { id: t.id + 1, stage: 'finale', partner: null, next: null, setup: null });
   Object.assign(s, { prompts: {}, offers: {}, queue: [], timers: {}, intent: null });
   const names = winners.map(id => seatName(s, id)).join(' and ');
-  emit(s, { kind: 'win', seats: winners, reason, text: `${names} ${winners.length > 1 ? 'win' : 'wins'}!` });
-  s.results = buildResults(s, winners, reason, FINALE_MS);
+  emit(s, { kind: 'win', seats: winners, reason, text: text ?? `${names} ${winners.length > 1 ? 'win' : 'wins'}!` });
+  s.results = buildResults(s, winners, reason, finaleMs);
 }

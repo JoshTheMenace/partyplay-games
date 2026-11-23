@@ -1,7 +1,7 @@
 /* Phone/host SVG map (EXPERIENCE §4.3). Stroke widths in px use non-scaling-stroke, so zoom never fattens them. */
 .island-settlers-map {
   position: relative; width: 100%; overflow: hidden; border-radius: 14px;
-  background: radial-gradient(circle at 50% 45%, #1d6b9e, #0b2d4f 80%);
+  background: radial-gradient(circle at 50% 50%, #2f9fcb, #17679b 46%, #0a2a4c 96%);
 }
 .island-settlers-map[data-mode='mini'] { aspect-ratio: 366 / 230; cursor: pointer; }
 .island-settlers-map[data-mode='full'] { height: 100%; min-height: 220px; }

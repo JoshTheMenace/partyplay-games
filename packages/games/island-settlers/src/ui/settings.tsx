@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { StatusNotice, ToggleRow, type SettingsViewProps } from '../../../../party-ui/src/index';
 import {
-  CPU_LEVELS, DEFAULT_SETTINGS, MAPS, MISSIONS, MODES, ROUND_SECONDS, SCENARIOS, SEAFARERS_SCENARIOS,
+  CPU_LEVELS, DEFAULT_SETTINGS, ISLANDS_MODES, MAPS, MISSIONS, MODES, ROUND_SECONDS, SCENARIOS, SEAFARERS_SCENARIOS,
   TABLE_SIZE, TARGET_RANGE, TIMER_PRESETS, TIMERS, VARIANTS, type Settings, type TimedStep,
 } from '../model';
 import { maxTarget, restrictions, suggestedTarget, type OptionKey } from '../settings';
+import { MAX_ROOM_PLAYERS } from '../../../../party-contract/src/index';
+import { ISLAND_SEATS, islandCount } from '../wire';
 import { EmblemChip } from './shared/SeatChip';
 import { plural, secondsText } from './shared/format';
 import { MODULE_HELP } from './shared/help';
@@ -18,6 +20,11 @@ const MAP_BLURB = {
   seafarers: 'Islands across the sea. Ships, gold fields and a pirate.',
   explorers: 'Sail into fog with settlers and crews. Missions score points.',
 };
+const ISLANDS_BLURB = {
+  one: 'Everyone shares one board. Up to ten players.',
+  many: 'Islands of four that share the dice, all playing at once. Rooms above ten always play this way.',
+};
+const ISLANDS_NAMES = { one: 'One island', many: 'Archipelago' };
 const MODE_BLURB = {
   standard: 'One player at a time. With 5+ players the next player gets a build turn.',
   connect: 'One shared roll, then everyone trades and builds at once against a round timer.',
@@ -44,18 +51,23 @@ function Radios<T extends string | number>({ legend, value, options, onPick, dis
   </fieldset>;
 }
 
-/** "You + 2 phones + 1 CPU = 4 seats" for a chosen head count (the view is not told who has joined). */
-function TablePreview({ size }: { size: number }) {
-  const [people, setPeople] = useState(1), seats = Math.max(size, people), cpus = seats - people;
+/**
+ * "You + 2 phones + 1 CPU = 4 seats", or how a bigger room is dealt onto islands, for a chosen head count
+ * (the view is not told who has joined).
+ */
+function TablePreview({ size, islands }: { size: number; islands: Settings['islands'] }) {
+  const [people, setPeople] = useState(1), count = islandCount(people, { islands });
+  const seats = count > 1 ? count * ISLAND_SEATS : Math.max(size, people), cpus = seats - people;
   const parts = ['You', people > 1 ? plural(people - 1, 'phone') : '', cpus ? plural(cpus, 'CPU') : ''];
   return <>
     <label>Preview with<select value={people} onChange={e => setPeople(+e.target.value)}>
-      {range(1, TABLE_SIZE.max).map(n => <option key={n} value={n}>{plural(n, 'person', 'people')}</option>)}
+      {range(1, MAX_ROOM_PLAYERS).map(n => <option key={n} value={n}>{plural(n, 'person', 'people')}</option>)}
     </select></label>
     <p className="island-settlers-preview" aria-live="polite">
-      <span aria-hidden="true">{range(0, seats - 1).map(i => <EmblemChip key={i} index={i} size="28px"/>)}</span>
-      {parts.filter(Boolean).join(' + ')} = {plural(seats, 'seat')}
-      {seats > size ? ' (the table grows to fit)' : ''}
+      {count > 1 ? <>{count} islands of {ISLAND_SEATS}, all playing at once{cpus ? ` (${plural(cpus, 'CPU')} ${cpus > 1 ? 'fill' : 'fills'} the spare ${cpus > 1 ? 'seats' : 'seat'})` : ''}</>
+        : <><span aria-hidden="true">{range(0, seats - 1).map(i => <EmblemChip key={i} index={i} size="28px"/>)}</span>
+          {parts.filter(Boolean).join(' + ')} = {plural(seats, 'seat')}
+          {seats > size ? ' (the table grows to fit)' : ''}</>}
     </p>
   </>;
 }
@@ -102,8 +114,12 @@ export function SettingsView({ settings: raw, onChange, disabled }: SettingsView
         onChange={e => set({ tableSize: +e.target.value })}>
         {range(TABLE_SIZE.min, TABLE_SIZE.max).map(n => <option key={n} value={n}>{n} seats</option>)}
       </select></label>
-      <TablePreview size={s.tableSize}/>
+      <TablePreview size={s.tableSize} islands={s.islands}/>
     </div></section>
+    <Radios legend="Islands" value={s.islands} disabled={disabled} onPick={islands => set({ islands })}
+      options={ISLANDS_MODES.map(m => [m, ISLANDS_NAMES[m], ISLANDS_BLURB[m]] as const)}/>
+    <small>An archipelago plays in rounds whatever “Turns” says: three rolls for the whole room, then every island
+      trades and builds. Timers are always on, and a horn ends the round once most of the room is done.</small>
     <Radios legend="Map" value={s.map} disabled={disabled} onPick={map => set({ map })}
       options={MAPS.map(m => [m, MAP_NAMES[m], MAP_BLURB[m]] as const)}/>
     {s.map === 'seafarers' && <Radios legend="Seafarers scenario" value={s.seafarers} disabled={disabled}
@@ -116,7 +132,7 @@ export function SettingsView({ settings: raw, onChange, disabled }: SettingsView
     </fieldset>}
     <Radios legend="Turns" value={s.mode} disabled={disabled} onPick={mode => set({ mode })}
       options={MODES.map(m => [m, MODE_NAMES[m], MODE_BLURB[m]] as const)}/>
-    {s.mode === 'connect' && <Radios legend="Round length" value={s.roundSeconds} disabled={disabled}
+    {(s.mode === 'connect' || s.islands === 'many') && <Radios legend="Round length" value={s.roundSeconds} disabled={disabled}
       onPick={roundSeconds => set({ roundSeconds })}
       options={ROUND_SECONDS.map(n => [n, `${n} s`] as const)}/>}
     <section><h3>Victory target</h3><div className="island-settlers-row">
@@ -138,6 +154,8 @@ export function SettingsView({ settings: raw, onChange, disabled }: SettingsView
       options={CPU_LEVELS.map(l => [l, CPU_NAMES[l]] as const)}/>
     <ToggleRow label="Balanced dice: totals turn up about as often as the odds say" checked={s.balancedDice}
       disabled={disabled} onChange={balancedDice => set({ balancedDice })}/>
+    <ToggleRow label="Quick start: the game places everyone’s starting pieces" checked={s.quickStart}
+      disabled={disabled} onChange={quickStart => set({ quickStart })}/>
     {notice && <StatusNotice>{notice}</StatusNotice>}
     <fieldset className="island-settlers-toggles"><legend>Expansions and scenarios</legend>
       <div className="island-settlers-toggle"><ToggleRow label="Cities & Knights" checked={s.citiesKnights}

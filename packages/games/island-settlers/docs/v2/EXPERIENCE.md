@@ -15,14 +15,15 @@ Units and conventions:
 
 ### 1.1 Look
 
-- A stylized low-poly tabletop diorama, flat-shaded (`flatShading:true`) with no textures except the token and plaque canvas textures.
+- A stylized low-poly tabletop diorama, flat-shaded (`flatShading:true`). Textures are canvas-drawn: tokens, plaques and one soft tile-top texture (lighter in the middle, darker at the rim, a few speckles) that multiplies every terrain colour.
 - Materials: `MeshStandardMaterial`, roughness 0.85, metalness 0, `NoToneMapping`, sRGB output. Colours below are final sRGB values.
 - Lights:
-  - Hemisphere: sky `#dcecff`, ground `#2a4f6e`, intensity 1.7.
-  - Key directional: `#fff1d6`, intensity 2.2, from (−12, 24, 14).
-  - Fill directional: `#9fd6ff`, intensity 0.5, from (16, 10, −12).
-  - No shadow maps. Every piece and prop carries a baked blob shadow (see 1.5), which is cheaper and always readable.
-- Stage background: a radial gradient from `#1d6b9e` at the board centre to `#0b2d4f` at the corners. It is drawn as the ocean plane's canvas texture, so the sea "is" the background.
+  - Hemisphere: sky `#dcecff`, ground `#2a4f6e`, intensity 1.45.
+  - Key directional: `#fff1d6`, intensity 2.5, from the north-west above the land (−12, 24, 14 from its centre).
+  - Fill directional: `#9fd6ff`, intensity 0.55, from (16, 10, −12).
+  - **Shadows.** The key light casts real soft shadows (one 2048 map fitted to the land, `PCFSoftShadowMap`) from tiles, pieces and props onto tiles, tokens' rims and pieces. The map is redrawn only for 1.6 s after a snapshot, while pieces move. On low-power screens (four cores or fewer) shadows stay off and every piece keeps its baked blob shadow (see 1.5), which is hidden otherwise.
+- **The sea is the stage background**: one unlit plane with a small shader. Turquoise shallows (`#2f9fcb`) around the land fall off through `#17679b` to deep navy (`#0a2a4c`); a slow swell brightens and darkens it by 5%; thin east-west crests drift and come and go in patches. Time stands still under reduced motion.
+- **The island's shadow on the water**: every land hex again at radius 1.06, pushed 0.10 east and 0.16 south, `#04162b` at 28%.
 
 ### 1.2 Terrain palette (extends the kp tokens and never redefines them)
 
@@ -57,9 +58,10 @@ UI resource colours (cards, chips, icons) stay brighter than the terrain: wood `
   - The side uses the Side colour and the top uses the Top colour.
   - Build it with `ExtrudeGeometry` (`depth 0.30, bevelSize 0.05, bevelThickness 0.04, bevelSegments 1`), or a hand-built 24-triangle prism with an inset top. It is one shared geometry for all land tiles, with one material per terrain.
 - **Coast.** Every land edge whose neighbour is sea gets a beach strip: a flat quad 0.10 wu wide at y = 0.301 along the outer rim, in the beach colour. This one detail makes islands read as islands.
-- **Sea tiles.** A flat hex at y = 0.02 in the shelf colour, radius 0.99. The deep ocean plane sits at y = 0. Sea hexes that touch land get a foam ring: a hex outline 0.06 wide at y = 0.03 that drifts ±0.02 wu on a 4 s sine. The drift stops under reduced motion.
+- **Sea tiles.** A flat hex at y = 0.028, radius 0.97, a light glaze (20% of a pale shelf tint) over the moving water, so ships still read the grid they sail on. The ocean plane sits at y = 0. Sea hexes that touch land get a foam ring: a hex outline 0.06 wide at y = 0.03 that drifts ±0.02 wu on a 4 s sine. The drift stops under reduced motion.
+- **A board arriving** (the round starting, or the TV cutting to another island) rises out of the mist whole: the fog reveal below, applied to every land tile at once.
 - **Fog tiles.** A dark base hex at y = 0.02 with 3 `fog_cloud` instances at y 0.35–0.55, placed from a hash of the tile id. On reveal, the clouds scale ×1.4 and fade out over 500 ms while the new land tile rises from y −0.30 to 0 over 600 ms (easeOutBack).
-- **Props.** 3–7 instances per land tile, placed by `hashUnit(tileId+i)` in the ring between r = 0.36 and r = 0.74 from the centre. They never go inside the token disc or near the corners. Keep them under 0.22 wu tall and batch them in one `InstancedMesh` per prop type.
+- **Props.** 6–9 instances per land tile (9–12 on forests and mountains, 4 on low-power screens), placed by `hashUnit(tileId+i)` in the ring between r = 0.50 and r = 0.63 from the centre, like a wreath around the number. That ring clears the token disc, the roads on the edges and the buildings on the corners even at the larger sizes (trees and peaks ×1.5, the rest ×1.25–1.4), and nothing stands south of the token inside r = 0.60, where a tall prop would reach over it on screen. One `InstancedMesh` per prop type.
 
 ### 1.4 Number tokens (explicit user requirement)
 
@@ -379,7 +381,16 @@ The dice are DOM elements inside the dice chip. They are crisp and can be read f
 | 600–1440 | Resource fly-outs (3.7). |
 | 1440 | Everything settles. The production strip is filled in (it appears at 600 ms and stays until the next roll). |
 
+**The throw.** For the same roll, big dice (150u each, with the total disc) drop onto the middle of the board from above with a spin, land at 450 ms, rest until 800 ms, then shrink into the dice chip by 1120 ms while the cards start to fly. They draw above every other overlay. Reduced motion shows only the chip.
+
 The active phone is never blocked by this sequence. The engine accepts actions at once; the theatre is presentation only. **Backlog rule:** DisplayView runs one animation queue ordered by event id. If the queued work exceeds 2.5 s, it skips straight to the end state of the older items. After a reload it plays only events whose `atMs` is within 3 s of `serverNowMs()`, so it never replays history.
+
+### 3.6a Other moments on the stage
+
+- **A trade lands**: both hands of cards cross between the two seat rows at once (620 ms, bowing out to the left of the rail). A bank trade flies to the Table card and the new cards fly back.
+- **A point gained**: the seat's VP numeral pops to 1.55× and a small "+1" floats up from it (700 / 900 ms).
+- **The horn** (Connect with five or more seats, and every archipelago): a coral banner "The horn! 12 seconds to finish" pops at the top of the board for 2.6 s with the horn sound; the banner clock turns urgent.
+- **An archipelago**: the left rail's first panel lists every island (name, each seat's public points in its colour, how many are done) with the island on screen outlined, then the room's leaders. A cream plate at the top-left of the board names the island on screen ("Island 3 of 8" or "Your island"); it drops in with each cut while a sea-coloured wipe clears over 620 ms and the new island rises. The wipe lies over the board and under the HUD, so the banner, the island list and the seat rail never blink. The offers rail gives its slot to this panel (offers stay on that island's phones), and since nothing in the rail can then give way, the ticker under it keeps two events of at most two lines in a slot of fixed height (116u).
 
 ### 3.7 Resource fly-outs (batched per player)
 
@@ -421,7 +432,8 @@ SceneView unmounts at results, so the reveal must play while the engine holds a 
 | 0 | Victory sound. Banner "Ana wins!". The winner's buildings flash their halos at full opacity. Seat rail crown on the winner. |
 | 0.8 | Hidden VP reveal, one seat at a time in seat order, 0.5 s each (0.3 s at more than 6 seats). A card flips over the VP numeral, and the VP counts up by the number revealed. |
 | ≤ 6.3 | The rail re-sorts into final rank (a FLIP animation, 500 ms), and rank numerals (#1…#10, 28u) appear on the chips. |
-| 9 | The outcome completes and the shell shows ResultsView. |
+| +0.7 | The winner's card lands on the board (cream, ringed in the winner's colour: chip, the headline, the points) under a shower of 46 confetti pieces that falls until the hold ends. Reduced motion shows the card alone. |
+| 9 | The outcome completes and the shell shows ResultsView. An archipelago holds 11 s and stays on the champion's island. |
 
 Under reduced motion the final state shows at t = 0.8 s, and the rest of the hold still runs so everyone can read it.
 
@@ -655,7 +667,9 @@ Order:
 | Barbarian attack | Drum: 3 sine hits at 60 Hz, 150 ms apart, plus the seven's saw | 0.5 | 900 ms |
 | Victory | C-major arpeggio 523-659-784-1047 Hz (triangle, 110 ms apart), then a held chord for 1.2 s with a noise shimmer (highpass 6 kHz, 0.05) | 0.5 | 1.8 s |
 
-Phone personal cues reuse the turn start, resource arrival, steal and offer recipes at 0.6×.
+| The horn | A ship's horn: sawtooth 147 Hz for 0.3 s then 220 Hz held 0.75 s, each through lowpass 900 Hz with a sine an octave up | 0.3 | 1.1 s |
+
+Phone personal cues reuse the turn start, resource arrival, steal and offer recipes at 0.6×. The horn is a notice and a haptic on the phones that are still playing.
 
 ---
 
@@ -721,3 +735,15 @@ Record the build hash, viewport, roster and evidence path for each. Emulated pho
 20. **Replay.** "Play again" gives a fresh board, fresh stats and no replayed animations.
 21. **Sound balance.** With music on, the dice, the build sounds and the victory are clearly audible and never clip (compressor gain reduction ≤ 6 dB). Mute silences both music and SFX on that device.
 22. **Frame budget.** In a 10-seat late game on balanced quality, `onMetrics` reports ≤ 700 draw calls, ≤ 250k triangles and a p95 frame under 20 ms on the QA laptop.
+
+
+---
+
+## 8. The archipelago on screen (added with the big-room format)
+
+Rules are in ENGINE §20. What players see:
+
+- **TV.** One island at a time, chosen by the server's director, in the same frame as a one-island game: banner, seat rail (four rows), dice chip, production strip. The left rail holds the archipelago panel (3.6a). Three rolls a round: three throws 2.4 s apart, each with its own fly-outs.
+- **Phone.** A one-line strip above the header: the island's name, the round, and "#5 of 32" (the seat's place in the room by public points); it turns coral with "Horn! Last moves". The payout card lists each of the round's rolls with what it paid. While the dice roll the task reads "Round 6 · One roll for every island"; after Done, "Round 6 is in · Waiting for the other islands". A phone never shows another island.
+- **Finale and results.** The headline is "Ana wins the archipelago!" on every island; a phone's task line reads "#7 of 32 in the room · #2 on Coral Hook". The results screen is the room's: the champion and their island, every seat by points in up to four columns (64 names fit above the fold at 720p; a name keeps its width and the island's name beside it gives way first; a phone gets one scrolling list with its row outlined and a "You placed…" card), each island's winner, and the room awards.
+- **Settings.** "Islands: One island / Archipelago" with the note that rooms above ten always play it, and a preview line ("8 islands of 4, all playing at once").

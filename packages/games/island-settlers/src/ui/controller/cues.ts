@@ -30,6 +30,11 @@ export function useCues(pub: PublicView, me: PrivateView, now: () => number, sfx
     const traded = pub.events.some(e => e.id > s.events && fresh(e.at) && e.kind === 'trade'
       && (e.seat === me.seat || e.partner === me.seat));
     if (traded) sfx.haptic('trade');
+    const horn = pub.events.find(e => e.id > s.events && fresh(e.at) && e.kind === 'horn');
+    if (horn && !me.task.kind.match(/wait|finale|ended/)) {
+      notify('info', horn.text, `horn:${horn.id}`);
+      sfx.haptic('turn');
+    }
     s.events = Math.max(s.events, ...pub.events.map(e => e.id));
     const offers = pub.offers.filter(o => o.from !== me.seat && o.responses[me.seat] && !s.offers.has(o.id));
     if (offers.some(o => fresh(o.at))) sfx.cue('offer');

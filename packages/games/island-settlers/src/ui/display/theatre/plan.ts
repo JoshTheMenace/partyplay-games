@@ -23,6 +23,8 @@ export type Flight = {
   key: string; seat: SeatId; goods: { good: Good; amount: number }[]; from: Origin;
   /** ms after the beat start. */
   delay: number; ms: number; faceDown?: true;
+  /** A trade: the cards cross sideways between two rail rows, or go to the bank. */
+  swap?: true; toBank?: true;
 };
 export type Beat = {
   /** start is Infinity until the queue places it. */
@@ -34,7 +36,10 @@ export type Beat = {
   flights: Flight[];
 };
 
-const ANIMATED = new Set<GameEvent['kind']>(['roll', 'payout', 'take', 'steal', 'robber']);
+const ANIMATED = new Set<GameEvent['kind']>(['roll', 'payout', 'take', 'steal', 'robber', 'trade', 'bank', 'horn']);
+/** How long the horn's banner stays up. */
+export const HORN_MS = 2600;
+export const TRADE_MS = 620;
 export const animated = (e: GameEvent) => ANIMATED.has(e.kind);
 
 type Pair = { seat: SeatId; good: Good; amount: number; tile: TileId | null; pips: number };
@@ -75,6 +80,9 @@ const tilePips = (pub: PublicView, id: TileId) =>
 const pairs = (pub: PublicView, grants: Grant[]): Pair[] =>
   grants.map(g => ({ ...g, pips: tilePips(pub, g.tile) }));
 
+const goodsOf = (cards: Partial<Record<Good, number>>) =>
+  GOODS.filter(g => (cards[g] ?? 0) > 0).map(good => ({ good, amount: cards[good] ?? 0 }));
+
 const flightsOf = (e: GameEvent, pub: PublicView): Flight[] => {
   const order = pub.seats.map(s => s.id);
   const room = ROLL_MS.settle - ROLL_MS.flyStart - FLY.ms;
@@ -87,6 +95,15 @@ const flightsOf = (e: GameEvent, pub: PublicView): Flight[] => {
       key: `steal:${e.id}`, seat: e.seat, goods: [], from: { seat: e.victim }, delay: 0, ms: STEAL_MS,
       faceDown: true,
     }];
+    // Trades are public: both hands of cards cross at once. A bank trade goes out, then comes back.
+    case 'trade': return [
+      { key: 'give', seat: e.partner, goods: goodsOf(e.give), from: { seat: e.seat }, delay: 0, ms: TRADE_MS, swap: true },
+      { key: 'get', seat: e.seat, goods: goodsOf(e.get), from: { seat: e.partner }, delay: 80, ms: TRADE_MS, swap: true },
+    ];
+    case 'bank': return [
+      { key: 'give', seat: e.seat, goods: goodsOf(e.give), from: { seat: e.seat }, delay: 0, ms: TRADE_MS, toBank: true },
+      { key: 'get', seat: e.seat, goods: goodsOf(e.get), from: { bank: true }, delay: 260, ms: TRADE_MS },
+    ];
     default: return [];
   }
 };
@@ -101,8 +118,9 @@ export function toBeat(event: GameEvent, pub: PublicView): Beat {
     return { event, start: Infinity, ms: ROLL_MS.settle, life, flights };
   }
   if (event.kind === 'robber') return { event, start: Infinity, ms: HOP_MS, life: HOP_MS + PING_MS, flights };
-  const ms = Math.max(landed(flights), 1);
-  return { event, start: Infinity, ms, life: ms + (event.kind === 'steal' ? 0 : chips), flights };
+  if (event.kind === 'horn') return { event, start: Infinity, ms: 1, life: HORN_MS, flights };
+  const ms = Math.max(landed(flights), 1), swap = event.kind === 'trade' || event.kind === 'bank';
+  return { event, start: Infinity, ms, life: ms + (event.kind === 'steal' || swap ? 0 : chips), flights };
 }
 
 /**

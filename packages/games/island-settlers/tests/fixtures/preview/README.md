@@ -29,6 +29,8 @@ shared `party-ui/src/style.css`. Stop it with Ctrl-C (or `kill` the PID you star
 | `chrome` | `0` hides the toolbar; the scene stage then fills the viewport | shown |
 | `role` | `display`, `controller`, `personal` (only for `view=instructions`) | `controller` |
 | `reject` | a reason string; every `sendAction` resolves `{ accepted: false, reason }` | accepted |
+| `islands` | a number above 1 shows the fixture as one island of an archipelago (the others are copies with shuffled names and scores) | `1` |
+| `horn` | `1` marks the horn as sounded in that archipelago | off |
 
 Examples:
 
@@ -53,6 +55,8 @@ http://127.0.0.1:5390/?view=display&fixture=finale-6&chrome=0
   'controller'`, `PersonalView` if exported, else `ControllerView`; its scene uses the display role.
   Unlike production, the view renders before the scene reports ready, so a broken scene never
   hides the HUD. The toolbar shows the scene status.
+- **Wire**: fixtures are island views; `tests/fixtures/wire.ts` wraps them in the room and seat
+  views the client now takes, and hands the client the original view objects so nothing is re-derived.
 - **Context**: `roomId 'PREVIEW'`, `roundId` = fixture name, `connected: true`, `setInput`,
   `releaseInput` and `assetsReady` are no-ops. `sendAction` logs to the console and the toolbar,
   appends to `window.islandPreview.actions`, and resolves accepted (see `reject`).

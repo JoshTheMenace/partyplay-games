@@ -6,6 +6,7 @@
  * Run with `node --import tsx` so the TypeScript CPU module loads.
  */
 import { decide } from '../../src/cpu/index.ts';
+import { islandOf, seatView } from '../../src/wire.ts';
 
 const LABEL = { wood: 'Wood', brick: 'Brick', wool: 'Wool', grain: 'Grain', ore: 'Ore',
   paper: 'Paper', cloth: 'Cloth', coin: 'Coin', gold: 'Gold' };
@@ -25,7 +26,8 @@ export function seeded(seed) {
 /** Frames seen by one page: the merged current snapshot, acks by action id, sent action types, errors. */
 export function observe(page, name) {
   page.setDefaultTimeout(6000);
-  const data = { name, page, current: null, revision: 0, sent: new Map(), acks: [], errors: [], frames: 0 };
+  const data = { name, page, current: null, room: null, revision: 0, sent: new Map(), acks: [], errors: [], frames: 0,
+    bytes: 0, largest: 0, since: Date.now() };
   page.on('pageerror', e => data.errors.push(`pageerror: ${e.message}`));
   page.on('console', m => { if (m.type() === 'error') data.errors.push(`console: ${m.text()}`); });
   page.on('websocket', socket => {
@@ -34,10 +36,20 @@ export function observe(page, name) {
       if (m.type === 'game.action') data.sent.set(m.actionId, m.payload);
     });
     socket.on('framereceived', f => {
+      // Traffic as the page sees it: bytes received and the largest single message.
+      const size = Buffer.byteLength(String(f.payload));
+      data.bytes += size;
+      if (size > data.largest) data.largest = size;
       const m = JSON.parse(String(f.payload));
       if (m.type === 'game.snapshot' || m.type === 'round.results') {
-        const prev = data.current?.roundId === m.roundId ? data.current.publicView : {};
-        data.current = { ...m, publicView: { ...prev, ...m.publicView } };
+        // The wire carries the room (wire.ts); the driver works on the island this page shows, as the UI does.
+        const prev = data.room?.roundId === m.roundId ? data.room.view : {};
+        const room = { ...prev, ...m.publicView };
+        data.room = { roundId: m.roundId, view: room };
+        if (!room.league) return;
+        const seat = m.privateView ? seatView(m.roundId, name, room, m.privateView).view : null;
+        data.current = { ...m, room, publicView: seat?.pub ?? islandOf(room.league, room.league.island),
+          privateView: seat?.me ?? null };
         data.revision = m.revision;
         data.frames++;
       }
@@ -247,9 +259,12 @@ export async function execute(phone, a) {
       if (await clear.isEnabled()) await clear.click();
       await setRow(p, composer.getByRole('group', { name: 'You give' }), 'Give', a.give, {});
       await setRow(p, composer.getByRole('group', { name: 'You get' }), 'Get', a.want, {});
-      if (a.to.length && me.partners.length > 1) {
-        for (const id of a.to) await composer.getByRole('group', { name: 'Send to' })
-          .getByRole('button', { name: new RegExp(esc(pub.seats.find(s => s.id === id).name)) }).click();
+      // The only partner left in the window has a fixed pill (pressed and disabled): nothing to tap. Seats
+      // leave the window while this runs, so ask the page, not the view this call started with.
+      for (const id of a.to) {
+        const pill = composer.getByRole('group', { name: 'Send to' })
+          .getByRole('button', { name: new RegExp(esc(pub.seats.find(s => s.id === id).name)) });
+        if (await pill.isEnabled()) await pill.click({ timeout: 2000 }).catch(async e => { if (await pill.isEnabled()) throw e; });
       }
       await composer.getByRole('button', { name: 'Offer', exact: true }).click();
       return true;

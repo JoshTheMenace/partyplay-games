@@ -37,6 +37,7 @@ export const MISSIONS = ['lairs', 'fish', 'spices'] as const;
 export const TIMER_PRESETS = ['off', 'relaxed', 'brisk'] as const;
 export const CPU_LEVELS = ['easy', 'normal', 'sharp'] as const;
 export const ROUND_SECONDS = [60, 90, 120] as const;
+export const ISLANDS_MODES = ['one', 'many'] as const;
 
 export type Mode = (typeof MODES)[number];
 export type MapKind = (typeof MAPS)[number];
@@ -47,6 +48,7 @@ export type Mission = (typeof MISSIONS)[number];
 export type TimerPreset = (typeof TIMER_PRESETS)[number];
 export type CpuLevel = (typeof CPU_LEVELS)[number];
 export type RoundSeconds = (typeof ROUND_SECONDS)[number];
+export type IslandsMode = (typeof ISLANDS_MODES)[number];
 
 /** Rule families. Each one is a module in the engine registry. */
 export const MODULE_IDS = [
@@ -74,6 +76,10 @@ export type Settings = {
   tableSize: number;
   cpuLevel: CpuLevel;
   balancedDice: boolean;
+  /** 'many': the room is dealt onto several islands that share one roll. Rooms above ten always are. */
+  islands: IslandsMode;
+  /** The game places every starting piece (the best open spots, in the usual order). */
+  quickStart: boolean;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -90,6 +96,8 @@ export const DEFAULT_SETTINGS: Settings = {
   tableSize: 4,
   cpuLevel: 'normal',
   balancedDice: false,
+  islands: 'one',
+  quickStart: false,
 };
 
 export const TABLE_SIZE = { min: 3, max: 10 } as const;
@@ -415,7 +423,9 @@ export type Action =
   | { type: 'skip-paired'; turnId: number; skip: boolean }
   /** Optional: tell the TV which placement the phone is choosing (null when leaving it). */
   | { type: 'intent'; turnId: number; piece: IntentPiece | null }
-  | { type: 'emote'; turnId: number; emote: Emote };
+  | { type: 'emote'; turnId: number; emote: Emote }
+  /** A page that missed the full copy of its views asks for it again (wire.ts). Any turn id. */
+  | { type: 'sync'; turnId: number };
 
 export type ActionType = Action['type'];
 export const ACTION_LIMITS = { maxBytes: 1024, perPlayer: 4096 } as const;
@@ -477,6 +487,8 @@ export type GameEvent =
   | (EventBase & { kind: 'reveal'; seat: SeatId | null; tile: TileId; terrain: Terrain })
   | (EventBase & { kind: 'auto'; seat: SeatId; step: TimedStep; reason: 'timeout' | 'disconnected' | 'error' })
   | (EventBase & { kind: 'presence'; seat: SeatId; connected: boolean })
+  /** Most seats are done with the round: every clock still running ends in `seconds`. */
+  | (EventBase & { kind: 'horn'; seconds: number })
   | (EventBase & { kind: 'emote'; seat: SeatId; emote: Emote })
   /** C&K barbarian ship arrival or a Barbarian Attack battle. */
   | (EventBase & {

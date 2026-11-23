@@ -77,7 +77,9 @@ export const commodityStock = (seats: number) => (seats <= 4 ? 12 : seats <= 6 ?
 
 export function initState(s: State): CkState {
   const copies = s.order.length >= 7 ? 2 : 1, shuffled = random(s, 'cards');
-  const deck = (t: Track) => shuffle(DECKS[t].flatMap(([k, n]) => Array<ProgressKind>(n * copies).fill(k)), shuffled);
+  // An archipelago's dice belong to the whole room, so the card that sets them (Alchemist) is left out there.
+  const cards = (t: Track) => DECKS[t].filter(([k]) => !(s.league && k === 'alchemist'));
+  const deck = (t: Track) => shuffle(cards(t).flatMap(([k, n]) => Array<ProgressKind>(n * copies).fill(k)), shuffled);
   const seat = (): SeatX => ({
     improvements: { science: 0, trade: 0, politics: 0 }, progress: [], points: 0, defender: 0,
     fleet: [], harbor: null,

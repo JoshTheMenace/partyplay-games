@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { decide } from '../../src/cpu/index';
 import { tick } from '../../src/engine/index';
-import { cpuStep, rules } from '../../src/server';
+import { cpuStep, island as rules } from '../../src/server';
 import { seeded } from '../fixtures/board';
 import { act, pub, view } from '../helpers';
 import { enginePlays } from './match';

@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import type { PublicSeat, PublicView } from '../../model';
 import { CPU_NAMES, hasDevCards } from '../shared/labels';
 import { SEATS } from '../shared/seats';
@@ -28,6 +28,9 @@ export function SeatRow({ pub, seat, height, now, serverNowMs, vp, rank }: RowPr
   const winner = !!pub.results?.winners.includes(seat.id), badge = over ? null : statusBadge(pub, seat);
   const status = over ? '' : statusText(pub, seat, now), level = CPU_NAMES[pub.settings.cpuLevel];
   const extras = extrasFor(pub, seat), { row, line, room } = useRoom(extras);
+  // A point gained pops on the numeral (the key remounts it, so the animation restarts each time).
+  const was = useRef(vp), gained = vp > was.current;
+  useEffect(() => { const timer = setTimeout(() => { was.current = vp; }, 900); return () => clearTimeout(timer); }, [vp]);
   const more = extras.slice(room).map(e => e.label).join(', '), army = pub.awards['largest-army'] === seat.id;
   const knights = `${seat.knights} knights`;
   // Dense rows keep the word only (every CPU shares the table's level); the title still names it.
@@ -57,7 +60,8 @@ export function SeatRow({ pub, seat, height, now, serverNowMs, vp, rank }: RowPr
         {status || <><small>Left</small>{(pub.settings.map === 'base' ? LEFT : SHIPS).map(([k, icon]) =>
           <Stat key={k} icon={icon} value={seat.left[k]} label={`${seat.left[k]} ${k} left`}/>)}</>}</p>}
     </div>
-    <b className="island-settlers-hud-vp kp-numeral" data-seat-vp={seat.id} data-up={vp > seat.vp || undefined}
-      aria-label={`${vp} victory points`}>{vp}</b>
+    <b key={vp} className="island-settlers-hud-vp kp-numeral" data-seat-vp={seat.id}
+      data-up={vp > seat.vp || undefined} data-pop={gained || undefined}
+      aria-label={`${vp} victory points`}>{vp}{gained && <i aria-hidden="true">+{vp - was.current}</i>}</b>
   </article>;
 }

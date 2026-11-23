@@ -17,7 +17,8 @@ const FIXED: Record<string, string> = {
 /** Slots whose colour comes from the seat. */
 export const SEAT_ROLES = new Set(['seat', 'seat_dark']);
 
-export function materials(scope: ResourceScope) {
+/** `real`: the scene casts real shadows, so the baked blob under each piece is not drawn. */
+export function materials(scope: ResourceScope, real = false) {
   const cache = new Map<string, Material>();
   const standard = (p: MeshStandardMaterialParameters) =>
     scope.own(new MeshStandardMaterial({ roughness: 0.85, metalness: 0, flatShading: true, ...p }));
@@ -36,7 +37,7 @@ export function materials(scope: ResourceScope) {
         return scope.own(new MeshBasicMaterial({ color: name === 'outline' ? INK : CREAM, side: BackSide }));
       }
       if (name === 'shadow') {
-        return scope.own(new MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }));
+        return scope.own(new MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, visible: !real }));
       }
       if (name === 'glow') return standard({ color: SUN, emissive: SUN, emissiveIntensity: 0.9 });
       if (FIXED[name] || name.startsWith('#')) return standard({ color: FIXED[name] ?? name });

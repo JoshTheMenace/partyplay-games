@@ -52,7 +52,16 @@ Deliveries 15, Fishing + Deliveries 12, Fishing + Rivers 10, C&K + Caravans 15, 
 
 - All maps are generated per table size; 5–10 seat supplies, dev decks and port counts are scaled.
 - 7–10 seats: the paired build turn runs at the same time as the main turn.
-- Connect rounds keep private hands and a shared board for 3–10 seats; setup stays sequential.
+- Connect rounds keep private hands and a shared board for 3–10 seats; setup stays sequential (or is
+  skipped by quick start).
+- **Archipelago** (rooms above ten, or a host's choice from five): islands of four that share three
+  rolls a round and play at once; the highest total in the room wins. This is PartyPlay's own format,
+  not from any published rules. Details: [ENGINE §20](docs/v2/ENGINE.md).
+- Connect rounds with five or more seats, and every archipelago, have a **horn**: once 70% are done the
+  rest get 12 seconds.
+- **Quick start** (host option): the game places every starting piece.
+- In an archipelago nothing can be played before the roll, so the Cities & Knights **Alchemist** is left
+  out of the Science deck there, and Deliveries' reroll of a 2 or 12 is made once for the whole room.
 - A safety-net round limit (15 rounds per target point in Standard, 12 in Connect, scaled per
   module) ends a stalled game with the highest total winning.
 - Fog Islands accepts Barbarian Attack, Caravans and Deliveries on the home island, and Four Islands

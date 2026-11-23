@@ -36,5 +36,9 @@
 .island-settlers-hud-ticker li {
   display: flex; align-items: center; gap: calc(8 * var(--u)); line-height: 1.2;
 }
+.island-settlers-hud-ticker[data-short] {
+  height: calc(116 * var(--u)); overflow: hidden; font-size: max(12px, calc(18 * var(--u)));
+}
+.island-settlers-hud-ticker[data-short] span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .island-settlers-hud-ticker li:nth-child(2) { opacity: 0.6; }
 .island-settlers-hud-ticker li:nth-child(3) { opacity: 0.35; }

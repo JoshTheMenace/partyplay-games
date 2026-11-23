@@ -31,7 +31,7 @@ const BA = (s: State) => s.modules.includes('barbarian-attack');
 const base = { module: ID, group: 'deliveries' as const };
 
 /** T&B 3–4 (without Barbarian Attack): no 2 or 12 discs, and those rolls are rerolled. */
-const noExtremes = (seats: number, scenarios: readonly string[]) =>
+export const noExtremes = (seats: number, scenarios: readonly string[]) =>
   seats <= 4 && !scenarios.includes('barbarian-attack');
 
 /** The 2 and 12 hexes (and fog faces) take the nearest number that keeps the placement rules. */

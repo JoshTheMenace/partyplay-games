@@ -19,6 +19,17 @@ export const TURN_HELP = {
   ],
 };
 
+/** The big-room format (src/league); keep in step with its constants. */
+export const ARCHIPELAGO_HELP = [
+  'More than ten players (or when the host picks it): the room is dealt by lot onto islands of four. CPUs fill spare seats.',
+  'Every island has its own board, bank and robber, and they all play at the same time. You trade with your own island.',
+  'Each round the room rolls three times. The same dice pay every island. Then everyone trades and builds at once.',
+  'Tap Done when you have finished. Once most of the room is done a horn sounds and the rest get 12 seconds.',
+  'The game ends for everyone after a round in which somebody reaches the target. The highest total in the room wins; a tie goes to whoever was ahead a round earlier.',
+  'The TV moves from island to island. Your phone always shows your own island and your place in the room.',
+  'Quick start (a host option, for any room) places everyone’s starting pieces so play begins at once.',
+];
+
 // Module summaries below are read from the engine modules (src/engine/modules/*); keep them in step.
 
 const SEAFARERS = [
@@ -170,5 +181,6 @@ export const ALL_TOPICS: Topic[] = [
   BASICS, SEVEN,
   { id: 'turns', title: 'Turns', lines: TURN_HELP.standard },
   { id: 'connect', title: 'Connect rounds', lines: TURN_HELP.connect },
+  { id: 'archipelago', title: 'Archipelago (big rooms)', lines: ARCHIPELAGO_HELP },
   ...Object.values(MODULE_HELP), TABLE,
 ];

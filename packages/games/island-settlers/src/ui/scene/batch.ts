@@ -22,6 +22,7 @@ export type Instance = {
 };
 
 const BODY = SEATS.map(s => new Color(s.body)), DARK = SEATS.map(s => new Color(s.dark));
+const FLAT = new Set(['outline', 'outline_cream', 'shadow', 'glow']);
 const ZERO = new Matrix4().makeScale(0, 0, 0), tints = new Map<string, Color>();
 const tint = (hex = '#ffffff') => tints.get(hex) ?? tints.set(hex, new Color(hex)).get(hex)!;
 function colour(role: string, inst: Instance) {
@@ -71,7 +72,9 @@ export class Batch {
       const cells = new InstancedBufferAttribute(new Float32Array(this.capacity * 2), 2);
       if (decal) geometry.setAttribute('emblemCell', cells);
       const mesh = new InstancedMesh(geometry, this.material(part), this.capacity);
-      Object.assign(mesh, { frustumCulled: false, renderOrder: this.order });
+      // Solid parts cast and take real shadows; decals, outlines and the baked blob never cast.
+      const solid = !decal && !FLAT.has(part.role);
+      Object.assign(mesh, { frustumCulled: false, renderOrder: this.order, castShadow: solid, receiveShadow: solid });
       this.parent.add(mesh);
       return mesh;
     });

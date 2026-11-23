@@ -12,8 +12,9 @@ import { observe, play, until } from './driver.mjs';
 const [base = 'http://127.0.0.1:4393', out = 'output/settlers-v2/m3', mode = 'watch'] = process.argv.slice(2);
 const { chromium } = await import(process.env.PLAYWRIGHT ?? 'playwright');
 mkdirSync(out, { recursive: true });
+// CHROME_ARGS overrides the GPU flags (for example software WebGL on a headless Linux box).
 const browser = await chromium.launch({ executablePath: process.env.CHROME || undefined,
-  args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
+  args: process.env.CHROME_ARGS?.split(' ') ?? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const started = Date.now(), notes = [];
 const log = s => {
   const line = `[${((Date.now() - started) / 1000).toFixed(0)}s] ${s}`;
@@ -31,7 +32,8 @@ const solo = mode === 'solo';
 if (!solo) await hostPage.getByRole('button', { name: 'Watch only' }).click();
 else {
   await hostPage.getByRole('button', { name: 'Settings', exact: true }).click();
-  await hostPage.getByLabel('Seats').selectOption('3');
+  await hostPage.getByRole('button', { name: 'Game rules' }).click();
+  await hostPage.locator('.island-settlers-settings select').first().selectOption('3');
   await hostPage.getByRole('button', { name: 'Apply settings' }).click();
 }
 const code = (await hostPage.locator('.kp-code').first().textContent()).trim();

@@ -4,7 +4,7 @@ import type { Synth } from './synth';
 /** EXPERIENCE §5 recipes. Kept round and low-passed so they sit under the 22% soundtrack. */
 export type SoundName =
   | 'dice' | 'seven' | 'resource' | 'route' | 'settlement' | 'city' | 'robber' | 'steal'
-  | 'turn' | 'offer' | 'trade' | 'tick' | 'barbarians' | 'victory';
+  | 'turn' | 'offer' | 'trade' | 'tick' | 'barbarians' | 'victory' | 'horn';
 
 export const GOOD_PITCH: Record<Good, number> = {
   wood: 660, brick: 740, wool: 880, grain: 990, ore: 523, paper: 1175, cloth: 1047, coin: 1319,
@@ -62,6 +62,13 @@ export const RECIPES: Record<SoundName, (s: Synth, good?: Good) => void> = {
   barbarians(s) {
     for (let i = 0; i < 3; i++) s.tone('sine', 72, i * 0.15, 0.2, 0.5, { to: 56, attack: 0.003 });
     growl(s, 0.45, 0.3);
+  },
+  /** A ship's horn: two low reedy notes a fifth apart, the second held. */
+  horn(s) {
+    for (const [hz, at, len] of [[147, 0, 0.3], [220, 0.32, 0.75]] as const) {
+      s.tone('sawtooth', hz, at, len, 0.3, { attack: 0.05, filter: ['lowpass', 900, 0.7] });
+      s.tone('sine', hz * 2, at, len, 0.1, { attack: 0.05 });
+    }
   },
   victory(s) {
     const notes = [523, 659, 784, 1047];

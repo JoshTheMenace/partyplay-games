@@ -18,7 +18,7 @@ import { SEATS } from '../../src/ui/shared/seats';
 import { freshEvents } from '../../src/ui/shared/timeline';
 
 const src = resolve(dirname(fileURLToPath(import.meta.url)), '../../src');
-const FORBIDDEN = [join(src, 'engine'), join(src, 'cpu'), join(src, 'server')];
+const FORBIDDEN = [join(src, 'engine'), join(src, 'cpu'), join(src, 'server'), join(src, 'league')];
 
 /** Runtime module specifiers of a source file. Type-only imports and exports are skipped. */
 function runtimeImports(code: string): string[] {
@@ -40,7 +40,8 @@ const breaches = (file: string, code: string) => runtimeImports(code)
   .filter(target => FORBIDDEN.some(bad => target.startsWith(bad) && /^([/.]|$)/.test(target.slice(bad.length))))
   .map(target => `${relative(src, file)} → ${relative(src, target)}`);
 
-const uiFiles = () => [join(src, 'client.tsx'),
+/** The client entry, the shared browser-safe modules it leans on (the wire and its board graph), and the UI. */
+const uiFiles = () => [join(src, 'client.tsx'), join(src, 'wire.ts'), join(src, 'graph.ts'), join(src, 'audio.tsx'),
   ...readdirSync(join(src, 'ui'), { recursive: true, encoding: 'utf8' })
     .filter(f => /\.tsx?$/.test(f)).map(f => join(src, 'ui', f))];
 
@@ -53,6 +54,7 @@ test('the boundary check catches runtime imports and allows type imports', () =>
   const file = join(src, 'ui', 'x', 'index.tsx');
   assert.equal(breaches(file, "import { a } from '../../engine/state';").length, 1);
   assert.equal(breaches(file, "import '../../server';").length, 1);
+  assert.equal(breaches(file, "import { sync } from '../../league/views';").length, 1);
   assert.equal(breaches(file, "const m = import('../../cpu/index');").length, 1);
   assert.equal(breaches(file, "import.meta.glob<Record<string, X>>(\n  '../../engine/*.ts');").length, 1);
   assert.equal(breaches(file, "import {\n  a,\n  type B,\n} from '../../engine/state';").length, 1);

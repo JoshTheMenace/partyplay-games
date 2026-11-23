@@ -49,6 +49,7 @@ export function applyAction(s: State, id: SeatId, a: Action, now: number) {
 function dispatch(s: State, id: SeatId, a: Action) {
   const p = seat(s, id), stage = s.turn.stage;
   need(stage !== 'ended', 'The game has finished.');
+  if (a.type === 'sync') return;
   if (a.type === 'emote') return emote(s, id, a.emote);
   need(stage !== 'finale', 'The game is over. Only emotes now.');
   need(a.turnId === s.turn.id, 'The turn changed. Choose again.');

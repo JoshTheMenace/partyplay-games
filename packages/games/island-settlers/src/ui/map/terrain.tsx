@@ -31,11 +31,13 @@ export function Token({ at, number, robbed }: { at: Point; number: number; robbe
 
 function Hex({ tile, view, robbed }: { tile: Tile; view: MapView; robbed: boolean }) {
   const { terrain, number } = tileFace(view, tile.id), meta = TERRAIN_META[terrain];
-  if (terrain === 'sea') return <polygon points={hexPoints(tile, 0.99)} fill={meta.top} opacity={0.55}/>;
+  // Sea hexes are a light glaze over the water, as on the TV, so ships still read the grid.
+  if (terrain === 'sea') return <polygon points={hexPoints(tile, 0.97)} fill="#8fd3f2" opacity={0.16}/>;
   const top = robbed ? mix(meta.top, '#7d7f86', 0.55) : meta.top;
   return <g data-terrain={terrain}>
     <polygon points={hexPoints(tile, 0.965)} fill={top} stroke={meta.side} strokeWidth={0.06}
       strokeLinejoin="round"/>
+    <polygon points={hexPoints(tile, 0.74)} fill="#ffffff" opacity={0.09}/>
     {terrain === 'fog'
       ? <path d="M-.4.12a.2.2 0 0 1 .1-.3.26.26 0 0 1 .46-.05.2.2 0 0 1 .24.35Z" fill="#d9dde8" opacity={0.8}
         transform={`translate(${round(tile.x)} ${round(tile.y)})`}/>
@@ -51,6 +53,8 @@ export function Terrain({ view, glow, glowAge }: { view: MapView; glow: string[]
   const land = tiles.filter(t => tileFace(view, t.id).terrain !== 'sea');
   const index = boardIndex(view.board);
   return <g className="island-settlers-terrain">
+    {land.map(t => <polygon key={t.id} points={hexPoints({ x: t.x + 0.1, y: t.y + 0.16 }, 1.1)} fill="#04162b"
+      opacity={0.3}/>)}
     {land.map(t => <polygon key={t.id} points={hexPoints(t, 1.07)} fill={BEACH}/>)}
     {tiles.map(t => <Hex key={t.id} tile={t} view={view} robbed={blocked.has(t.id)}/>)}
     {glowAge < 1500 && glow.map(id => {

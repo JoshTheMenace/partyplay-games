@@ -53,7 +53,7 @@ export function parseAction(raw: unknown): Action {
   need(Number.isSafeInteger(a.turnId) && (a.turnId as number) >= 0, 'Invalid turn.');
   const turnId = a.turnId as number;
   switch (a.type) {
-    case 'roll': case 'end': case 'buy-dev': return { type: a.type, turnId };
+    case 'roll': case 'end': case 'buy-dev': case 'sync': return { type: a.type, turnId };
     case 'build':
       return { type: 'build', turnId, piece: oneOf(a.piece, PIECES, 'Unknown piece.'), at: id(a.at) };
     case 'move-ship': return { type: 'move-ship', turnId, from: id(a.from), to: id(a.to) };

@@ -4,14 +4,15 @@
  * board or fog reveals change; pieces and overlays diff every snapshot.
  */
 import {
-  Color, DirectionalLight, Group, HemisphereLight, OrthographicCamera, Scene,
+  Color, DirectionalLight, Group, HemisphereLight, OrthographicCamera, PCFSoftShadowMap, Scene,
+  type WebGLRenderer,
 } from 'three';
 import type { GameEvent, PublicView, TileId } from '../../model';
 import { boardIndex } from '../shared/board';
 import { bridge, type ScreenPoint } from '../shared/bridge';
 import { freshEvents } from '../shared/timeline';
 import { ResourceScope } from '../../../../../party-runtime/src/index';
-import { CAMERA_DIR, WATER, fitCamera, project, unproject, type Fit, type Stage } from './camera';
+import { CAMERA_DIR, WATER, fitCamera, landBox, project, unproject, type Fit, type Stage } from './camera';
 import { textures } from './canvas';
 import { LAND_TOP, SEA_Y, pieceScale } from './constants';
 import { context } from './context';
@@ -26,18 +27,33 @@ import { buildTerrain, type TerrainLayer } from './terrain';
 import { buildTokens, type TokenLayer } from './tokens';
 
 const FLASH_AT = 450, TINT_MS = 300;
+/** Pieces drop, hop and rise for a moment after each snapshot; the shadow map follows them that long. */
+const SHADOW_SETTLE_MS = 1600;
 
 export function createBoardScene(scope: ResourceScope, kit: Kit, low: boolean) {
   const scene = new Scene(), camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 400);
   scene.background = new Color('#0b2d4f');
   camera.position.set(CAMERA_DIR.x * 80, CAMERA_DIR.y * 80, CAMERA_DIR.z * 80);
   camera.lookAt(0, 0, 0);
-  const key = new DirectionalLight('#fff1d6', 2.2), fill = new DirectionalLight('#9fd6ff', 0.5);
+  const key = new DirectionalLight('#fff1d6', 2.5), fill = new DirectionalLight('#9fd6ff', 0.55);
   key.position.set(-12, 24, 14);
   fill.position.set(16, 10, -12);
-  scene.add(new HemisphereLight('#dcecff', '#2a4f6e', 1.7), key, fill);
+  scene.add(new HemisphereLight('#dcecff', '#2a4f6e', 1.45), key, fill, key.target);
+  // Real shadows from the key light (not on low-power screens). The helper owns the renderer, so the
+  // scene switches them on in its first render; the map is redrawn only while something moved.
+  let renderer: WebGLRenderer | null = null, shadowsUntil = Infinity;
+  if (!low) {
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    Object.assign(key.shadow, { bias: -0.0004, normalBias: 0.03 });
+    scene.onBeforeRender = gl => {
+      if (renderer) return;
+      renderer = gl;
+      Object.assign(gl.shadowMap, { enabled: true, type: PCFSoftShadowMap, autoUpdate: false, needsUpdate: true });
+    };
+  }
 
-  const mats = materials(scope), tex = textures(scope), ctx = context(scope, mats, tex, kit);
+  const mats = materials(scope, !low), tex = textures(scope), ctx = context(scope, mats, tex, kit);
   const pieces = createPieces(ctx, scene), overlays = createOverlays(ctx, scene);
   let view: PublicView | null = null, staticKey = '', layer: ResourceScope | null = null;
   let terrain: TerrainLayer | null = null, tokens: TokenLayer | null = null, statics: Group | null = null;
@@ -62,8 +78,19 @@ export function createBoardScene(scope: ResourceScope, kit: Kit, low: boolean) {
     tokens.robbed(tint);
   }
 
+  /** Aim the key light at the land and fit its shadow box around it. */
+  function light(board: PublicView['board']) {
+    const box = landBox(board), cx = (box.minX + box.maxX) / 2, cz = (box.minY + box.maxY) / 2;
+    const half = Math.max(box.maxX - box.minX, box.maxY - box.minY) / 2 + 2;
+    key.target.position.set(cx, 0, cz);
+    key.position.set(cx - 12, 24, cz + 14);
+    Object.assign(key.shadow.camera, { left: -half, right: half, top: half, bottom: -half, near: 1, far: 80 });
+    key.shadow.camera.updateProjectionMatrix();
+  }
+
   function refit() {
     if (!view || !stage) return;
+    light(view.board);
     fit = fitCamera(view.board, stage, host);
     Object.assign(camera, { left: fit.left, right: fit.right, top: fit.top, bottom: fit.bottom });
     camera.updateProjectionMatrix();
@@ -96,11 +123,15 @@ export function createBoardScene(scope: ResourceScope, kit: Kit, low: boolean) {
   return {
     scene, camera,
     update(next: PublicView, serverNow: number, now: number) {
+      // Another island's board (the TV cut to it): its history is not news, and its ids start over.
+      if (view && next.board !== view.board) lastSeen = Math.max(0, ...next.events.map(e => e.id));
       const fresh = freshEvents(next.events, lastSeen, serverNow);
       lastSeen = Math.max(lastSeen, ...next.events.map(e => e.id));
-      const revealed = new Set(fresh.flatMap(e => (e.kind === 'reveal' ? [e.tile] : [])));
       const nextKey = JSON.stringify(next.pieces.reveals);
       const boardChanged = next.board !== view?.board;
+      // A new board (the round starting, or the TV cutting to another island) rises out of the mist whole.
+      const revealed = new Set(boardChanged ? next.board.tiles.filter(t => t.terrain !== 'sea').map(t => t.id)
+        : fresh.flatMap(e => (e.kind === 'reveal' ? [e.tile] : [])));
       if (boardChanged && next.pieces.robber) tint.set(next.pieces.robber, 1);
       if (boardChanged || nextKey !== staticKey) rebuildStatics(next, revealed, now);
       staticKey = nextKey;
@@ -108,12 +139,14 @@ export function createBoardScene(scope: ResourceScope, kit: Kit, low: boolean) {
       if (boardChanged) refit();
       pieces.sync(next, now, cues(fresh, now));
       overlays.sync(next, pieces, bridge.pick, me);
+      shadowsUntil = now + SHADOW_SETTLE_MS;
     },
     /** Re-read bridge.pick (host placement) without a new snapshot. */
     repick() { if (view) overlays.sync(view, pieces, bridge.pick, me); },
     setViewer(seat: number | null, isHost: boolean) { me = seat; host = isHost; refit(); },
     resize(next: Stage) { stage = next; refit(); if (view) overlays.sync(view, pieces, bridge.pick, me); },
     frame(now: number, dt: number, reduced: boolean) {
+      if (renderer && now < shadowsUntil + 50) renderer.shadowMap.needsUpdate = true;
       const robbed = view?.pieces.robber ?? null;
       let changed = false;
       for (const id of new Set([...tint.keys(), ...(robbed ? [robbed] : [])])) {

@@ -24,6 +24,7 @@ export function InstructionsView({ role }: InstructionsViewProps) {
       <li><b>Win:</b> the first to the target score (usually 10 points) wins.</li>
     </ol>
     <p>{ROLE_LINE[role]}</p>
+    <p>Over ten players split into islands of four.</p>
     <details><summary>More rules</summary><TopicList topics={ALL_TOPICS}/></details>
   </div>;
 }

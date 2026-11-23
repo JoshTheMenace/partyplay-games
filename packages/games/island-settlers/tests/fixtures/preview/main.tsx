@@ -9,16 +9,20 @@ import type { ActionResult } from '../../../../../party-contract/src/index';
 import type { GameClientModule } from '../../../../../party-ui/src/index';
 import { usesScene } from '../../../../../party-runtime/src/scene-policy';
 import '../../../../../party-ui/src/style.css';
-import type { Action, PrivateView, PublicView, Settings } from '../../../src/model';
+import type { Action, Settings } from '../../../src/model';
+import type { RoomView, SeatView } from '../../../src/wire';
+import { roomOf, seatOf } from '../wire';
 import { FIXTURE_NAMES, loadFixture, outcomeOf } from '../index';
 import { makeClock } from './clock';
 import { useReplay } from './replay';
 import { Toolbar, VIEWS, type ViewName } from './toolbar';
 import './preview.css';
 
-type Client = GameClientModule<null, Action, Settings, PublicView, PrivateView>;
+type Client = GameClientModule<null, Action, Settings, RoomView, SeatView>;
 
 const q = new URLSearchParams(location.search);
+/** `islands=8` shows the fixture as one island of an archipelago; `horn=1` sounds the horn. */
+const islands = Number(q.get('islands') ?? 1), horn = q.get('horn') === '1';
 const view: ViewName = VIEWS.find(v => v === q.get('view')) ?? 'display';
 const fixture = loadFixture(FIXTURE_NAMES.find(n => n === q.get('fixture')) ?? 'mid-4');
 const seat = q.get('seat') ?? fixture.seat;
@@ -58,11 +62,12 @@ function App({ client }: { client: Client }) {
     return Promise.resolve(reject ? { accepted: false, reason: reject } : { accepted: true });
   };
   const playerId = role === 'display' ? null : seat;
-  const privateView = playerId ? fixture.views[playerId] ?? null : null;
+  const room = useMemo(() => roomOf(pub, { islands, horn }), [pub]);
+  const privateView = useMemo(() => seatOf(pub, playerId ? fixture.views[playerId] ?? null : null, islands > 1), [pub, playerId]);
   const noop = () => {};
   const props = {
     roomId: 'PREVIEW', roundId: fixture.name, playerId, viewRole: role, isHost: host, connected: true,
-    publicView: pub,
+    publicView: room,
     privateView, serverNowMs: clock.now, setInput: noop, releaseInput: noop, sendAction, assetsReady: noop,
   } as const;
 
@@ -78,7 +83,7 @@ function App({ client }: { client: Client }) {
     if (view === 'results') {
       const outcome = outcomeOf(pub), Results = client.ResultsView, id = q.get('seat');
       return <div className="kp-panel kp-round-results">{Results
-        ? <Results outcome={outcome} publicView={pub} playerId={id} isHost={id === null}/>
+        ? <Results outcome={outcome} publicView={room} playerId={id} isHost={id === null}/>
         : <pre>{JSON.stringify(outcome, null, 1)}</pre>}</div>;
     }
     const View = role === 'display' ? client.DisplayView : host && client.PersonalView ? client.PersonalView

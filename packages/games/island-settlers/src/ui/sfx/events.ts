@@ -39,6 +39,7 @@ export function soundsFor(event: GameEvent): Shot[] {
     case 'trade': case 'bank': return [{ sound: 'trade', delay: 0 }];
     case 'barbarians': return [{ sound: 'barbarians', delay: 0 }];
     case 'win': return [{ sound: 'victory', delay: 0 }];
+    case 'horn': return [{ sound: 'horn', delay: 0 }];
     default: return [];
   }
 }

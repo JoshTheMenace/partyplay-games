@@ -153,6 +153,9 @@ button.island-settlers-card:not(:disabled):active { transform: translateY(2px); 
   .island-settlers-card-name { font-size: 13px; }
   .island-settlers-bar .kp-btn { font-size: 16px; }
   .island-settlers-bar .island-settlers-end { margin-left: 12px; flex-basis: 70px; }
+  /* The label fills a 62px tab here, so the badge sits clear of its last letter. */
+  .island-settlers-badge { right: -10px; top: -15px; }
+  .island-settlers-badge[data-dot] { right: -9px; top: -10px; }
   .island-settlers-grid { gap: 12px 8px; }
 }
 
