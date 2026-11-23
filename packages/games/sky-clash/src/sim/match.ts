@@ -3,7 +3,8 @@
  * death → complete), KOs through the blast zones, respawn halos, disconnect forfeits, the public view and the outcome.
  */
 import type { Outcome, RoundContext } from '../../../../party-contract/src/index';
-import { MAX_FIGHTERS, ROSTER, ROSTER_DATA, neutralInput, type CpuLevel, type FighterKind, type FighterView, type Input, type LobbyChoice, type Settings, type StageId, type View } from '../model';
+import { CREW, MAX_FIGHTERS, ROSTER, ROSTER_DATA, neutralInput, type CpuLevel, type FighterKind, type FighterView, type Input, type LobbyChoice, type Settings, type StageId, type View } from '../model';
+import { ARENA_IDS } from '../arenas';
 import { STAGE_IDS, getStage, resolveStage, stageFrame } from '../stages';
 import { P, alive, byId, clearMove, creditOf, dropHeld, isSpecial, scriptFrame, setState } from './common';
 import { liveHits, orphanCheck, resolveCombat } from './combat';
@@ -18,7 +19,8 @@ import { surfaces, unstick } from './world';
 
 const COUNTDOWN_MS = 3000, GAME_MS = 2000, SUDDEN_MS = 60000, FORFEIT_MS = 20000, OUT_FRAMES = 90, CREDIT_FRAMES = 900;
 const CPU_COLORS = ['#a7b0c0', '#b58aff', '#78d955', '#ffd24a'];
-const REGULAR = ROSTER.filter(k => !ROSTER_DATA[k].bonus);
+/** Random picks and CPU fill come from the crew of the Reaches; legacy fighters appear only when someone chooses one. */
+const REGULAR: readonly FighterKind[] = CREW;
 const zero = () => ({ attack: 0, special: 0, jump: 0, shield: 0, smash: 0, grab: 0 });
 
 /** CPU fighters for this roster: capped at four fighters, and a lone human always gets one. */
@@ -46,20 +48,20 @@ export function readChoice(raw: unknown): LobbyChoice {
   const costume = Number.isInteger(c.costume) && (c.costume as number) >= 0 && (c.costume as number) < 4 ? c.costume as number : 0;
   return { fighter, costume, stage };
 }
-/** Most-voted stage; ties (and a winning 'random') resolve from the seed. No votes → Battlefield. */
+/** Most-voted stage; ties (and a winning 'random') resolve from the seed. No votes, or Random, give an arena of the Reaches. */
 export function tallyStage(votes: readonly (StageId | 'random' | null)[], pick: () => number): StageId {
   const counts = new Map<StageId | 'random', number>();
   for (const v of votes) if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
-  if (!counts.size) return 'battlefield';
+  if (!counts.size) return ARENA_IDS[0];
   const max = Math.max(...counts.values()), leaders = [...counts].filter(([, n]) => n === max).map(([id]) => id).sort();
   const won = leaders[Math.floor(pick() * leaders.length)]!;
-  return won === 'random' ? STAGE_IDS[Math.floor(pick() * STAGE_IDS.length)]! : won;
+  return won === 'random' ? ARENA_IDS[Math.floor(pick() * ARENA_IDS.length)]! : won;
 }
 
 export function createMatch(ctx: RoundContext, settings: Settings): State {
   const s: State = {
     turnId: ctx.roundId, phase: 'countdown', phaseEndsAt: ctx.nowMs + COUNTDOWN_MS, endsAt: settings.seconds ? ctx.nowMs + COUNTDOWN_MS + settings.seconds * 1000 : 0,
-    frame: 0, stageId: 'battlefield', stageTick: 0, hazards: settings.hazards, teams: settings.teams, stocks: settings.stocks, settings: { ...settings },
+    frame: 0, stageId: ARENA_IDS[0], stageTick: 0, hazards: settings.hazards, teams: settings.teams, stocks: settings.stocks, settings: { ...settings },
     seed: ctx.seed >>> 0, rng: (ctx.seed >>> 0) ^ 0x9e3779b9, fighters: [], projectiles: [], events: [], eventId: 0, projectileId: 0,
     eliminations: 0, winners: [], hazardCycle: -1, lastNow: ctx.nowMs,
   };

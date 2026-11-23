@@ -1,0 +1,231 @@
+{
+ "kind": "beacon-rock",
+ "name": "Beacon Rock",
+ "generator": "tools/blender/crew/beacon-rock.py",
+ "height": 6.0,
+ "tris": 19568,
+ "vertices": 10008,
+ "bytes": 850028,
+ "texture": 2048,
+ "bounds": {
+  "min": [
+   -36.9745,
+   -17.7481,
+   -85.0869
+  ],
+  "max": [
+   33.9555,
+   14.55,
+   1.7404
+  ]
+ },
+ "slots": [
+  {
+   "name": "stone",
+   "surface": "stone",
+   "rough": 0.86,
+   "metal": 0,
+   "spec": 0.2,
+   "glow": 0,
+   "kind": 1,
+   "color": "#93867a",
+   "pattern": "#7d7268"
+  },
+  {
+   "name": "paving",
+   "surface": "stone",
+   "rough": 0.86,
+   "metal": 0,
+   "spec": 0.2,
+   "glow": 0,
+   "kind": 1,
+   "color": "#a2968a",
+   "pattern": "#8a7d70"
+  },
+  {
+   "name": "rock",
+   "surface": "rock",
+   "rough": 0.92,
+   "metal": 0,
+   "spec": 0.15,
+   "glow": 0,
+   "kind": 4,
+   "color": "#6f6a78",
+   "pattern": "#4d4a5c"
+  },
+  {
+   "name": "far",
+   "surface": "rock",
+   "rough": 0.92,
+   "metal": 0,
+   "spec": 0.15,
+   "glow": 0,
+   "kind": 4,
+   "color": "#5c6488",
+   "pattern": "#48507a"
+  },
+  {
+   "name": "brass",
+   "surface": "metal",
+   "rough": 0.34,
+   "metal": 1,
+   "spec": 1,
+   "glow": 0,
+   "kind": 0,
+   "color": "#c9963f",
+   "pattern": "#8a5a22"
+  },
+  {
+   "name": "iron",
+   "surface": "iron",
+   "rough": 0.6,
+   "metal": 1,
+   "spec": 1,
+   "glow": 0,
+   "kind": 0,
+   "color": "#3c3d48",
+   "pattern": "#25262e"
+  },
+  {
+   "name": "wood",
+   "surface": "planks",
+   "rough": 0.75,
+   "metal": 0,
+   "spec": 0.25,
+   "glow": 0,
+   "kind": 2,
+   "color": "#5a4032",
+   "pattern": "#3a2a22"
+  },
+  {
+   "name": "plaster",
+   "surface": "stone",
+   "rough": 0.86,
+   "metal": 0,
+   "spec": 0.2,
+   "glow": 0,
+   "kind": 1,
+   "color": "#c4b8a6",
+   "pattern": "#b03a2e"
+  },
+  {
+   "name": "roof",
+   "surface": "plate",
+   "rough": 0.42,
+   "metal": 1,
+   "spec": 1,
+   "glow": 0,
+   "kind": 3,
+   "color": "#2f5560",
+   "pattern": "#1f3a44"
+  },
+  {
+   "name": "moss",
+   "surface": "moss",
+   "rough": 0.95,
+   "metal": 0,
+   "spec": 0.1,
+   "glow": 0,
+   "kind": 0,
+   "color": "#5f7a4a",
+   "pattern": "#3f5a3a"
+  },
+  {
+   "name": "ember",
+   "surface": "glow",
+   "rough": 0.4,
+   "metal": 0,
+   "spec": 0.2,
+   "glow": 2.0,
+   "kind": 0,
+   "color": "#ffc060",
+   "pattern": "#ff6a1c"
+  }
+ ],
+ "bones": [
+  "root"
+ ],
+ "parents": {
+  "root": null
+ },
+ "joints": {
+  "root": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "chains": {},
+ "extras": {
+  "collision": {
+   "blocks": [
+    {
+     "id": "main",
+     "left": -5.6,
+     "right": 5.6,
+     "top": 0.0,
+     "bottom": -1.4
+    },
+    {
+     "id": "under",
+     "left": -4.2,
+     "right": 4.2,
+     "top": -1.4,
+     "bottom": -3.2
+    }
+   ],
+   "platforms": [
+    {
+     "id": "left",
+     "left": -3.9,
+     "right": -1.5,
+     "y": 2.1
+    },
+    {
+     "id": "right",
+     "left": 1.5,
+     "right": 3.9,
+     "y": 2.1
+    },
+    {
+     "id": "top",
+     "left": -1.2,
+     "right": 1.2,
+     "y": 4.1
+    }
+   ]
+  },
+  "lights": [
+   [
+    -5.1,
+    2.4,
+    -2.34
+   ],
+   [
+    -1.9,
+    2.0,
+    -2.34
+   ],
+   [
+    1.9,
+    2.0,
+    -2.34
+   ],
+   [
+    5.1,
+    2.4,
+    -2.34
+   ]
+  ]
+ },
+ "anchors": {
+  "beam": {
+   "bone": "root",
+   "at": [
+    3.4,
+    12.0,
+    -8.5
+   ]
+  }
+ }
+}

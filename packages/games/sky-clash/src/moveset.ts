@@ -1,7 +1,9 @@
 /**
- * Per-fighter move tables compiled from the imported Melee command streams (fidelity/actions.ts), plus physics from
+ * Per-fighter move tables. The crew of the Reaches is authored in src/crew and compiled by src/crew/build.ts (the last section of
+ * this file merges it in). Legacy fighters are compiled here from the imported command streams (fidelity/actions.ts), with physics from
  * fidelity/attributes.ts. Browser-safe data: the renderer reads frame data and limbs, the server reads everything.
  *
+ * Legacy notes:
  * Hitbox anchor model. Melee hitbox offsets are relative to animated bones whose transforms we do not have, so:
  * - bone 0 (TopN, the fighter's root) offsets are used directly: z is forward, y is up (× UNIT × model scale);
  * - any other bone is placed on the move's authored strike ray (ANCHOR: root height and direction in fighter space,
@@ -17,9 +19,12 @@ import { ACTIONS } from '../fidelity/actions';
 import { ATTRIBUTES } from '../fidelity/attributes';
 import { decodeHitbox } from '../fidelity/commands';
 import { POSE_TABLE } from './poses-table';
-import { MOVE_SOURCES, ROSTER, ROSTER_DATA, UNIT, type FighterKind, type HitEffect, type Hitbox, type HitWindow, type Limb, type MoveDef, type MoveId, type Pose } from './model';
+import { CREW_DEFS } from './crew/index';
+import { CREW, compileMoves, compilePhysics, compileTiming } from './crew/build';
+import { MOVE_SOURCES, LEGACY_ROSTER as ROSTER, ROSTER_DATA, UNIT, type FighterKind as AnyKind, type HitEffect, type Hitbox, type HitWindow, type LegacyKind as FighterKind, type Limb, type MoveDef, type MoveId, type Pose } from './model';
 
-export type Hit = Hitbox & { id: number; limb: Limb; clank: boolean; bone: number; onlyGrabbed: boolean; sfx: number };
+/** `track` (crew): the hitbox's path in fighter space, [x, y] per frame from one frame before the window opens, so it follows the animation. */
+export type Hit = Hitbox & { id: number; limb: Limb; clank: boolean; bone: number; onlyGrabbed: boolean; sfx: number; track?: number[] };
 export type Window = HitWindow & { hitboxes: Hit[]; group: number };
 export type ThrowData = { damage: number; angle: number; kbBase: number; kbGrowth: number; fixedKb: number; effect: HitEffect };
 export type Move = MoveDef & {
@@ -204,7 +209,7 @@ function movesFor(kind: FighterKind): Partial<Record<MoveId, Move>> {
   }
   return result;
 }
-export const MOVESET = Object.fromEntries(ROSTER.map(kind => [kind, movesFor(kind)])) as Record<FighterKind, Partial<Record<MoveId, Move>>>;
+const LEGACY_MOVESET = Object.fromEntries(ROSTER.map(kind => [kind, movesFor(kind)])) as Record<FighterKind, Partial<Record<MoveId, Move>>>;
 
 /** Durations and intangibility of common actions (dodges, techs, getups, ledge options), per fighter. */
 const TIMING_SOURCES = {
@@ -214,7 +219,7 @@ const TIMING_SOURCES = {
   guardOff: 'GuardOff', rebound: 'Rebound', turn: 'Turn', dash: 'Dash', landing: 'Landing', squat: 'Squat', dizzy: 'FuraFura', grabRelease: 'CatchCut', capturedRelease: 'CaptureCut',
 } as const;
 export type TimingId = keyof typeof TIMING_SOURCES;
-export const TIMING = Object.fromEntries(ROSTER.map(kind => {
+const LEGACY_TIMING = Object.fromEntries(ROSTER.map(kind => {
   const profile = ROSTER_DATA[kind].profile as string, data = ACTIONS[profile]!;
   return [kind, Object.fromEntries(Object.entries(TIMING_SOURCES).map(([id, name]) => {
     const c = action(profile, data, name); return [id, { total: c?.total ?? 20, intangible: c?.intangible ?? [] }];
@@ -229,7 +234,8 @@ export type Physics = {
   weight: number; landing: number; turnFrames: number; jabWindow: number; scale: number; shieldSize: number; shieldBreakVy: number; ledgeJumpH: number; ledgeJumpV: number;
   height: number; radius: number;
 };
-export const PHYSICS = Object.fromEntries(ROSTER.map(kind => {
+const TIMING = LEGACY_TIMING;
+const LEGACY_PHYSICS = Object.fromEntries(ROSTER.map(kind => {
   const a = ATTRIBUTES[kind], info = ROSTER_DATA[kind], u = UNIT;
   const p: Physics = {
     walk: a.walk_max_vel * u, walkAccel: a.walk_accel_mul * u, walkBase: a.walk_accel_base * u, friction: a.ground_friction * u,
@@ -246,4 +252,17 @@ export const PHYSICS = Object.fromEntries(ROSTER.map(kind => {
   };
   return [kind, p];
 })) as Record<FighterKind, Physics>;
-export const moveOf = (kind: FighterKind, move: MoveId): Move | undefined => MOVESET[kind][move];
+
+// ── Both generations ─────────────────────────────────────────────────────
+const crew = <T>(make: (kind: typeof CREW[number]) => T) => Object.fromEntries(CREW.map(kind => [kind, make(kind)]));
+export const MOVESET = { ...crew(kind => compileMoves(CREW_DEFS[kind])), ...LEGACY_MOVESET } as Record<AnyKind, Partial<Record<MoveId, Move>>>;
+const ALL_TIMING = { ...crew(kind => compileTiming(CREW_DEFS[kind])), ...LEGACY_TIMING } as Record<AnyKind, Record<TimingId, Timing>>;
+export { ALL_TIMING as TIMING };
+export const PHYSICS = { ...crew(kind => compilePhysics(kind, CREW_DEFS[kind].physics)), ...LEGACY_PHYSICS } as Record<AnyKind, Physics>;
+/** Air drift constants in the legacy unit, as fidelity/physics.ts driftAcceleration expects them. */
+export type AirAttrs = { air_drift_max: number; air_drift_stick_mul: number; aerial_drift_base: number; aerial_friction: number; air_max_horizontal_velocity: number };
+export const AIR = { ...crew(kind => { const p = CREW_DEFS[kind].physics; return { air_drift_max: p.airSpeed / UNIT, air_drift_stick_mul: p.airAccel / UNIT, aerial_drift_base: p.airAccel * .35 / UNIT, aerial_friction: p.airFriction / UNIT, air_max_horizontal_velocity: p.airSpeed * 1.7 / UNIT }; }),
+  ...ATTRIBUTES } as unknown as Record<AnyKind, AirAttrs>;
+/** Frames a clanked attack rebounds for. */
+export const REBOUND = { ...crew(kind => ALL_TIMING[kind].rebound.total), ...Object.fromEntries(ROSTER.map(kind => [kind, Math.round(ATTRIBUTES[kind].clank_animation_length || LEGACY_TIMING[kind].rebound.total)])) } as Record<AnyKind, number>;
+export const moveOf = (kind: AnyKind, move: MoveId): Move | undefined => MOVESET[kind][move];

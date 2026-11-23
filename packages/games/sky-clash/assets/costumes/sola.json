@@ -1,0 +1,170 @@
+[
+ {
+  "name": "Beacon Teal",
+  "colors": {
+   "coat": "#1d5a62",
+   "lining": "#c4b99c",
+   "trouser": "#2a2d38",
+   "leather": "#5c3521",
+   "scarf": "#cfc5a9",
+   "skin": "#e3a882",
+   "hair": "#402b2c",
+   "brass": "#c9963f",
+   "steel": "#b4bdc8",
+   "wood": "#4a3226",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#c8792c",
+   "lens": "#1c2630",
+   "ember": "#ffb347"
+  },
+  "patterns": {
+   "coat": "#d9c9a3",
+   "lining": "#b5532a",
+   "trouser": "#3a4050",
+   "leather": "#3d2416",
+   "scarf": "#d9742b",
+   "skin": "#c0604f",
+   "hair": "#7a5148",
+   "brass": "#8a5a22",
+   "steel": "#5d6672",
+   "wood": "#2e1e17",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#5a2c10",
+   "lens": "#1c2630",
+   "ember": "#ff6a1c"
+  },
+  "swatch": [
+   "#1d5a62",
+   "#cfc5a9",
+   "#ffb347"
+  ]
+ },
+ {
+  "name": "Harbour Red",
+  "colors": {
+   "coat": "#8f2f2c",
+   "lining": "#e0d4b8",
+   "trouser": "#2a2d38",
+   "leather": "#5c3521",
+   "scarf": "#e3d9c0",
+   "skin": "#e3a882",
+   "hair": "#2a2326",
+   "brass": "#c9963f",
+   "steel": "#b4bdc8",
+   "wood": "#4a3226",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#c8792c",
+   "lens": "#1c2630",
+   "ember": "#ffc65c"
+  },
+  "patterns": {
+   "coat": "#d9c9a3",
+   "lining": "#b5532a",
+   "trouser": "#3a4050",
+   "leather": "#3d2416",
+   "scarf": "#2f6f78",
+   "skin": "#c0604f",
+   "hair": "#7a5148",
+   "brass": "#8a5a22",
+   "steel": "#5d6672",
+   "wood": "#2e1e17",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#5a2c10",
+   "lens": "#1c2630",
+   "ember": "#ff6a1c"
+  },
+  "swatch": [
+   "#8f2f2c",
+   "#e3d9c0",
+   "#ffc65c"
+  ]
+ },
+ {
+  "name": "Night Watch",
+  "colors": {
+   "coat": "#2b3350",
+   "lining": "#c4b99c",
+   "trouser": "#1d1f29",
+   "leather": "#3b2d2a",
+   "scarf": "#c9a54a",
+   "skin": "#e3a882",
+   "hair": "#c9c2b8",
+   "brass": "#c9963f",
+   "steel": "#b4bdc8",
+   "wood": "#4a3226",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#5fa8d8",
+   "lens": "#1c2630",
+   "ember": "#8fe3ff"
+  },
+  "patterns": {
+   "coat": "#d9c9a3",
+   "lining": "#b5532a",
+   "trouser": "#3a4050",
+   "leather": "#3d2416",
+   "scarf": "#f0e4c2",
+   "skin": "#c0604f",
+   "hair": "#7a5148",
+   "brass": "#8a5a22",
+   "steel": "#5d6672",
+   "wood": "#2e1e17",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#5a2c10",
+   "lens": "#1c2630",
+   "ember": "#3aa8ff"
+  },
+  "swatch": [
+   "#2b3350",
+   "#c9a54a",
+   "#8fe3ff"
+  ]
+ },
+ {
+  "name": "Moss and Rust",
+  "colors": {
+   "coat": "#566b3a",
+   "lining": "#c4b99c",
+   "trouser": "#2a2d38",
+   "leather": "#4b3423",
+   "scarf": "#c9683a",
+   "skin": "#e3a882",
+   "hair": "#7b3b24",
+   "brass": "#c9963f",
+   "steel": "#b4bdc8",
+   "wood": "#4a3226",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#6f8f3a",
+   "lens": "#1c2630",
+   "ember": "#ffd866"
+  },
+  "patterns": {
+   "coat": "#d9c9a3",
+   "lining": "#b5532a",
+   "trouser": "#3a4050",
+   "leather": "#3d2416",
+   "scarf": "#f1dfbd",
+   "skin": "#c0604f",
+   "hair": "#7a5148",
+   "brass": "#8a5a22",
+   "steel": "#5d6672",
+   "wood": "#2e1e17",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#5a2c10",
+   "lens": "#1c2630",
+   "ember": "#ff6a1c"
+  },
+  "swatch": [
+   "#566b3a",
+   "#c9683a",
+   "#ffd866"
+  ]
+ }
+]

@@ -1,6 +1,23 @@
 # Sky Clash stages
 
-`src/stages.ts` defines all 30 stages in Melee units and converts them with `UNIT` (0.08 m per unit). Collision is axis-aligned:
+Two groups share one collision machinery (`stageFrame(id, tick, hazards)` in `src/stages.ts`): the **arenas of the Reaches**, which are the game's own stages and come first everywhere, and the **legacy stages** from the earlier version, frozen and kept selectable in a separate group.
+
+## Arenas of the Reaches (new and original)
+
+Authored in meters in `src/arenas.ts`. The art is one baked model per arena, built by `tools/blender/crew/<id>.py` to the same numbers; `tests/arenas.test.ts` checks the two agree, that fighters stand on every floor and platform, drop through platforms, grab both ledges and die past the blast zone. Layouts are genre staples only. Neither arena moves or has a hazard.
+
+| Id | Name | Main floor (m) | Platforms (m) | Blast zone (m): left, right, bottom, top | Camera box (m) | Art |
+| --- | --- | --- | --- | --- | --- | --- |
+| `beacon-rock` | Beacon Rock | x −5.6 to 5.6 at y 0, 1.4 deep, a narrower block under it to y −3.2 | left x −3.9 to −1.5 at y 2.1; right x 1.5 to 3.9 at y 2.1; top x −1.2 to 1.2 at y 4.1 | −15.5, 15.5, −8.5, 13.5 | −12 to 12, −5.5 to 11 | Stone terrace at dusk, three floating slabs with hanging lanterns, lamp posts, the beacon tower and its turning beam, far islands in haze over a cloud sea. Warm key light, cool rim. |
+| `bellyard` | Bellyard | x −6.6 to 6.6 at y 0, 1.5 deep, a narrower block under it to y −3.4 | pallet x −1.7 to 1.7 at y 2.4 | −16.5, 16.5, −8.5, 13 | −13 to 13, −5.5 to 10.5 | Riveted foundry deck in a storm: glowing furnace vents, a pipe rail, ingot stacks, a cargo pallet on chains, three great bells on a gantry between two casting towers, rain. Cold key light, hot rim from the furnaces. |
+
+Ledges sit at both top corners of each main floor; the blocks underneath have none. Spawns are four points on the main floor; respawn halos are about 6 m above it.
+
+## Legacy stages
+
+Everything below describes the legacy group. It is unchanged by the overhaul.
+
+`src/stages.ts` defines the 30 legacy stages in Melee units and converts them with `UNIT` (0.08 m per unit). Collision is axis-aligned:
 
 - **Blocks** are solid. The top is a floor, the sides are walls and the bottom is a ceiling.
 - **Platforms** are one-way.

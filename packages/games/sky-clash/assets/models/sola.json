@@ -1,0 +1,563 @@
+{
+ "kind": "sola",
+ "name": "Sola",
+ "generator": "tools/blender/crew/sola.py",
+ "height": 1.72,
+ "tris": 48868,
+ "vertices": 24827,
+ "bytes": 2054888,
+ "texture": 1024,
+ "bounds": {
+  "min": [
+   -0.6554,
+   -0.0005,
+   -0.7241
+  ],
+  "max": [
+   0.678,
+   1.7396,
+   1.277
+  ]
+ },
+ "slots": [
+  {
+   "name": "coat",
+   "surface": "cloth",
+   "rough": 0.88,
+   "metal": 0,
+   "spec": 0.25,
+   "glow": 0,
+   "kind": 0,
+   "color": "#1d5a62",
+   "pattern": "#d9c9a3"
+  },
+  {
+   "name": "lining",
+   "surface": "cloth",
+   "rough": 0.88,
+   "metal": 0,
+   "spec": 0.25,
+   "glow": 0,
+   "kind": 0,
+   "color": "#c4b99c",
+   "pattern": "#b5532a"
+  },
+  {
+   "name": "trouser",
+   "surface": "cloth",
+   "rough": 0.88,
+   "metal": 0,
+   "spec": 0.25,
+   "glow": 0,
+   "kind": 0,
+   "color": "#2a2d38",
+   "pattern": "#3a4050"
+  },
+  {
+   "name": "leather",
+   "surface": "leather",
+   "rough": 0.6,
+   "metal": 0,
+   "spec": 0.5,
+   "glow": 0,
+   "kind": 0,
+   "color": "#5c3521",
+   "pattern": "#3d2416"
+  },
+  {
+   "name": "scarf",
+   "surface": "wool",
+   "rough": 0.95,
+   "metal": 0,
+   "spec": 0.15,
+   "glow": 0,
+   "kind": 0,
+   "color": "#cfc5a9",
+   "pattern": "#d9742b"
+  },
+  {
+   "name": "skin",
+   "surface": "skin",
+   "rough": 0.62,
+   "metal": 0,
+   "spec": 0.35,
+   "glow": 0,
+   "kind": 0,
+   "color": "#e3a882",
+   "pattern": "#c0604f"
+  },
+  {
+   "name": "hair",
+   "surface": "hair",
+   "rough": 0.7,
+   "metal": 0,
+   "spec": 0.4,
+   "glow": 0,
+   "kind": 0,
+   "color": "#402b2c",
+   "pattern": "#7a5148"
+  },
+  {
+   "name": "brass",
+   "surface": "metal",
+   "rough": 0.34,
+   "metal": 1,
+   "spec": 1,
+   "glow": 0,
+   "kind": 0,
+   "color": "#c9963f",
+   "pattern": "#8a5a22"
+  },
+  {
+   "name": "steel",
+   "surface": "metal",
+   "rough": 0.34,
+   "metal": 1,
+   "spec": 1,
+   "glow": 0,
+   "kind": 0,
+   "color": "#b4bdc8",
+   "pattern": "#5d6672"
+  },
+  {
+   "name": "wood",
+   "surface": "wood",
+   "rough": 0.7,
+   "metal": 0,
+   "spec": 0.3,
+   "glow": 0,
+   "kind": 0,
+   "color": "#4a3226",
+   "pattern": "#2e1e17"
+  },
+  {
+   "name": "dark",
+   "surface": "flat",
+   "rough": 0.9,
+   "metal": 0,
+   "spec": 0.1,
+   "glow": 0,
+   "kind": 0,
+   "color": "#16131a",
+   "pattern": "#16131a"
+  },
+  {
+   "name": "white",
+   "surface": "eye",
+   "rough": 0.08,
+   "metal": 0,
+   "spec": 1,
+   "glow": 0,
+   "kind": 0,
+   "color": "#f3efe6",
+   "pattern": "#f3efe6"
+  },
+  {
+   "name": "iris",
+   "surface": "eye",
+   "rough": 0.08,
+   "metal": 0,
+   "spec": 1,
+   "glow": 0,
+   "kind": 0,
+   "color": "#c8792c",
+   "pattern": "#5a2c10"
+  },
+  {
+   "name": "lens",
+   "surface": "glass",
+   "rough": 0.12,
+   "metal": 0,
+   "spec": 1,
+   "glow": 0,
+   "kind": 0,
+   "color": "#1c2630",
+   "pattern": "#1c2630"
+  },
+  {
+   "name": "ember",
+   "surface": "glow",
+   "rough": 0.4,
+   "metal": 0,
+   "spec": 0.2,
+   "glow": 1.9,
+   "kind": 0,
+   "color": "#ffb347",
+   "pattern": "#ff6a1c"
+  }
+ ],
+ "bones": [
+  "root",
+  "hips",
+  "spine",
+  "chest",
+  "neck",
+  "head",
+  "shoulder_L",
+  "upperarm_L",
+  "forearm_L",
+  "hand_L",
+  "thigh_L",
+  "shin_L",
+  "foot_L",
+  "shoulder_R",
+  "upperarm_R",
+  "forearm_R",
+  "hand_R",
+  "thigh_R",
+  "shin_R",
+  "foot_R",
+  "prop",
+  "jaw",
+  "lid_L",
+  "brow_L",
+  "lid_R",
+  "brow_R",
+  "fingers1_L",
+  "fingers2_L",
+  "thumb_L",
+  "fingers1_R",
+  "fingers2_R",
+  "thumb_R",
+  "extra_tailL_0",
+  "extra_tailL_1",
+  "extra_tailR_0",
+  "extra_tailR_1",
+  "extra_scarf_0",
+  "extra_scarf_1",
+  "extra_scarf_2",
+  "extra_lantern_0"
+ ],
+ "parents": {
+  "root": null,
+  "hips": "root",
+  "spine": "hips",
+  "chest": "spine",
+  "neck": "chest",
+  "head": "neck",
+  "shoulder_L": "chest",
+  "upperarm_L": "shoulder_L",
+  "forearm_L": "upperarm_L",
+  "hand_L": "forearm_L",
+  "thigh_L": "hips",
+  "shin_L": "thigh_L",
+  "foot_L": "shin_L",
+  "shoulder_R": "chest",
+  "upperarm_R": "shoulder_R",
+  "forearm_R": "upperarm_R",
+  "hand_R": "forearm_R",
+  "thigh_R": "hips",
+  "shin_R": "thigh_R",
+  "foot_R": "shin_R",
+  "prop": "hand_R",
+  "jaw": "head",
+  "lid_L": "head",
+  "brow_L": "head",
+  "lid_R": "head",
+  "brow_R": "head",
+  "fingers1_L": "hand_L",
+  "fingers2_L": "fingers1_L",
+  "thumb_L": "hand_L",
+  "fingers1_R": "hand_R",
+  "fingers2_R": "fingers1_R",
+  "thumb_R": "hand_R",
+  "extra_tailL_0": "hips",
+  "extra_tailL_1": "extra_tailL_0",
+  "extra_tailR_0": "hips",
+  "extra_tailR_1": "extra_tailR_0",
+  "extra_scarf_0": "chest",
+  "extra_scarf_1": "extra_scarf_0",
+  "extra_scarf_2": "extra_scarf_1",
+  "extra_lantern_0": "prop"
+ },
+ "joints": {
+  "root": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "hips": [
+   0.0,
+   0.955,
+   0.0
+  ],
+  "spine": [
+   0.0,
+   1.065,
+   -0.004
+  ],
+  "chest": [
+   0.0,
+   1.205,
+   -0.008
+  ],
+  "neck": [
+   0.0,
+   1.412,
+   -0.012
+  ],
+  "head": [
+   0.0,
+   1.478,
+   -0.004
+  ],
+  "shoulder_L": [
+   0.045,
+   1.378,
+   -0.004
+  ],
+  "upperarm_L": [
+   0.168,
+   1.385,
+   -0.008
+  ],
+  "forearm_L": [
+   0.371,
+   1.2147,
+   -0.008
+  ],
+  "hand_L": [
+   0.551,
+   1.0636,
+   -0.008
+  ],
+  "thigh_L": [
+   0.084,
+   0.925,
+   0.0
+  ],
+  "shin_L": [
+   0.098,
+   0.505,
+   0.005
+  ],
+  "foot_L": [
+   0.102,
+   0.095,
+   -0.012
+  ],
+  "shoulder_R": [
+   -0.045,
+   1.378,
+   -0.004
+  ],
+  "upperarm_R": [
+   -0.168,
+   1.385,
+   -0.008
+  ],
+  "forearm_R": [
+   -0.371,
+   1.2147,
+   -0.008
+  ],
+  "hand_R": [
+   -0.551,
+   1.0636,
+   -0.008
+  ],
+  "thigh_R": [
+   -0.084,
+   0.925,
+   0.0
+  ],
+  "shin_R": [
+   -0.098,
+   0.505,
+   0.005
+  ],
+  "foot_R": [
+   -0.102,
+   0.095,
+   -0.012
+  ],
+  "prop": [
+   -0.6012,
+   0.9928,
+   -0.008
+  ],
+  "jaw": [
+   0.0,
+   1.5553,
+   0.0068
+  ],
+  "lid_L": [
+   0.0388,
+   1.592,
+   0.0712
+  ],
+  "brow_L": [
+   0.0406,
+   1.6248,
+   0.1063
+  ],
+  "lid_R": [
+   -0.0388,
+   1.592,
+   0.0712
+  ],
+  "brow_R": [
+   -0.0406,
+   1.6248,
+   0.1063
+  ],
+  "fingers1_L": [
+   0.6261,
+   1.0006,
+   -0.008
+  ],
+  "fingers2_L": [
+   0.6513,
+   0.9716,
+   -0.008
+  ],
+  "thumb_L": [
+   0.574,
+   1.0443,
+   0.026
+  ],
+  "fingers1_R": [
+   -0.6261,
+   1.0006,
+   -0.008
+  ],
+  "fingers2_R": [
+   -0.6513,
+   0.9716,
+   -0.008
+  ],
+  "thumb_R": [
+   -0.574,
+   1.0443,
+   0.026
+  ],
+  "extra_tailL_0": [
+   0.1379,
+   0.925,
+   -0.1075
+  ],
+  "extra_tailL_1": [
+   0.1809,
+   0.72,
+   -0.1677
+  ],
+  "extra_tailR_0": [
+   -0.1379,
+   0.925,
+   -0.1075
+  ],
+  "extra_tailR_1": [
+   -0.1809,
+   0.72,
+   -0.1677
+  ],
+  "extra_scarf_0": [
+   0.05,
+   1.44,
+   -0.085
+  ],
+  "extra_scarf_1": [
+   0.088,
+   1.26,
+   -0.15
+  ],
+  "extra_scarf_2": [
+   0.096,
+   1.14,
+   -0.158
+  ],
+  "extra_lantern_0": [
+   -0.6012,
+   1.1278,
+   0.88
+  ]
+ },
+ "chains": {
+  "tailL": [
+   "extra_tailL_0",
+   "extra_tailL_1"
+  ],
+  "tailR": [
+   "extra_tailR_0",
+   "extra_tailR_1"
+  ],
+  "scarf": [
+   "extra_scarf_0",
+   "extra_scarf_1",
+   "extra_scarf_2"
+  ],
+  "lantern": [
+   "extra_lantern_0"
+  ]
+ },
+ "extras": {
+  "hand": {
+   "along": [
+    0.766,
+    -0.6428,
+    0.0
+   ],
+   "thumb": [
+    0,
+    0,
+    1
+   ],
+   "palm": [
+    -0.6428,
+    -0.766,
+    0.0
+   ]
+  },
+  "fist": true
+ },
+ "anchors": {
+  "pikeTip": {
+   "bone": "prop",
+   "at": [
+    0,
+    0,
+    1.22
+   ]
+  },
+  "pikeHead": {
+   "bone": "prop",
+   "at": [
+    0,
+    0,
+    1.02
+   ]
+  },
+  "pikeButt": {
+   "bone": "prop",
+   "at": [
+    0,
+    0,
+    -0.7
+   ]
+  },
+  "pikeMid": {
+   "bone": "prop",
+   "at": [
+    0,
+    0,
+    0.55
+   ]
+  },
+  "lantern": {
+   "bone": "extra_lantern_0",
+   "at": [
+    0,
+    0,
+    -0.115
+   ]
+  },
+  "grip": {
+   "bone": "prop",
+   "at": [
+    0,
+    0,
+    0
+   ]
+  }
+ }
+}

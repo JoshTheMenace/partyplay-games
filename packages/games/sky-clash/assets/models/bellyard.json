@@ -1,0 +1,177 @@
+{
+ "kind": "bellyard",
+ "name": "Bellyard",
+ "generator": "tools/blender/crew/bellyard.py",
+ "height": 8.0,
+ "tris": 20880,
+ "vertices": 10760,
+ "bytes": 932100,
+ "texture": 2048,
+ "bounds": {
+  "min": [
+   -28.7694,
+   -14.35,
+   -122.7338
+  ],
+  "max": [
+   46.3592,
+   14.5,
+   1.33
+  ]
+ },
+ "slots": [
+  {
+   "name": "deck",
+   "surface": "grate",
+   "rough": 0.68,
+   "metal": 0.3,
+   "spec": 0.6,
+   "glow": 0,
+   "kind": 3,
+   "color": "#5d6470",
+   "pattern": "#3a3f48"
+  },
+  {
+   "name": "iron",
+   "surface": "iron",
+   "rough": 0.6,
+   "metal": 1,
+   "spec": 1,
+   "glow": 0,
+   "kind": 0,
+   "color": "#33363f",
+   "pattern": "#1f2127"
+  },
+  {
+   "name": "bronze",
+   "surface": "bronze",
+   "rough": 0.46,
+   "metal": 1,
+   "spec": 1,
+   "glow": 0,
+   "kind": 0,
+   "color": "#4f8f80",
+   "pattern": "#a8884a"
+  },
+  {
+   "name": "brass",
+   "surface": "metal",
+   "rough": 0.34,
+   "metal": 1,
+   "spec": 1,
+   "glow": 0,
+   "kind": 0,
+   "color": "#c9963f",
+   "pattern": "#8a5a22"
+  },
+  {
+   "name": "wood",
+   "surface": "planks",
+   "rough": 0.75,
+   "metal": 0,
+   "spec": 0.25,
+   "glow": 0,
+   "kind": 2,
+   "color": "#5a4032",
+   "pattern": "#3a2a22"
+  },
+  {
+   "name": "brick",
+   "surface": "stone",
+   "rough": 0.86,
+   "metal": 0,
+   "spec": 0.2,
+   "glow": 0,
+   "kind": 1,
+   "color": "#6a4a44",
+   "pattern": "#3f2c2a"
+  },
+  {
+   "name": "far",
+   "surface": "flat",
+   "rough": 0.9,
+   "metal": 0,
+   "spec": 0.1,
+   "glow": 0,
+   "kind": 0,
+   "color": "#232b3a",
+   "pattern": "#232b3a"
+  },
+  {
+   "name": "ember",
+   "surface": "glow",
+   "rough": 0.4,
+   "metal": 0,
+   "spec": 0.2,
+   "glow": 1.9,
+   "kind": 0,
+   "color": "#ff9a3c",
+   "pattern": "#ff6a1c"
+  }
+ ],
+ "bones": [
+  "root"
+ ],
+ "parents": {
+  "root": null
+ },
+ "joints": {
+  "root": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "chains": {},
+ "extras": {
+  "collision": {
+   "blocks": [
+    {
+     "id": "main",
+     "left": -6.6,
+     "right": 6.6,
+     "top": 0.0,
+     "bottom": -1.5
+    },
+    {
+     "id": "under",
+     "left": -5.2,
+     "right": 5.2,
+     "top": -1.5,
+     "bottom": -3.4
+    }
+   ],
+   "platforms": [
+    {
+     "id": "pallet",
+     "left": -1.7,
+     "right": 1.7,
+     "y": 2.4
+    }
+   ]
+  },
+  "lights": [
+   [
+    -4.6,
+    0.7,
+    -1.9000000000000001
+   ],
+   [
+    -1.6,
+    0.7,
+    -1.9000000000000001
+   ],
+   [
+    1.6,
+    0.7,
+    -1.9000000000000001
+   ],
+   [
+    4.6,
+    0.7,
+    -1.9000000000000001
+   ]
+  ]
+ },
+ "anchors": {}
+}

@@ -1,29 +1,36 @@
 /**
- * Sky Clash shared contract (v2, Melee roster). Browser-safe: types, public constants and display data only.
+ * Sky Clash shared contract. Browser-safe: types, public constants and display data only.
+ * Two generations share it: the crew of the Reaches (src/crew, the game's own cast, listed first) and the frozen legacy roster (src/roster.ts).
  * World units are meters. +X right, +Y up. A fighter's x/y is the center of its feet.
  * The simulation runs at 60 frames per second; durations are frames unless named *Ms.
- * Melee values stay in their original units inside fidelity/; UNIT converts them to meters.
- * Owners may ADD optional fields. Renaming or removing a field needs every consumer updated.
+ * Legacy values stay in their original units inside fidelity/; UNIT converts them to meters. The crew is authored in meters.
  */
-import { ROSTER, ROSTER_DATA, type FighterKind } from './roster';
+import { CREW, CREW_DATA, type CrewKind } from './crew/roster';
+import { ROSTER as LEGACY_ROSTER, ROSTER_DATA, type FighterKind as LegacyKind } from './roster';
 import type { StageId } from './stages';
-export { ROSTER, ROSTER_DATA, type FighterKind } from './roster';
+export { CREW, CREW_DATA, isCrew, type CrewKind } from './crew/roster';
+export { LEGACY_ROSTER, ROSTER_DATA, type LegacyKind };
 export type { StageId } from './stages';
+export type FighterKind = CrewKind | LegacyKind;
+/** Every selectable fighter: the crew first, then the legacy group. */
+export const ROSTER: FighterKind[] = [...CREW, ...LEGACY_ROSTER];
 
 export const FPS = 60;
 export const MAX_FIGHTERS = 4;
-/** Melee length unit → meters (1.92 m Fox ≈ 24 Melee units tall). */
+/** Legacy length unit → meters. */
 export const UNIT = .08;
-export type FighterInfo = (typeof ROSTER_DATA)[FighterKind];
-export const FIGHTERS = ROSTER_DATA as Record<FighterKind, FighterInfo>;
+export type FighterInfo = { name: string; sourceIndex: number; profile: string; style: string; color: string; height: number; radius: number; specials: readonly string[]; bonus: boolean; title?: string; blurb?: string; archetype?: string };
+export const FIGHTERS: Record<FighterKind, FighterInfo> = { ...CREW_DATA, ...ROSTER_DATA };
 export type HitEffect = 'normal' | 'fire' | 'electric' | 'slash' | 'coin' | 'ice' | 'sleep' | 'grass' | 'darkness' | 'water' | 'star' | 'psychic' | 'magic';
 
 // ── Costumes (authored by the model pipeline in assets/costumes/<kind>.json) ──
 /** Material name → hex color. Costume 0 is the default. Every fighter ships exactly four. */
-export type Costume = { name: string; colors: Record<string, string> };
+/** `swatch` (crew): the three colours that stand for the costume in menus, chosen by the fighter's model script. */
+export type Costume = { name: string; colors: Record<string, string>; swatch?: readonly string[] };
 
 // ── Rig contract for fighter GLBs (assets/fighters/<kind>.glb) ───────────
-/** Required bones, exact names. Rest pose: T-pose, facing +Z, Y up, feet at y=0, arms along ±X (left hand at +X). Non-humanoids (Kirby, Jigglypuff, the hands, Sandbag) still carry every bone, placed sensibly. */
+/** Required bones, exact names, with world-aligned rest frames: facing +Z, Y up, feet at y=0, left hand toward +X. Legacy models rest in a T-pose; crew models rest with the arms 40 degrees down
+ * and add face (jaw, lid_L/R, brow_L/R) and hand (fingers1/2_L/R, thumb_L/R) bones. Each crew rig is described in src/crew/<id>/rig.ts. */
 export const BONES = ['root', 'hips', 'spine', 'chest', 'neck', 'head', 'shoulder_L', 'upperarm_L', 'forearm_L', 'hand_L', 'shoulder_R', 'upperarm_R', 'forearm_R', 'hand_R', 'thigh_L', 'shin_L', 'foot_L', 'thigh_R', 'shin_R', 'foot_R', 'prop'] as const;
 export type BoneName = typeof BONES[number];
 /** Optional secondary-motion chains (hair, tails, capes, ears, scarves) are named extra_<name>_<index>, parent→child; the renderer adds spring motion. */
@@ -32,7 +39,7 @@ export const EXTRA_BONE_PREFIX = 'extra_';
 export const MATERIALS = ['primary', 'secondary', 'accent', 'trim', 'skin', 'hair', 'dark', 'light', 'metal', 'emissive', 'eye', 'eye-white'] as const;
 
 // ── Moves ────────────────────────────────────────────────────────────────
-/** Game move ids and the Melee subaction names they are imported from (first match with hitboxes wins). */
+/** Game move ids. The names on the right are where the legacy importer found each move; the crew authors every id directly (src/crew). */
 export const MOVE_SOURCES = {
   jab1: ['Attack11'], jab2: ['Attack12'], jab3: ['Attack13'], jabRapid: ['Attack100Loop'],
   ftilt: ['AttackS3S', 'AttackS3'], ftiltHi: ['AttackS3Hi'], ftiltLw: ['AttackS3Lw'], utilt: ['AttackHi3'], dtilt: ['AttackLw3'], dash: ['AttackDash'],

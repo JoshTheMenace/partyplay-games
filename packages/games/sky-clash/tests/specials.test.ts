@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { MOVE_SOURCES, POSES, ROSTER, ROSTER_DATA, type FighterKind } from '../src/model';
+import { MOVE_SOURCES, POSES, LEGACY_ROSTER as ROSTER, ROSTER_DATA, type FighterKind } from '../src/model';
 import { MOVESET } from '../src/moveset';
 import { POSE_TABLE } from '../src/poses-table';
 import { KITS, type Slot } from '../src/specials';

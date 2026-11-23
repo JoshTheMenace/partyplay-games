@@ -1,10 +1,11 @@
 import { useState, type CSSProperties } from 'react';
 import { ArcadeButton, Eyebrow, Modal, StatusNotice, TextInput, type LobbyViewProps } from '../../../../party-ui/src/index';
 import type { RosterPlayer } from '../../../../party-contract/src/protocol';
-import { FIGHTERS, type FighterKind, type LobbyChoice, type Settings } from '../model';
-import { STAGE_IDS, getStage, stageFrame, type StageId } from '../stages';
+import { ARENA_IDS } from '../arenas';
+import { FIGHTERS, isCrew, type FighterKind, type LobbyChoice, type Settings } from '../model';
+import { LEGACY_STAGE_IDS, getStage, stageFrame, type StageId } from '../stages';
 import { Portrait, StageImage, costumeOf, costumeTone, costumesOf, tone } from './assets';
-import { CPU_LEVELS, DIRECTIONS, SERIES, STAT_LABELS, costumeColors, filterFighters, fighterStats, seriesOf, type SeriesId } from './data';
+import { CPU_LEVELS, DIRECTIONS, FIGHTER_ORDER, SERIES, STAT_LABELS, costumeColors, filterCrew, filterFighters, fighterStats, seriesOf, type SeriesId } from './data';
 import { cpuCount, firstStep, isComplete, leaders, pickCostume, pickFighter, pickStage, readChoice, readSettings, readyChoice, rulesLine, takenCostumes, voteCounts, type StagePick } from './lobby-choice';
 type Props = LobbyViewProps<Settings>;
 const fighterName = (f: LobbyChoice['fighter']) => f === 'random' ? 'Random' : f ? FIGHTERS[f].name : 'Choosing…';
@@ -49,7 +50,7 @@ function PhoneLobby({ players, settings: raw, connected, error, onChoice, onRead
         {voting ? <ArcadeButton tone="sky" disabled={!connected || !draft.fighter} onClick={() => setStep('stage')}>Next: stage vote</ArcadeButton>
           : <ArcadeButton tone="lime" disabled={!connected || !draft.fighter} onClick={ready}>Ready!</ArcadeButton>}
       </> : <>
-        {draft.stage ? <div className="sc-foot-hero"><StageImage id={draft.stage}/><p>{draft.stage === 'random' ? 'If Random wins, any of the 30 stages can come up.' : getStage(draft.stage).blurb}</p></div>
+        {draft.stage ? <div className="sc-foot-hero"><StageImage id={draft.stage}/><p>{draft.stage === 'random' ? 'If Random wins, an arena of the Reaches comes up.' : getStage(draft.stage).blurb}</p></div>
           : draft.fighter && <Portrait kind={draft.fighter} costume={draft.costume} render className="sc-foot-hero"/>}
         <p className="sc-foot-vote">{draft.stage ? <><small>Your vote</small><b>{stageName(draft.stage)}</b></> : 'Tap a stage to vote'}</p>
         <ArcadeButton tone="ghost" onClick={() => setStep('fighter')}>← Fighter</ArcadeButton>
@@ -61,25 +62,32 @@ function PhoneLobby({ players, settings: raw, connected, error, onChoice, onRead
   </section>;
 }
 function FighterPicker({ players, me, draft, disabled, onChange, onDetails }: { players: RosterPlayer[]; me: string; draft: LobbyChoice; disabled: boolean; onChange(c: LobbyChoice): void; onDetails(): void }) {
-  const [query, setQuery] = useState(''), [series, setSeries] = useState<SeriesId | 'all'>('all'), list = filterFighters(query, series);
+  const [query, setQuery] = useState(''), [series, setSeries] = useState<SeriesId | 'all'>('all'), crew = filterCrew(query), list = filterFighters(query, series);
+  // The legacy roster stays folded away unless this seat already holds one of its fighters or a search reaches into it.
+  const [legacy, setLegacy] = useState(() => !!draft.fighter && draft.fighter !== 'random' && !isCrew(draft.fighter)), open = legacy || (!!query.trim() && list.length > 0);
   const others = (kind: FighterKind) => players.filter(p => p.id !== me && readChoice(p.lobbyChoice).fighter === kind);
   const tile = (id: FighterKind | 'random') => { const on = draft.fighter === id, costume = on ? draft.costume : 0, taken = id === 'random' ? [] : others(id);
-    return <button key={id} type="button" className="sc-fighter-tile" aria-pressed={on} disabled={disabled} style={id === 'random' ? undefined : costumeTone(id, costume)}
+    return <button key={id} type="button" className={`sc-fighter-tile${id !== 'random' && isCrew(id) ? ' sc-crew-tile' : ''}`} aria-pressed={on} disabled={disabled} style={id === 'random' ? undefined : costumeTone(id, costume)}
       aria-label={`${id === 'random' ? 'Random fighter' : FIGHTERS[id].name}${taken.length ? `, also picked by ${taken.map(p => p.name).join(', ')}` : ''}`}
       onClick={() => { if (on && id !== 'random') onDetails(); else onChange(pickFighter(draft, id)); }}>
-      <Portrait kind={id} costume={costume}/><span>{id === 'random' ? 'Random' : FIGHTERS[id].name}</span>
+      <Portrait kind={id} costume={costume}/><span>{id === 'random' ? 'Random' : FIGHTERS[id].name}{id !== 'random' && FIGHTERS[id].archetype && <small>{FIGHTERS[id].archetype}</small>}</span>
       {taken.length > 0 && <i className="sc-tile-dots" aria-hidden="true">{taken.map(p => <em key={p.id} style={{ background: p.color }}/>)}</i>}
     </button>; };
   return <div className="sc-lobby-body sc-fighter-body">
     <div className="sc-tools">
-      <TextInput type="search" aria-label="Search fighters or specials" placeholder="Search 33 fighters" value={query} onChange={e => setQuery(e.target.value)}/>
-      <div className="sc-chips" role="group" aria-label="Series">{[{ id: 'all' as const, label: 'All' }, ...SERIES].map(s => <button key={s.id} type="button" aria-pressed={series === s.id} onClick={() => setSeries(s.id)}>{s.label}</button>)}</div>
+      <TextInput type="search" aria-label="Search fighters or specials" placeholder="Search fighters and specials" value={query} onChange={e => setQuery(e.target.value)}/>
     </div>
-    <div className="sc-fighter-grid" role="group" aria-label="Fighters">
-      {!query && series === 'all' && tile('random')}
-      {list.map(tile)}
-      {!list.length && <p className="sc-empty">No fighter matches “{query}”.</p>}
+    <h3 className="sc-group">The crew of the Reaches</h3>
+    <div className="sc-fighter-grid sc-crew-grid" role="group" aria-label="The crew of the Reaches">
+      {crew.map(tile)}
+      {!query && tile('random')}
+      {!crew.length && !list.length && <p className="sc-empty">No fighter matches “{query}”.</p>}
     </div>
+    <button type="button" className="sc-legacy-toggle" aria-expanded={open} onClick={() => setLegacy(!open)}><span>Legacy roster<small>{FIGHTER_ORDER.length} fighters from the earlier version, kept as they were</small></span><b>{open ? 'Hide' : 'Show'}</b></button>
+    {open && <>
+      <div className="sc-chips" role="group" aria-label="Legacy series">{[{ id: 'all' as const, label: 'All' }, ...SERIES].map(s => <button key={s.id} type="button" aria-pressed={series === s.id} onClick={() => setSeries(s.id)}>{s.label}</button>)}</div>
+      <div className="sc-fighter-grid" role="group" aria-label="Legacy fighters">{list.map(tile)}</div>
+    </>}
   </div>;
 }
 function SelectedFighter({ players, me, draft, disabled, onChange, onDetails }: { players: RosterPlayer[]; me: string; draft: LobbyChoice; disabled: boolean; onChange(c: LobbyChoice): void; onDetails(): void }) {
@@ -97,14 +105,15 @@ function Swatches({ kind, costume, taken, disabled, onPick }: { kind: FighterKin
       aria-label={`${c.name} costume${taken?.has(i) ? ' (also picked by another player)' : ''}`} title={c.name}
       style={{ background: `conic-gradient(from 225deg, ${col.primary} 0 50%, ${col.secondary} 0 75%, ${col.accent} 0)` }}>{taken?.has(i) && <em aria-hidden="true"/>}</button>; })}</div>;
 }
-/** Full fighter sheet: render, series, Melee attributes, specials by direction and costumes. */
+/** Full fighter sheet: render, group, attributes, specials by direction and costumes. */
 export function FighterDetails({ kind, costume }: { kind: FighterKind | 'random'; costume: number }) {
-  if (kind === 'random') return <div className="sc-details"><Portrait kind="random" render className="sc-details-render"/><p>One of the 33 fighters is dealt to you when the match starts. Feeling lucky?</p></div>;
+  if (kind === 'random') return <div className="sc-details"><Portrait kind="random" render className="sc-details-render"/><p>A fighter of the Reaches is dealt to you when the match starts. Feeling lucky?</p></div>;
   const f = FIGHTERS[kind], s = fighterStats(kind);
   return <div className="sc-details" style={costumeTone(kind, costume)}>
     <Portrait kind={kind} costume={costume} render className="sc-details-render"/>
     <div className="sc-details-copy">
-      <Eyebrow>{seriesOf(kind).label}{f.bonus ? ' · Bonus fighter' : ''}</Eyebrow>
+      <Eyebrow>{f.title ? `${f.title} · ${f.archetype}` : `Legacy · ${seriesOf(kind).label}${f.bonus ? ' · Bonus fighter' : ''}`}</Eyebrow>
+      {f.blurb && <p className="sc-blurb">{f.blurb}</p>}
       <p className="sc-facts"><span><b className="kp-numeral">{s.weight}</b> weight</span><span><b className="kp-numeral">{s.jumps}</b> jumps</span><span><b className="kp-numeral">{s.height.toFixed(1)}</b> m</span><span>{s.weightClass}</span></p>
       <dl className="sc-bars">{(Object.keys(STAT_LABELS) as (keyof typeof STAT_LABELS)[]).map(k => <div key={k}><dt>{STAT_LABELS[k]}</dt>
         <dd role="meter" aria-label={STAT_LABELS[k]} aria-valuemin={1} aria-valuemax={5} aria-valuenow={s.bars[k]}>{[1, 2, 3, 4, 5].map(i => <i key={i} className={i <= s.bars[k] ? 'sc-on' : undefined}/>)}</dd></div>)}</dl>
@@ -115,16 +124,21 @@ export function FighterDetails({ kind, costume }: { kind: FighterKind | 'random'
 }
 function StagePicker({ players, draft, disabled, onChange }: { players: RosterPlayer[]; draft: LobbyChoice; disabled: boolean; onChange(c: LobbyChoice): void }) {
   const [query, setQuery] = useState(''), counts = voteCounts(players), q = query.trim().toLowerCase();
-  const ids: StagePick[] = ['random', ...STAGE_IDS.filter(id => !q || `${getStage(id).name} ${getStage(id).source}`.toLowerCase().includes(q))];
-  return <div className="sc-lobby-body sc-stage-body">
-    <div className="sc-tools"><TextInput type="search" aria-label="Search stages" placeholder="Search 30 stages" value={query} onChange={e => setQuery(e.target.value)}/><p className="kp-muted">Most votes wins · ties drawn at random</p></div>
-    <div className="sc-stage-grid" role="group" aria-label="Stages">{ids.map(id => { const hazard = id === 'random' ? null : hazardLabel(id), voters = players.filter(p => readChoice(p.lobbyChoice).stage === id);
+  const match = (id: StageId) => !q || `${getStage(id).name} ${getStage(id).source}`.toLowerCase().includes(q), arenas: StagePick[] = [...ARENA_IDS.filter(match), ...(q ? [] : ['random' as const])], old = LEGACY_STAGE_IDS.filter(match);
+  const [legacy, setLegacy] = useState(() => !!draft.stage && draft.stage !== 'random' && (LEGACY_STAGE_IDS as readonly string[]).includes(draft.stage)), open = legacy || (!!q && old.length > 0);
+  const card = (id: StagePick) => { const hazard = id === 'random' ? null : hazardLabel(id), voters = players.filter(p => readChoice(p.lobbyChoice).stage === id);
       return <button key={id} type="button" className="sc-stage-card" aria-pressed={draft.stage === id} disabled={disabled} onClick={() => onChange(pickStage(draft, id))}
         aria-label={`${id === 'random' ? 'Random stage' : getStage(id).name}, ${counts[id]} vote${counts[id] === 1 ? '' : 's'}`} style={id === 'random' ? undefined : tone(getStage(id).palette.accent)}>
         <StageImage id={id}/><span className="sc-stage-name">{id === 'random' ? 'Random' : getStage(id).name}</span>
-        <span className="sc-stage-meta">{id === 'random' ? 'Any of the 30' : hazard ? `⚠ ${hazard}` : 'No hazards'}</span>
+        <span className="sc-stage-meta">{id === 'random' ? 'Any arena of the Reaches' : hazard ? `⚠ ${hazard}` : 'No hazards'}</span>
         {counts[id] > 0 && <b className="sc-votes"><span className="kp-numeral">{counts[id]}</span>{voters.map(p => <em key={p.id} style={{ background: p.color }}/>)}</b>}
-      </button>; })}</div>
+      </button>; };
+  return <div className="sc-lobby-body sc-stage-body">
+    <div className="sc-tools"><TextInput type="search" aria-label="Search stages" placeholder="Search stages" value={query} onChange={e => setQuery(e.target.value)}/><p className="kp-muted">Most votes wins · ties drawn at random</p></div>
+    <h3 className="sc-group">Arenas of the Reaches</h3>
+    <div className="sc-stage-grid sc-arena-grid" role="group" aria-label="Arenas of the Reaches">{arenas.map(card)}{!arenas.length && !old.length && <p className="sc-empty">No stage matches “{query}”.</p>}</div>
+    <button type="button" className="sc-legacy-toggle" aria-expanded={open} onClick={() => setLegacy(!open)}><span>Legacy stages<small>{LEGACY_STAGE_IDS.length} stages from the earlier version, kept as they were</small></span><b>{open ? 'Hide' : 'Show'}</b></button>
+    {open && <div className="sc-stage-grid" role="group" aria-label="Legacy stages">{old.map(card)}</div>}
   </div>;
 }
 // ── Display (host watching) ───────────────────────────────────────────────
@@ -160,7 +174,7 @@ function LobbyBoard({ players, settings: raw }: Props) {
       <Eyebrow>{fixed ? 'Stage chosen by the host' : 'Stage votes · most votes wins, ties drawn at random'}</Eyebrow>
       <div className="sc-vote-row">{fixed ? <VoteTile id={fixed} count={null} lead players={[]}/>
         : voted.length ? voted.map(id => <VoteTile key={id} id={id} count={counts[id]} lead={lead.includes(id)} tied={lead.length > 1} players={players.filter(p => readChoice(p.lobbyChoice).stage === id)}/>)
-        : <p className="kp-muted">No votes yet. All 30 stages (and Random) are on your phones.</p>}</div>
+        : <p className="kp-muted">No votes yet. Every arena (and Random) is on your phones.</p>}</div>
     </div>
   </section>;
 }

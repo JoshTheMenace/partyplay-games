@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Box3, InstancedMesh, Mesh, PerspectiveCamera, Vector3, type BufferGeometry, type Object3D } from 'three';
 import { ResourceScope } from '../../../party-runtime/src/index';
-import { STAGE_IDS, stageFrame, type Block, type StageId } from '../src/stages';
+import { LEGACY_STAGE_IDS as STAGE_IDS, stageFrame, type Block, type StageId } from '../src/stages';
 import { createStageArt, type StageArt } from '../src/scene/stage/index';
 import { BESPOKE } from '../src/scene/stage/art/index';
 import { massGeometry, slabGeometry, stacks, type Rect } from '../src/scene/stage/kit';

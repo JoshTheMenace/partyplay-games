@@ -124,11 +124,11 @@ test('snapshots blend positions and the stage clock, but never slide across a te
 test('the prepared stage is the host pick, else the leading vote, else Battlefield', () => {
   const votes = (...stages: unknown[]) => stages.map(stage => ({ lobbyChoice: { fighter: 'fox', costume: 0, stage } }));
   assert.equal(predictStage({ stage: 'temple' }, votes('onett')), 'temple');
-  assert.equal(predictStage({ stage: 'random' }, votes('onett')), 'battlefield');
+  assert.equal(predictStage({ stage: 'random' }, votes('onett')), 'beacon-rock');
   assert.equal(predictStage({ stage: 'vote' }, votes('onett', 'fourside', 'fourside', 'random', 'bogus')), 'fourside');
   assert.equal(predictStage({ stage: 'vote' }, votes('onett', 'fourside')), 'onett');
-  assert.equal(predictStage({ stage: 'vote' }, [{}, { lobbyChoice: null }]), 'battlefield');
-  assert.equal(predictStage(null, []), 'battlefield');
+  assert.equal(predictStage({ stage: 'vote' }, [{}, { lobbyChoice: null }]), 'beacon-rock');
+  assert.equal(predictStage(null, []), 'beacon-rock');
 });
 
 test('events fire once, when presentation reaches their frame, and stale ones drop', () => {

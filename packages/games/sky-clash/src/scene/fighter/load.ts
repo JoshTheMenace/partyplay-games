@@ -9,11 +9,12 @@ import { keyedLoader } from './queue';
 
 const URLS = import.meta.glob('../../../assets/fighters/*.glb', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 const COSTUMES = import.meta.glob('../../../assets/costumes/*.json', { eager: true, import: 'default' }) as Record<string, Costume[] | { costumes: Costume[] }>;
-const META = import.meta.glob('../../../assets/models/*.json', { eager: true, import: 'prop' }) as Record<string, { visible?: PropMode } | undefined>;
+// The whole file is imported (not the named `prop` export): crew and arena metadata share the folder and have no such key.
+const META = import.meta.glob('../../../assets/models/*.json', { eager: true, import: 'default' }) as Record<string, { prop?: { visible?: PropMode } } | undefined>;
 export const modelUrl = (kind: FighterKind) => URLS[`../../../assets/fighters/${kind}.glb`];
 export const costumesOf = (kind: FighterKind): Costume[] => { const raw = COSTUMES[`../../../assets/costumes/${kind}.json`]; return Array.isArray(raw) ? raw : raw?.costumes ?? []; };
 /** The model pipeline's prop mode (assets/models/<kind>.json → prop.visible). */
-export const propModeOf = (kind: FighterKind): PropMode | undefined => META[`../../../assets/models/${kind}.json`]?.visible;
+export const propModeOf = (kind: FighterKind): PropMode | undefined => META[`../../../assets/models/${kind}.json`]?.prop?.visible;
 
 const loader = keyedLoader<FighterKind, FighterModel>(async (kind, signal) => {
   const url = modelUrl(kind);

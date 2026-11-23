@@ -1,10 +1,12 @@
 /**
  * Headless balance and sanity report: level-3 CPU matches under the real rules, plus offstage recovery drills.
- * Run from the repository root: node --import tsx packages/games/sky-clash/tools/balance.ts [matches|recovery|all] [--quick]
- * Melee is not balanced and is not flattened here; the report exists to catch reconstruction bugs (fighters that cannot
- * recover, specials that self-destruct, loop forever or make a fighter unkillable) and dominant bonus fighters.
+ * Run from the repository root: node --import tsx packages/games/sky-clash/tools/balance.ts [matches|recovery|all] [--quick] [--legacy] [--only=a,b]
+ * The crew of the Reaches on its own arenas is the default; --legacy reports the frozen legacy roster on its standard stages instead
+ * (that group is not balanced and is not flattened here; its report exists to catch fighters that cannot recover, specials that
+ * self-destruct, loop forever or make a fighter unkillable, and dominant bonus fighters).
  */
-import { ROSTER, ROSTER_DATA, type CpuLevel, type FighterKind, type Settings, type StageId } from '../src/model';
+import { ARENA_IDS } from '../src/arenas';
+import { CREW, FIGHTERS, LEGACY_ROSTER as ROSTER, ROSTER_DATA, isCrew, type CpuLevel, type FighterKind, type Settings, type StageId } from '../src/model';
 import { stageFrame } from '../src/stages';
 import { P, setState } from '../src/sim/common';
 import { arena } from '../src/sim/harness';
@@ -35,10 +37,10 @@ export const SPOTS: [number, number, number, number][] = [[2.5, -1.2, 1, .05], [
 /** Hard spots after a typical launch (party recovery's target): 8–10 m out and 2–4 m below the ledge, still drifting away. */
 export const HARD_SPOTS: [number, number, number, number][] = [[8, -2, 1, .1], [9, -3, 1, .08], [10, -2.5, 1, .05], [8.5, -4, 1, .05], [5, -3, 0, .05]];
 /** Recovery drill: a level-2/3 CPU placed offstage must reach the ledge or the floor. Returns successes per spot. */
-export function recoveryDrill(kind: FighterKind, level: CpuLevel = 3, spots = SPOTS, stage: StageId = 'battlefield', recovery: Settings['recovery'] = 'party'): boolean[] {
+export function recoveryDrill(kind: FighterKind, level: CpuLevel = 3, spots = SPOTS, stage: StageId = isCrew(kind) ? ARENA_IDS[0] : 'battlefield', recovery: Settings['recovery'] = 'party'): boolean[] {
   const ledge = stageFrame(stage, 0).ledges.reduce((a, l) => (l.x > a.x ? l : a));
   return spots.map(([dx, dy, jumps, vx], i) => {
-    const a = arena({ fighters: [kind, 'sandbag'], stage, seed: 5 + i, cpu: [level, null], settings: { recovery } }); a.place(1, ledge.x - 6);
+    const a = arena({ fighters: [kind, isCrew(kind) ? kind : 'sandbag'], stage, seed: 5 + i, cpu: [level, null], settings: { recovery } }); a.place(1, ledge.x - 6);
     const f = a.f(0); Object.assign(f, { x: ledge.x + dx, y: ledge.y + dy, vx, vy: 0, grounded: false, ground: null, jumpsLeft: jumps ? P(f).jumps - 1 : 0, facing: -1 }); setState(f, 'air');
     for (let t = 0; t < 600 && f.state !== 'out'; t++) { a.tick(); if (f.grounded || f.state === 'ledge') return true; }
     return false;
@@ -66,26 +68,26 @@ export function roundRobin(kinds: readonly FighterKind[], o: { seeds?: number; s
 }
 
 /** One fighter against each opponent on alternating standard stages and sides: its win rate (shared wins count half). */
-export function gauntlet(kind: FighterKind, opponents: readonly FighterKind[], seeds = 1, stocks = 2): number {
+export function gauntlet(kind: FighterKind, opponents: readonly FighterKind[], seeds = 1, stocks = 2, stages: readonly StageId[] = STAGES.slice(0, 5)): number {
   let wins = 0, n = 0;
   for (const [i, other] of opponents.entries()) for (let k = 0; k < seeds; k++) {
-    const pair: FighterKind[] = (i + k) % 2 ? [other, kind] : [kind, other], r = playMatch(pair, STAGES[(i + k) % 5]!, 900 + i * 13 + k, { stocks });
+    const pair: FighterKind[] = (i + k) % 2 ? [other, kind] : [kind, other], r = playMatch(pair, stages[(i + k) % stages.length]!, 900 + i * 13 + k, { stocks });
     wins += r.winners.length === 1 && r.winners[0] === kind ? 1 : r.winners.includes(kind) ? .5 : 0; n++;
   }
   return wins / n;
 }
 const pct = (v: number) => `${Math.round(v * 100)}%`.padStart(5);
 const avg = (v: number[]) => (v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0);
-export function report(kinds: readonly FighterKind[], o: { seeds?: number; recovery?: boolean; matches?: boolean } = {}) {
+export function report(kinds: readonly FighterKind[], o: { seeds?: number; recovery?: boolean; matches?: boolean; stages?: StageId[] } = {}) {
   const lines: string[] = [];
   const rec = o.recovery === false ? null : new Map(kinds.map(k => [k, [...recoveryDrill(k, 3), ...recoveryDrill(k, 2)]]));
-  const hard = rec && new Map(kinds.map(k => [k, [recoveryDrill(k, 3, HARD_SPOTS), recoveryDrill(k, 3, HARD_SPOTS, 'battlefield', 'melee')]]));
-  const rr = o.matches === false ? null : roundRobin(kinds, { seeds: o.seeds ?? 1 });
+  const hard = rec && new Map(kinds.map(k => [k, [recoveryDrill(k, 3, HARD_SPOTS), recoveryDrill(k, 3, HARD_SPOTS, undefined, 'melee')]]));
+  const rr = o.matches === false ? null : roundRobin(kinds, { seeds: o.seeds ?? 1, ...(o.stages ? { stages: o.stages } : {}) });
   lines.push(`fighter              ${rr ? 'games  win   avg s  KO%   falls  SD  stuck' : ''}${rec ? '  recovery  hard party/melee' : ''}`);
   for (const k of kinds) {
     const row = rr?.rows.get(k), r = rec?.get(k), h = hard?.get(k), n = (b: boolean[]) => `${b.filter(Boolean).length}/${b.length}`;
     const cells = row ? `${String(row.games).padStart(5)} ${pct(row.wins / row.games)} ${(row.frames / row.games / 60).toFixed(0).padStart(6)} ${avg(row.koDamage).toFixed(0).padStart(4)} ${String(row.falls).padStart(6)} ${String(row.selfs).padStart(3)} ${String(row.stuck).padStart(6)}` : '';
-    lines.push(`${(ROSTER_DATA[k].name + (ROSTER_DATA[k].bonus ? ' *' : '')).padEnd(20)} ${cells}${r ? `  ${n(r).padEnd(8)}  ${n(h![0])} ${n(h![1])}` : ''}`);
+    lines.push(`${(FIGHTERS[k].name + (FIGHTERS[k].bonus ? ' *' : '')).padEnd(20)} ${cells}${r ? `  ${n(r).padEnd(8)}  ${n(h![0])} ${n(h![1])}` : ''}`);
   }
   if (rr) {
     // Damage share by move: a special carrying a fighter's whole game is a degenerate-kit warning sign.
@@ -102,11 +104,11 @@ export function report(kinds: readonly FighterKind[], o: { seeds?: number; recov
 }
 
 if (process.argv[1]?.endsWith('balance.ts')) {
-  const mode = process.argv[2] ?? 'all', quick = process.argv.includes('--quick');
-  const kinds = (process.argv.find(a => a.startsWith('--only='))?.slice(7).split(',') as FighterKind[] | undefined) ?? (quick ? ROSTER.filter((_, i) => i % 3 === 0) : ROSTER);
+  const mode = process.argv[2]?.startsWith('--') ? 'all' : process.argv[2] ?? 'all', quick = process.argv.includes('--quick'), legacy = process.argv.includes('--legacy'), seedsArg = process.argv.find(a => a.startsWith('--seeds='));
+  const kinds = (process.argv.find(a => a.startsWith('--only='))?.slice(7).split(',') as FighterKind[] | undefined) ?? (!legacy ? [...CREW] : quick ? ROSTER.filter((_, i) => i % 3 === 0) : ROSTER);
   const started = Date.now();
-  console.log(report(kinds, { recovery: mode !== 'matches', matches: mode !== 'recovery', seeds: quick || process.argv.includes('--one') ? 1 : 2 }));
-  if (mode !== 'recovery') {
+  console.log(report(kinds, { recovery: mode !== 'matches', matches: mode !== 'recovery', seeds: seedsArg ? Number(seedsArg.slice(8)) : quick || process.argv.includes('--one') ? 1 : legacy ? 2 : 6, ...(legacy ? {} : { stages: [...ARENA_IDS] }) }));
+  if (mode !== 'recovery' && legacy) {
     const regulars = ROSTER.filter(k => !ROSTER_DATA[k].bonus);
     console.log(`\nbonus fighters vs every regular: ${ROSTER.filter(k => ROSTER_DATA[k].bonus).map(k => `${ROSTER_DATA[k].name} ${pct(gauntlet(k, regulars)).trim()}`).join(', ')}`);
   }

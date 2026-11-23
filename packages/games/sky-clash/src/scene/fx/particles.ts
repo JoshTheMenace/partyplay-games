@@ -4,7 +4,7 @@
  */
 import { AdditiveBlending, BufferAttribute, DynamicDrawUsage, BufferGeometry, NormalBlending, Points, ShaderMaterial, Vector4, type Camera, type WebGLRenderer } from 'three';
 
-export const SHAPE = { glow: 0, spark: 1, ring: 2, star: 3, puff: 4, shard: 5, leaf: 6, coin: 7, bubble: 8 } as const;
+export const SHAPE = { glow: 0, spark: 1, ring: 2, star: 3, puff: 4, shard: 5, leaf: 6, coin: 7, bubble: 8, streak: 9, flame: 10, crescent: 11, burst: 12 } as const;
 export type Shape = keyof typeof SHAPE;
 export type Spawn = {
   x: number; y: number; z?: number; vx?: number; vy?: number; vz?: number; life: number; size: number; grow?: number;
@@ -14,7 +14,7 @@ export type Spawn = {
 const VERT = `attribute vec4 color4; attribute vec2 shapeRot; attribute float size;
 uniform float uScale; varying vec4 vColor; varying vec2 vShape;
 void main() { vColor = color4; vShape = shapeRot; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = size * uScale / max(.1, -mv.z); gl_Position = projectionMatrix * mv; }`;
-const FRAG = `varying vec4 vColor; varying vec2 vShape;
+const FRAG = `uniform float uGain; varying vec4 vColor; varying vec2 vShape;
 void main() {
   vec2 p = gl_PointCoord * 2.0 - 1.0; p.y = -p.y;
   float c = cos(vShape.y), s = sin(vShape.y); p = vec2(c * p.x - s * p.y, s * p.x + c * p.y);
@@ -23,13 +23,17 @@ void main() {
   else if (k == 1) a = pow(max(0.0, 1.0 - abs(p.x)), 10.0) * (1.0 - abs(p.y)) + pow(max(0.0, 1.0 - abs(p.y)), 10.0) * (1.0 - abs(p.x)) + exp(-r * r * 18.0);
   else if (k == 2) a = smoothstep(.62, .78, r) * (1.0 - smoothstep(.84, 1.0, r));
   else if (k == 3) { float ang = atan(p.y, p.x); a = 1.0 - smoothstep(-.06, .06, r - mix(.4, .98, pow(.5 + .5 * cos(ang * 5.0 - 1.5708), 3.0))); }
-  else if (k == 4) a = (1.0 - smoothstep(.45, 1.0, r)) * (.75 + .25 * sin(p.x * 7.0 + p.y * 5.0));
+  else if (k == 4) a = (1.0 - smoothstep(.2, 1.0, r)) * (.8 + .2 * sin(p.x * 7.0 + p.y * 5.0));
   else if (k == 5) a = 1.0 - smoothstep(.85, 1.0, abs(p.x) * 3.2 + abs(p.y));
   else if (k == 6) a = 1.0 - smoothstep(.8, 1.0, length(vec2(p.x * 2.2, p.y)));
   else if (k == 7) a = (1.0 - smoothstep(.85, 1.0, length(vec2(p.x * 1.4, p.y)))) * (.75 + .25 * step(.6, length(vec2(p.x * 1.4, p.y))));
-  else a = smoothstep(.55, .9, r) * (1.0 - smoothstep(.9, 1.0, r)) + .25 * exp(-r * r * 3.0);
+  else if (k == 8) a = smoothstep(.55, .9, r) * (1.0 - smoothstep(.9, 1.0, r)) + .25 * exp(-r * r * 3.0);
+  else if (k == 9) a = (1.0 - smoothstep(0.0, 1.0, abs(p.y) * 9.0)) * pow(max(0.0, 1.0 - abs(p.x)), 1.4) * (1.0 + step(abs(p.y), .035));   // a tapered streak along x with a hot core
+  else if (k == 10) { vec2 q = vec2(p.x * (1.7 + p.y * .9), p.y * 1.05 + .1); a = 1.0 - smoothstep(.35, .95, length(q)); a *= a; }                         // teardrop flame, point up
+  else if (k == 11) { float ang = atan(p.y, p.x); a = (1.0 - smoothstep(0.0, .13, abs(r - .72) + .05 * abs(ang))) * smoothstep(1.5, .5, abs(ang)); }        // crescent slash opening toward -x
+  else { float ang = atan(p.y, p.x); float spike = pow(.5 + .5 * cos(ang * 4.0), 14.0) + .5 * pow(.5 + .5 * cos(ang * 8.0 + 3.1416), 22.0); a = (1.0 - smoothstep(-.04, .04, r - mix(.1, 1.0, spike))) * (1.0 - r * .6) + exp(-r * r * 30.0); }
   a *= vColor.a; if (a < .01) discard;
-  gl_FragColor = vec4(vColor.rgb, a);
+  gl_FragColor = vec4(vColor.rgb * uGain, a);
 }`;
 
 export class Particles {
@@ -48,7 +52,7 @@ export class Particles {
     this.attrs = [new BufferAttribute(this.pos, 3), new BufferAttribute(this.col, 4), new BufferAttribute(this.sh, 2), new BufferAttribute(this.sz, 1)];
     ['position', 'color4', 'shapeRot', 'size'].forEach((name, i) => { this.attrs[i].setUsage(DynamicDrawUsage); geo.setAttribute(name, this.attrs[i]); });
     geo.setDrawRange(0, 0);
-    const mat = new ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, blending: additive ? AdditiveBlending : NormalBlending, uniforms: { uScale: { value: 600 } } });
+    const mat = new ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, blending: additive ? AdditiveBlending : NormalBlending, uniforms: { uScale: { value: 600 }, uGain: { value: 1 } } });
     this.points = new Points(geo, mat);
     this.points.frustumCulled = false; this.points.renderOrder = additive ? 20 : 19;
     this.points.onBeforeRender = (renderer: WebGLRenderer, _s, camera: Camera) => {
@@ -57,6 +61,8 @@ export class Particles {
     };
   }
   get count() { return this.live; }
+  /** Brightness multiplier: above 1 feeds the bloom of the HDR pipeline. */
+  set gain(v: number) { (this.points.material as ShaderMaterial).uniforms.uGain.value = v; }
 
   spawn(p: Spawn) {
     // Ring buffer: the oldest particle is recycled when the pool is full.

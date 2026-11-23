@@ -3,9 +3,8 @@
  * inline hits), capsule hurtboxes, shield bubbles, grab boxes, clanks, counters, then all connections at once so
  * simultaneous hits trade. Knockback direction follows the victim's side of the attacker (Melee's reverse hits).
  */
-import { ATTRIBUTES } from '../../fidelity/attributes';
 import type { HitEffect, Limb, LiveHit } from '../model';
-import { TIMING } from '../moveset';
+import { REBOUND } from '../moveset';
 import { chargeMultiplier, hitlagFrames, shieldDamage, shieldstunFrames, staleness } from './formulas';
 import { P, alive, allied, byId, creditOf, clearMove, dropHeld, isSmash, scriptFrame, setState, shieldBreak, takeHit } from './common';
 import { POWERSHIELD, startGrab } from './fighter';
@@ -25,10 +24,17 @@ export function strikes(f: Fighter): Strike[] {
   const grab = f.move === 'grab' || f.move === 'dashgrab' || !!ph?.grab;
   const mult = (isSmash(f.move) && f.charge ? chargeMultiplier(f.charge) : 1) * (f.special.scale || 1) * powerOf(f), counter = f.special.counter || 0;
   const dmg = (d: number) => Math.max(d * mult, counter);
-  for (const w of script?.windows ?? []) if (t >= Math.max(1, w.from) && t < w.to) for (const h of w.hitboxes) out.push({
-    id: h.id, key: `${w.group}`, x: f.x + f.facing * h.x, y: f.y + h.y, r: h.r, limb: h.limb, damage: dmg(h.damage), angle: h.angle, kbBase: h.kbBase, kbGrowth: h.kbGrowth,
-    fixedKb: h.fixedKb ?? 0, effect: h.effect ?? 'normal', shieldBonus: h.shieldDamage ?? 0, grounded: h.hitsGrounded !== false, airborne: h.hitsAirborne !== false, clank: h.clank, grab,
-  });
+  for (const w of script?.windows ?? []) if (t >= Math.max(1, w.from) && t < w.to) for (const h of w.hitboxes) {
+    const at = (x: number, y: number) => out.push({
+      id: h.id, key: `${w.group}`, x: f.x + f.facing * x, y: f.y + y, r: h.r, limb: h.limb, damage: dmg(h.damage), angle: h.angle, kbBase: h.kbBase, kbGrowth: h.kbGrowth,
+      fixedKb: h.fixedKb ?? 0, effect: h.effect ?? 'normal', shieldBonus: h.shieldDamage ?? 0, grounded: h.hitsGrounded !== false, airborne: h.hitsAirborne !== false, clank: h.clank, grab,
+    });
+    if (!h.track) { at(h.x, h.y); continue; }
+    // Crew hitboxes follow the animation: this frame's point on the track, plus points swept back toward last frame's so a fast swing leaves no gap.
+    const k = Math.min(h.track.length / 2 - 1, t - w.from + 1), x = h.track[k * 2]!, y = h.track[k * 2 + 1]!, px = h.track[k * 2 - 2] ?? x, py = h.track[k * 2 - 1] ?? y;
+    at(x, y);
+    for (let i = 1, n = Math.min(4, Math.ceil(Math.hypot(x - px, y - py) / (h.r * 1.4))); i < n; i++) at(x + (px - x) * i / n, y + (py - y) * i / n);
+  }
   (ph?.hits ?? []).forEach((h, i) => {
     if (f.phaseFrame >= h.from && f.phaseFrame < h.to) out.push({
       id: 8 + i, key: `i${i}`, x: f.x + f.facing * h.x, y: f.y + h.y, r: h.r, limb: 'body', damage: dmg(h.damage), angle: h.angle, kbBase: h.kbBase, kbGrowth: h.kbGrowth,
@@ -104,7 +110,7 @@ function clanks(s: State, live: Map<Fighter, Strike[]>) {
     emit(s, 'clash', (x.x + y.x) / 2, (x.y + y.y) / 2, { source: a.id, target: b.id, power: Math.min(1, (x.damage + y.damage) / 30) });
   }
 }
-function rebound(f: Fighter) { clearMove(f); setState(f, 'land', Math.round(ATTRIBUTES[f.kind].clank_animation_length || TIMING[f.kind].rebound.total)); f.vx = -f.facing * .04; }
+function rebound(f: Fighter) { clearMove(f); setState(f, 'land', REBOUND[f.kind]); f.vx = -f.facing * .04; }
 function hit(s: State, a: Fighter, t: Fighter, st: Strike) {
   a.hitIds.push(t.id + ':' + st.key);
   const ph = phaseOf(a), damage = staledDamage(a, st.damage), move = a.move ?? undefined;

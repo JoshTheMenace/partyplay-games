@@ -1,0 +1,162 @@
+[
+ {
+  "name": "Saffron Run",
+  "colors": {
+   "jacket": "#d28a1e",
+   "wrap": "#e2d7bd",
+   "trouser": "#2a3160",
+   "sash": "#2f8a80",
+   "leather": "#5a3a28",
+   "skin": "#c48a62",
+   "hair": "#23202e",
+   "kite": "#efe6cf",
+   "wood": "#6a4a34",
+   "brass": "#c9963f",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#3fae96",
+   "gale": "#8ff0d0"
+  },
+  "patterns": {
+   "jacket": "#f3d9a0",
+   "wrap": "#b9a888",
+   "trouser": "#3d4680",
+   "sash": "#f0e2b8",
+   "leather": "#3a2418",
+   "skin": "#a8503f",
+   "hair": "#4b4460",
+   "kite": "#d28a1e",
+   "wood": "#3e2a1e",
+   "brass": "#8a5a22",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#145046",
+   "gale": "#3fd0a8"
+  },
+  "swatch": [
+   "#d28a1e",
+   "#2a3160",
+   "#8ff0d0"
+  ]
+ },
+ {
+  "name": "Storm Indigo",
+  "colors": {
+   "jacket": "#34407e",
+   "wrap": "#e2d7bd",
+   "trouser": "#4a4f5c",
+   "sash": "#c9a54a",
+   "leather": "#5a3a28",
+   "skin": "#c48a62",
+   "hair": "#23202e",
+   "kite": "#dfe4f2",
+   "wood": "#6a4a34",
+   "brass": "#c9963f",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#5f8fd8",
+   "gale": "#9fd8ff"
+  },
+  "patterns": {
+   "jacket": "#b9c4f0",
+   "wrap": "#b9a888",
+   "trouser": "#3d4680",
+   "sash": "#f0e2b8",
+   "leather": "#3a2418",
+   "skin": "#a8503f",
+   "hair": "#4b4460",
+   "kite": "#34407e",
+   "wood": "#3e2a1e",
+   "brass": "#8a5a22",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#145046",
+   "gale": "#4aa0ff"
+  },
+  "swatch": [
+   "#34407e",
+   "#4a4f5c",
+   "#9fd8ff"
+  ]
+ },
+ {
+  "name": "Rosewind",
+  "colors": {
+   "jacket": "#b9485c",
+   "wrap": "#e2d7bd",
+   "trouser": "#3a2a3f",
+   "sash": "#e3c98a",
+   "leather": "#5a3a28",
+   "skin": "#c48a62",
+   "hair": "#6b3a2a",
+   "kite": "#f6e3e0",
+   "wood": "#6a4a34",
+   "brass": "#c9963f",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#3fae96",
+   "gale": "#ffd0e0"
+  },
+  "patterns": {
+   "jacket": "#f5c9cf",
+   "wrap": "#b9a888",
+   "trouser": "#3d4680",
+   "sash": "#f0e2b8",
+   "leather": "#3a2418",
+   "skin": "#a8503f",
+   "hair": "#4b4460",
+   "kite": "#b9485c",
+   "wood": "#3e2a1e",
+   "brass": "#8a5a22",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#145046",
+   "gale": "#ff8ab0"
+  },
+  "swatch": [
+   "#b9485c",
+   "#3a2a3f",
+   "#ffd0e0"
+  ]
+ },
+ {
+  "name": "Evergreen",
+  "colors": {
+   "jacket": "#4d7a40",
+   "wrap": "#e2d7bd",
+   "trouser": "#3a2f26",
+   "sash": "#c0562e",
+   "leather": "#5a3a28",
+   "skin": "#c48a62",
+   "hair": "#d8d2c2",
+   "kite": "#e9edd2",
+   "wood": "#6a4a34",
+   "brass": "#c9963f",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#7a9a3a",
+   "gale": "#e8ff9a"
+  },
+  "patterns": {
+   "jacket": "#dfe8b8",
+   "wrap": "#b9a888",
+   "trouser": "#3d4680",
+   "sash": "#f0e2b8",
+   "leather": "#3a2418",
+   "skin": "#a8503f",
+   "hair": "#4b4460",
+   "kite": "#4d7a40",
+   "wood": "#3e2a1e",
+   "brass": "#8a5a22",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#145046",
+   "gale": "#a8e04a"
+  },
+  "swatch": [
+   "#4d7a40",
+   "#3a2f26",
+   "#e8ff9a"
+  ]
+ }
+]

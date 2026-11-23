@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Matrix4, Quaternion, Scene, Vector3, type Bone } from 'three';
-import { MOVE_SOURCES, POSES, ROSTER, type FighterKind, type FighterState, type FighterView, type LiveHit, type MoveId } from '../src/model';
+import { MOVE_SOURCES, POSES, LEGACY_ROSTER as ROSTER, type FighterKind, type FighterState, type FighterView, type LiveHit, type MoveId } from '../src/model';
 import { MOVESET, PHYSICS } from '../src/moveset';
 import { FighterActor, type ActorContext } from '../src/scene/fighter/actor';
 import { pose, type Clock, type MoveInfo } from '../src/scene/fighter/animate';

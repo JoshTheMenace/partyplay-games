@@ -48,6 +48,16 @@ export class ProjectileArt {
       for (let i = 0; i < n; i++) fx.add.spawn({ x: p.x + (fx.rand() - .5) * p.r, y: p.y + (fx.rand() - .5) * p.r, vx: -p.vx * 10 + (fx.rand() - .5), vy: -p.vy * 10 + fx.rand() * .8, life: .28, size: p.r * size * 2, grow: -.6, color: col, shape: 'glow', drag: 3 });
     };
     switch (kind) {
+      // ── The crew's own shots ──
+      case 'cinder': g.add(this.mesh('orb', this.halo([1, .5, .12]), 1.9), this.mesh('orb', this.glow([1, .62, .2], .95), .85), this.mesh('orb', this.glow([1, .96, .8]), .45)); v.pulse = 2;
+        v.trail = (p, fx) => { fx.add.spawn({ x: p.x + (fx.rand() - .5) * p.r, y: p.y + (fx.rand() - .5) * p.r, vx: -p.vx * 14 + (fx.rand() - .5) * .6, vy: -p.vy * 14 + fx.rand() * 1.4, life: .3, size: p.r * 1.5, grow: -.7, color: [1, .5, .12], shape: 'flame', drag: 3, alpha: .8 });
+          if (fx.rand() > .5) fx.add.spawn({ x: p.x, y: p.y, vx: (fx.rand() - .5) * 2, vy: fx.rand() * 2, life: .6, size: .06, color: [1, .8, .35], shape: 'glow', gravity: -1.5, drag: 1 }); }; break;
+      case 'glassbulb': g.add(this.mesh('orb', this.halo([.62, .9, 1]), 1.2), this.mesh('ring', this.glow([.85, .96, 1], .8), .98), this.mesh('orb', this.glow([1, .7, .85], .5), .3, .3, .3, -.3), this.mesh('orb', this.glow([1, 1, 1], .9), .14, .14, .14, .42)); v.pulse = 1.5; v.min = .2;
+        v.trail = (p, fx) => { if (fx.rand() > .8) fx.add.spawn({ x: p.x + (fx.rand() - .5) * p.r * 2, y: p.y + (fx.rand() - .5) * p.r * 2, life: .4, size: .12, color: [.85, .96, 1], shape: 'star', spin: 4, gravity: 1 }); }; break;
+      case 'shard': v.min = .1; g.add(this.mesh('cone', this.glow([.75, .93, 1], .9), 2.6, .6, .3), this.mesh('cone', this.glow([1, 1, 1]), 1.4, .24, .2, .3)); v.orient = true;
+        v.trail = (p, fx) => { if (fx.rand() > .5) fx.add.spawn({ x: p.x, y: p.y, vx: -p.vx * 8, vy: -p.vy * 8 + fx.rand(), life: .2, size: .07, color: [.9, .97, 1], shape: 'glow' }); }; break;
+      case 'galedart': v.min = .14; g.add(this.mesh('cone', this.glow([.56, .94, .82], .9), 2.6, .8, .5), this.mesh('cone', this.glow([.95, 1, .98]), 1.5, .36, .3, .3), this.mesh('orb', this.halo([.5, .95, .8]), 1.5)); v.orient = true;
+        v.trail = (p, fx) => { fx.add.spawn({ x: p.x - p.vx * 2, y: p.y + (fx.rand() - .5) * p.r * 1.6, vx: -p.vx * 20, vy: (fx.rand() - .5) * 1.2, life: .16, size: p.r * 3.2, color: [.56, .94, .82], shape: 'streak', angle: Math.atan2(p.vy, p.vx), alpha: .6 }); }; break;
       case 'fireball': case 'dins-fire': case 'pk-fire': orb([1, .45, .1]); v.trail = embers([1, .5, .12], 2); break;
       case 'flame': orb([1, .4, .08], false); v.trail = embers([1, .55, .15], 4, .9); break;
       case 'pill': v.min = 0.28; g.add(this.mesh('capsule', this.solid('#f4f4f4'), .9, .9, .9, -.22), this.mesh('capsule', this.solid('#e53a4a'), .9, .9, .9, .22)); v.spin = 14; break;

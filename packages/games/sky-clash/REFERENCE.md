@@ -1,5 +1,7 @@
 # Melee fidelity requirements and reuse investigation
 
+> **Legacy only.** This file records where the frozen legacy roster and stages came from. Nothing in the crew of the Reaches or its arenas ([DESIGN.md](DESIGN.md)) was derived from these sources, and the importers named here must not be run.
+
 ## Current scope
 
 Sky Clash v2 (2026-09-24) rebuilds the game around the Melee content: all 33 fighter kinds, the 27 regular fighters' imported attributes and attack command streams, and 30 stages. The user asked to keep that content and rebuild everything else. The engine, CPUs, specials, Blender models, animation, effects, stage art and UI are new. Where Melee behaviour could not be recovered, the code reconstructs it and says so in a comment. Nothing here claims frame parity. [README.md](README.md) covers play and limits.

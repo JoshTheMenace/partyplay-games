@@ -3,7 +3,7 @@ import { readFileSync, statSync } from 'node:fs';
 import test from 'node:test';
 import { ACTIONS } from '../fidelity/actions';
 import { ATTRIBUTES } from '../fidelity/attributes';
-import { MOVE_SOURCES, POSES, ROSTER, ROSTER_DATA, UNIT, type MoveId } from '../src/model';
+import { MOVE_SOURCES, POSES, LEGACY_ROSTER as ROSTER, ROSTER_DATA, UNIT, type MoveId } from '../src/model';
 import { MOVESET, PHYSICS, TIMING, defaultPose } from '../src/moveset';
 
 const roster = JSON.parse(readFileSync(new URL('../fidelity/roster.json', import.meta.url), 'utf8')) as { id: string; sha256: string; bonus: boolean }[];

@@ -12,7 +12,7 @@ import { STAGES, STAGE_IDS, stageFrame, type StageId } from '../../src/stages';
 
 const q = new URLSearchParams(location.search), stageId = (STAGE_IDS.includes(q.get('stage') as StageId) ? q.get('stage') : 'battlefield') as StageId, stage = STAGES[stageId];
 const kinds = (q.get('fighters') ?? 'fox,mario,kirby,marth').split(',').filter(isFighterKind) as FighterKind[];
-const pause = Number(q.get('pause') ?? Infinity), prep = Number(q.get('prep') ?? 1200);
+const pause = Number(q.get('pause') ?? Infinity), prep = Number(q.get('prep') ?? 1200), clean = q.get('clean') === '1';   // clean: nobody on stage (stage cards)
 const COLORS = ['#ff5748', '#28c6e7', '#78d955', '#ffd24a'], NAMES = ['Aria', 'Benedikt the Unbreakable', 'Chen', 'CPU 1'];
 const players = kinds.map((fighter, i) => ({ id: `p${i}`, name: NAMES[i], color: COLORS[i], lobbyChoice: { fighter, costume: i % 4, stage: stageId } }));
 const resolved = (STAGE_IDS.includes(q.get('resolved') as StageId) ? q.get('resolved') : stageId) as StageId;
@@ -25,6 +25,7 @@ const base = (i: number): FighterView => ({ id: `p${i}`, name: NAMES[i], color: 
 /** The scripted match at frame f (60 per second): a 6-second loop of pacing, a smash, a launch, a KO and a respawn. */
 function simulate(f: number, fighters: FighterView[], events: GameEvent[]) {
   const loop = f % 360, cycle = Math.floor(f / 360), hitAt = 120;
+  if (clean) { fighters.forEach((p, i) => Object.assign(p, base(i), { state: 'out', stocks: 0 })); return; }
   fighters.forEach((p, i) => {
     const s = base(i), home = s.x, t = f / 60;
     Object.assign(p, s, { damage: (cycle * 23 + i * 17) % 160, stocks: 4 - (i === 1 ? cycle % 4 : 0), stateFrame: f % 30 });

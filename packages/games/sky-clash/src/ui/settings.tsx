@@ -1,6 +1,7 @@
 import { ToggleRow, type InstructionsViewProps, type SettingsViewProps } from '../../../../party-ui/src/index';
-import { ROSTER, type CpuLevel, type Settings } from '../model';
-import { STAGE_IDS, getStage } from '../stages';
+import { ARENA_IDS } from '../arenas';
+import { CREW, type CpuLevel, type Settings } from '../model';
+import { LEGACY_STAGE_IDS, getStage } from '../stages';
 import { CPU_LEVELS } from './data';
 import { TIME_OPTIONS, readSettings, timeLabel } from './lobby-choice';
 function Segmented<T extends string | number>({ label, value, options, disabled, onChange, format = String }: { label: string; value: T; options: readonly T[]; disabled: boolean; onChange(v: T): void; format?(v: T): string }) {
@@ -17,17 +18,18 @@ export function SettingsView({ settings: raw, onChange, disabled }: SettingsView
     <p className="sc-set-note">CPUs fill empty seats up to four fighters. A lone player always gets one CPU rival.</p>
     <ToggleRow label="Teams (two teams, no friendly fire)" checked={s.teams} disabled={disabled} onChange={teams => set({ teams })}/>
     <ToggleRow label="Stage hazards" checked={s.hazards} disabled={disabled} onChange={hazards => set({ hazards })}/>
-    <ToggleRow label="Melee L-cancel (tap Shield just before landing an aerial)" checked={s.lcancel === 'melee'} disabled={disabled} onChange={on => set({ lcancel: on ? 'melee' : 'auto' })}/>
-    <Segmented label="Recovery" value={s.recovery ?? 'party'} options={['party', 'melee'] as const} disabled={disabled} onChange={recovery => set({ recovery })} format={v => v === 'party' ? 'Party' : 'Melee'}/>
-    <p className="sc-set-note">{s.recovery === 'melee' ? 'Melee jump and up-special heights.' : 'Stronger air jumps and up-specials, an air jump back after a hit, and Jump with no jumps left does your up-special.'}</p>
+    <ToggleRow label="Manual landing cancel (tap Shield just before landing an aerial)" checked={s.lcancel === 'melee'} disabled={disabled} onChange={on => set({ lcancel: on ? 'melee' : 'auto' })}/>
+    <Segmented label="Recovery" value={s.recovery ?? 'party'} options={['party', 'melee'] as const} disabled={disabled} onChange={recovery => set({ recovery })} format={v => v === 'party' ? 'Party' : 'Strict'}/>
+    <p className="sc-set-note">{s.recovery === 'melee' ? 'Jumps and up-specials exactly as each fighter is tuned.' : 'Stronger air jumps and up-specials, an air jump back after a hit, and Jump with no jumps left does your up-special.'}</p>
     <label className="sc-select-row">Stage<select value={s.stage} disabled={disabled} onChange={e => set({ stage: e.target.value as Settings['stage'] })}>
-      <option value="vote">Players vote</option><option value="random">Random</option>{STAGE_IDS.map(id => <option key={id} value={id}>{getStage(id).name}</option>)}</select></label>
+      <option value="vote">Players vote</option><option value="random">Random arena</option><optgroup label="The Reaches">{ARENA_IDS.map(id => <option key={id} value={id}>{getStage(id).name}</option>)}</optgroup>
+      <optgroup label="Legacy stages">{LEGACY_STAGE_IDS.map(id => <option key={id} value={id}>{getStage(id).name}</option>)}</optgroup></select></label>
   </div>;
 }
 export function InstructionsView({ role }: InstructionsViewProps) {
   return <div className="sky-clash-instructions">
     <h2>Launch your rivals off the stage.</h2>
-    <p>Hits raise damage, and the higher it climbs the farther you fly. Knock a fighter past the edge of the screen to take a stock. The last fighter (or team) standing wins. All {ROSTER.length} Melee fighters and {STAGE_IDS.length} stages are here.</p>
+    <p>Hits raise damage, and the higher it climbs the farther you fly. Knock a fighter past the edge of the screen to take a stock. The last fighter (or team) standing wins. Choose from the {CREW.length} fighters of the Reaches and fight on their arenas; the earlier roster and stages sit in a separate legacy group.</p>
     {role !== 'display' && <ul>
       <li><b>Move</b> with the left pad. Tap <b>Attack</b> with a direction for tilts and aerials.</li>
       <li><b>Swipe</b> across <b>Attack</b> for a smash in that direction (hold to charge), or flick the pad and tap Attack. Tap <b>Special</b> with the pad, or <b>swipe</b> it: swipe up to recover.</li>

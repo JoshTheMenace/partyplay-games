@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ROSTER, ROSTER_DATA, type FighterKind, type StageId } from '../src/model';
+import { LEGACY_ROSTER as ROSTER, ROSTER_DATA, type FighterKind, type StageId } from '../src/model';
 import { HARD_SPOTS, SPOTS, gauntlet, recoveryDrill, roundRobin } from '../tools/balance';
 
 // Melee-faithful weak spots: Yoshi and Jigglypuff have no rising up-special, and some slow recoveries cannot cover the far spot.

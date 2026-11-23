@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ROSTER_DATA, neutralInput, type Input, type LobbyChoice } from '../src/model';
+import { CREW, neutralInput, type Input, type LobbyChoice } from '../src/model';
 import { rules } from '../src/server';
+import { ARENA_IDS } from '../src/arenas';
 import { STAGE_IDS, getStage } from '../src/stages';
 import { tallyStage } from '../src/sim/match';
 
@@ -18,7 +19,7 @@ test('a lone human gets a CPU; CPUs are capped at four fighters and named CPU 1â
 test('chosen fighters and costumes are kept; Random resolves from the seed to a regular fighter; duplicate costumes shift', () => {
   const s = make([seat(0, { fighter: 'marth', costume: 2 }), seat(1, { fighter: 'marth', costume: 2 }), seat(2, { fighter: 'random' }), seat(3)]);
   assert.deepEqual(s.fighters.slice(0, 2).map(f => [f.kind, f.costume]), [['marth', 2], ['marth', 3]]);
-  for (const f of s.fighters.slice(2)) assert.equal(ROSTER_DATA[f.kind].bonus, false);
+  for (const f of s.fighters.slice(2)) assert.ok((CREW as readonly string[]).includes(f.kind), 'Random and unpicked seats get a fighter of the crew');
   const again = make([seat(0, { fighter: 'marth', costume: 2 }), seat(1, { fighter: 'marth', costume: 2 }), seat(2, { fighter: 'random' }), seat(3)]);
   assert.deepEqual(again.fighters.map(f => f.kind), s.fighters.map(f => f.kind), 'deterministic from the seed');
 });
@@ -28,7 +29,7 @@ test('stage: most votes win, ties break by seed among leaders, Random votes reso
   assert.deepEqual([...tie].sort(), ['fountain', 'yoshi-story']);
   assert.ok(STAGE_IDS.includes(make([seat(0, { stage: 'random' }), seat(1, { stage: 'random' })]).stageId));
   assert.equal(make([seat(0, { stage: 'fountain' }), seat(1, { stage: 'fountain' })], { stage: 'corneria' }).stageId, 'corneria');
-  assert.equal(tallyStage([], Math.random), 'battlefield');
+  assert.equal(tallyStage([], Math.random), ARENA_IDS[0]);
   assert.ok(STAGE_IDS.includes(make([seat(0), seat(1)], { stage: 'random' }).stageId));
 });
 test('teams alternate by seat order; everyone starts on the stage spawns facing the middle', () => {

@@ -7,6 +7,10 @@ export function mountThreeScene(canvas: HTMLCanvasElement, options: {
   signal: AbortSignal; scene: Scene; camera: Camera; quality?: Quality;
   resize(aspect: number): void; frame(nowMs: number, dtSeconds: number): void;
   onReady(): void; onError(error: unknown): void; onMetrics?(metrics: SceneMetrics): void;
+  /** Optional: called once with the new renderer, before shaders compile (shadow maps, tone mapping, a post-processing chain). */
+  configure?(renderer: WebGLRenderer): void;
+  /** Optional: draws the frame instead of the default `renderer.render(scene, camera)` (multi-pass rendering). The caller owns what it creates. */
+  render?(renderer: WebGLRenderer, scene: Scene, camera: Camera): void;
 }) {
   const scope = new ResourceScope(options.signal), frames = new FrameMetrics(), began = performance.now();
   if (scope.signal.aborted) return scope;
@@ -14,6 +18,7 @@ export function mountThreeScene(canvas: HTMLCanvasElement, options: {
   try { renderer = new WebGLRenderer({ canvas, antialias: options.quality !== 'low', powerPreference: 'high-performance' }); }
   catch (error) { scope.dispose(); options.onError(error); return scope; }
   scope.defer(() => { renderer.setAnimationLoop(null); renderer.dispose(); renderer.forceContextLoss(); });
+  try { options.configure?.(renderer); } catch (error) { scope.dispose(); options.onError(error); return scope; }
   let sized = false, warmed = false, ready = false, previous = 0, reported = 0, loadMs = 0;
   const fail = (error: unknown) => { if (scope.signal.aborted) return; scope.dispose(); options.onError(error); };
   scope.listen(canvas, 'webglcontextlost', event => { event.preventDefault(); fail(new Error('Graphics context lost. Return to the lobby and start again.')); });
@@ -31,7 +36,8 @@ export function mountThreeScene(canvas: HTMLCanvasElement, options: {
     if (scope.signal.aborted || !sized || !warmed || document.hidden) return;
     try {
       const delta = previous ? now - previous : 0; previous = now;
-      options.frame(now, Math.min(delta / 1000, .1)); renderer.render(options.scene, options.camera);
+      options.frame(now, Math.min(delta / 1000, .1));
+      if (options.render) options.render(renderer, options.scene, options.camera); else renderer.render(options.scene, options.camera);
       if (!ready) { ready = true; loadMs = performance.now() - began; options.onReady(); }
       else if (delta) frames.record(delta);
       if (now - reported >= 1000) { reported = now; const { render, memory } = renderer.info; options.onMetrics?.({ ...frames.snapshot(), loadMs, calls: render.calls, triangles: render.triangles, geometries: memory.geometries, textures: memory.textures, pixelRatio: renderer.getPixelRatio() }); }

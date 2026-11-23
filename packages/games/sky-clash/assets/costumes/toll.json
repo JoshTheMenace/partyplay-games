@@ -1,0 +1,106 @@
+[
+ {
+  "name": "Verdigris",
+  "colors": {
+   "bronze": "#4f8f80",
+   "iron": "#34363f",
+   "brass": "#c9963f",
+   "copper": "#b5673a",
+   "enamel": "#7c2f2a",
+   "dark": "#141218",
+   "ember": "#ffb347"
+  },
+  "patterns": {
+   "bronze": "#a8884a",
+   "iron": "#23242b",
+   "brass": "#8a5a22",
+   "copper": "#6f3a22",
+   "enamel": "#4a1c1a",
+   "dark": "#141218",
+   "ember": "#ff6a1c"
+  },
+  "swatch": [
+   "#4f8f80",
+   "#c9963f",
+   "#ffb347"
+  ]
+ },
+ {
+  "name": "Foundry Brass",
+  "colors": {
+   "bronze": "#b88d3e",
+   "iron": "#34363f",
+   "brass": "#d8d2c4",
+   "copper": "#b5673a",
+   "enamel": "#27445c",
+   "dark": "#141218",
+   "ember": "#ffd27a"
+  },
+  "patterns": {
+   "bronze": "#e0c078",
+   "iron": "#23242b",
+   "brass": "#8a5a22",
+   "copper": "#6f3a22",
+   "enamel": "#4a1c1a",
+   "dark": "#141218",
+   "ember": "#ff6a1c"
+  },
+  "swatch": [
+   "#b88d3e",
+   "#d8d2c4",
+   "#ffd27a"
+  ]
+ },
+ {
+  "name": "Soot and Frost",
+  "colors": {
+   "bronze": "#3d4350",
+   "iron": "#22232a",
+   "brass": "#9aa4b5",
+   "copper": "#b5673a",
+   "enamel": "#2f5a6a",
+   "dark": "#141218",
+   "ember": "#8fe3ff"
+  },
+  "patterns": {
+   "bronze": "#7d8799",
+   "iron": "#23242b",
+   "brass": "#8a5a22",
+   "copper": "#6f3a22",
+   "enamel": "#4a1c1a",
+   "dark": "#141218",
+   "ember": "#3aa8ff"
+  },
+  "swatch": [
+   "#3d4350",
+   "#9aa4b5",
+   "#8fe3ff"
+  ]
+ },
+ {
+  "name": "Rose Copper",
+  "colors": {
+   "bronze": "#a85f4a",
+   "iron": "#34363f",
+   "brass": "#e0b060",
+   "copper": "#7a4a3a",
+   "enamel": "#3a2f52",
+   "dark": "#141218",
+   "ember": "#ffe07a"
+  },
+  "patterns": {
+   "bronze": "#e3a07f",
+   "iron": "#23242b",
+   "brass": "#8a5a22",
+   "copper": "#6f3a22",
+   "enamel": "#4a1c1a",
+   "dark": "#141218",
+   "ember": "#ff6a1c"
+  },
+  "swatch": [
+   "#a85f4a",
+   "#e0b060",
+   "#ffe07a"
+  ]
+ }
+]

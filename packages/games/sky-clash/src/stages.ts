@@ -4,12 +4,16 @@
  * bottom = ceiling); platforms are one-way. Motion, transformations and hazards are pure functions of stageTick,
  * so the server and the renderer read the exact same frame. Browser-safe data. STAGES.md lists sources and simplifications.
  */
+import { ARENAS, ARENA_IDS } from './arenas';
 import { UNIT } from './model';
 
-export const STAGE_IDS = ['cloudbreak', 'peach-castle', 'rainbow-cruise', 'kongo-jungle', 'jungle-japes', 'great-bay', 'temple', 'brinstar', 'brinstar-depths',
+/** The arenas of the Reaches (src/arenas.ts) come first; the rest are the legacy stages. */
+export const STAGE_IDS = [...ARENA_IDS, 'cloudbreak', 'peach-castle', 'rainbow-cruise', 'kongo-jungle', 'jungle-japes', 'great-bay', 'temple', 'brinstar', 'brinstar-depths',
   'yoshi-story', 'yoshi-island', 'fountain', 'green-greens', 'corneria', 'venom', 'stadium', 'poke-floats', 'mute-city', 'big-blue', 'onett', 'fourside',
   'icicle-mountain', 'mushroom-kingdom', 'mushroom-kingdom-ii', 'flat-zone', 'dream-land', 'yoshi-island-64', 'kongo-jungle-64', 'battlefield', 'final-destination'] as const;
 export type StageId = typeof STAGE_IDS[number];
+/** The frozen legacy group (everything that is not an arena of the Reaches). */
+export const LEGACY_STAGE_IDS: StageId[] = STAGE_IDS.filter(id => !(ARENA_IDS as readonly string[]).includes(id));
 export type StageChoice = StageId | 'random';
 /**
  * Solid box. Moving blocks carry `dx`/`dy`: their top's movement since the previous tick, so riders are carried.
@@ -138,6 +142,7 @@ const flatScene = (t: number) => Math.floor(mod(t, 4500) / 1500); // 0 Fire, 1 O
 
 // ── Stages ────────────────────────────────────────────────────────────────
 const SPECS: Record<StageId, Spec> = {
+  ...ARENAS,
   battlefield: {
     name: 'Battlefield', blurb: 'The tournament standard: a floating island with three soft platforms and a jagged underside that catches low recoveries.',
     family: 'space', palette: '#120c33 #3b2d7a #2a2360 #8f93b8 #d4c9ff #7ef0ff #e8e1ff',
@@ -457,7 +462,7 @@ function define(id: StageId, s: Spec): StageDef {
 export const STAGES = Object.fromEntries(STAGE_IDS.map(id => [id, define(id, SPECS[id])])) as Record<StageId, StageDef>;
 export const getStage = (id: StageId): StageDef => STAGES[id];
 export const resolveStage = (choice: StageId | 'random' | undefined, seed: number): StageId =>
-  choice === 'random' ? STAGE_IDS[(seed >>> 0) % STAGE_IDS.length] : choice && Object.hasOwn(STAGES, choice) ? choice : 'battlefield';
+  choice === 'random' ? ARENA_IDS[(seed >>> 0) % ARENA_IDS.length] : choice && Object.hasOwn(STAGES, choice) ? choice : ARENA_IDS[0];
 
 /**
  * Collision, ledges and hazard at `tick` (the View's stageTick). dx/dy compare against tick − 1; a piece that wraps around

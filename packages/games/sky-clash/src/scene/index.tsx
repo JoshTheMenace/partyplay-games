@@ -2,19 +2,26 @@
  * Sky Clash display scene (display role only; client.tsx lazy-imports it so phones never load three.js).
  *
  * Owns the mount, frame loop, snapshot buffering and interpolation, camera, stage art, name tags and offscreen
- * magnifier bubbles. Fighters and effects come from ./fighter and ./fx. Preparation builds the predicted stage with
+ * magnifier bubbles. Crew fighters come from ./crew, legacy fighters from ./fighter, effects from ./fx. An arena of the Reaches (./arena)
+ * turns on the HDR pipeline (./pipeline: shadows, bloom, tone curve); a legacy stage renders directly, as it always did. Preparation builds the predicted stage with
  * every lobby pick standing on its spawn, so shader warm-up covers what GO will show; the resolved stage replaces it
  * when the first snapshot arrives.
  */
 import { useEffect, useRef } from 'react';
-import { BackSide, CapsuleGeometry, Group, Mesh, MeshBasicMaterial, MeshToonMaterial, PerspectiveCamera, Scene, Vector3 } from 'three';
+import { BackSide, CapsuleGeometry, Group, Mesh, MeshBasicMaterial, MeshToonMaterial, PerspectiveCamera, Scene, Vector3, type WebGLRenderTarget, type WebGLRenderer } from 'three';
 import type { SceneViewProps } from '../../../../party-ui/src/index';
 import { ResourceScope, SnapshotBuffer } from '../../../../party-runtime/src/index';
 import { mountThreeScene, type Quality } from '../../../../party-3d/src/index';
-import { FIGHTERS, isFighterKind, type FighterKind, type FighterView, type Settings, type View } from '../model';
+import { ARENA_IDS, isArena } from '../arenas';
+import { CREW_DEFS } from '../crew/index';
+import { FIGHTERS, isCrew, isFighterKind, type FighterKind, type FighterView, type Settings, type View } from '../model';
 import { STAGES, type StageId } from '../stages';
+import { arenaReady, createArenaArt, loadArena, type ArenaArt } from './arena/index';
 import { CameraDirector, EventClock, applyShot, blendView, distanceFor, jumped, predictStage, type Subject } from './camera';
+import { CrewActor } from './crew/actor';
+import { loadCrewModels, type CrewModel } from './crew/model';
 import { FighterActor, FighterCache, loadFighterModels, type FighterModel } from './fighter/index';
+import { Pipeline, skyEnvironment } from './pipeline';
 import { createFx } from './fx/index';
 import { createStageArt, type StageArt } from './stage/index';
 import { BUBBLE_LAYER } from './stage/kit';
@@ -71,10 +78,10 @@ export default function SceneView(props: SceneViewProps<Settings, View>) {
     const scope = new ResourceScope(props.signal), el = canvas.current, root = overlay.current, flashEl = flash.current;
     if (!el || !root || !flashEl) { props.onError(new Error('The arena canvas is unavailable.')); return scope.dispose; }
     const fail = (error: unknown) => { if (!scope.signal.aborted) { scope.dispose(); latest.current.onError(error); } };
-    const models = new Map<FighterKind, FighterModel | null>(), loading = new Map<FighterKind, Promise<void>>();
+    const models = new Map<FighterKind, FighterModel | CrewModel | null>(), loading = new Map<FighterKind, Promise<void>>();
     const need = (kind: FighterKind): Promise<void> => {
       if (models.has(kind) || loading.has(kind)) return loading.get(kind) ?? Promise.resolve();
-      const load = loadFighterModels([kind], scope.signal).then(m => { models.set(kind, m.get(kind) ?? null); }, error => {
+      const load = (isCrew(kind) ? loadCrewModels([kind], scope.signal).then(m => { models.set(kind, m.get(kind) ?? null); }) : loadFighterModels([kind], scope.signal).then(m => { models.set(kind, m.get(kind) ?? null); })).catch(error => {
         if (scope.signal.aborted) return;
         console.warn(`Sky Clash: showing a stand-in for ${FIGHTERS[kind].name}.`, error); models.set(kind, null);
       }).finally(() => loading.delete(kind));
@@ -84,13 +91,24 @@ export default function SceneView(props: SceneViewProps<Settings, View>) {
       return load;
     };
     const first = latest.current, prepared = predictStage(first.settings, first.players), preview = previewFighters(prepared, first.players);
-    Promise.all(preview.map(f => need(f.fighter))).then(() => { if (!scope.signal.aborted) build(); }).catch(fail);
+    // An arena's model must be parsed before its art can be built; under a vote or Random any arena may come up, so all of them load.
+    const arenas = isArena(prepared) && first.settings.stage === prepared ? [prepared] : first.settings.stage === 'vote' || first.settings.stage === 'random' || isArena(prepared) ? [...ARENA_IDS] : [];
+    Promise.all([...preview.map(f => need(f.fighter)), ...arenas.map(id => loadArena(id, scope.signal))]).then(() => { if (!scope.signal.aborted) build(); }).catch(fail);
 
     function build() {
       const scene = new Scene(), camera = new PerspectiveCamera(30, 16 / 9, .5, 2400), quality = readQuality(), motion = matchMedia('(prefers-reduced-motion: reduce)');
       const cache = scope.own(new FighterCache()), fx = createFx(scene, scope), tags = createTags(root!), magnifier = createMagnifier(scene, scope), project = new Vector3();
       scope.defer(() => tags.dispose());
-      let art: StageArt = createStageArt(prepared, scope, quality), aspect = 16 / 9;
+      const makeArt = (id: StageId): StageArt | ArenaArt => isArena(id) && arenaReady(id) ? createArenaArt(id, scope, quality) : createStageArt(id, scope, quality);
+      let art = makeArt(prepared), aspect = 16 / 9, renderer: WebGLRenderer | null = null, pipeline: Pipeline | null = null, plainEnv: WebGLRenderTarget | null = null;
+      scope.defer(() => { pipeline?.dispose(); plainEnv?.dispose(); });
+      /** Hand the scene's look to the current stage: an arena brings its sky, haze and grade; a legacy stage gets the old direct path and a plain sky for crew metal to reflect. */
+      const enterStage = () => {
+        if (!renderer || !pipeline) return;
+        if ('enter' in art) { pipeline.grade(art.enter(scene, renderer)); pipeline.direct = false; fx.setHdr(true); return; }
+        const p = art.stage.palette; plainEnv ??= skyEnvironment(renderer, p.skyTop, p.skyBottom, p.ground);
+        scene.environment = plainEnv.texture; scene.environmentIntensity = 1.6; scene.fog = null; pipeline.direct = true; fx.setHdr(false);   // crew metal needs a sky to reflect; legacy toon materials ignore it
+      };
       scene.add(art.root);
       const director = new CameraDirector(art.stage.camera, art.floor, aspect);
       const actors = new Map<string, { actor: Actor; kind: FighterKind; last: FighterView }>();
@@ -100,7 +118,8 @@ export default function SceneView(props: SceneViewProps<Settings, View>) {
         if (entry && entry.kind === view.fighter) return entry;
         if (!models.has(view.fighter)) { void need(view.fighter); return entry; } // keep the old body until a transform partner arrives
         entry?.actor.dispose();
-        const model = models.get(view.fighter), actor: Actor = model ? new FighterActor({ view, model, cache }) : new StandIn(view);
+        const model = models.get(view.fighter), kind = view.fighter;
+        const actor: Actor = !model ? new StandIn(view) : isCrew(kind) ? new CrewActor({ view, model: model as CrewModel, def: CREW_DEFS[kind], cache, quality }) : new FighterActor({ view, model: model as FighterModel, cache });
         actor.group.traverse(o => o.layers.enable(BUBBLE_LAYER)); scene.add(actor.group);
         actors.set(view.id, entry = { actor, kind: view.fighter, last: view });
         return entry;
@@ -109,7 +128,9 @@ export default function SceneView(props: SceneViewProps<Settings, View>) {
         .map(f => ({ x: f.x, y: f.y, height: actors.get(f.id)?.actor.height ?? FIGHTERS[f.fighter].height, vx: f.vx, vy: f.vy, launch: f.launch }));
       const setStage = (id: StageId, fighters: readonly FighterView[]) => {
         if (id === art.id) return;
-        art.dispose(); art = createStageArt(id, scope, quality); scene.add(art.root);
+        if (isArena(id) && !arenaReady(id)) { void loadArena(id, scope.signal).catch(() => {}); if (isArena(art.id)) return; }   // keep the shown arena until the voted one has loaded
+        if ('leave' in art) art.leave(scene);
+        art.dispose(); plainEnv?.dispose(); plainEnv = null; art = makeArt(id); scene.add(art.root); enterStage();
         director.reset(art.stage.camera, art.floor, aspect, subjectsOf(fighters)); el!.setAttribute('aria-label', `${art.stage.name} arena`);
       };
       el!.setAttribute('aria-label', `${art.stage.name} arena`);
@@ -118,6 +139,8 @@ export default function SceneView(props: SceneViewProps<Settings, View>) {
 
       mountThreeScene(el!, {
         signal: scope.signal, scene, camera, quality,
+        configure(r) { renderer = r; pipeline = new Pipeline(r, quality); enterStage(); },
+        render(_r, s, c) { pipeline!.render(s, c); },
         resize(next) { aspect = next; camera.aspect = next; },
         frame(now, dt) {
           const p = latest.current, reduced = motion.matches, seconds = now / 1000, view = buffer.current!.sample(p.serverNowMs(), blendView) ?? null;
@@ -128,7 +151,7 @@ export default function SceneView(props: SceneViewProps<Settings, View>) {
           const kick = fx.cameraKick(), shot = director.update(subjectsOf(fighters), aspect, dt, kick);
           applyShot(camera, shot); camera.updateMatrixWorld();
           const frame = art.update({ tick: view?.stageTick ?? 0, hazards: view?.hazards ?? p.settings.hazards, seconds, dt, reduced, camera, fighters });
-          const ctx = { dt, seconds, reduced, cameraDistance: distanceFor(shot.halfH), platforms: [...frame.blocks, ...frame.platforms] }, seen = new Set<string>();
+          const ctx = { dt, seconds, reduced, cameraDistance: distanceFor(shot.halfH), platforms: [...frame.blocks, ...frame.platforms], win: view?.phase === 'complete', lift: 'enter' in art ? 1 : 2.6 }, seen = new Set<string>();
           for (const f of fighters) {
             const entry = actorFor(f); if (!entry) continue;
             seen.add(f.id);

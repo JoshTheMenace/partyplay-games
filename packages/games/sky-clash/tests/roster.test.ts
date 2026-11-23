@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { MOVE_SOURCES, ROSTER, ROSTER_DATA, type MoveId } from '../src/model';
+import { MOVE_SOURCES, LEGACY_ROSTER as ROSTER, ROSTER_DATA, type MoveId } from '../src/model';
 import { MOVESET } from '../src/moveset';
 import { setState } from '../src/sim/common';
 import { arena } from '../src/sim/harness';

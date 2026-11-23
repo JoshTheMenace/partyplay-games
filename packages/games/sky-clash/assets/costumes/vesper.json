@@ -1,0 +1,162 @@
+[
+ {
+  "name": "Plum Kiln",
+  "colors": {
+   "robe": "#4a2a58",
+   "mantle": "#a84a66",
+   "apron": "#4d3528",
+   "lining": "#d6cab4",
+   "glove": "#3a2a30",
+   "skin": "#e6c0a2",
+   "hair": "#cdc9d6",
+   "pewter": "#8f97a3",
+   "brass": "#c9963f",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#7c5ca6",
+   "lens": "#1e1a2a",
+   "prism": "#8fd8ff"
+  },
+  "patterns": {
+   "robe": "#7c4e86",
+   "mantle": "#f0d0d4",
+   "apron": "#2e1f18",
+   "lining": "#a84a66",
+   "glove": "#241a1e",
+   "skin": "#b85a5a",
+   "hair": "#8f8aa0",
+   "pewter": "#4f5662",
+   "brass": "#8a5a22",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#2e1c48",
+   "lens": "#1e1a2a",
+   "prism": "#ff9ad0"
+  },
+  "swatch": [
+   "#4a2a58",
+   "#a84a66",
+   "#8fd8ff"
+  ]
+ },
+ {
+  "name": "Sea Glass",
+  "colors": {
+   "robe": "#1f5560",
+   "mantle": "#7fc8b4",
+   "apron": "#4d3528",
+   "lining": "#d6cab4",
+   "glove": "#3a2a30",
+   "skin": "#e6c0a2",
+   "hair": "#cdc9d6",
+   "pewter": "#8f97a3",
+   "brass": "#c9963f",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#3f9a8a",
+   "lens": "#1e1a2a",
+   "prism": "#c0ffe0"
+  },
+  "patterns": {
+   "robe": "#4f97a0",
+   "mantle": "#f0fff4",
+   "apron": "#2e1f18",
+   "lining": "#a84a66",
+   "glove": "#241a1e",
+   "skin": "#b85a5a",
+   "hair": "#8f8aa0",
+   "pewter": "#4f5662",
+   "brass": "#8a5a22",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#2e1c48",
+   "lens": "#1e1a2a",
+   "prism": "#40e0b0"
+  },
+  "swatch": [
+   "#1f5560",
+   "#7fc8b4",
+   "#c0ffe0"
+  ]
+ },
+ {
+  "name": "Ember Kiln",
+  "colors": {
+   "robe": "#5a2420",
+   "mantle": "#d98a3a",
+   "apron": "#4d3528",
+   "lining": "#d6cab4",
+   "glove": "#3a2a30",
+   "skin": "#e6c0a2",
+   "hair": "#2e2428",
+   "pewter": "#8f97a3",
+   "brass": "#c9963f",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#b8742a",
+   "lens": "#1e1a2a",
+   "prism": "#ffd08a"
+  },
+  "patterns": {
+   "robe": "#9a4a3a",
+   "mantle": "#ffe8c0",
+   "apron": "#2e1f18",
+   "lining": "#a84a66",
+   "glove": "#241a1e",
+   "skin": "#b85a5a",
+   "hair": "#8f8aa0",
+   "pewter": "#4f5662",
+   "brass": "#8a5a22",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#2e1c48",
+   "lens": "#1e1a2a",
+   "prism": "#ff7a2a"
+  },
+  "swatch": [
+   "#5a2420",
+   "#d98a3a",
+   "#ffd08a"
+  ]
+ },
+ {
+  "name": "Frost Works",
+  "colors": {
+   "robe": "#c9c6d8",
+   "mantle": "#5a6cb0",
+   "apron": "#6a5a52",
+   "lining": "#d6cab4",
+   "glove": "#3a2a30",
+   "skin": "#e6c0a2",
+   "hair": "#2a2630",
+   "pewter": "#8f97a3",
+   "brass": "#c9963f",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#5a78c8",
+   "lens": "#1e1a2a",
+   "prism": "#a0c8ff"
+  },
+  "patterns": {
+   "robe": "#f4f2fa",
+   "mantle": "#d8e0ff",
+   "apron": "#2e1f18",
+   "lining": "#a84a66",
+   "glove": "#241a1e",
+   "skin": "#b85a5a",
+   "hair": "#8f8aa0",
+   "pewter": "#4f5662",
+   "brass": "#8a5a22",
+   "dark": "#16131a",
+   "white": "#f3efe6",
+   "iris": "#2e1c48",
+   "lens": "#1e1a2a",
+   "prism": "#6080ff"
+  },
+  "swatch": [
+   "#c9c6d8",
+   "#5a6cb0",
+   "#a0c8ff"
+  ]
+ }
+]

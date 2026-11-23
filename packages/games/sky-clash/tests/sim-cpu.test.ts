@@ -7,8 +7,10 @@ import { setState } from '../src/sim/common';
 import { arena } from '../src/sim/harness';
 
 const STAGES: StageId[] = ['battlefield', 'final-destination', 'dream-land', 'yoshi-story', 'stadium', 'fountain'];
+/** Four CPUs of the legacy group on a legacy stage (CPU fill itself now deals the crew of the Reaches; tests/crew.test.ts covers those). */
+const LEGACY_FOUR: FighterKind[][] = [['fox', 'mario', 'kirby', 'marth'], ['samus', 'peach', 'pikachu', 'captain-falcon'], ['link', 'luigi', 'ness', 'falco']];
 function match(stage: StageId, level: CpuLevel, seed: number) {
-  const s = rules.create({ roomId: 'r', roundId: 't', seed, nowMs: 0, players: [] }, { ...rules.validateSettings({ stage, cpuLevel: level, stocks: 2, seconds: 300 }), cpus: 4 });
+  const s = arena({ fighters: LEGACY_FOUR[seed % LEGACY_FOUR.length]!, stage, seed, cpu: [level, level, level, level], settings: { ...rules.validateSettings({ stage, cpuLevel: level, stocks: 2, seconds: 300 }), cpus: 0 }, keepCountdown: true }).s;
   const seen = new Set<number>(), run = new Map<string, [string, number]>(), longest = new Map<string, number>(), span = new Map<string, [number, number]>();
   let kos = 0, sds = 0, hits = 0, now = 0;
   for (let t = 0; t < 60 * 330 && !rules.outcome(s).complete; t++) {

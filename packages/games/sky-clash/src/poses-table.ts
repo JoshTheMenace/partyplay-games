@@ -5,7 +5,7 @@
  * Each fighter layers its own entries over its style base (unarmed, sword, hammer) and the shared humanoid base.
  * Signature motions and hand-held props beyond these families live in the renderer (scene/fighter SIGNATURES, props HELD).
  */
-import { ROSTER, ROSTER_DATA, type FighterKind, type Limb, type MoveId, type Pose } from './model';
+import { LEGACY_ROSTER as ROSTER, ROSTER_DATA, type LegacyKind as FighterKind, type Limb, type MoveId, type Pose } from './model';
 
 export type PoseEntry = { pose: Pose; limb: Limb };
 const LIMB: Partial<Record<Pose, Limb>> = {

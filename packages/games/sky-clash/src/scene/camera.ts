@@ -3,6 +3,7 @@
  * A shot is the visible rectangle on the gameplay plane (z = 0): its center and half height.
  */
 import type { PerspectiveCamera } from 'three';
+import { ARENA_IDS } from '../arenas';
 import { STAGE_IDS, type StageId } from '../stages';
 import type { FighterView, GameEvent, ProjectileView, Settings, View } from '../model';
 
@@ -127,9 +128,9 @@ export function blendView(a: View, b: View, k: number): View {
 export function predictStage(settings: Pick<Settings, 'stage'> | null | undefined, players: readonly { lobbyChoice?: unknown }[]): StageId {
   const valid = (s: unknown): s is StageId => (STAGE_IDS as readonly unknown[]).includes(s), pick = settings?.stage;
   if (valid(pick)) return pick;
-  if (pick === 'random') return 'battlefield';
+  if (pick === 'random') return ARENA_IDS[0];
   const votes = players.map(p => (p.lobbyChoice as { stage?: unknown } | undefined)?.stage).filter(valid), count = (s: StageId) => votes.filter(v => v === s).length;
-  return votes.reduce<StageId | null>((best, s) => best && count(best) >= count(s) ? best : s, null) ?? 'battlefield';
+  return votes.reduce<StageId | null>((best, s) => best && count(best) >= count(s) ? best : s, null) ?? ARENA_IDS[0];
 }
 /** Fires each event id once, when presentation reaches its frame, so sparks land with the interpolated contact. Stale ones drop. */
 export class EventClock {

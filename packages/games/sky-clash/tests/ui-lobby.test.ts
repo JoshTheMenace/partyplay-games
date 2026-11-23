@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_SETTINGS, ROSTER, type FighterView } from '../src/model';
+import { DEFAULT_SETTINGS, LEGACY_ROSTER as ROSTER, type FighterView } from '../src/model';
 import { STAGE_IDS } from '../src/stages';
 import { FIGHTER_ORDER, SERIES, damageColor, fallbackCostumes, fighterStats, filterFighters, formatClock } from '../src/ui/data';
 import { EMPTY_CHOICE, cpuCount, firstStep, isComplete, leaders, pickCostume, pickFighter, pickStage, readChoice, readSettings, readyChoice, takenCostumes, voteCounts } from '../src/ui/lobby-choice';

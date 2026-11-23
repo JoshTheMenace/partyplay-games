@@ -1,5 +1,7 @@
 # Sky Clash fighter pipeline (Blender 5.2, headless)
 
+> **Legacy pipeline.** This guide covers the frozen legacy fighters (`fighters/*.py` on `common.py`, `build_all.sh`, `render_sheet.py`, `validate.py`). The game's own cast, the crew of the Reaches, is built by `crew/` and documented in [PIPELINE.md](../../PIPELINE.md); validate those with `crew/validate.py`. Do not extend this pipeline.
+
 Each fighter is one Python script that sculpts the model from code, then rigs, skins and exports it. The shared kit does the hard parts.
 Reference fighters: `fighters/mario.py` (humanoid), `fighters/fox.py` (animal with ears, tail and a blaster) and `fighters/kirby.py` (round body).
 

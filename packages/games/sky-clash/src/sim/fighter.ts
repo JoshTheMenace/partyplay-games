@@ -5,9 +5,8 @@
  * script windows use scriptFrame() = that + 1 (Melee's action frame).
  */
 import { driftAcceleration } from '../../fidelity/physics';
-import { ATTRIBUTES } from '../../fidelity/attributes';
 import { UNIT, type FighterState, type MoveId } from '../model';
-import { MOVESET, TIMING, type Move, type TimingId } from '../moveset';
+import { AIR, MOVESET, TIMING, type Move, type TimingId } from '../moveset';
 import { ASDI, CHARGE_FRAMES, DECAY, SDI, SHIELD_DRAIN, SHIELD_REGEN, SHIELD_MAX, applyDI, MASH, grabFrames } from './formulas';
 import { P, PARTY_JUMP, byId, clearMove, dropHeld, endMove, grabRelease, inRange, isAerial, isSmash, isSpecial, isThrow, party, scriptFrame, setState, shieldBreak, startMove, takeHit, toAir } from './common';
 import { armored, endSpecial, kitOf, landSpecial, phaseIntangible, phaseOf, scriptOf, startSpecial, stepSpecial, type Motion } from './specials';
@@ -474,7 +473,7 @@ function ground(s: State, f: Fighter, env: Env, list: Surface[], motion: Motion 
 }
 const airState = (f: Fighter): FighterState => (['hitstun', 'tumble', 'attack', 'dizzy', 'helpless', 'airdodge'] as FighterState[]).includes(f.state) ? f.state : 'air';
 function air(s: State, f: Fighter, env: Env, list: Surface[], motion: Motion | null) {
-  const p = P(f), a = ATTRIBUTES[f.kind], st = f.state, sp = isSpecial(f.move);
+  const p = P(f), a = AIR[f.kind] as Parameters<typeof driftAcceleration>[2], st = f.state, sp = isSpecial(f.move);
   if (st === 'airdodge') {
     if (f.stateFrame < 30) { f.vx *= .9; f.vy *= .9; } else gravity(f, 1);
   } else {

@@ -60,6 +60,18 @@
 .sc-tile-dots { position: absolute; top: 4px; right: 4px; display: flex; gap: 2px; }
 .sc-tile-dots em { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--kp-ink); }
 .sc-empty { grid-column: 1 / -1; margin: 1rem 0; color: var(--muted-foreground); text-align: center; }
+/* The crew of the Reaches leads; the legacy roster and stages fold away under one brass-edged row. */
+.sc-group { margin: .15rem 0 -.2rem; font-family: var(--font-display); font-weight: 400; font-size: 1.05rem; letter-spacing: .01em; color: #f1cf8a; }
+.sc-crew-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: .5rem; }
+.sc-crew-tile { padding: .3rem .3rem .4rem; border-color: #c9963f66; background: linear-gradient(180deg, #1a2150, #10153a); font-size: .86rem; }
+.sc-crew-tile > span small { display: block; margin-top: .1rem; font-size: .7em; font-weight: 800; letter-spacing: .02em; color: #f1cf8a; }
+.sc-crew-grid .sc-portrait-random { border-radius: .6rem; }
+.sc-legacy-toggle { display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-height: 48px; margin-top: .35rem; padding: .45rem .8rem; border-radius: .9rem; border: 1px solid #c9963f55; background: #0d1233; color: var(--kp-cream); text-align: left; }
+.sc-legacy-toggle span { display: grid; font-weight: 900; font-size: .88rem; }
+.sc-legacy-toggle small { font-weight: 700; font-size: .72rem; color: var(--muted-foreground); }
+.sc-legacy-toggle b { flex: none; font-size: .78rem; color: #f1cf8a; }
+.sc-blurb { margin: .2rem 0 .35rem; font-size: .86rem; line-height: 1.35; color: var(--kp-cream); }
+.sc-arena-grid { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); }
 .sc-stage-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: .5rem; }
 .sc-stage-card { position: relative; display: grid; gap: .15rem; padding: .35rem .35rem .45rem; text-align: left; border-radius: 1rem; border: 2px solid #fff6e51f; background: #141a44; color: var(--kp-cream); min-width: 0; }
 .sc-stage-card[aria-pressed=true] { border-color: var(--kp-sun); box-shadow: 0 0 0 3px #ffd24a55; background: color-mix(in srgb, var(--sc-color, var(--kp-sun)) 18%, #141a44); }

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { STAGES, STAGE_IDS, getStage, resolveStage, stageFrame, type Block, type Zone } from '../src/stages';
+import { ARENA_IDS } from '../src/arenas';
+import { LEGACY_STAGE_IDS as STAGE_IDS, STAGES, getStage, resolveStage, stageFrame, type Block, type Zone } from '../src/stages';
 import { UNIT } from '../src/model';
 
 const E = 1e-6, TICKS = 14400; // 4 minutes covers every stage loop (Stadium's full rotation is 7.3 minutes; sampled below)
@@ -170,8 +171,8 @@ test('hazards warn before they strike, and hazards off stops them but keeps terr
 
 test('resolveStage picks seeded random stages and falls back safely', () => {
   assert.equal(resolveStage('random', 27), resolveStage('random', 27));
-  assert.equal(new Set(Array.from({ length: 30 }, (_, seed) => resolveStage('random', seed))).size, 30);
+  assert.deepEqual([...new Set(Array.from({ length: 30 }, (_, seed) => resolveStage('random', seed)))].sort(), [...ARENA_IDS].sort(), 'Random deals an arena of the Reaches');
   assert.equal(resolveStage('onett', 1), 'onett');
-  assert.equal(resolveStage(undefined, 1), 'battlefield');
-  assert.equal(resolveStage('__proto__' as never, 1), 'battlefield');
+  assert.equal(resolveStage(undefined, 1), ARENA_IDS[0]);
+  assert.equal(resolveStage('__proto__' as never, 1), ARENA_IDS[0]);
 });

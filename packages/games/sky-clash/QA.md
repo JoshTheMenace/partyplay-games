@@ -1,8 +1,67 @@
 # Sky Clash verification
 
-This file covers the v2 rebuild after the polish pass. Older records are in git history.
+The newest record is first. The 2026-09-24 record further down describes the legacy group before the overhaul and is kept for reference.
 
-## Final check, 2026-09-24
+## Visual overhaul: the crew of the Reaches, 2026-11-22 and 23
+
+Four original fighters (Sola, Toll, Kes, Vesper) and two original arenas (Beacon Rock, Bellyard), with a new render pipeline, keyframed animation and authored movesets. Evidence is under `output/skyclash-pass/`. Everything here ran on a shared machine with no GPU (WebGL through SwiftShader, load average 15 to 35), so nothing below says anything about frame rate or how it feels to play.
+
+### Static checks (working tree at the end of the pass)
+
+| Check | Result |
+| --- | --- |
+| `node --import tsx --test packages/games/sky-clash/tests/*.test.ts` | 217 tests, 216 pass, 1 fail: `tick cost stays far under 1 ms with four CPUs`, a timing budget that also failed on the untouched tree before the pass (baseline 203 tests, 202 pass, same failure). `final-game-tests.log` |
+| `npm run test:platform` | 122 tests, 121 pass, 0 fail, 1 skipped. `final-platform-tests.log` (run because of the two optional hooks added to `packages/party-3d`) |
+| `npx oxlint packages/games/sky-clash packages/party-3d` | Exit 0, no warnings |
+| `npx tsc -p game-modules/packages/games/sky-clash/tools/tsconfig.json` (Sky Clash source, tests and tools) | Exit 0 |
+| `python3 packages/games/sky-clash/tools/blender/crew/validate.py` | 6 of 6 models pass (four fighters, two arenas) |
+
+New tests: `tests/crew.test.ts` (11 tests over every crew fighter: complete moves and special phases, rig bones and anchors, budgets, every clip solving on every frame, hitbox tracks equal to the clip's anchor, every attack and special connecting with a body in its way, a counter answering a hit, the display playing the authored clip, recovery from six offstage spots on each arena, CPU matches to a finish) and `tests/arenas.test.ts` (3 tests: definitions, the model built to the collision numbers, floors, platforms, drop-through, both ledges, the blast zone).
+
+### Balance (headless, level-3 CPUs, `tools/balance.ts matches --seeds=8`, 48 one-on-one matches on the two arenas)
+
+| Fighter | Win rate | Average KO percent taken | Falls | Self-destructs | Longest single state (frames) |
+| --- | --- | --- | --- | --- | --- |
+| Sola | 46% | 143 | 36 | 0 | 195 |
+| Toll | 46% | 168 | 36 | 0 | 199 |
+| Kes | 54% | 133 | 33 | 0 | 199 |
+| Vesper | 54% | 164 | 35 | 0 | 197 |
+
+No special carries more than 20% of a fighter's damage. Recovery drill: every fighter reaches the stage from 12 of 12 standard offstage spots. This is CPU against CPU with the general fighter brain; it does not measure how the fighters balance in human hands (Vesper's zoning and Kes's movement are the least well played by the CPU).
+
+### Real rooms (build `skyclash-pass-b`, `HOST=127.0.0.1 npm run serve:isolated -- skyclash-pass-b 4432`, headless Chromium, emulated touch phones)
+
+Driven by `tools/ui-lab/crew-flow.mjs`. Each run is a fresh room; the reports are `room/<scenario>-flow.json` and the screenshots `room/<scenario>-*.png`. All four finished with no failure and no console or page errors.
+
+| Scenario | What happened |
+| --- | --- |
+| `duel` (display 1280×720, low tier) | Two phones joined, each saw the four crew fighters first and the legacy roster folded, picked Sola and Toll, voted Beacon Rock, readied; the fight ran on Beacon Rock; both seats hit each other with real touches (Sola landed 2, Toll 1; 13% and 6%); player 1 walked off; results listed both; Play again returned the host to the lobby and the phones to selection with their picks kept; both readied again and a second fight started in the same room. |
+| `solo` (display 1920×1080, balanced tier) | One phone picked Kes; the host fixed the Bellyard with three CPUs, all dealt from the crew; CPUs landed 17 hits, 11 KOs in the match; the phone moved and used specials but landed none; results listed four; Play again returned to selection. |
+| `quad` (display 1280×720, balanced tier) | One phone picked Vesper on Beacon Rock with three CPUs of the crew (Toll, Vesper, Toll): 52 CPU hits, 1 by the phone, 11 KOs; results; Play again. |
+| `legacy` (display 1280×720, low tier) | One phone opened the folded legacy roster, picked Mario on Battlefield against one CPU (dealt Vesper): the old fighter and stage load and play beside a crew fighter; 10 hits by the phone, 12 by the CPU; results; Play again. |
+
+The emissive-colour fix, the lift for crew fighters on legacy stages and the retuned glow values were made after these runs, so two scenarios were repeated on the final build.
+
+**Final build `skyclash-pass-c`** (port 4433, the working tree as it stands; `room-final/`): `duel` passed all 11 checks again (Sola landed 2, Toll 1; results; Play again; second fight), and `solo` passed all 8 at 1920×1080 on the balanced tier (Kes on a phone, CPUs dealt Kes, Toll, Kes on the Bellyard; 94 CPU hits, 2 by the phone; results; Play again). No console or page errors in either. `quad` and `legacy` were not repeated on this build.
+
+Things the first attempts taught (all environmental or in the driver, none in the game): the host's settings dialog now reaches the rules through a "Game rules" button; a one-stock match against three CPUs is over before a software-rendered session can act; steering from the host page's snapshots lags by seconds, so the driver reads a phone's; at the balanced tier the host socket was dropped once at the results screen (`first-pass/`).
+
+### Looked at, in the game's own renderer
+
+- Turnarounds and close-ups of each fighter (`turnarounds/`), four costumes each as portraits and full-body art (`art/`).
+- Filmstrips at fixed simulation ticks with hitboxes drawn, per fighter: locomotion, being hit, ground attacks, smashes, aerials, specials (`strips/<id>-*.png`; earlier iterations in `hero/`, `toll/`, `kes/`, `vesper/`).
+- The display scene with four fighters on each arena at 1280×720 and 1920×1080, and a legacy stage with crew and legacy fighters together (`stages/`).
+- Every lobby, board, HUD and results screen in the UI lab with the crew (`ui/`), before and after from the same fixtures (`before/`).
+
+### Not checked
+
+- Frame rate, shader compile time or memory on any real GPU; the cost figures in DESIGN.md are reasoned from what is submitted per frame.
+- Physical phones, a real TV, audio, or how any of it feels to play. No human has played the new fighters.
+- Teams, Sudden Death and time-out endings with the crew (covered by the shared engine's tests with legacy fighters, not re-run in a room).
+- The throw animations in a room (clips exist and solve; the tests check the grab connects, not how the throw looks with a victim).
+- More than four fighters, which the engine does not allow yet.
+
+## Legacy group, final check of 2026-09-24
 
 Build `sc-final-1` (`npm run build:isolated -- sc-final-1`), served with `npm run serve:isolated -- sc-final-1 4393` and left running for the user. Evidence is in `output/sky-clash-v2/final/`.
 
